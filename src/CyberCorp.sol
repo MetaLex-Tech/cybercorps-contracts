@@ -91,6 +91,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
     event OfficerRemoved(address indexed officer, uint256 index);
+    event OfficerUpdated(address indexed officer, uint256 index);
     event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
     event EscrowedOfficerSignatureAdded(uint256 indexed index, address indexed officer);
     event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
@@ -100,6 +101,8 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     error NotRefImplementation();
     error SignatureRequired();
     error InvalidEscrowSignatureIndex();
+    error InvalidOfficerIndex();
+    error DuplicateOfficer();
     error InvalidExtension();
     error ExtensionTypeNotSupported();
     error ExtensionNotConfigured();
@@ -197,24 +200,64 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
     }
 
+    /// @notice Checks whether an EOA is listed as an officer at any index other than `_skipIndex`
+    /// @dev Pass type(uint256).max as `_skipIndex` to scan the whole array
+    function _isOfficerAtOtherIndex(address _eoa, uint256 _skipIndex) internal view returns (bool) {
+        for (uint256 i = 0; i < companyOfficers.length; i++) {
+            if (i != _skipIndex && companyOfficers[i].eoa == _eoa) return true;
+        }
+        return false;
+    }
+
+    /// @dev Grants the standard officer role without downgrading a higher custom role
+    function _grantOfficerRole(address _eoa) internal {
+        if (AUTH.userRoles(_eoa) < 200) AUTH.updateRole(_eoa, 200);
+    }
+
+    /// @dev Revokes only the standard officer role; custom roles set outside the
+    /// officer lifecycle (anything other than exactly 200) are left untouched
+    function _revokeOfficerRole(address _eoa) internal {
+        if (AUTH.userRoles(_eoa) == 200) AUTH.updateRole(_eoa, 0);
+    }
+
     /// @notice Adds a new officer to the company
     /// @dev Only callable by owner, sets officer role to 200
     /// @param _officer Officer details including address and role
     function addOfficer(CompanyOfficer memory _officer) external onlyOwner() {
+        if (_isOfficerAtOtherIndex(_officer.eoa, type(uint256).max)) revert DuplicateOfficer();
         companyOfficers.push(_officer);
-        AUTH.updateRole(_officer.eoa, 200);
+        _grantOfficerRole(_officer.eoa);
         emit OfficerAdded(_officer.eoa, companyOfficers.length - 1);
+    }
+
+    /// @notice Updates an existing officer's details by index
+    /// @dev Only callable by owner. If the EOA changes, revokes the old role and grants the new one
+    /// @param _index Index of the officer to update
+    /// @param _officer Updated officer details including address and role
+    function updateOfficer(uint256 _index, CompanyOfficer memory _officer) external onlyOwner() {
+        if (_index >= companyOfficers.length) revert InvalidOfficerIndex();
+
+        address oldEOA = companyOfficers[_index].eoa;
+        if (oldEOA != _officer.eoa) {
+            if (_isOfficerAtOtherIndex(_officer.eoa, _index)) revert DuplicateOfficer();
+            // Legacy state may hold duplicates; keep the role while another entry lists this EOA
+            if (!_isOfficerAtOtherIndex(oldEOA, _index)) _revokeOfficerRole(oldEOA);
+            _grantOfficerRole(_officer.eoa);
+        }
+
+        companyOfficers[_index] = _officer;
+        emit OfficerUpdated(_officer.eoa, _index);
     }
 
     /// @notice Removes an officer by their address
     /// @dev Only callable by owner, revokes officer role
     /// @param _address Address of the officer to remove
     function removeOfficer(address _address) external onlyOwner() {
-        AUTH.updateRole(_address, 0);
         for (uint256 i = 0; i < companyOfficers.length; i++) {
             if (companyOfficers[i].eoa == _address) {
                 companyOfficers[i] = companyOfficers[companyOfficers.length - 1];
                 companyOfficers.pop();
+                if (!_isOfficerAtOtherIndex(_address, type(uint256).max)) _revokeOfficerRole(_address);
                 emit OfficerRemoved(_address, i);
                 break;
             }
@@ -227,9 +270,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     function removeOfficerAt(uint256 _index) external onlyOwner() {
         require(_index < companyOfficers.length, "Index out of bounds");
         address officerEOA = companyOfficers[_index].eoa;
-        AUTH.updateRole(officerEOA, 0);
         companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
         companyOfficers.pop();
+        if (!_isOfficerAtOtherIndex(officerEOA, type(uint256).max)) _revokeOfficerRole(officerEOA);
         emit OfficerRemoved(officerEOA, _index);
     }
 
