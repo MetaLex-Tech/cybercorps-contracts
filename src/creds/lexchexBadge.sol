@@ -486,7 +486,6 @@ contract LeXcheXBadge is
     // ── Carried over from LeXcheX v1 (interface-compatible reads, §0.10) ─────
 
     /// @notice v1-compatible read: true when the owner holds any valid credential (scans the active set)
-    // TODO should integrate v1 LexCheX as another issuer instead
     function hasValidLexCheX(address owner) public view returns (bool) {
         uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
         for (uint256 i = 0; i < ids.length; i++) {
