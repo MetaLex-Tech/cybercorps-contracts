@@ -97,6 +97,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
     event OfficerRemoved(address indexed officer, uint256 index);
+    event OfficerUpdated(address indexed officer, uint256 index);
     event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
     event EscrowedOfficerSignatureAdded(uint256 indexed index, address indexed officer);
     event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
@@ -110,6 +111,8 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     error NotRefImplementation();
     error SignatureRequired();
     error InvalidEscrowSignatureIndex();
+    error InvalidOfficerIndex();
+    error DuplicateOfficer();
     error InvalidExtension();
     error ExtensionTypeNotSupported();
     error ExtensionNotConfigured();
@@ -118,7 +121,6 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     error RoleManagerNotCyberCorp();
     error InvalidOfficer();
     error InvalidDirector();
-    error DuplicateOfficer();
     error DuplicateDirector();
     error LastOfficer();
     error LastDirector();
@@ -364,17 +366,44 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     }
 
     /// @notice Adds a new officer to the company
-    /// @dev Only callable by owner, sets officer role to 200
+    /// @dev Board authority (P1); the roster mapping is the duplicate check, and the role grant
+    /// never downgrades an address already holding a higher role.
     /// @param _officer Officer details including address and role
     function addOfficer(CompanyOfficer memory _officer) external onlyBoardAuthority {
         if (_officer.eoa == address(0)) revert InvalidOfficer();
         if (officerMembers[_officer.eoa]) revert DuplicateOfficer();
         companyOfficers.push(_officer);
         officerMembers[_officer.eoa] = true;
-        if (!boardMembers[_officer.eoa]) {
+        if (AUTH.userRoles(_officer.eoa) < AUTH.OFFICER_ROLE()) {
             AUTH.updateRole(_officer.eoa, AUTH.OFFICER_ROLE());
         }
         emit OfficerAdded(_officer.eoa, companyOfficers.length - 1);
+    }
+
+    /// @notice Updates an existing officer's details by index
+    /// @dev Board authority (P1); when the EOA changes, roster membership and AUTH roles rotate
+    /// with it — the departing address falls back to its residual role (board seat, manager
+    /// pointer, or nothing) and the incoming address is raised to OFFICER_ROLE only if it does
+    /// not already hold a higher role.
+    /// @param _index Index of the officer to update
+    /// @param _officer Updated officer details including address and role
+    function updateOfficer(uint256 _index, CompanyOfficer memory _officer) external onlyBoardAuthority {
+        if (_index >= companyOfficers.length) revert InvalidOfficerIndex();
+        if (_officer.eoa == address(0)) revert InvalidOfficer();
+
+        address oldEOA = companyOfficers[_index].eoa;
+        if (oldEOA != _officer.eoa) {
+            if (officerMembers[_officer.eoa]) revert DuplicateOfficer();
+            officerMembers[oldEOA] = false;
+            officerMembers[_officer.eoa] = true;
+            AUTH.updateRole(oldEOA, _residualRole(oldEOA));
+            if (AUTH.userRoles(_officer.eoa) < AUTH.OFFICER_ROLE()) {
+                AUTH.updateRole(_officer.eoa, AUTH.OFFICER_ROLE());
+            }
+        }
+
+        companyOfficers[_index] = _officer;
+        emit OfficerUpdated(_officer.eoa, _index);
     }
 
     /// @notice Removes an officer by their address

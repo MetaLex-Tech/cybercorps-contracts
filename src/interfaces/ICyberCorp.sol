@@ -91,6 +91,7 @@ interface ICyberCorp {
     function addDirector(CompanyDirector calldata director) external;
     function removeDirector(address director) external;
     function setBoardAuthorityAdapter(address adapter) external;
+    function updateOfficer(uint256 _index, CompanyOfficer memory _officer) external;
     function addEscrowedOfficerSignature(bytes calldata signature) external;
     function setEscrowedOfficerSignature(uint256 index, bytes calldata signature) external;
     function getEscrowedOfficerSignature(uint256 index) external view returns (bytes memory);

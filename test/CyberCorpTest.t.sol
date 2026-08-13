@@ -3774,6 +3774,134 @@ contract CyberCorpForkTest is Test {
         vm.stopPrank();
     }
 
+    function testUpdateOfficerUpdatesAuthRole() public {
+        address oldOfficer = address(0xBEEF);
+        address newOfficer = address(0xCAFE);
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorpAddr,
+            address authAddr,
+            ,
+            ,
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("OfficerUpdate"),
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer
+        );
+        CyberCorp cyberCorp = CyberCorp(cyberCorpAddr);
+        BorgAuth corpAuth = BorgAuth(authAddr);
+
+        // Must be a factory-deployed corp: AUTH owner is CyberCorpFactory, and factory grants CyberCorp role 200
+        assertEq(address(cyberCorp.AUTH()), authAddr);
+        assertEq(corpAuth.userRoles(address(cyberCorpFactory)), corpAuth.OWNER_ROLE());
+        assertEq(corpAuth.userRoles(address(cyberCorp)), 200);
+        assertGe(corpAuth.userRoles(address(cyberCorp)), corpAuth.OWNER_ROLE());
+
+        cyberCorp.addOfficer(
+            CompanyOfficer({
+                eoa: oldOfficer,
+                name: "Second Officer",
+                contact: "second@example.com",
+                title: "CTO"
+            })
+        );
+        assertEq(corpAuth.userRoles(oldOfficer), 200);
+        assertEq(corpAuth.userRoles(newOfficer), 0);
+
+        CompanyOfficer memory updated = CompanyOfficer({
+            eoa: newOfficer,
+            name: "Updated Officer",
+            contact: "updated@example.com",
+            title: "COO"
+        });
+
+        vm.expectEmit(true, true, true, true);
+        emit CyberCorp.OfficerUpdated(newOfficer, 1);
+        cyberCorp.updateOfficer(1, updated);
+
+        (address eoa, string memory name, string memory contact, string memory title) =
+            cyberCorp.companyOfficers(1);
+        assertEq(eoa, newOfficer);
+        assertEq(name, "Updated Officer");
+        assertEq(contact, "updated@example.com");
+        assertEq(title, "COO");
+        // CyberCorp's factory-granted role must be enough for AUTH.updateRole inside updateOfficer
+        assertEq(corpAuth.userRoles(oldOfficer), 0);
+        assertEq(corpAuth.userRoles(newOfficer), 200);
+        vm.stopPrank();
+    }
+
+    function testOfficerDuplicateAndCustomRoleHandling() public {
+        address officerB = address(0xBEEF);
+        address customRoleOfficer = address(0xCAFE);
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (address cyberCorpAddr, address authAddr,,,) = cyberCorpFactory.deployCyberCorp(
+            keccak256("OfficerDuplicates"),
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer
+        );
+        CyberCorp cyberCorp = CyberCorp(cyberCorpAddr);
+        BorgAuth corpAuth = BorgAuth(authAddr);
+
+        // Adding an EOA that is already an officer must revert
+        vm.expectRevert(CyberCorp.DuplicateOfficer.selector);
+        cyberCorp.addOfficer(
+            CompanyOfficer({eoa: testAddress, name: "Dup", contact: "dup@example.com", title: "CEO"})
+        );
+
+        cyberCorp.addOfficer(
+            CompanyOfficer({eoa: officerB, name: "Officer B", contact: "b@example.com", title: "CTO"})
+        );
+
+        // Updating an entry to an EOA held by another index must also revert
+        vm.expectRevert(CyberCorp.DuplicateOfficer.selector);
+        cyberCorp.updateOfficer(
+            1, CompanyOfficer({eoa: testAddress, name: "Dup", contact: "dup@example.com", title: "CTO"})
+        );
+
+        // Give the next officer a custom role above 200 before adding them;
+        // officer lifecycle must not downgrade it (testAddress has role 200 >= OWNER_ROLE)
+        corpAuth.updateRole(customRoleOfficer, 500);
+        cyberCorp.updateOfficer(
+            1, CompanyOfficer({eoa: customRoleOfficer, name: "Custom", contact: "c@example.com", title: "CTO"})
+        );
+        assertEq(corpAuth.userRoles(customRoleOfficer), 500, "custom role must not be flattened to 200");
+        // officerB held exactly 200 (granted via addOfficer), so it is revoked
+        assertEq(corpAuth.userRoles(officerB), 0);
+
+        // Removing the custom-role officer must leave the custom role untouched
+        cyberCorp.removeOfficer(customRoleOfficer);
+        assertEq(corpAuth.userRoles(customRoleOfficer), 500, "custom role must survive removal");
+
+        vm.stopPrank();
+    }
+
     function precisionTest() public {
 
     }
