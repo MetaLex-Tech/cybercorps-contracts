@@ -109,9 +109,13 @@ accounting. Use
 - matching comma-delimited `SOURCE_TOKEN_IDS` — for a printer with no active
   certificate (never issued, or every lot voided), pass the sentinel
   `type(uint256).max` here; and
-- `SOURCELESS_TERMS` (comma-delimited terms bytes, consumed in printer order)
-  for each sentinel entry. Supplied terms carry the same reconciliation duty
-  as a source certificate: charter/class-authority evidence per printer.
+- `SOURCELESS_TERMS` (comma-delimited, consumed in printer order) for each
+  sentinel entry. Each value must be a **full share extension payload**
+  (abi-encoded `ShareCertData`), exactly what a source certificate's
+  `extensionData` carries — not bare `SeriesTerms` bytes; the script
+  validates decodability through the controller's extractor before
+  broadcasting. Supplied terms carry the same reconciliation duty as a
+  source certificate: charter/class-authority evidence per printer.
 
 The script submits one owner transaction:
 

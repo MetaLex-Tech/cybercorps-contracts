@@ -7,6 +7,7 @@ import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IIssuanceManagerFactory} from "../src/interfaces/IIssuanceManagerFactory.sol";
 import {IShareClassTermsController} from "../src/interfaces/IShareClassTermsController.sol";
+import {IShareClassTermsExtension} from "../src/interfaces/IShareClassTermsExtension.sol";
 import {ICertificateExtension} from "../src/storage/extensions/ICertificateExtension.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
@@ -80,6 +81,23 @@ contract UpgradeAndMigrateShareClassTermsScript is Script {
                 }
                 bytes memory supplied = sourcelessTerms[sourcelessUsed++];
                 if (supplied.length == 0) revert("Empty SOURCELESS_TERMS entry");
+                // The supplied value must be a FULL share extension payload (abi-encoded
+                // ShareCertData) — exactly what a source certificate's extensionData carries —
+                // because the controller's renderer decodes that shape, not bare SeriesTerms
+                // bytes. Validate through the controller's own extractor before broadcasting,
+                // so a wrong encoding fails here with a clear message instead of reverting the
+                // atomic upgrade with InvalidShareExtensionData.
+                try IShareClassTermsExtension(controllerAddress).getSeriesTermsData(supplied) returns (
+                    bytes memory termsData, uint256
+                ) {
+                    if (termsData.length == 0) {
+                        revert("SOURCELESS_TERMS entry decodes to empty SeriesTerms");
+                    }
+                } catch {
+                    revert(
+                        "SOURCELESS_TERMS entry is not a full share extension payload (abi-encoded ShareCertData)"
+                    );
+                }
                 extensionData[i] = supplied;
                 continue;
             }
