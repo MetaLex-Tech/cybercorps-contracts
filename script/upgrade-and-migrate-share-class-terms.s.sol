@@ -116,9 +116,16 @@ contract UpgradeAndMigrateShareClassTermsScript is Script {
             (bool ok, bytes memory ret) =
                 ext.staticcall(abi.encodeCall(ICertificateExtension.supportsExtensionType, (shareType)));
             if (!ok || ret.length < 32 || !abi.decode(ret, (bool))) continue;
-            (bool isController,) =
+            // A controller-backed printer only counts as migrated when its class state is
+            // CONFIGURED: an installed-but-unconfigured controller still fails closed on every
+            // lifecycle call, and omitting such a printer here would report a successful upgrade
+            // that leaves it unusable — including it lets the migration loop configure it.
+            (bool isController, bytes memory ctRet) =
                 ext.staticcall(abi.encodeCall(IShareClassTermsController.getClassTerms, (enumerated)));
-            if (isController) continue;
+            if (isController && ctRet.length >= 160) {
+                (,,,, bool configured) = abi.decode(ctRet, (bytes, bytes32, uint256, uint256, bool));
+                if (configured) continue;
+            }
             bool included = false;
             for (uint256 j = 0; j < printers.length; ++j) {
                 if (printers[j] == enumerated) {

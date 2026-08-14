@@ -56,12 +56,18 @@ contract AcceptUpgradeIssuanceManagerScript is Script {
             (bool ok, bytes memory ret) =
                 ext.staticcall(abi.encodeCall(ICertificateExtension.supportsExtensionType, (shareType)));
             if (!ok || ret.length < 32 || !abi.decode(ret, (bool))) continue;
-            (bool isController,) =
+            // The printer must be controller-backed AND configured: an installed-but-unconfigured
+            // controller still fails closed on every lifecycle call after the upgrade.
+            (bool isController, bytes memory ctRet) =
                 ext.staticcall(abi.encodeCall(IShareClassTermsController.getClassTerms, (printer)));
+            bool configured = false;
+            if (isController && ctRet.length >= 160) {
+                (,,,, configured) = abi.decode(ctRet, (bytes, bytes32, uint256, uint256, bool));
+            }
             vm.assertTrue(
-                isController,
+                configured,
                 string.concat(
-                    "Legacy SHARE printer without class-terms controller detected; use "
+                    "Legacy SHARE printer without a CONFIGURED class-terms controller detected; use "
                     "upgrade-and-migrate-share-class-terms.s.sol for the atomic upgrade+migration instead: ",
                     vm.toString(printer)
                 )

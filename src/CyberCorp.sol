@@ -230,7 +230,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         if (companyDirectors.length == 0) revert LastDirector();
 
         address initialDirector = companyDirectors[0].eoa;
-        AUTH.updateRole(initialDirector, AUTH.BOARD_ROLE());
+        if (AUTH.userRoles(initialDirector) < AUTH.BOARD_ROLE()) {
+            AUTH.updateRole(initialDirector, AUTH.BOARD_ROLE());
+        }
         boardGovernanceEnforced = true;
         emit BoardGovernanceActivated(initialDirector);
     }
@@ -307,7 +309,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         ) {
             // Restore the residual role rather than zeroing: a superseded manager address that
             // also holds a director or officer seat keeps that seat's authority.
-            AUTH.updateRole(previousManager, _residualRole(previousManager));
+            _restoreResidualIfLifecycleRole(previousManager, AUTH.OWNER_ROLE());
         }
         // Grant only when the address does not already satisfy the owner threshold. BorgAuth
         // stores a single role per user and officers (200) / directors (300) already clear the
@@ -315,6 +317,17 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         // pointing a manager slot at themselves must not lose Board authority.
         if (newManager != address(0) && AUTH.userRoles(newManager) < AUTH.OWNER_ROLE()) {
             AUTH.updateRole(newManager, AUTH.OWNER_ROLE());
+        }
+    }
+
+    /// @dev Roster and manager mutations only rewrite a role their own lifecycle granted (the
+    ///      exact seat value); anything else — e.g. a pre-lock custom grant on a legacy corp —
+    ///      is left untouched, so removing a seat cannot clobber authority the lifecycle never
+    ///      issued. Within that rule the departing address falls back to its residual
+    ///      entitlement below.
+    function _restoreResidualIfLifecycleRole(address account, uint256 lifecycleRole) private {
+        if (AUTH.userRoles(account) == lifecycleRole) {
+            AUTH.updateRole(account, _residualRole(account));
         }
     }
 
@@ -396,7 +409,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
             if (officerMembers[_officer.eoa]) revert DuplicateOfficer();
             officerMembers[oldEOA] = false;
             officerMembers[_officer.eoa] = true;
-            AUTH.updateRole(oldEOA, _residualRole(oldEOA));
+            _restoreResidualIfLifecycleRole(oldEOA, AUTH.OFFICER_ROLE());
             if (AUTH.userRoles(_officer.eoa) < AUTH.OFFICER_ROLE()) {
                 AUTH.updateRole(_officer.eoa, AUTH.OFFICER_ROLE());
             }
@@ -417,7 +430,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
                 companyOfficers[i] = companyOfficers[companyOfficers.length - 1];
                 companyOfficers.pop();
                 officerMembers[_address] = false;
-                AUTH.updateRole(_address, _residualRole(_address));
+                _restoreResidualIfLifecycleRole(_address, AUTH.OFFICER_ROLE());
                 emit OfficerRemoved(_address, i);
                 return;
             }
@@ -435,7 +448,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
         companyOfficers.pop();
         officerMembers[officerEOA] = false;
-        AUTH.updateRole(officerEOA, _residualRole(officerEOA));
+        _restoreResidualIfLifecycleRole(officerEOA, AUTH.OFFICER_ROLE());
         emit OfficerRemoved(officerEOA, _index);
     }
 
@@ -446,7 +459,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         if (boardMembers[director.eoa]) revert DuplicateDirector();
         companyDirectors.push(director);
         boardMembers[director.eoa] = true;
-        AUTH.updateRole(director.eoa, AUTH.BOARD_ROLE());
+        if (AUTH.userRoles(director.eoa) < AUTH.BOARD_ROLE()) {
+            AUTH.updateRole(director.eoa, AUTH.BOARD_ROLE());
+        }
         emit DirectorAdded(director.eoa, companyDirectors.length - 1);
     }
 
@@ -459,7 +474,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
                     companyDirectors[companyDirectors.length - 1];
                 companyDirectors.pop();
                 boardMembers[director] = false;
-                AUTH.updateRole(director, _residualRole(director));
+                _restoreResidualIfLifecycleRole(director, AUTH.BOARD_ROLE());
                 emit DirectorRemoved(director, i);
                 return;
             }
@@ -475,7 +490,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
             companyDirectors[companyDirectors.length - 1];
         companyDirectors.pop();
         boardMembers[director] = false;
-        AUTH.updateRole(director, _residualRole(director));
+        _restoreResidualIfLifecycleRole(director, AUTH.BOARD_ROLE());
         emit DirectorRemoved(director, index);
     }
 

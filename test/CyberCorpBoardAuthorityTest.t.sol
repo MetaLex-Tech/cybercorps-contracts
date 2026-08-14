@@ -150,6 +150,51 @@ contract CyberCorpBoardAuthorityTest is Test {
         vm.stopPrank();
     }
 
+    function test_PreLockCustomRolesSurviveRosterLifecycle() public {
+        // A custom role granted BEFORE the role-manager lock (the only time raw grants are
+        // possible) must survive roster churn: lifecycle writes only touch a role the lifecycle
+        // itself granted (the exact seat value).
+        BorgAuth customAuth = new BorgAuth(address(this));
+        customAuth.updateRole(founder, customAuth.OFFICER_ROLE());
+        CompanyOfficer memory initialOfficer =
+            CompanyOfficer({eoa: founder, name: "Founder", contact: "f@example.com", title: "President"});
+        CyberCorp c = CyberCorp(
+            address(
+                new ERC1967Proxy(
+                    address(new CyberCorp()),
+                    abi.encodeCall(
+                        CyberCorp.initialize,
+                        (
+                            address(customAuth),
+                            "Custom Corp",
+                            "Corporation",
+                            "Delaware",
+                            "contact@example.com",
+                            "Delaware courts",
+                            address(0x1),
+                            address(0x2),
+                            initialOfficer,
+                            address(0x3),
+                            address(0x4)
+                        )
+                    )
+                )
+            )
+        );
+        address custom = address(0x901);
+        customAuth.updateRole(custom, 500);
+        customAuth.updateRole(address(c), customAuth.OFFICER_ROLE());
+        customAuth.setRoleManager(address(c));
+        c.activateBoardGovernance();
+
+        vm.startPrank(founder);
+        c.addOfficer(_officer(custom));
+        assertEq(customAuth.userRoles(custom), 500, "add flattened the custom role");
+        c.removeOfficer(custom);
+        assertEq(customAuth.userRoles(custom), 500, "removal clobbered the custom role");
+        vm.stopPrank();
+    }
+
     function test_InitializeRejectsZeroFounder() public {
         // A zero founder would be seeded as the sole director; after the one-way role-manager
         // lock nobody could ever pass onlyEnforcedBoard again, bricking the corp.
