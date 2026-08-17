@@ -29,10 +29,11 @@ pragma solidity 0.8.28;
 import "./ShareExtension.sol";
 
 /// @title ShareExtensionV3 - share certificate extension with series-scope data
-/// @notice The series-scope payload is the existing SeriesTerms struct: terms that are identical for
-/// every certificate of a series (the printer) can be set once in the printer's `seriesData` instead of
-/// being duplicated inside each cert's ShareCertData. The per-cert surface (ShareCertData, which still
-/// embeds SeriesTerms) is inherited from ShareExtension unchanged for backwards compatibility. Supports
+/// @notice The series-scope payload is a `ShareLayer`: any of the six sections of a `ShareCertData` that
+/// are the same for every certificate of a series (the printer) can be set once in the printer's
+/// `seriesData` instead of being duplicated inside each cert. A bare `SeriesTerms` is still accepted as
+/// the series payload, which is the format V3 wrote before layering. The per-cert surface
+/// (`ShareCertData`) is inherited from ShareExtension unchanged for backwards compatibility. Supports
 /// both the legacy "SHARE" type key and "SHARE_V3".
 /// @author MetaLeX Labs, Inc.
 contract ShareExtensionV3 is ShareExtension {
@@ -46,6 +47,8 @@ contract ShareExtensionV3 is ShareExtension {
         return true;
     }
 
+    /// @dev Reads the bare `SeriesTerms` format only. Read a layered series payload with
+    ///      `ShareLayerLib.seriesLayerOf`.
     function decodeSeriesExtensionData(bytes memory data) external pure returns (SeriesTerms memory) {
         return abi.decode(data, (SeriesTerms));
     }
@@ -56,16 +59,11 @@ contract ShareExtensionV3 is ShareExtension {
 
     function getSeriesExtensionURI(bytes memory seriesData) external pure returns (string memory) {
         if (seriesData.length == 0) return "";
-        SeriesTerms memory terms = abi.decode(seriesData, (SeriesTerms));
 
-        // _buildSeriesJson renders '"terms": {...}, ' (trailing separator), so close with a derived field.
+        // A bare SeriesTerms payload becomes a layer that carries only the terms section, so both
+        // formats render through the same path. The output for a bare payload is unchanged.
         return string(
-            abi.encodePacked(
-                ', "seriesDetails": {',
-                _buildSeriesJson(terms),
-                '"conversionRatio": "', from18DecimalsToString(_getConversionRatio(terms)),
-                '"}'
-            )
+            abi.encodePacked(', "seriesDetails": {', _buildTermsSectionsJson(_layerOf(seriesData)), '}')
         );
     }
 }

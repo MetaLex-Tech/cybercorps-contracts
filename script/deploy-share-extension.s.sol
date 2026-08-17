@@ -5,13 +5,14 @@ import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ShareExtension} from "../src/storage/extensions/ShareExtension.sol";
+import {ShareLayerLib} from "../src/storage/extensions/ShareLayerLib.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
 contract DeployShareExtensionScript is Script {
     // TODO update before production
     bytes32 internal constant DEFAULT_SALT = keccak256("MetaLexCyberCorp-ShareExtension.dev1");
 
-    function run() external returns (address implementation, address proxy) {
+    function run() external returns (address implementation, address proxy, address layerLib) {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address auth = DeploymentConstants.coreV2(block.chainid).auth;
 
@@ -24,11 +25,14 @@ contract DeployShareExtensionScript is Script {
                 abi.encodeWithSelector(ShareExtension.initialize.selector, auth)
             )
         );
+        // Readers call the library to merge the class, series and cert layers of a share payload.
+        layerLib = address(ShareLayerLib);
 
         vm.stopBroadcast();
 
         console.log("ShareExtension implementation:", implementation);
         console.log("ShareExtension proxy:", proxy);
+        console.log("ShareLayerLib:", layerLib);
         console.log("AUTH_ADDRESS:", auth);
     }
 }

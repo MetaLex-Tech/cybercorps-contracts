@@ -9,8 +9,10 @@ import {
     MandatoryConversionTrigger,
     MandatoryConversionTriggerType,
     RedemptionType,
+    SHARE_LAYER_TAG,
     SeriesTerms,
     ShareCertData,
+    ShareLayer,
     ShareRepresentationType,
     SpecialVotingRight,
     SplitRecord,
@@ -95,26 +97,55 @@ library RealWorldShareCert {
 
     /// @notice abi-encoded ShareCertData (~13 KB) as stored in CertificateDetails.extensionData.
     function encodedShareCertData() internal pure returns (bytes memory) {
-        SplitRecord[] memory splits = new SplitRecord[](1);
-        splits[0] =
-            SplitRecord({numerator: 1, denominator: 1, timestamp: 1_780_075_297, sourceAuthorityURI: PINATA_URI});
+        return abi.encode(shareCertData());
+    }
 
-        ShareCertData memory scd = ShareCertData({
+    /// @notice The same payload as one whole struct, before it is split into layers.
+    function shareCertData() internal pure returns (ShareCertData memory) {
+        return ShareCertData({
             terms: seriesTerms(),
-            certificateData: CertificateData({
-                isPartlyPaid: false,
-                amountPaid: 0,
-                totalConsideration: 0,
-                sourceAuthorityURI: PINATA_URI,
-                representationType: ShareRepresentationType.Tokenized,
-                holdingPeriodTackingApplied: true
-            }),
+            certificateData: certificateData(),
             mandatoryConversionTriggers: conversionTriggers(),
             specialVotingRights: votingRights(),
             transferRestrictions: transferRestrictions(),
-            splitHistory: splits
+            splitHistory: splitHistory()
         });
-        return abi.encode(scd);
+    }
+
+    /// @notice The five series-wide sections of the payload, as the printer's `seriesData`.
+    function encodedSeriesLayer() internal pure returns (bytes memory) {
+        ShareLayer memory layer;
+        layer.terms = abi.encode(seriesTerms());
+        layer.conversionTriggers = abi.encode(conversionTriggers());
+        layer.votingRights = abi.encode(votingRights());
+        layer.transferRestrictions = abi.encode(transferRestrictions());
+        layer.splitHistory = abi.encode(splitHistory());
+        return abi.encode(SHARE_LAYER_TAG, layer);
+    }
+
+    /// @notice What is left of the payload once the series sections move to the printer, as a cert's
+    ///         `extensionData`. Every other section is empty, so the cert inherits it from the series.
+    function encodedCertLayer() internal pure returns (bytes memory) {
+        ShareLayer memory layer;
+        layer.certificateData = abi.encode(certificateData());
+        return abi.encode(SHARE_LAYER_TAG, layer);
+    }
+
+    function certificateData() internal pure returns (CertificateData memory) {
+        return CertificateData({
+            isPartlyPaid: false,
+            amountPaid: 0,
+            totalConsideration: 0,
+            sourceAuthorityURI: PINATA_URI,
+            representationType: ShareRepresentationType.Tokenized,
+            holdingPeriodTackingApplied: true
+        });
+    }
+
+    function splitHistory() internal pure returns (SplitRecord[] memory splits) {
+        splits = new SplitRecord[](1);
+        splits[0] =
+            SplitRecord({numerator: 1, denominator: 1, timestamp: 1_780_075_297, sourceAuthorityURI: PINATA_URI});
     }
 
     function seriesTerms() internal pure returns (SeriesTerms memory) {

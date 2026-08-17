@@ -43,6 +43,15 @@ pragma solidity 0.8.28;
 
 import "./ShareExtension.sol";
 
+/// @title ShareExtensionLogic - read and write helpers over a share payload
+/// @notice Every function takes a payload and returns a new payload in the same format it was given.
+/// A payload is either a legacy whole `ShareCertData` or a `ShareLayer`. A layer is mutated section by
+/// section, so a lean cert payload stays lean and a series payload stays shared.
+///
+/// A layer only holds the sections its scope owns. Applying a change to a layer that does not carry
+/// the section reverts, because a silent write would replace an inherited section with a partial one.
+/// Apply the change to the layer that owns the section, or set that section on this layer first.
+/// @author MetaLeX Labs, Inc.
 contract ShareExtensionLogic {
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
     uint256 public constant PRICE_PRECISION = 10 ** 18;
@@ -55,9 +64,20 @@ contract ShareExtensionLogic {
         return abi.encode(data);
     }
 
+    /// @dev A layer is validated over the sections it carries. An absent section belongs to another
+    ///      layer, which is validated when that layer is written.
     function validateShareData(bytes memory data) external pure returns (bool valid, string memory error) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        return _validateShareDataInternal(share);
+        if (!hasShareLayerTag(data)) return _validateShareDataInternal(abi.decode(data, (ShareCertData)));
+
+        ShareLayer memory layer = _layer(data);
+        if (layer.terms.length != 0) {
+            (valid, error) = _validateSeriesTermsInternal(abi.decode(layer.terms, (SeriesTerms)));
+            if (!valid) return (valid, error);
+        }
+        if (layer.certificateData.length != 0) {
+            return _validateCertificateDataInternal(abi.decode(layer.certificateData, (CertificateData)));
+        }
+        return (true, "");
     }
 
     function validateSeriesTerms(SeriesTerms memory terms) external pure returns (bool valid, string memory error) {
@@ -73,10 +93,7 @@ contract ShareExtensionLogic {
     function updateSeriesTerms(bytes memory data, SeriesTerms memory terms) external pure returns (bytes memory) {
         (bool valid, string memory error) = _validateSeriesTermsInternal(terms);
         require(valid, error);
-
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.terms = terms;
-        return abi.encode(share);
+        return _withTerms(data, terms);
     }
 
     function updateCertificateData(
@@ -85,83 +102,68 @@ contract ShareExtensionLogic {
     ) external pure returns (bytes memory) {
         (bool valid, string memory error) = _validateCertificateDataInternal(certificateData);
         require(valid, error);
-
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.certificateData = certificateData;
-        return abi.encode(share);
+        return _withCertificateData(data, certificateData);
     }
 
     function updateConversionPrice(bytes memory data, uint256 newPrice) external pure returns (bytes memory) {
         require(newPrice > 0, "ShareExtensionLogic: conversionPrice must be > 0");
 
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        require(share.terms.isConvertible, "ShareExtensionLogic: series is not convertible");
-        share.terms.conversionPrice = newPrice;
-        return abi.encode(share);
+        SeriesTerms memory terms = _terms(data);
+        require(terms.isConvertible, "ShareExtensionLogic: series is not convertible");
+        terms.conversionPrice = newPrice;
+        return _withTerms(data, terms);
     }
 
     function updateAuthorizedShares(bytes memory data, uint256 newAmount) external pure returns (bytes memory) {
         require(newAmount > 0, "ShareExtensionLogic: authorizedShares must be > 0");
 
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.terms.authorizedShares = newAmount;
-        return abi.encode(share);
+        SeriesTerms memory terms = _terms(data);
+        terms.authorizedShares = newAmount;
+        return _withTerms(data, terms);
     }
 
     function updateSeriesName(bytes memory data, string memory newName) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.terms.seriesName = newName;
-        return abi.encode(share);
+        SeriesTerms memory terms = _terms(data);
+        terms.seriesName = newName;
+        return _withTerms(data, terms);
     }
 
     function addConversionTrigger(
         bytes memory data,
         MandatoryConversionTrigger memory conversionTrigger
     ) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.mandatoryConversionTriggers = _appendConversionTrigger(
-            share.mandatoryConversionTriggers,
-            conversionTrigger
-        );
-        return abi.encode(share);
+        return _withConversionTriggers(data, _appendConversionTrigger(_conversionTriggers(data), conversionTrigger));
     }
 
     function removeConversionTrigger(bytes memory data, uint256 index) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.mandatoryConversionTriggers = _removeConversionTrigger(share.mandatoryConversionTriggers, index);
-        return abi.encode(share);
+        return _withConversionTriggers(data, _removeConversionTrigger(_conversionTriggers(data), index));
     }
 
     function addSpecialVotingRight(
         bytes memory data,
         SpecialVotingRight memory votingRight
     ) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.specialVotingRights = _appendSpecialVotingRight(share.specialVotingRights, votingRight);
-        return abi.encode(share);
+        return _withVotingRights(data, _appendSpecialVotingRight(_votingRights(data), votingRight));
     }
 
     function removeSpecialVotingRight(bytes memory data, uint256 index) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.specialVotingRights = _removeSpecialVotingRight(share.specialVotingRights, index);
-        return abi.encode(share);
+        return _withVotingRights(data, _removeSpecialVotingRight(_votingRights(data), index));
     }
 
     function addTransferRestriction(
         bytes memory data,
         TransferRestriction memory restriction
     ) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.transferRestrictions = _appendTransferRestriction(share.transferRestrictions, restriction);
-        return abi.encode(share);
+        return _withTransferRestrictions(data, _appendTransferRestriction(_transferRestrictions(data), restriction));
     }
 
     function removeTransferRestriction(bytes memory data, uint256 index) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.transferRestrictions = _removeTransferRestriction(share.transferRestrictions, index);
-        return abi.encode(share);
+        return _withTransferRestrictions(data, _removeTransferRestriction(_transferRestrictions(data), index));
     }
 
+    /// @dev A split reprices the terms, rescales the IPO conversion thresholds and appends to the split
+    ///      history. All three sections must be on the payload, which for a layered issuance means the
+    ///      layer that owns the series terms.
     function recordStockSplit(
         bytes memory data,
         uint256 splitNumerator,
@@ -172,31 +174,29 @@ contract ShareExtensionLogic {
         require(splitNumerator > 0 && splitDenominator > 0, "ShareExtensionLogic: split ratio must be non-zero");
         require(splitNumerator != splitDenominator, "ShareExtensionLogic: split ratio must differ from 1:1");
 
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-
-        share.terms.originalIssuePrice = (share.terms.originalIssuePrice * splitDenominator) / splitNumerator;
-        share.terms.parValue = (share.terms.parValue * splitDenominator) / splitNumerator;
-        if (share.terms.conversionPrice > 0) {
-            share.terms.conversionPrice = (share.terms.conversionPrice * splitDenominator) / splitNumerator;
+        SeriesTerms memory terms = _terms(data);
+        terms.originalIssuePrice = (terms.originalIssuePrice * splitDenominator) / splitNumerator;
+        terms.parValue = (terms.parValue * splitDenominator) / splitNumerator;
+        if (terms.conversionPrice > 0) {
+            terms.conversionPrice = (terms.conversionPrice * splitDenominator) / splitNumerator;
         }
-        if (share.terms.redemptionPrice > 0) {
-            share.terms.redemptionPrice = (share.terms.redemptionPrice * splitDenominator) / splitNumerator;
+        if (terms.redemptionPrice > 0) {
+            terms.redemptionPrice = (terms.redemptionPrice * splitDenominator) / splitNumerator;
         }
+        terms.authorizedShares = (terms.authorizedShares * splitNumerator) / splitDenominator;
 
-        share.terms.authorizedShares = (share.terms.authorizedShares * splitNumerator) / splitDenominator;
-
-        for (uint256 i = 0; i < share.mandatoryConversionTriggers.length; i++) {
+        MandatoryConversionTrigger[] memory triggers = _conversionTriggers(data);
+        for (uint256 i = 0; i < triggers.length; i++) {
             if (
-                share.mandatoryConversionTriggers[i].triggerType == MandatoryConversionTriggerType.QualifiedIPO
-                    && share.mandatoryConversionTriggers[i].primaryThreshold > 0
+                triggers[i].triggerType == MandatoryConversionTriggerType.QualifiedIPO
+                    && triggers[i].primaryThreshold > 0
             ) {
-                share.mandatoryConversionTriggers[i].primaryThreshold =
-                    (share.mandatoryConversionTriggers[i].primaryThreshold * splitDenominator) / splitNumerator;
+                triggers[i].primaryThreshold = (triggers[i].primaryThreshold * splitDenominator) / splitNumerator;
             }
         }
 
-        share.splitHistory = _appendSplitRecord(
-            share.splitHistory,
+        SplitRecord[] memory history = _appendSplitRecord(
+            _splitHistory(data),
             SplitRecord({
                 numerator: splitNumerator,
                 denominator: splitDenominator,
@@ -205,22 +205,153 @@ contract ShareExtensionLogic {
             })
         );
 
-        return abi.encode(share);
+        data = _withTerms(data, terms);
+        data = _withConversionTriggers(data, triggers);
+        return _withSplitHistory(data, history);
     }
 
     function getConversionRatio(bytes memory data) external pure returns (uint256 ratio) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        if (!share.terms.isConvertible || share.terms.conversionPrice == 0) return 0;
-        ratio = (share.terms.originalIssuePrice * PRICE_PRECISION) / share.terms.conversionPrice;
+        SeriesTerms memory terms = _termsOrEmpty(data);
+        if (!terms.isConvertible || terms.conversionPrice == 0) return 0;
+        ratio = (terms.originalIssuePrice * PRICE_PRECISION) / terms.conversionPrice;
     }
 
     function getPaymentPercentage(bytes memory data) external pure returns (uint256 percentage) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        if (!share.certificateData.isPartlyPaid || share.certificateData.totalConsideration == 0) {
-            return PERCENTAGE_PRECISION;
+        CertificateData memory cert = _certificateDataOrEmpty(data);
+        if (!cert.isPartlyPaid || cert.totalConsideration == 0) return PERCENTAGE_PRECISION;
+        percentage = (cert.amountPaid * PERCENTAGE_PRECISION) / cert.totalConsideration;
+    }
+
+    // --- Section readers and writers, over either payload format ---
+
+    function _layer(bytes memory data) private pure returns (ShareLayer memory layer) {
+        (, layer) = abi.decode(data, (bytes32, ShareLayer));
+    }
+
+    function _requireSection(bytes memory section, string memory name) private pure returns (bytes memory) {
+        require(section.length != 0, string.concat("ShareExtensionLogic: layer has no ", name, " section"));
+        return section;
+    }
+
+    function _terms(bytes memory data) private pure returns (SeriesTerms memory) {
+        if (!hasShareLayerTag(data)) return abi.decode(data, (ShareCertData)).terms;
+        return abi.decode(_requireSection(_layer(data).terms, "terms"), (SeriesTerms));
+    }
+
+    /// @dev The lenient reader the getters use. An absent section reads as a blank struct, which the
+    ///      getters already treat as "nothing to report".
+    function _termsOrEmpty(bytes memory data) private pure returns (SeriesTerms memory terms) {
+        if (!hasShareLayerTag(data)) return abi.decode(data, (ShareCertData)).terms;
+        bytes memory section = _layer(data).terms;
+        if (section.length != 0) terms = abi.decode(section, (SeriesTerms));
+    }
+
+    function _withTerms(bytes memory data, SeriesTerms memory terms) private pure returns (bytes memory) {
+        if (!hasShareLayerTag(data)) {
+            ShareCertData memory share = abi.decode(data, (ShareCertData));
+            share.terms = terms;
+            return abi.encode(share);
         }
-        percentage =
-            (share.certificateData.amountPaid * PERCENTAGE_PRECISION) / share.certificateData.totalConsideration;
+        ShareLayer memory layer = _layer(data);
+        layer.terms = abi.encode(terms);
+        return abi.encode(SHARE_LAYER_TAG, layer);
+    }
+
+    function _certificateDataOrEmpty(bytes memory data) private pure returns (CertificateData memory cert) {
+        if (!hasShareLayerTag(data)) return abi.decode(data, (ShareCertData)).certificateData;
+        bytes memory section = _layer(data).certificateData;
+        if (section.length != 0) cert = abi.decode(section, (CertificateData));
+    }
+
+    function _withCertificateData(
+        bytes memory data,
+        CertificateData memory certificateData
+    ) private pure returns (bytes memory) {
+        if (!hasShareLayerTag(data)) {
+            ShareCertData memory share = abi.decode(data, (ShareCertData));
+            share.certificateData = certificateData;
+            return abi.encode(share);
+        }
+        ShareLayer memory layer = _layer(data);
+        layer.certificateData = abi.encode(certificateData);
+        return abi.encode(SHARE_LAYER_TAG, layer);
+    }
+
+    function _conversionTriggers(bytes memory data) private pure returns (MandatoryConversionTrigger[] memory) {
+        if (!hasShareLayerTag(data)) return abi.decode(data, (ShareCertData)).mandatoryConversionTriggers;
+        return abi.decode(
+            _requireSection(_layer(data).conversionTriggers, "conversionTriggers"), (MandatoryConversionTrigger[])
+        );
+    }
+
+    function _withConversionTriggers(
+        bytes memory data,
+        MandatoryConversionTrigger[] memory triggers
+    ) private pure returns (bytes memory) {
+        if (!hasShareLayerTag(data)) {
+            ShareCertData memory share = abi.decode(data, (ShareCertData));
+            share.mandatoryConversionTriggers = triggers;
+            return abi.encode(share);
+        }
+        ShareLayer memory layer = _layer(data);
+        layer.conversionTriggers = abi.encode(triggers);
+        return abi.encode(SHARE_LAYER_TAG, layer);
+    }
+
+    function _votingRights(bytes memory data) private pure returns (SpecialVotingRight[] memory) {
+        if (!hasShareLayerTag(data)) return abi.decode(data, (ShareCertData)).specialVotingRights;
+        return abi.decode(_requireSection(_layer(data).votingRights, "votingRights"), (SpecialVotingRight[]));
+    }
+
+    function _withVotingRights(
+        bytes memory data,
+        SpecialVotingRight[] memory rights
+    ) private pure returns (bytes memory) {
+        if (!hasShareLayerTag(data)) {
+            ShareCertData memory share = abi.decode(data, (ShareCertData));
+            share.specialVotingRights = rights;
+            return abi.encode(share);
+        }
+        ShareLayer memory layer = _layer(data);
+        layer.votingRights = abi.encode(rights);
+        return abi.encode(SHARE_LAYER_TAG, layer);
+    }
+
+    function _transferRestrictions(bytes memory data) private pure returns (TransferRestriction[] memory) {
+        if (!hasShareLayerTag(data)) return abi.decode(data, (ShareCertData)).transferRestrictions;
+        return abi.decode(
+            _requireSection(_layer(data).transferRestrictions, "transferRestrictions"), (TransferRestriction[])
+        );
+    }
+
+    function _withTransferRestrictions(
+        bytes memory data,
+        TransferRestriction[] memory restrictions
+    ) private pure returns (bytes memory) {
+        if (!hasShareLayerTag(data)) {
+            ShareCertData memory share = abi.decode(data, (ShareCertData));
+            share.transferRestrictions = restrictions;
+            return abi.encode(share);
+        }
+        ShareLayer memory layer = _layer(data);
+        layer.transferRestrictions = abi.encode(restrictions);
+        return abi.encode(SHARE_LAYER_TAG, layer);
+    }
+
+    function _splitHistory(bytes memory data) private pure returns (SplitRecord[] memory) {
+        if (!hasShareLayerTag(data)) return abi.decode(data, (ShareCertData)).splitHistory;
+        return abi.decode(_requireSection(_layer(data).splitHistory, "splitHistory"), (SplitRecord[]));
+    }
+
+    function _withSplitHistory(bytes memory data, SplitRecord[] memory history) private pure returns (bytes memory) {
+        if (!hasShareLayerTag(data)) {
+            ShareCertData memory share = abi.decode(data, (ShareCertData));
+            share.splitHistory = history;
+            return abi.encode(share);
+        }
+        ShareLayer memory layer = _layer(data);
+        layer.splitHistory = abi.encode(history);
+        return abi.encode(SHARE_LAYER_TAG, layer);
     }
 
     // function computeAccruedDividends(bytes memory data, uint256 asOfTimestamp) external pure returns (uint256 accrued) {
