@@ -98,8 +98,8 @@ contract SecondaryTradeEquityGasLimitTest is SecondaryTradeGasBase {
 ///
 /// The five series-wide sections of `ShareCertData` move to the printer's `seriesData`, where one copy
 /// serves every cert of the series. Only `certificateData` stays on the cert. Nothing is lost: a reader
-/// merges the layers back with `ShareLayerLib.resolve`, and the token URI renders the
-/// series sections through `getSeriesExtensionURI`.
+/// merges the layers back with `ShareLayerLib.resolve`, and the token URI renders the series sections
+/// through `getSeriesExtensionURI`.
 ///
 /// Settlement copies the seller's per-cert payload into a fresh Ledger Entry Token for the buyer, so the
 /// size of that payload sets the cost of finalization.
@@ -107,13 +107,13 @@ contract SecondaryTradeEquityGasLimitTest is SecondaryTradeGasBase {
 /// Measured. Per-lot data: 832-byte payload against 13,984 legacy, the same 6 legends of 3,321 bytes.
 /// | pathway           | postOffer | acceptOffer | finalize  | finalize % of limit | finalize vs legacy |
 /// |-------------------|-----------|-------------|-----------|---------------------|--------------------|
-/// | Rule 144          | 1,362,186 | 1,998,673   | 4,818,413 | 28.7%               | -65.3%             |
-/// | Section 4(a)(7)   | 1,362,186 | 1,935,090   | 4,889,830 | 29.1%               | -66.7%             |
-/// | Section 4(a)(1/2) | 1,362,186 | 1,895,299   | 4,871,039 | 29.0%               | -66.7%             |
-/// | Regulation S      | 1,362,186 | 1,993,344   | 5,037,008 | 30.0%               | -66.0%             |
+/// | Rule 144          | 1,362,187 | 1,998,674   | 4,818,413 | 28.7%               | -65.3%             |
+/// | Section 4(a)(7)   | 1,362,187 | 1,935,091   | 4,889,830 | 29.1%               | -66.7%             |
+/// | Section 4(a)(1/2) | 1,362,187 | 1,895,300   | 4,871,039 | 29.0%               | -66.7%             |
+/// | Regulation S      | 1,362,187 | 1,993,344   | 5,037,008 | 30.0%               | -66.0%             |
 ///
 /// Unpinned posting does not read the payload, so postOffer is unchanged. Posting pinned to Rule 144
-/// does read it, and costs 1,590,184 against 2,505,028.
+/// does read it, and costs 1,590,185 against 2,505,028.
 contract SecondaryTradeEquityLayeredGasLimitTest is SecondaryTradeEquityGasLimitTest {
     function _extensionImplementation() internal override returns (address) {
         return address(new ShareExtensionV3());

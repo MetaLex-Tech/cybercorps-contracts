@@ -115,19 +115,25 @@ library RealWorldShareCert {
     /// @notice The five series-wide sections of the payload, as the printer's `seriesData`.
     function encodedSeriesLayer() internal pure returns (bytes memory) {
         ShareLayer memory layer;
-        layer.terms = abi.encode(seriesTerms());
-        layer.conversionTriggers = abi.encode(conversionTriggers());
-        layer.votingRights = abi.encode(votingRights());
-        layer.transferRestrictions = abi.encode(transferRestrictions());
-        layer.splitHistory = abi.encode(splitHistory());
+        layer.terms = new SeriesTerms[](1);
+        layer.terms[0] = seriesTerms();
+        layer.conversionTriggers = new MandatoryConversionTrigger[][](1);
+        layer.conversionTriggers[0] = conversionTriggers();
+        layer.votingRights = new SpecialVotingRight[][](1);
+        layer.votingRights[0] = votingRights();
+        layer.transferRestrictions = new TransferRestriction[][](1);
+        layer.transferRestrictions[0] = transferRestrictions();
+        layer.splitHistory = new SplitRecord[][](1);
+        layer.splitHistory[0] = splitHistory();
         return abi.encode(SHARE_LAYER_TAG, layer);
     }
 
     /// @notice What is left of the payload once the series sections move to the printer, as a cert's
-    ///         `extensionData`. Every other section is empty, so the cert inherits it from the series.
+    ///         `extensionData`. Every other section is unset, so the cert inherits it from the series.
     function encodedCertLayer() internal pure returns (bytes memory) {
         ShareLayer memory layer;
-        layer.certificateData = abi.encode(certificateData());
+        layer.certificateData = new CertificateData[](1);
+        layer.certificateData[0] = certificateData();
         return abi.encode(SHARE_LAYER_TAG, layer);
     }
 

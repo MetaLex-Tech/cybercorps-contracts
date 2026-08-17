@@ -63,7 +63,7 @@ contract ShareExtensionV3 is ShareExtension {
         // A bare SeriesTerms payload becomes a layer that carries only the terms section, so both
         // formats render through the same path. The output for a bare payload is unchanged.
         return string(
-            abi.encodePacked(', "seriesDetails": {', _buildTermsSectionsJson(_layerOf(seriesData)), '}')
+            abi.encodePacked(', "seriesDetails": {', _buildTermsSectionsJson(seriesLayerOf(seriesData)), '}')
         );
     }
 }

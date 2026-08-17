@@ -54,7 +54,9 @@ import {
     SpecialVotingRight,
     SplitRecord,
     TransferRestriction,
-    hasShareLayerTag
+    decodeShareLayer,
+    hasShareLayerTag,
+    seriesLayerOf
 } from "./ShareExtension.sol";
 
 /// @title  ShareLayerLib - splits and merges the three layers of a share payload
@@ -80,8 +82,8 @@ library ShareLayerLib {
         return abi.encode(SHARE_LAYER_TAG, layer);
     }
 
-    function decode(bytes memory data) public pure returns (ShareLayer memory layer) {
-        (, layer) = abi.decode(data, (bytes32, ShareLayer));
+    function decode(bytes memory data) public pure returns (ShareLayer memory) {
+        return decodeShareLayer(data);
     }
 
     /// @notice Splits a whole `ShareCertData` into a series payload and a cert payload.
@@ -94,14 +96,20 @@ library ShareLayerLib {
         returns (bytes memory seriesPayload, bytes memory certPayload)
     {
         ShareLayer memory series;
-        series.terms = abi.encode(share.terms);
-        series.conversionTriggers = abi.encode(share.mandatoryConversionTriggers);
-        series.votingRights = abi.encode(share.specialVotingRights);
-        series.transferRestrictions = abi.encode(share.transferRestrictions);
-        series.splitHistory = abi.encode(share.splitHistory);
+        series.terms = new SeriesTerms[](1);
+        series.terms[0] = share.terms;
+        series.conversionTriggers = new MandatoryConversionTrigger[][](1);
+        series.conversionTriggers[0] = share.mandatoryConversionTriggers;
+        series.votingRights = new SpecialVotingRight[][](1);
+        series.votingRights[0] = share.specialVotingRights;
+        series.transferRestrictions = new TransferRestriction[][](1);
+        series.transferRestrictions[0] = share.transferRestrictions;
+        series.splitHistory = new SplitRecord[][](1);
+        series.splitHistory[0] = share.splitHistory;
 
         ShareLayer memory cert;
-        cert.certificateData = abi.encode(share.certificateData);
+        cert.certificateData = new CertificateData[](1);
+        cert.certificateData[0] = share.certificateData;
 
         return (abi.encode(SHARE_LAYER_TAG, series), abi.encode(SHARE_LAYER_TAG, cert));
     }
@@ -120,29 +128,33 @@ library ShareLayerLib {
         if (certData.length == 0) return share;
         if (!hasShareLayerTag(certData)) return abi.decode(certData, (ShareCertData));
 
-        ShareLayer memory cert = decode(certData);
+        ShareLayer memory cert = decodeShareLayer(certData);
         ShareLayer memory series = seriesLayerOf(seriesData);
         ShareLayer memory class_ = classLayerOf(classData);
 
-        bytes memory section = _mostGranular(cert.certificateData, series.certificateData, class_.certificateData);
-        if (section.length != 0) share.certificateData = abi.decode(section, (CertificateData));
+        if (cert.certificateData.length != 0) share.certificateData = cert.certificateData[0];
+        else if (series.certificateData.length != 0) share.certificateData = series.certificateData[0];
+        else if (class_.certificateData.length != 0) share.certificateData = class_.certificateData[0];
 
-        section = _mostGranular(cert.terms, series.terms, class_.terms);
-        if (section.length != 0) share.terms = abi.decode(section, (SeriesTerms));
+        if (cert.terms.length != 0) share.terms = cert.terms[0];
+        else if (series.terms.length != 0) share.terms = series.terms[0];
+        else if (class_.terms.length != 0) share.terms = class_.terms[0];
 
-        section = _mostGranular(cert.conversionTriggers, series.conversionTriggers, class_.conversionTriggers);
-        if (section.length != 0) {
-            share.mandatoryConversionTriggers = abi.decode(section, (MandatoryConversionTrigger[]));
-        }
+        if (cert.conversionTriggers.length != 0) share.mandatoryConversionTriggers = cert.conversionTriggers[0];
+        else if (series.conversionTriggers.length != 0) share.mandatoryConversionTriggers = series.conversionTriggers[0];
+        else if (class_.conversionTriggers.length != 0) share.mandatoryConversionTriggers = class_.conversionTriggers[0];
 
-        section = _mostGranular(cert.votingRights, series.votingRights, class_.votingRights);
-        if (section.length != 0) share.specialVotingRights = abi.decode(section, (SpecialVotingRight[]));
+        if (cert.votingRights.length != 0) share.specialVotingRights = cert.votingRights[0];
+        else if (series.votingRights.length != 0) share.specialVotingRights = series.votingRights[0];
+        else if (class_.votingRights.length != 0) share.specialVotingRights = class_.votingRights[0];
 
-        section = _mostGranular(cert.transferRestrictions, series.transferRestrictions, class_.transferRestrictions);
-        if (section.length != 0) share.transferRestrictions = abi.decode(section, (TransferRestriction[]));
+        if (cert.transferRestrictions.length != 0) share.transferRestrictions = cert.transferRestrictions[0];
+        else if (series.transferRestrictions.length != 0) share.transferRestrictions = series.transferRestrictions[0];
+        else if (class_.transferRestrictions.length != 0) share.transferRestrictions = class_.transferRestrictions[0];
 
-        section = _mostGranular(cert.splitHistory, series.splitHistory, class_.splitHistory);
-        if (section.length != 0) share.splitHistory = abi.decode(section, (SplitRecord[]));
+        if (cert.splitHistory.length != 0) share.splitHistory = cert.splitHistory[0];
+        else if (series.splitHistory.length != 0) share.splitHistory = series.splitHistory[0];
+        else if (class_.splitHistory.length != 0) share.splitHistory = class_.splitHistory[0];
     }
 
     /// @notice Reads the three layers of a cert straight off the chain and merges them.
@@ -173,26 +185,14 @@ library ShareLayerLib {
 
     /// @notice Reads a series payload as a layer.
     /// @dev A legacy series payload is a bare `SeriesTerms`, which is the terms section on its own.
-    function seriesLayerOf(bytes memory data) public pure returns (ShareLayer memory layer) {
-        if (data.length == 0) return layer;
-        if (hasShareLayerTag(data)) return decode(data);
-        layer.terms = data;
+    function seriesLayer(bytes memory data) public pure returns (ShareLayer memory) {
+        return seriesLayerOf(data);
     }
 
     /// @notice Reads a class payload as a layer.
     /// @dev A class payload has no legacy share format, so an untagged payload belongs to another
     ///      decoder and contributes nothing.
     function classLayerOf(bytes memory data) public pure returns (ShareLayer memory layer) {
-        if (hasShareLayerTag(data)) layer = decode(data);
-    }
-
-    function _mostGranular(bytes memory cert, bytes memory series, bytes memory class_)
-        private
-        pure
-        returns (bytes memory)
-    {
-        if (cert.length != 0) return cert;
-        if (series.length != 0) return series;
-        return class_;
+        if (hasShareLayerTag(data)) layer = decodeShareLayer(data);
     }
 }

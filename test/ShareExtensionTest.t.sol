@@ -285,8 +285,10 @@ contract ShareLayerTest is Test {
         certTerms.seriesName = "Series Seed 2 (as adjusted)";
 
         ShareLayer memory certLayer;
-        certLayer.certificateData = abi.encode(RealWorldShareCert.certificateData());
-        certLayer.terms = abi.encode(certTerms);
+        certLayer.certificateData = new CertificateData[](1);
+        certLayer.certificateData[0] = RealWorldShareCert.certificateData();
+        certLayer.terms = new SeriesTerms[](1);
+        certLayer.terms[0] = certTerms;
 
         ShareCertData memory resolved = ShareLayerLib.resolve(
             "", RealWorldShareCert.encodedSeriesLayer(), abi.encode(SHARE_LAYER_TAG, certLayer)
@@ -305,11 +307,14 @@ contract ShareLayerTest is Test {
         classTerms.seriesName = "Preferred Stock (class default)";
 
         ShareLayer memory classLayer;
-        classLayer.terms = abi.encode(classTerms);
-        classLayer.transferRestrictions = abi.encode(new TransferRestriction[](0));
+        classLayer.terms = new SeriesTerms[](1);
+        classLayer.terms[0] = classTerms;
+        classLayer.transferRestrictions = new TransferRestriction[][](1);
+        classLayer.transferRestrictions[0] = new TransferRestriction[](0);
 
         ShareLayer memory seriesLayer;
-        seriesLayer.terms = abi.encode(RealWorldShareCert.seriesTerms());
+        seriesLayer.terms = new SeriesTerms[](1);
+        seriesLayer.terms[0] = RealWorldShareCert.seriesTerms();
 
         ShareCertData memory resolved = ShareLayerLib.resolve(
             abi.encode(SHARE_LAYER_TAG, classLayer),
@@ -319,6 +324,30 @@ contract ShareLayerTest is Test {
 
         assertEq(resolved.terms.seriesName, "Series Seed 2", "the series wins over the class");
         assertEq(resolved.transferRestrictions.length, 0, "the class fills what neither layer below sets");
+    }
+
+    /// @notice Setting a section to an empty list is an override, not an absence. The section length
+    ///         is the only presence rule, so "this cert has no transfer restrictions" and "this cert
+    ///         inherits the restrictions" are different payloads and resolve differently.
+    function testResolve_AnEmptyListOverridesRatherThanInherits() public view {
+        ShareLayer memory clears;
+        clears.certificateData = new CertificateData[](1);
+        clears.certificateData[0] = RealWorldShareCert.certificateData();
+        clears.transferRestrictions = new TransferRestriction[][](1);
+        clears.transferRestrictions[0] = new TransferRestriction[](0);
+
+        bytes memory series = RealWorldShareCert.encodedSeriesLayer();
+
+        assertEq(
+            ShareLayerLib.resolve("", series, abi.encode(SHARE_LAYER_TAG, clears)).transferRestrictions.length,
+            0,
+            "an empty list set on the cert clears the series restrictions"
+        );
+        assertEq(
+            ShareLayerLib.resolve("", series, RealWorldShareCert.encodedCertLayer()).transferRestrictions.length,
+            RealWorldShareCert.transferRestrictions().length,
+            "a cert that sets nothing still inherits them"
+        );
     }
 
     // --- Backwards compatibility ---
