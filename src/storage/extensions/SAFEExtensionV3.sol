@@ -26,6 +26,7 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+import {ScopedDataLayerLib} from "./ScopedDataLayerLib.sol";
 import "./SAFEExtension.sol";
 
 /// @notice Series-wide SAFE terms, encoded as the printer's seriesData.
@@ -33,6 +34,13 @@ struct SAFESeriesData {
     string seriesName;
     string[] governingDocumentURIs;
     string customProvisions;
+}
+
+/// @notice The whole certificate: the series terms and the cert terms, side by side. The two scopes
+/// hold different fields, so this is a pairing and not a merge.
+struct SAFEResolvedData {
+    SAFESeriesData series;
+    SAFEData certificate;
 }
 
 /// @title SAFEExtensionV3 - SAFE certificate extension with typed series-scope data
@@ -44,10 +52,6 @@ contract SAFEExtensionV3 is SAFEExtension {
         return extensionType == EXTENSION_TYPE_V3 || extensionType == EXTENSION_TYPE;
     }
 
-    function supportsSeriesExtensionData() external pure returns (bool) {
-        return true;
-    }
-
     function decodeSeriesExtensionData(bytes memory data) external pure returns (SAFESeriesData memory) {
         return abi.decode(data, (SAFESeriesData));
     }
@@ -56,7 +60,30 @@ contract SAFEExtensionV3 is SAFEExtension {
         return abi.encode(data);
     }
 
-    function getSeriesExtensionURI(bytes memory data) external pure returns (string memory) {
+    /// @notice Announces the resolved-render path to `CertificateUriBuilder`.
+    function supportsResolvedExtensionData() external pure returns (bool) {
+        return true;
+    }
+
+    /// @notice The typed whole certificate. A scope with no payload reads back as a blank struct.
+    function resolveCert(address printer, uint256 tokenId) public view returns (SAFEResolvedData memory resolved) {
+        (bytes memory certData, bytes memory seriesData) = ScopedDataLayerLib.getScopedPayloads(printer, tokenId);
+        if (certData.length != 0) resolved.certificate = abi.decode(certData, (SAFEData));
+        if (seriesData.length != 0) resolved.series = abi.decode(seriesData, (SAFESeriesData));
+    }
+
+    /// @notice Renders the whole certificate: the cert scope and the series scope in one section.
+    /// @dev The cert payload alone is not the whole certificate, so this replaces the per-scope calls.
+    ///      A scope with no payload is left out rather than rendered blank.
+    function getResolvedExtensionURI(address printer, uint256 tokenId) external view returns (string memory) {
+        (bytes memory certData, bytes memory seriesData) = ScopedDataLayerLib.getScopedPayloads(printer, tokenId);
+        return string.concat(
+            certData.length == 0 ? "" : getExtensionURI(certData),
+            _buildSeriesJson(seriesData)
+        );
+    }
+
+    function _buildSeriesJson(bytes memory data) internal pure returns (string memory) {
         if (data.length == 0) return "";
         SAFESeriesData memory decoded = abi.decode(data, (SAFESeriesData));
         return string.concat(

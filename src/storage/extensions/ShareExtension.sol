@@ -221,59 +221,6 @@ struct ShareCertData {
     SplitRecord[] splitHistory;
 }
 
-// First word of a layered share payload. A legacy payload is a bare `abi.encode(ShareCertData)` or
-// `abi.encode(SeriesTerms)`. The first word of a bare payload is a small ABI head offset, so it can
-// never be equal to this tag. Readers use the tag to tell the two formats apart.
-bytes32 constant SHARE_LAYER_TAG = keccak256("metalex.share.layer.v1");
-
-/// @notice One layer of `ShareCertData`, split into its six sections.
-///
-/// The same struct is stored at three scopes: the class payload on the IssuanceManager, the series
-/// payload on the printer, and the per-cert payload. Resolution goes cert, then series, then class.
-/// The first layer that sets a section wins, so the more granular scope always overrides the less
-/// granular one.
-///
-/// Every section is an array of zero or one entry, and that is the only presence rule: length zero
-/// inherits the section from the layer above, length one sets it. There is no separate flag or mask
-/// that could disagree with the data, and an unset section costs one word instead of a whole blank
-/// struct. A small per-cert payload is what makes a secondary-trade settlement cheap, because
-/// settlement copies the payload into a fresh Ledger Entry Token for the buyer.
-///
-/// The scope of each section is a best guess. Put a section at the scope where it is expected to be
-/// the same for every cert below it, and override it lower down when one cert differs.
-struct ShareLayer {
-    CertificateData[] certificateData;
-    SeriesTerms[] terms;
-    MandatoryConversionTrigger[][] conversionTriggers;
-    SpecialVotingRight[][] votingRights;
-    TransferRestriction[][] transferRestrictions;
-    SplitRecord[][] splitHistory;
-}
-
-/// Tells a layered payload from a legacy whole-struct payload.
-function hasShareLayerTag(bytes memory data) pure returns (bool) {
-    if (data.length < 32) return false;
-    bytes32 tag;
-    assembly ("memory-safe") {
-        tag := mload(add(data, 32))
-    }
-    return tag == SHARE_LAYER_TAG;
-}
-
-/// Reads a tagged layered payload. Check `hasShareLayerTag` first.
-function decodeShareLayer(bytes memory data) pure returns (ShareLayer memory layer) {
-    (, layer) = abi.decode(data, (bytes32, ShareLayer));
-}
-
-/// Reads a series payload as a layer. A legacy series payload is a bare `SeriesTerms`, which is the
-/// terms section on its own.
-function seriesLayerOf(bytes memory data) pure returns (ShareLayer memory layer) {
-    if (data.length == 0) return layer;
-    if (hasShareLayerTag(data)) return decodeShareLayer(data);
-    layer.terms = new SeriesTerms[](1);
-    layer.terms[0] = abi.decode(data, (SeriesTerms));
-}
-
 contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SHARE");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
@@ -297,11 +244,11 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         __BorgAuthACL_init(_auth);
     }
 
-    function decodeExtensionData(bytes memory data) external pure returns (ShareCertData memory) {
+    function decodeExtensionData(bytes memory data) external pure virtual returns (ShareCertData memory) {
         return abi.decode(data, (ShareCertData));
     }
 
-    function encodeExtensionData(ShareCertData memory data) external pure returns (bytes memory) {
+    function encodeExtensionData(ShareCertData memory data) external pure virtual returns (bytes memory) {
         return abi.encode(data);
     }
 
@@ -309,20 +256,8 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return extensionType == EXTENSION_TYPE;
     }
 
-    // ── Layered payloads ──────────────────────────────────────────────────────
-
-    /// @notice Tells if a payload is a layered payload or a legacy whole-struct payload.
-    /// @dev `ShareLayerLib` splits, merges and reads layers. It is a linked library, so it is deployed
-    ///      once and shared by every extension version.
-    function isShareLayer(bytes memory data) public pure returns (bool) {
-        return hasShareLayerTag(data);
-    }
-
-    // ── Rendering ─────────────────────────────────────────────────────────────
-
-    function getExtensionURI(bytes memory data) external pure override returns (string memory) {
+    function getExtensionURI(bytes memory data) public pure virtual override returns (string memory) {
         if (data.length == 0) return "";
-        if (isShareLayer(data)) return _buildCertLayerJson(decodeShareLayer(data));
 
         ShareCertData memory share = abi.decode(data, (ShareCertData));
 
@@ -346,68 +281,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 '}'
             )
         );
-    }
-
-    /// @dev Renders a cert layer. Only the sections the cert carries appear. The layers above are
-    ///      rendered as their own sections of the token URI, so nothing is lost by leaving them out.
-    function _buildCertLayerJson(ShareLayer memory layer) internal pure returns (string memory) {
-        CertificateData memory cert;
-        if (layer.certificateData.length != 0) cert = layer.certificateData[0];
-
-        return string(
-            abi.encodePacked(
-                ', "shareDetails": {',
-                _buildCertificateJson(cert),
-                '"paymentPercentage": "', Strings.toString(_getPaymentPercentage(cert)),
-                '", ',
-                _buildTermsSectionsJson(layer),
-                '}'
-            )
-        );
-    }
-
-    /// @dev Renders the five series-wide sections of a layer, then the derived conversion ratio.
-    ///      A section that the layer does not carry is left out. The ratio is always last and never
-    ///      has a trailing separator, so the caller only has to close the object.
-    function _buildTermsSectionsJson(ShareLayer memory layer) internal pure returns (string memory json) {
-        SeriesTerms memory terms;
-        if (layer.terms.length != 0) {
-            terms = layer.terms[0];
-            json = _buildSeriesJson(terms);
-        }
-        if (layer.conversionTriggers.length != 0) {
-            json = string(abi.encodePacked(
-                json,
-                '"mandatoryConversionTriggers": ',
-                _buildMandatoryConversionTriggersJson(layer.conversionTriggers[0]),
-                ', '
-            ));
-        }
-        if (layer.votingRights.length != 0) {
-            json = string(abi.encodePacked(
-                json,
-                '"specialVotingRights": ',
-                _buildSpecialVotingRightsJson(layer.votingRights[0]),
-                ', '
-            ));
-        }
-        if (layer.transferRestrictions.length != 0) {
-            json = string(abi.encodePacked(
-                json,
-                '"transferRestrictions": ',
-                _buildTransferRestrictionsJson(layer.transferRestrictions[0]),
-                ', '
-            ));
-        }
-        if (layer.splitHistory.length != 0) {
-            json = string(abi.encodePacked(
-                json,
-                '"splitHistory": ',
-                _buildSplitHistoryJson(layer.splitHistory[0]),
-                ', '
-            ));
-        }
-        json = string(abi.encodePacked(json, '"conversionRatio": "', from18DecimalsToString(_getConversionRatio(terms)), '"'));
     }
 
     function _buildSeriesJson(SeriesTerms memory terms) internal pure returns (string memory) {

@@ -46,14 +46,25 @@ interface ICertificateExtension {
     function getExtensionURI(bytes memory data) external view returns (string memory);
 }
 
-/// @notice V3 certificate extension: one extension contract decodes/renders BOTH the per-cert
-/// `CertificateDetails.extensionData` payload (inherited ICertificateExtension surface, unchanged for
-/// backwards compatibility) and a series-scope payload (the printer's `seriesData`, since each
-/// LedgerEntryToken is the series scope). Callers feature-detect V3 via `supportsSeriesExtensionData()`
-/// (or try/catch) so V1/V2 extensions keep working untouched.
+/// @notice V3 certificate extension: the cert payload alone is not the whole certificate. A section
+/// may be stored at the series scope (the printer's `seriesData`) or the class scope
+/// (`SecurityClassInfo.classData`), so a reader that renders one scope on its own shows a partial
+/// certificate. A V3 extension reaches every scope through the printer, merges them, and renders one
+/// complete section.
+///
+/// Three more functions are expected of every implementation but cannot be declared here, because each
+/// version returns its own types and Solidity has no generics. Read them through the concrete type.
+///
+/// | function                                | returns                                          |
+/// |-----------------------------------------|--------------------------------------------------|
+/// | `decodeExtensionData(bytes)`            | the shape that version stores on a certificate   |
+/// | `encodeExtensionData(<stored shape>)`   | `bytes`                                          |
+/// | `resolveCert(address printer, uint256)` | that version's resolved shape                    |
 interface ICertificateExtensionV3 is ICertificateExtension {
-    function supportsSeriesExtensionData() external pure returns (bool);
-    function getSeriesExtensionURI(bytes memory seriesData) external view returns (string memory);
+    function supportsResolvedExtensionData() external pure returns (bool);
+    /// @param printer the Ledger Entry Token that holds the cert, and the route to the series and class scopes
+    /// @param tokenId the cert to resolve
+    function getResolvedExtensionURI(address printer, uint256 tokenId) external view returns (string memory);
 }
 
 /// @notice Typed accessors over a fund-interest cert payload. Consumers (holding-period condition,

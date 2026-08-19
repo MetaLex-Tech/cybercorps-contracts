@@ -34,12 +34,12 @@ import {console2} from "forge-std/Test.sol";
 /// is 1,632 bytes and is written once for the printer, so it never appears in a settlement.
 /// | pathway           | postOffer | acceptOffer | finalize  | finalize % of limit |
 /// |-------------------|-----------|-------------|-----------|---------------------|
-/// | Rule 144          | 1,362,193 | 1,963,921   | 2,608,892 | 15.5%               |
+/// | Rule 144          | 1,362,193 | 1,963,981   | 2,608,952 | 15.6%               |
 /// | Section 4(a)(7)   | 1,362,193 | 1,935,095   | 2,647,066 | 15.8%               |
 /// | Section 4(a)(1/2) | 1,362,193 | 1,895,304   | 2,628,275 | 15.7%               |
 /// | Regulation S      | 1,362,193 | 1,993,348   | 2,794,241 | 16.7%               |
 ///
-/// Posting pinned to Rule 144 costs 1,555,436.
+/// Posting pinned to Rule 144 costs 1,555,496.
 ///
 /// Settlement costs about one fifth of the equity case: 2.79 M against 14.81 M in the worst pathway.
 /// Posting and acceptance are within a few percent of each other, because neither depends much on payload

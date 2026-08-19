@@ -9,10 +9,8 @@ import {
     MandatoryConversionTrigger,
     MandatoryConversionTriggerType,
     RedemptionType,
-    SHARE_LAYER_TAG,
     SeriesTerms,
     ShareCertData,
-    ShareLayer,
     ShareRepresentationType,
     SpecialVotingRight,
     SplitRecord,
@@ -21,6 +19,7 @@ import {
     TransferRestrictionType,
     VotingScope
 } from "../../src/storage/extensions/ShareExtension.sol";
+import {ShareCertDataLayer} from "../../src/storage/extensions/ShareExtensionV3.sol";
 
 // IPFS URI used in certData.uri and template (66 chars, matches real certData[0].uri)
 string constant REAL_WORLD_IPFS_URI = "ipfs://bafybeidk7knzf43nsj6q2jhouieifyssknohn4uvizlxtnbwvxgjkqgbne";
@@ -114,7 +113,7 @@ library RealWorldShareCert {
 
     /// @notice The five series-wide sections of the payload, as the printer's `seriesData`.
     function encodedSeriesLayer() internal pure returns (bytes memory) {
-        ShareLayer memory layer;
+        ShareCertDataLayer memory layer;
         layer.terms = new SeriesTerms[](1);
         layer.terms[0] = seriesTerms();
         layer.conversionTriggers = new MandatoryConversionTrigger[][](1);
@@ -125,16 +124,16 @@ library RealWorldShareCert {
         layer.transferRestrictions[0] = transferRestrictions();
         layer.splitHistory = new SplitRecord[][](1);
         layer.splitHistory[0] = splitHistory();
-        return abi.encode(SHARE_LAYER_TAG, layer);
+        return abi.encode(layer);
     }
 
     /// @notice What is left of the payload once the series sections move to the printer, as a cert's
     ///         `extensionData`. Every other section is unset, so the cert inherits it from the series.
     function encodedCertLayer() internal pure returns (bytes memory) {
-        ShareLayer memory layer;
+        ShareCertDataLayer memory layer;
         layer.certificateData = new CertificateData[](1);
         layer.certificateData[0] = certificateData();
-        return abi.encode(SHARE_LAYER_TAG, layer);
+        return abi.encode(layer);
     }
 
     function certificateData() internal pure returns (CertificateData memory) {

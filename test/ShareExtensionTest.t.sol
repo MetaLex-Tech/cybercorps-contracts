@@ -3,22 +3,26 @@ pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
 import {
-    SHARE_LAYER_TAG,
     ShareExtension,
     SeriesTerms,
     CertificateData,
     MandatoryConversionTrigger,
     ShareCertData,
-    ShareLayer,
     SpecialVotingRight,
     TransferRestrictionException,
     TransferRestriction,
     SplitRecord
 } from "../src/storage/extensions/ShareExtension.sol";
+import {ShareCertDataLayer} from "../src/storage/extensions/ShareExtensionV3.sol";
 import {ShareExtensionLogic} from "../src/storage/extensions/ShareExtensionLogic.sol";
+import {ShareCertDataLayerLib} from "../src/storage/extensions/ShareCertDataLayerLib.sol";
 import {ShareExtensionV3} from "../src/storage/extensions/ShareExtensionV3.sol";
-import {ShareLayerLib} from "../src/storage/extensions/ShareLayerLib.sol";
 import {RealWorldShareCert} from "./libs/RealWorldShareCert.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {CertificateSVGParams, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {ICertificateImageBuilder} from "../src/interfaces/ICertificateImageBuilder.sol";
 
 contract ShareExtensionHarness is ShareExtension {
     // _buildSeriesJson returns `"terms": {...}, ` (fragment); wrap for parseable JSON.
@@ -232,12 +236,12 @@ contract ShareExtensionTest is Test {
 /// @notice The layered payload: how a `ShareCertData` splits across the class, series and cert scopes,
 ///         and how it merges back. The fixture is the real Series Seed 2 payload the gas guards use.
 contract ShareLayerTest is Test {
-    ShareExtension internal ext;
-    ShareExtensionV3 internal extV3;
+    ShareExtensionV3 internal ext;
+    ShareExtensionLogic internal logic;
 
     function setUp() public {
-        ext = new ShareExtension();
-        extV3 = new ShareExtensionV3();
+        ext = new ShareExtensionV3();
+        logic = new ShareExtensionLogic();
     }
 
     function _hash(ShareCertData memory share) internal pure returns (bytes32) {
@@ -246,32 +250,12 @@ contract ShareLayerTest is Test {
 
     // --- Format detection ---
 
-    function testIsShareLayer_TellsLayeredFromLegacy() public view {
-        assertFalse(ext.isShareLayer(RealWorldShareCert.encodedShareCertData()), "whole ShareCertData");
-        assertFalse(ext.isShareLayer(abi.encode(RealWorldShareCert.seriesTerms())), "bare SeriesTerms");
-        assertFalse(ext.isShareLayer(bytes("")), "empty");
-        assertTrue(ext.isShareLayer(RealWorldShareCert.encodedCertLayer()), "cert layer");
-        assertTrue(ext.isShareLayer(RealWorldShareCert.encodedSeriesLayer()), "series layer");
-    }
-
     // --- Split and merge ---
-
-    function testSplit_MovesEverySeriesWideSectionOffTheCert() public view {
-        bytes memory whole = RealWorldShareCert.encodedShareCertData();
-        (bytes memory series, bytes memory cert) = ShareLayerLib.split(RealWorldShareCert.shareCertData());
-
-        assertLt(cert.length, whole.length / 10, "the cert keeps under a tenth of the payload");
-        assertEq(
-            _hash(ShareLayerLib.resolve("", series, cert)),
-            _hash(RealWorldShareCert.shareCertData()),
-            "the layers merge back to the whole struct"
-        );
-    }
 
     function testResolve_SeriesLayerFillsEverySectionTheCertLeavesEmpty() public view {
         assertEq(
             _hash(
-                ShareLayerLib.resolve(
+                ShareCertDataLayerLib.resolve(
                     "", RealWorldShareCert.encodedSeriesLayer(), RealWorldShareCert.encodedCertLayer()
                 )
             ),
@@ -284,14 +268,14 @@ contract ShareLayerTest is Test {
         SeriesTerms memory certTerms = RealWorldShareCert.seriesTerms();
         certTerms.seriesName = "Series Seed 2 (as adjusted)";
 
-        ShareLayer memory certLayer;
+        ShareCertDataLayer memory certLayer;
         certLayer.certificateData = new CertificateData[](1);
         certLayer.certificateData[0] = RealWorldShareCert.certificateData();
         certLayer.terms = new SeriesTerms[](1);
         certLayer.terms[0] = certTerms;
 
-        ShareCertData memory resolved = ShareLayerLib.resolve(
-            "", RealWorldShareCert.encodedSeriesLayer(), abi.encode(SHARE_LAYER_TAG, certLayer)
+        ShareCertData memory resolved = ShareCertDataLayerLib.resolve(
+            "", RealWorldShareCert.encodedSeriesLayer(), abi.encode(certLayer)
         );
 
         assertEq(resolved.terms.seriesName, "Series Seed 2 (as adjusted)", "the cert wins");
@@ -306,106 +290,183 @@ contract ShareLayerTest is Test {
         SeriesTerms memory classTerms = RealWorldShareCert.seriesTerms();
         classTerms.seriesName = "Preferred Stock (class default)";
 
-        ShareLayer memory classLayer;
+        ShareCertDataLayer memory classLayer;
         classLayer.terms = new SeriesTerms[](1);
         classLayer.terms[0] = classTerms;
         classLayer.transferRestrictions = new TransferRestriction[][](1);
-        classLayer.transferRestrictions[0] = new TransferRestriction[](0);
+        classLayer.transferRestrictions[0] = _oneRestriction("class default");
 
-        ShareLayer memory seriesLayer;
+        ShareCertDataLayer memory seriesLayer;
         seriesLayer.terms = new SeriesTerms[](1);
         seriesLayer.terms[0] = RealWorldShareCert.seriesTerms();
 
-        ShareCertData memory resolved = ShareLayerLib.resolve(
-            abi.encode(SHARE_LAYER_TAG, classLayer),
-            abi.encode(SHARE_LAYER_TAG, seriesLayer),
+        ShareCertData memory resolved = ShareCertDataLayerLib.resolve(
+            abi.encode(classLayer),
+            abi.encode(seriesLayer),
             RealWorldShareCert.encodedCertLayer()
         );
 
         assertEq(resolved.terms.seriesName, "Series Seed 2", "the series wins over the class");
-        assertEq(resolved.transferRestrictions.length, 0, "the class fills what neither layer below sets");
+        assertEq(resolved.transferRestrictions.length, 1, "the class fills what neither layer below sets");
+        assertEq(resolved.transferRestrictions[0].restrictionText, "class default");
     }
 
-    /// @notice Setting a section to an empty list is an override, not an absence. The section length
-    ///         is the only presence rule, so "this cert has no transfer restrictions" and "this cert
-    ///         inherits the restrictions" are different payloads and resolve differently.
-    function testResolve_AnEmptyListOverridesRatherThanInherits() public view {
-        ShareLayer memory clears;
-        clears.certificateData = new CertificateData[](1);
-        clears.certificateData[0] = RealWorldShareCert.certificateData();
-        clears.transferRestrictions = new TransferRestriction[][](1);
-        clears.transferRestrictions[0] = new TransferRestriction[](0);
+    /// @notice The list sections append. Every layer that sets one adds its entries, from the class
+    ///         down to the cert, so no layer can drop what another layer sets.
+    function testResolve_ListSectionsAppendEveryLayer() public view {
+        ShareCertData memory resolved = ShareCertDataLayerLib.resolve(
+            _restrictionLayer(_oneRestriction("class"), false),
+            _restrictionLayer(_oneRestriction("series"), false),
+            _restrictionLayer(_oneRestriction("cert"), false)
+        );
 
-        bytes memory series = RealWorldShareCert.encodedSeriesLayer();
+        assertEq(resolved.transferRestrictions.length, 3, "every layer contributes");
+        assertEq(resolved.transferRestrictions[0].restrictionText, "class", "the class comes first");
+        assertEq(resolved.transferRestrictions[1].restrictionText, "series", "then the series");
+        assertEq(resolved.transferRestrictions[2].restrictionText, "cert", "then the cert");
+    }
+
+    /// @notice The overwrite flag is the only way to remove what a layer above gives. A cert that sets
+    ///         the flag keeps its own list alone.
+    function testResolve_CertOverwriteFlagDropsTheLayersAboveIt() public view {
+        ShareCertData memory resolved = ShareCertDataLayerLib.resolve(
+            _restrictionLayer(_oneRestriction("class"), false),
+            _restrictionLayer(_oneRestriction("series"), false),
+            _restrictionLayer(_oneRestriction("cert"), true)
+        );
+
+        assertEq(resolved.transferRestrictions.length, 1, "the class and the series are dropped");
+        assertEq(resolved.transferRestrictions[0].restrictionText, "cert");
+    }
+
+    /// @notice A flag drops the layers above the layer that sets it, and it keeps the layers below.
+    function testResolve_SeriesOverwriteFlagDropsTheClassAndKeepsTheCert() public view {
+        ShareCertData memory resolved = ShareCertDataLayerLib.resolve(
+            _restrictionLayer(_oneRestriction("class"), false),
+            _restrictionLayer(_oneRestriction("series"), true),
+            _restrictionLayer(_oneRestriction("cert"), false)
+        );
+
+        assertEq(resolved.transferRestrictions.length, 2, "the class is dropped");
+        assertEq(resolved.transferRestrictions[0].restrictionText, "series");
+        assertEq(resolved.transferRestrictions[1].restrictionText, "cert");
+    }
+
+    /// @notice A flag on a layer that sets no list does nothing, so a stray flag cannot remove a
+    ///         restriction by accident.
+    function testResolve_AnOverwriteFlagWithNoListDoesNothing() public view {
+        ShareCertDataLayer memory strayFlag;
+        strayFlag.overwriteTransferRestrictions = true;
+
+        ShareCertData memory resolved =
+            ShareCertDataLayerLib.resolve("", RealWorldShareCert.encodedSeriesLayer(), abi.encode(strayFlag));
 
         assertEq(
-            ShareLayerLib.resolve("", series, abi.encode(SHARE_LAYER_TAG, clears)).transferRestrictions.length,
-            0,
-            "an empty list set on the cert clears the series restrictions"
+            resolved.transferRestrictions.length,
+            RealWorldShareCert.transferRestrictions().length,
+            "the series restrictions stay"
+        );
+    }
+
+    /// @notice To clear a section a layer needs both parts: an empty list, which appends nothing, and
+    ///         the overwrite flag, which drops the layers above. An empty list alone changes nothing.
+    function testResolve_AnEmptyListClearsOnlyWithTheOverwriteFlag() public view {
+        bytes memory series = RealWorldShareCert.encodedSeriesLayer();
+        TransferRestriction[] memory emptyList = new TransferRestriction[](0);
+
+        assertEq(
+            ShareCertDataLayerLib.resolve("", series, _restrictionLayer(emptyList, false)).transferRestrictions.length,
+            RealWorldShareCert.transferRestrictions().length,
+            "an empty list appends nothing and removes nothing"
         );
         assertEq(
-            ShareLayerLib.resolve("", series, RealWorldShareCert.encodedCertLayer()).transferRestrictions.length,
+            ShareCertDataLayerLib.resolve("", series, _restrictionLayer(emptyList, true)).transferRestrictions.length,
+            0,
+            "with the flag the empty list clears the series restrictions"
+        );
+        assertEq(
+            ShareCertDataLayerLib.resolve("", series, RealWorldShareCert.encodedCertLayer()).transferRestrictions.length,
             RealWorldShareCert.transferRestrictions().length,
             "a cert that sets nothing still inherits them"
         );
     }
 
-    // --- Backwards compatibility ---
+    function _oneRestriction(string memory text) internal pure returns (TransferRestriction[] memory list) {
+        list = new TransferRestriction[](1);
+        list[0].restrictionText = text;
+    }
 
-    function testResolve_LegacyCertPayloadReadsBackUnchanged() public view {
+    /// @dev A layer that carries the transfer-restriction section alone, which is all a merge test
+    ///      needs to see.
+    function _restrictionLayer(
+        TransferRestriction[] memory list,
+        bool overwrite
+    ) internal pure returns (bytes memory) {
+        ShareCertDataLayer memory layer;
+        layer.transferRestrictions = new TransferRestriction[][](1);
+        layer.transferRestrictions[0] = list;
+        layer.overwriteTransferRestrictions = overwrite;
+        return abi.encode(layer);
+    }
+
+    /// @notice The codecs keep the legacy signatures but speak the shape this version stores. A whole
+    ///         struct in comes back out, so a caller needs no special case.
+    function testCodecs_RoundTripAWholeShareCertData() public view {
+        ShareCertData memory original = RealWorldShareCert.shareCertData();
+
+        bytes memory payload = ext.encodeExtensionData(original);
+        assertEq(_hash(ext.decodeExtensionData(payload)), _hash(original), "the struct survives the round trip");
+
+        // What it wrote is a plain cert layer.
         assertEq(
-            _hash(
-                ShareLayerLib.resolve(
-                    "", RealWorldShareCert.encodedSeriesLayer(), RealWorldShareCert.encodedShareCertData()
-                )
-            ),
-            _hash(RealWorldShareCert.shareCertData()),
-            "a whole-struct cert ignores the layers above it"
+            _hash(ShareCertDataLayerLib.resolve("", "", payload)),
+            _hash(original),
+            "and it resolves to the same struct with no series and no class"
+        );
+
+        // The layer sets no overwrite flag, so a series still appends its list entries to it.
+        ShareCertData memory withSeries =
+            ShareCertDataLayerLib.resolve("", RealWorldShareCert.encodedSeriesLayer(), payload);
+        assertEq(
+            withSeries.transferRestrictions.length,
+            original.transferRestrictions.length + RealWorldShareCert.transferRestrictions().length,
+            "a series appends to a whole-struct payload"
         );
     }
 
-    function testResolve_LegacySeriesPayloadIsTheTermsSection() public view {
-        ShareCertData memory resolved = ShareLayerLib.resolve(
-            "", abi.encode(RealWorldShareCert.seriesTerms()), RealWorldShareCert.encodedCertLayer()
-        );
+    /// @notice Decoding a lean cert payload shows only what that cert sets. The sections it inherits
+    ///         read back blank, because this view has no series and no class.
+    function testCodecs_DecodeShowsOnlyTheCertScope() public view {
+        ShareCertData memory decoded = ext.decodeExtensionData(RealWorldShareCert.encodedCertLayer());
 
-        assertEq(resolved.terms.seriesName, "Series Seed 2", "a bare SeriesTerms still resolves");
-        assertEq(resolved.transferRestrictions.length, 0, "it carries no other section");
+        assertEq(decoded.certificateData.sourceAuthorityURI, RealWorldShareCert.PINATA_URI, "the cert scope is set");
+        assertEq(decoded.terms.authorizedShares, 0, "the series terms are inherited, not stored here");
+        assertEq(decoded.transferRestrictions.length, 0, "so are the restrictions");
     }
 
-    function testGetSeriesExtensionURI_BarePayloadRendersAsBefore() public view {
-        string memory json =
-            string.concat("{", _stripLeadingSeparator(extV3.getSeriesExtensionURI(abi.encode(RealWorldShareCert.seriesTerms()))), "}");
-        vm.parseJson(json);
-        assertEq(vm.parseJsonString(json, ".seriesDetails.terms.seriesName"), "Series Seed 2");
-        assertEq(vm.parseJsonString(json, ".seriesDetails.conversionRatio"), "1.00");
-    }
+    // --- Backwards compatibility ---
 
     // --- Rendering ---
 
-    function testGetSeriesExtensionURI_LayerRendersEverySectionItCarries() public view {
-        string memory json = string.concat(
-            "{", _stripLeadingSeparator(extV3.getSeriesExtensionURI(RealWorldShareCert.encodedSeriesLayer())), "}"
-        );
-        vm.parseJson(json);
-        assertEq(vm.parseJsonString(json, ".seriesDetails.terms.seriesName"), "Series Seed 2");
-        _assertRestrictionsRendered(json, ".seriesDetails");
-        assertEq(vm.parseJsonString(json, ".seriesDetails.splitHistory[0].numerator"), "1");
-    }
-
-    function testGetExtensionURI_CertLayerRendersOnlyWhatTheCertCarries() public view {
+    /// @notice The cert-scope render shows what the cert layer itself carries. A section the cert
+    ///         leaves unset renders blank, because this view cannot reach the layer that holds it.
+    function testGetExtensionURI_CertScopeRendersBlankForWhatItInherits() public view {
         string memory json =
             string.concat("{", _stripLeadingSeparator(ext.getExtensionURI(RealWorldShareCert.encodedCertLayer())), "}");
         vm.parseJson(json);
+
         assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.representationType"), "Tokenized");
         assertEq(vm.parseJsonString(json, ".shareDetails.paymentPercentage"), "10000");
-        // The series sections are on the printer, so the cert section leaves them out.
-        assertEq(vm.parseJsonKeys(json, ".shareDetails").length, 3, "certificateData, paymentPercentage, ratio");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.seriesName"), "", "the series terms are inherited");
+        assertEq(vm.parseJsonStringArray(json, ".shareDetails.transferRestrictions").length, 0, "so are the restrictions");
     }
 
-    function testGetExtensionURI_LegacyPayloadStillRendersEverySection() public view {
+    /// @notice The legacy whole-struct render still works, on the legacy extension. A printer binds to
+    ///         one extension at creation and cannot be repointed, so a legacy printer keeps this render.
+    function testGetExtensionURI_LegacyExtensionStillRendersEverySection() public {
+        ShareExtension legacy = new ShareExtension();
         string memory json = string.concat(
-            "{", _stripLeadingSeparator(ext.getExtensionURI(RealWorldShareCert.encodedShareCertData())), "}"
+            "{", _stripLeadingSeparator(legacy.getExtensionURI(RealWorldShareCert.encodedShareCertData())), "}"
         );
         vm.parseJson(json);
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.seriesName"), "Series Seed 2");
@@ -438,19 +499,18 @@ contract ShareLayerTest is Test {
 ///         the payload keeps its format, and a change aimed at a section the layer does not carry is
 ///         refused instead of overwriting what the layer inherits.
 contract ShareLayerLogicTest is Test {
-    ShareExtension internal ext;
+    ShareExtensionV3 internal ext;
     ShareExtensionLogic internal logic;
 
     function setUp() public {
-        ext = new ShareExtension();
+        ext = new ShareExtensionV3();
         logic = new ShareExtensionLogic();
     }
 
     function testUpdateSeriesName_OnASeriesLayerKeepsEveryOtherSection() public view {
         bytes memory updated = logic.updateSeriesName(RealWorldShareCert.encodedSeriesLayer(), "Series Seed 2-A");
 
-        assertTrue(ext.isShareLayer(updated), "the payload keeps its format");
-        ShareCertData memory resolved = ShareLayerLib.resolve("", updated, RealWorldShareCert.encodedCertLayer());
+        ShareCertData memory resolved = ShareCertDataLayerLib.resolve("", updated, RealWorldShareCert.encodedCertLayer());
         assertEq(resolved.terms.seriesName, "Series Seed 2-A");
         assertEq(resolved.transferRestrictions.length, RealWorldShareCert.transferRestrictions().length);
         assertEq(resolved.specialVotingRights.length, RealWorldShareCert.votingRights().length);
@@ -461,7 +521,7 @@ contract ShareLayerLogicTest is Test {
         added.restrictionText = "Added by board resolution";
 
         bytes memory updated = logic.addTransferRestriction(RealWorldShareCert.encodedSeriesLayer(), added);
-        ShareCertData memory resolved = ShareLayerLib.resolve("", updated, RealWorldShareCert.encodedCertLayer());
+        ShareCertData memory resolved = ShareCertDataLayerLib.resolve("", updated, RealWorldShareCert.encodedCertLayer());
 
         uint256 last = resolved.transferRestrictions.length - 1;
         assertEq(last, RealWorldShareCert.transferRestrictions().length, "one more than before");
@@ -479,7 +539,7 @@ contract ShareLayerLogicTest is Test {
     function testRecordStockSplit_RepricesTheSeriesLayer() public view {
         bytes memory updated =
             logic.recordStockSplit(RealWorldShareCert.encodedSeriesLayer(), 2, 1, "ipfs://split", 1_780_075_298);
-        ShareCertData memory resolved = ShareLayerLib.resolve("", updated, RealWorldShareCert.encodedCertLayer());
+        ShareCertData memory resolved = ShareCertDataLayerLib.resolve("", updated, RealWorldShareCert.encodedCertLayer());
 
         SeriesTerms memory before = RealWorldShareCert.seriesTerms();
         assertEq(resolved.terms.parValue, before.parValue / 2, "par value halves");
@@ -487,12 +547,83 @@ contract ShareLayerLogicTest is Test {
         assertEq(resolved.splitHistory.length, RealWorldShareCert.splitHistory().length + 1, "the split is recorded");
     }
 
-    function testUpdateSeriesName_LegacyPayloadStaysALegacyPayload() public view {
-        bytes memory updated = logic.updateSeriesName(RealWorldShareCert.encodedShareCertData(), "Series Seed 2-A");
+}
 
-        assertFalse(ext.isShareLayer(updated), "the payload keeps its format");
-        ShareCertData memory resolved = ShareLayerLib.resolve("", "", updated);
-        assertEq(resolved.terms.seriesName, "Series Seed 2-A");
-        assertEq(resolved.transferRestrictions.length, RealWorldShareCert.transferRestrictions().length);
+/// @dev Advertises the V3 resolved path and returns a marker, so a test can tell which path the
+///      builder took without standing up a whole printer.
+contract ResolvedStubExtension {
+    function supportsExtensionType(bytes32) external pure returns (bool) { return true; }
+    function supportsResolvedExtensionData() external pure returns (bool) { return true; }
+    function getResolvedExtensionURI(address, uint256) external pure returns (string memory) {
+        return ', "resolved": "yes"';
+    }
+    function getExtensionURI(bytes memory) external pure returns (string memory) {
+        return ', "perScope": "yes"';
+    }
+}
+
+/// @dev The builder asks the printer for its reserved units, and that call is not guarded.
+contract PrinterStub {
+    function unitsReserved(uint256) external pure returns (uint256) { return 0; }
+}
+
+/// @dev The builder always draws an image, so it needs an image builder wired.
+contract ImageBuilderStub is ICertificateImageBuilder {
+    function buildCertificateSVG(CertificateSVGParams calldata, uint256) external pure returns (string memory) {
+        return "<svg/>";
+    }
+}
+
+/// @dev Same shape without the resolved surface, which is every extension that predates V3.
+contract PerScopeStubExtension {
+    function supportsExtensionType(bytes32) external pure returns (bool) { return true; }
+    function getExtensionURI(bytes memory) external pure returns (string memory) {
+        return ', "perScope": "yes"';
+    }
+}
+
+/// @notice `CertificateUriBuilder` prefers the resolved section and falls back to the per-scope
+///         sections. The cert payload alone is not the whole certificate once a section lives at the
+///         series or the class scope, so a V3 extension renders every scope in one section.
+contract CertificateUriBuilderResolvedPathTest is Test {
+    CertificateUriBuilder internal builder;
+    address internal printer;
+
+    function setUp() public {
+        BorgAuth auth = new BorgAuth(address(this));
+        builder = CertificateUriBuilder(
+            address(
+                new ERC1967Proxy(
+                    address(new CertificateUriBuilder()),
+                    abi.encodeWithSelector(CertificateUriBuilder.initialize.selector, address(auth))
+                )
+            )
+        );
+        builder.setImageBuilder(address(new ImageBuilderStub()));
+        printer = address(new PrinterStub());
+    }
+
+    function _render(address extension) internal view returns (string memory) {
+        CertificateUriBuilder.CertificateDetails memory details;
+        details.extensionData = bytes("payload");
+        return builder.buildCertificateUriNotEncoded(
+            "Corp", "C-Corp", "DE", "hi@example.com",
+            SecurityClass.PreferredStock, SecuritySeries.SeriesSeed, "ipfs://cert",
+            new string[](0), details, new CertificateUriBuilder.Endorsement[](0),
+            CertificateUriBuilder.OwnerDetails("holder", address(0xBEEF)),
+            address(0), bytes32(0), 1, printer, extension
+        );
+    }
+
+    function testBuilder_PrefersTheResolvedSection() public {
+        string memory json = _render(address(new ResolvedStubExtension()));
+        assertEq(vm.parseJsonString(json, ".resolved"), "yes", "the resolved section is rendered");
+        assertFalse(vm.keyExistsJson(json, ".perScope"), "the cert-scope section is not");
+    }
+
+    function testBuilder_FallsBackWhenTheExtensionPredatesV3() public {
+        string memory json = _render(address(new PerScopeStubExtension()));
+        assertEq(vm.parseJsonString(json, ".perScope"), "yes", "the cert-scope section still renders");
+        assertFalse(vm.keyExistsJson(json, ".resolved"), "there is no resolved section");
     }
 }

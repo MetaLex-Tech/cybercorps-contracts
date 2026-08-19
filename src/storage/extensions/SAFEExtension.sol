@@ -78,7 +78,7 @@ contract SAFEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return extensionType == EXTENSION_TYPE;
     }
 
-    function getExtensionURI(bytes memory data) external view override returns (string memory) {
+    function getExtensionURI(bytes memory data) public view virtual override returns (string memory) {
         SAFEData memory decoded = abi.decode(data, (SAFEData));
         
         string memory json = string(abi.encodePacked(

@@ -26,6 +26,7 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+import {ScopedDataLayerLib} from "./ScopedDataLayerLib.sol";
 import "./SAFTExtensionV2.sol";
 
 /// @notice Series-wide SAFT terms, encoded as the printer's seriesData.
@@ -34,6 +35,13 @@ struct SAFTSeriesData {
     uint256 tokenGenerationEventDate;
     string[] governingDocumentURIs;
     string customProvisions;
+}
+
+/// @notice The whole certificate: the series terms and the cert terms, side by side. The two scopes
+/// hold different fields, so this is a pairing and not a merge.
+struct SAFTResolvedData {
+    SAFTSeriesData series;
+    SAFTDataV2 certificate;
 }
 
 /// @title SAFTExtensionV3 - SAFT certificate extension with typed series-scope data
@@ -45,14 +53,38 @@ contract SAFTExtensionV3 is SAFTExtensionV2 {
         return extensionType == EXTENSION_TYPE_V3 || extensionType == EXTENSION_TYPE;
     }
 
-    function supportsSeriesExtensionData() external pure returns (bool) { return true; }
     function decodeSeriesExtensionData(bytes memory data) external pure returns (SAFTSeriesData memory) {
         return abi.decode(data, (SAFTSeriesData));
     }
+
     function encodeSeriesExtensionData(SAFTSeriesData memory data) external pure returns (bytes memory) {
         return abi.encode(data);
     }
-    function getSeriesExtensionURI(bytes memory data) external pure returns (string memory) {
+
+    /// @notice Announces the resolved-render path to `CertificateUriBuilder`.
+    function supportsResolvedExtensionData() external pure returns (bool) {
+        return true;
+    }
+
+    /// @notice The typed whole certificate. A scope with no payload reads back as a blank struct.
+    function resolveCert(address printer, uint256 tokenId) public view returns (SAFTResolvedData memory resolved) {
+        (bytes memory certData, bytes memory seriesData) = ScopedDataLayerLib.getScopedPayloads(printer, tokenId);
+        if (certData.length != 0) resolved.certificate = abi.decode(certData, (SAFTDataV2));
+        if (seriesData.length != 0) resolved.series = abi.decode(seriesData, (SAFTSeriesData));
+    }
+
+    /// @notice Renders the whole certificate: the cert scope and the series scope in one section.
+    /// @dev The cert payload alone is not the whole certificate, so this replaces the per-scope calls.
+    ///      A scope with no payload is left out rather than rendered blank.
+    function getResolvedExtensionURI(address printer, uint256 tokenId) external view returns (string memory) {
+        (bytes memory certData, bytes memory seriesData) = ScopedDataLayerLib.getScopedPayloads(printer, tokenId);
+        return string.concat(
+            certData.length == 0 ? "" : getExtensionURI(certData),
+            _buildSeriesJson(seriesData)
+        );
+    }
+
+    function _buildSeriesJson(bytes memory data) internal pure returns (string memory) {
         if (data.length == 0) return "";
         SAFTSeriesData memory decoded = abi.decode(data, (SAFTSeriesData));
         return string.concat(
@@ -61,6 +93,7 @@ contract SAFTExtensionV3 is SAFTExtensionV2 {
             '", "customProvisions": "', decoded.customProvisions, '"}'
         );
     }
+
     function _uintToString(uint256 value) private pure returns (string memory) {
         if (value == 0) return "0";
         uint256 digits; uint256 temp = value;
