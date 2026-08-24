@@ -342,17 +342,20 @@ library SecondaryTradeStorage {
         uint256 remainingUnits = offer.units - offer.unitsAccepted;
         if (params.units > remainingUnits) revert ISecondaryTradeStorage.UnitsExceedOffer();
 
-        // Pro-rata consideration for this (possibly partial) fill. The final lot that exhausts the
-        // remaining units takes the leftover consideration (offer.consideration - offer.paymentAccepted)
-        // rather than another floored pro-rata amount; otherwise flooring across partial fills strands
-        // the rounding remainder — unpaid to the seller, or stuck in custody for a buy offer.
-        uint256 partialConsideration = params.units == remainingUnits
-            ? offer.consideration - offer.paymentAccepted
-            : offer.consideration * params.units / offer.units;
+        // Pro-rata price for this (possibly partial) fill, taken from the offer's running total so rounding
+        // error does not grow with the number of fills. The lot that exhausts the offer targets the full
+        // consideration, so it pays the remainder.
+        uint256 targetPaid = offer.consideration * (offer.unitsAccepted + params.units) / offer.units;
 
-        // A priced offer must never settle a lot for nothing: flooring zeroes any fill worth less than one
-        // base unit of the payment token, which would deliver units free and shove the whole price onto the
-        // exhausting lot. Unpriced (zero-consideration) offers are a deliberate shape and stay allowed.
+        // targetPaid can fall to or below the amount already collected due to round-down, and a
+        // void refunds one lot's charge, which can be less than its share. Use zero instead of an underflow
+        // and let the next check decide whether to proceed.
+        uint256 partialConsideration = targetPaid > offer.paymentAccepted
+            ? targetPaid - offer.paymentAccepted
+            : 0;
+
+        // A priced offer must never settle a lot for nothing: a fill worth less than one base unit of the
+        // payment token rounds to zero. Unpriced (zero-consideration) offers are a deliberate shape and stay allowed.
         if (offer.consideration > 0 && partialConsideration == 0)
             revert ISecondaryTradeStorage.ZeroConsiderationFill();
 
@@ -364,7 +367,7 @@ library SecondaryTradeStorage {
         if (params.units < remainingUnits) {
             _checkMinTradeThreshold(params.units, partialConsideration);
             uint256 remainderUnits = remainingUnits - params.units;
-            uint256 remainderConsideration = (offer.consideration - offer.paymentAccepted) - partialConsideration;
+            uint256 remainderConsideration = offer.consideration - targetPaid;
             _checkMinTradeThreshold(remainderUnits, remainderConsideration);
         }
 

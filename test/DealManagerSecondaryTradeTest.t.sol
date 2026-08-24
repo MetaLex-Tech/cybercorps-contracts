@@ -4409,4 +4409,31 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.expectRevert(ISecondaryTradeStorage.SecondaryAuthReplayed.selector);
         dm.voidSecondaryTradeAgreement(settlementId, buyer, "", 4, replay);
     }
+
+    /// @dev Many small fills must not accumulate round-down errors and significantly skew the price of the
+    /// final lot.
+    function test_AcceptOffer_RepeatedPartialFills_ChargeCumulativeProRata() public {
+        // 11 units for 21 base units
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.units = 11;
+        p.consideration = 21;
+        p.salt = uint256(keccak256("cumulativeProRataSellOffer"));
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        uint256 escrowed;
+        for (uint256 i = 0; i < 10; i++) {
+            bytes32 sid = _acceptSellOfferPartial(offerId, 1);
+            escrowed += dm.getSecondaryEscrow(sid).paymentAmount;
+            assertEq(escrowed, (uint256(21) * (i + 1)) / 11, "running total stays at the floored pro-rata");
+        }
+        assertEq(escrowed, 19, "ten units cost their pro-rata price, rounded down but not too far away");
+        assertEq(dm.getOffer(offerId).paymentAccepted, 19, "offer records the cumulative amount");
+
+        // The final lot pays its own share, so the seller collects the posted price exactly.
+        bytes32 last = _acceptSellOfferPartial(offerId, 1);
+        assertEq(dm.getSecondaryEscrow(last).paymentAmount, 2, "final lot pays the remainder"); // more due to previous round-down, but again, not too far away
+        assertEq(dm.getOffer(offerId).paymentAccepted, 21, "full offer collects the posted consideration");
+    }
 }
