@@ -504,10 +504,13 @@ contract CyberCertPrinterTest is Test {
     //  8 | Custodial secondary sale        | registered | n/a      | Cust    | Alice        | Cust    | Bob          | void + reissue (new tokenId) †
     //  9 | Registrar reassignment (held)   | registered | n/a      | Alice   | Alice        | Alice   | Bob          | assignCert, no token move
     // 10 | Bearer transfer                 | bearer     | n/a      | Alice   | Alice        | Bob     | Bob          | title tracks possession
+    // 11 | Replay after reassignment       | registered | Alice    | Alice   | Bob          | Alice   | Bob          | endorsement retired by #9 → no change
     // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
     //  † #8 is void-and-reissue (secondaryTransfer, administered): "before" is the seller's lot (then voided) and
     //    "after" is the freshly minted buyer lot under a NEW tokenId — not one token changing owner. #9 (assignCert)
     //    is the admin in-place reassignment it contrasts with. The full sale flow lives in the secondary-transfer / fork suites.
+    //  #11 follows #9: the endorsement names Alice, so her self-transfer still matches its `to`. It does not move
+    //    title, because the reassignment retired it (see `endorsementFloor`).
 
     // (1) Depositing with a custodian moves possession only; legal ownership stays with the depositor. The cert
     // is endorsed to its own owner (Alice) — the state Deal/Round issuance leaves — which the deposit doesn't match.
@@ -661,6 +664,23 @@ contract CyberCertPrinterTest is Test {
 
         assertEq(printer.ownerOf(1), investor);       // possession unchanged
         assertEq(printer.legalOwnerOf(1), recipient); // title moved
+    }
+
+    // (11) A registrar reassignment retires every endorsement written before it. Primary issuance leaves the cert
+    // endorsed to its own owner (Alice), so Alice must not replay that endorsement to take title back from Bob.
+    function test_Matrix_Registered_ReassignmentRetiresEarlierEndorsement() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _enableTransfers();
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, investor)); // endorsee == Alice
+
+        _reassignLegalOwner(1, investor, recipient); // title Alice -> Bob; the token stays with Alice
+
+        vm.prank(investor);
+        printer.transferFrom(investor, investor, 1); // replay attempt: to == the old endorsee
+
+        assertEq(printer.ownerOf(1), investor);
+        assertEq(printer.legalOwnerOf(1), recipient); // title stays with Bob
     }
 
     // (10) Bearer (unrestricted) certs have no registrar title: legal ownership tracks possession and follows

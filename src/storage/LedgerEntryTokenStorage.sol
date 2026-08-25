@@ -179,6 +179,10 @@ library LedgerEntryTokenStorage {
 
         // Appended after seriesData to keep the slots above unchanged for already-deployed printers.
         uint256 nonUsHolderCount;              // live holders booked non-US; drives the tally expiry above
+
+        // Index of the first endorsement that can still move legal title. A change of legal owner raises it
+        // past all older endorsements. Those old records do not move title again.
+        mapping(uint256 => uint256) endorsementFloor;
     }
 
     // Returns the storage layout
@@ -259,13 +263,15 @@ library LedgerEntryTokenStorage {
 
         address ownerAddress = s.owners[tokenId].ownerAddress;
         uint256 endorsementCount = s.endorsements[tokenId].length;
+        // Only endorsements at or above the floor can move title. A former owner cannot replay an old one.
+        bool endorsed = endorsementCount > s.endorsementFloor[tokenId];
         //check endorsement and update owners
         if (from == ownerAddress) {
             if (!s.endorsementRequired) {
                 emit ILedgerEntryToken.CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
                 _setLegalOwner(s, tokenId, to, "");
             }
-            else if (endorsementCount > 0) {
+            else if (endorsed) {
                 Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
                 if (endorsement.endorsee == to) {
                     // Endorsement exists; ownership will be updated
@@ -278,7 +284,7 @@ library LedgerEntryTokenStorage {
         // Token is not being transferred from the current owner (e.g. held by a custodian). Delivery to the party
         // named in the latest endorsement promotes legal title (DvP settlement); a move back to the legal owner or
         // on to any other party is a possession-only custody move that leaves legal ownership untouched.
-        else if (endorsementCount > 0 && s.endorsements[tokenId][endorsementCount - 1].endorsee == to) {
+        else if (endorsed && s.endorsements[tokenId][endorsementCount - 1].endorsee == to) {
             Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
             emit ILedgerEntryToken.CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
             _setLegalOwner(s, tokenId, endorsement.endorsee, endorsement.endorseeName);
@@ -379,6 +385,9 @@ library LedgerEntryTokenStorage {
             record.name = name;
             return;
         }
+
+        // Legal title moved. Retire all endorsements on this token; the new owner must write a new one.
+        s.endorsementFloor[tokenId] = s.endorsements[tokenId].length;
 
         // Genuine change of legal owner, emitted either way. A move to a real holder is an acquisition: (re)stamp
         // the clock and, on the first assignment (current == 0), the immutable issue timestamp. A move to
