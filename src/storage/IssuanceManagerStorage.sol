@@ -871,6 +871,8 @@ library IssuanceManagerStorage {
         );
 
         ILedgerEntryToken cert = ILedgerEntryToken(certPrinter);
+        // A void lot must not be sold. The caller also checks this. This is the last check before the units move.
+        if (cert.isVoided(tokenId)) revert CertificateVoided();
         // Registered owner of the seller's Ledger Entry Token, unchanged by hosting mode (the token never moves).
         address seller = cert.legalOwnerOf(tokenId);
 

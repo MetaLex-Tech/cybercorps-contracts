@@ -270,6 +270,9 @@ interface ISecondaryTradeStorage {
     /// @notice At finalize, the cert's current legal owner no longer matches the settlement's seller of record
     /// (ownership moved after listing/acceptance), so the payee and the party whose units are consumed diverge
     error SecondaryTradeSellerOwnershipChanged();
+    /// @notice The seller's cert is void. A void cert keeps its owner and its units, so it passes the
+    /// ownership and unit checks. It must not back a trade, so post, accept and finalize all reject it.
+    error CertificateVoided();
     error SecondaryConditionsNotMet(address condition);
     /// @notice No pathway supplied where the buyer must claim one: a buy offer at postOffer, or any acceptance
     error ExemptionPathwayRequired();

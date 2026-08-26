@@ -239,6 +239,10 @@ library SecondaryTradeStorage {
         if (params.side == OfferSide.SELL) {
             if (ILedgerEntryToken(params.certPrinter).legalOwnerOf(params.tokenId) != offeror)
                 revert ISecondaryTradeStorage.NotCertOwner();
+            // A void cert keeps its owner and its units. The other checks here do not stop one.
+            // A void cert is not valid, so it must not back an offer.
+            if (ILedgerEntryToken(params.certPrinter).isVoided(params.tokenId))
+                revert ISecondaryTradeStorage.CertificateVoided();
             // Reserve units on the seller's cert (the printer authorizes this DealManager as an admin)
             ILedgerEntryToken(params.certPrinter).increaseUnitsReserved(params.tokenId, params.units);
         } else {
@@ -436,6 +440,9 @@ library SecondaryTradeStorage {
             // Reserve units on the seller's cert at acceptance (buy-offer flow, routed through IssuanceManager)
             ILedgerEntryToken(certPrinter).increaseUnitsReserved(tokenId, params.units);
         }
+        // The cert must not be void at acceptance. On a buy offer this is the first check of the seller's
+        // cert. On a sell offer the issuer can void the cert after the offer is posted.
+        if (ILedgerEntryToken(certPrinter).isVoided(tokenId)) revert ISecondaryTradeStorage.CertificateVoided();
 
         // Resolve the buyer info per side: buy offers carry it on the offer (the offeror is the buyer),
         // sells take it from the acceptance.
@@ -566,6 +573,10 @@ library SecondaryTradeStorage {
         // position it'd still revert here and it could be resolved via the void/expiry path instead of mispaying.
         if (ILedgerEntryToken(offer.certPrinter).legalOwnerOf(secEscrow.tokenId) != seller)
             revert ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged();
+        // Check again for a void that occurred after acceptance. This stops the payment and the transfer.
+        // The lot then unwinds through the void/expiry path.
+        if (ILedgerEntryToken(offer.certPrinter).isVoided(secEscrow.tokenId))
+            revert ISecondaryTradeStorage.CertificateVoided();
         // Fee math (mirrors DealManager.computeFee / getPlatformPayable) computed directly from the factory
         address upgradeFactory = DealManagerStorage.getUpgradeFactory();
         uint256 fee = secEscrow.paymentAmount * IDealManagerFactory(upgradeFactory).getDefaultFeeRatio() / DealManagerFactoryStorage.BASIS_POINTS;

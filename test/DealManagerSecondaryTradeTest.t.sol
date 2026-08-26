@@ -355,6 +355,12 @@ contract DealManagerSecondaryTradeTest is Test {
         return UNITS - _consumed(tokenId) - certPrinter.unitsReserved(tokenId);
     }
 
+    /// @dev The issuer voids the seller's cert. The IssuanceManager is an authorized caller on the printer.
+    function _voidSellerCert() internal {
+        vm.prank(address(im));
+        certPrinter.voidCert(sellerTokenId);
+    }
+
     function _defaultSellOfferParams() internal view returns (PostOfferParams memory p) {
         p = PostOfferParams({
             side: OfferSide.SELL,
@@ -845,6 +851,100 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(attacker);
         vm.expectRevert(ISecondaryTradeStorage.NotCertOwner.selector);
         dm.acceptOffer(p);
+    }
+
+    // A void cert keeps its registered owner and its units, so it passes the ownership and unit checks.
+    // A void cert is not valid, so every step of the secondary path must reject it.
+    function test_RevertIf_PostOffer_Sell_CertVoided() public {
+        _voidSellerCert();
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        vm.prank(seller);
+        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        dm.postOffer(p);
+    }
+
+    // BUY counterpart: the acceptor supplies the seller cert, so acceptance is the first look at it.
+    function test_RevertIf_AcceptBuyOffer_CertVoided() public {
+        bytes32 offerId = _postBuyOffer();
+        _voidSellerCert();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            exemptionPathway: ExemptionPathway.NONE,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, seller, sellerKey),
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
+        });
+        vm.prank(seller);
+        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        dm.acceptOffer(p);
+    }
+
+    // The issuer can void the cert after the sell offer is posted, so acceptance must look again.
+    function test_RevertIf_AcceptSellOffer_CertVoidedAfterPosting() public {
+        bytes32 offerId = _postSellOffer();
+        _voidSellerCert();
+
+        AcceptOfferParams memory p = _sellAcceptParams(offerId);
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        dm.acceptOffer(p);
+    }
+
+    // Last check: a void between acceptance and settlement stops the payment and the transfer. The buyer's
+    // money stays in custody, and the lot then unwinds in full through the void path.
+    function test_RevertIf_FinalizeSecondaryTrade_CertVoidedAfterAcceptance() public {
+        bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        _voidSellerCert();
+
+        uint256 sellerBefore = paymentToken.balanceOf(seller);
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+        vm.prank(keeper);
+        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        assertEq(paymentToken.balanceOf(seller), sellerBefore, "seller not paid for a void cert");
+        assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "buyer's payment stays in custody");
+        assertEq(certPrinter.balanceOf(buyer), 0, "no buyer cert minted");
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "lot still ACCEPTED, unwinds via void"
+        );
+
+        // The lot is not stuck. Both parties request the void, the buyer gets the full payment back, and
+        // the offer returns to LIVE with the seller's reservation still held.
+        _voidSettlementBothParties(settlementId);
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.VOIDED),
+            "lot VOIDED"
+        );
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore + CONSIDERATION, "buyer refunded in full");
+        assertEq(paymentToken.balanceOf(address(dm)), 0, "custody drained");
+        assertEq(paymentToken.balanceOf(seller), sellerBefore, "seller still not paid");
+        _assertOfferState(offerId, baseline, OfferStatus.LIVE, 0, 0, 0, 1);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), UNITS, "reservation held: offer is LIVE, not cancelled");
+
+        // The offer is LIVE again but a void cert backs it, so nobody can fill it. The seller cancels to
+        // release the units.
+        AcceptOfferParams memory p = _sellAcceptParams(offerId);
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        dm.acceptOffer(p);
+
+        vm.prank(seller);
+        dm.cancelOffer(offerId);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 0, "cancel releases the seller's reservation");
     }
 
     // Posting a SELL offer reserves (escrows) the seller's units, freezing legal ownership: an attempt to

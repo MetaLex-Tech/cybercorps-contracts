@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
 import "../src/IssuanceManager.sol";
+import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import "../src/interfaces/ILedgerEntryToken.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
@@ -101,6 +102,17 @@ contract IssuanceManagerSecondaryTransferTest is Test {
             "buyer valuation blank"
         );
         _assertMirrorEndorsement(cert, expectedBuyerTokenId, "Bob");
+    }
+
+    // A void lot must not be sold. DealManager also checks this. This guard is the last check before the
+    // units move.
+    function test_RevertIf_SecondaryTransfer_SellerCertVoided() public {
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
+        cert.voidCert(0);
+
+        bytes memory metadata = _dealMetadata(address(cert), 0, UNITS, "Bob", HostingMode.DIRECT, address(0));
+        vm.expectRevert(IssuanceManagerStorage.CertificateVoided.selector);
+        issuanceManager.secondaryTransfer(metadata);
     }
 
     // Partial sale: only part of the seller position is sold, so the seller's token is decremented in place
