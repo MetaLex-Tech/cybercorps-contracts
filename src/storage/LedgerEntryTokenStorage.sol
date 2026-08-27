@@ -183,6 +183,13 @@ library LedgerEntryTokenStorage {
         // Index of the first endorsement that can still move legal title. A change of legal owner raises it
         // past all older endorsements. Those old records do not move title again.
         mapping(uint256 => uint256) endorsementFloor;
+
+        // Stop-transfer on the books, mirroring `transferable` / `tokenTransferable` above. Those two govern
+        // delivery: who may hold the certificate. These two govern registration: whether the holder of record
+        // may change at all. Both default false, so a new printer issues freely but its register is frozen
+        // until an admin opens it.
+        bool legalTransferable;
+        mapping(uint256 => bool) tokenLegalTransferable;
     }
 
     // Returns the storage layout
@@ -267,16 +274,18 @@ library LedgerEntryTokenStorage {
         bool endorsed = endorsementCount > s.endorsementFloor[tokenId];
         //check endorsement and update owners
         if (from == ownerAddress) {
+            // Bearer mode: no registrar title, so legal ownership follows possession down the chain. Only a
+            // test harness flips endorsementRequired today; initialize sets it true and there is no setter.
             if (!s.endorsementRequired) {
                 emit ILedgerEntryToken.CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
-                _setLegalOwner(s, tokenId, to, "");
+                _register(s, tokenId, ownerAddress, to, "");
             }
             else if (endorsed) {
                 Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
                 if (endorsement.endorsee == to) {
                     // Endorsement exists; ownership will be updated
                     emit ILedgerEntryToken.CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
-                    _setLegalOwner(s, tokenId, endorsement.endorsee, endorsement.endorseeName);
+                    _register(s, tokenId, ownerAddress, endorsement.endorsee, endorsement.endorseeName);
                 }
             }
         // NOTE: we don't revert in this block: Owner is able to transfer to another address without an endorsement, but it does not update the owner
@@ -287,7 +296,7 @@ library LedgerEntryTokenStorage {
         else if (endorsed && s.endorsements[tokenId][endorsementCount - 1].endorsee == to) {
             Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
             emit ILedgerEntryToken.CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
-            _setLegalOwner(s, tokenId, endorsement.endorsee, endorsement.endorseeName);
+            _register(s, tokenId, ownerAddress, endorsement.endorsee, endorsement.endorseeName);
         }
     }
 
@@ -297,7 +306,8 @@ library LedgerEntryTokenStorage {
         s.certLegend[tokenId] = s.defaultLegend;
         copyDefaultRestrictiveLegendsToCert(s, tokenId);
         s.certificateDetails[tokenId] = details;
-        _setLegalOwner(s, tokenId, to, "");
+        // Original issuance: no outgoing holder, so the gate lets it through untouched.
+        _register(s, tokenId, address(0), to, "");
         emit ILedgerEntryToken.CyberCertPrinter_CertificateCreated(tokenId);
     }
 
@@ -312,17 +322,42 @@ library LedgerEntryTokenStorage {
         s.certLegend[tokenId] = s.defaultLegend;
         copyDefaultRestrictiveLegendsToCert(s, tokenId);
         s.certificateDetails[tokenId] = details;
-        _setLegalOwner(s, tokenId, to, investorName);
+        // Original issuance: no outgoing holder, so the gate lets it through untouched.
+        _register(s, tokenId, address(0), to, investorName);
         emit ILedgerEntryToken.CertificateAssigned(tokenId, to, investorName, IIssuanceManager(s.issuanceManager).companyName());
         emit ILedgerEntryToken.CyberCertPrinter_CertificateCreated(tokenId);
     }
 
-    /// @dev Bookkeeping for LedgerEntryToken.assignCert (the ownerOf check stays in the printer).
-    function recordAssign(uint256 tokenId, address to, CertificateDetails memory details) external {
+    /// @dev Post-mint bookkeeping for LedgerEntryToken.safeMintFromAndAssign. Same as recordMintAndAssign,
+    /// except the register gate is told this is a transfer from the source lot's holder of record, so the
+    /// stop-transfer flag and the legal hooks apply as they would to any other change of holder.
+    function recordMintFromAndAssign(
+        uint256 sourceTokenId,
+        uint256 tokenId,
+        address to,
+        CertificateDetails memory details,
+        string memory investorName
+    ) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.certLegend[tokenId] = s.defaultLegend;
+        copyDefaultRestrictiveLegendsToCert(s, tokenId);
+        s.certificateDetails[tokenId] = details;
+        // The lot being registered is brand new, so the gate's own void check reads a status that is always
+        // clear. The lot that can be void is the one title comes from, so check that one here.
+        if (s.securityStatus[sourceTokenId] == SecurityStatus.Void) revert ILedgerEntryToken.VoidCertificate();
+        _register(s, tokenId, s.owners[sourceTokenId].ownerAddress, to, investorName);
+        emit ILedgerEntryToken.CertificateAssigned(tokenId, to, investorName, IIssuanceManager(s.issuanceManager).companyName());
+        emit ILedgerEntryToken.CyberCertPrinter_CertificateCreated(tokenId);
+    }
+
+    /// @dev Bookkeeping for LedgerEntryToken.assignCert (the legalOwnerOf check stays in the printer).
+    /// `name` is the incoming holder's legal name for the register; it was hardcoded blank before, which
+    /// wiped the name on every re-registration.
+    function recordAssign(uint256 tokenId, address to, CertificateDetails memory details, string memory name) external {
         CyberCertStorage storage s = cyberCertStorage();
         s.certificateDetails[tokenId] = details;
-        _setLegalOwner(s, tokenId, to, "");
-        emit ILedgerEntryToken.CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
+        _register(s, tokenId, s.owners[tokenId].ownerAddress, to, name);
+        emit ILedgerEntryToken.CertificateAssigned(tokenId, to, name, IIssuanceManager(s.issuanceManager).companyName());
     }
 
     /// @dev Endorsement push + event for LedgerEntryToken.addEndorsement (the auth check stays in the printer).
@@ -369,6 +404,54 @@ library LedgerEntryTokenStorage {
 
     /// @dev Single chokepoint for every owners[] write: reassign tokenId's legal owner to `newOwner`
     /// (holder-of-record name `name`) while keeping the per-legal-owner enumeration in sync.
+    /// @dev The one way the register is written. Every caller passes the outgoing holder of record, and that
+    /// single value decides whether a transfer restriction applies at all.
+    function _register(
+        CyberCertStorage storage s,
+        uint256 tokenId,
+        address outgoingHolder,
+        address newHolder,
+        string memory name
+    ) private {
+        _requireRegistrable(s, tokenId, outgoingHolder, newHolder);
+        _setLegalOwner(s, tokenId, newHolder, name);
+    }
+
+    /// @dev The single place a restriction on the register lives. Its counterpart for delivery is the flag +
+    /// hook block at the top of processTransfer, which governs possession and is deliberately separate.
+    function _requireRegistrable(
+        CyberCertStorage storage s,
+        uint256 tokenId,
+        address from,
+        address to
+    ) private view {
+        // Original issuance. No prior holder, so no transfer restriction can apply. This matches the
+        // behaviour before the gate existed: a mint never reached processTransfer.
+        if (from == address(0)) return;
+
+        // A void lot cannot be registered to a new holder. It keeps its owner and its units, so the checks
+        // below would otherwise pass on one.
+        if (s.securityStatus[tokenId] == SecurityStatus.Void) revert ILedgerEntryToken.VoidCertificate();
+
+        // Stop-transfer on the books. The manager completing a primary delivery out of escrow is exempt,
+        // mirroring the delivery carve-out in processTransfer.
+        if (!s.legalTransferable && !s.tokenLegalTransferable[tokenId]) {
+            ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+            if (from != corp.dealManager() && from != corp.roundManager())
+                revert ILedgerEntryToken.LegalOwnerNotTransferable();
+        }
+
+        _runLegalHook(s.globalRestrictionHook, from, to, tokenId);
+        _runLegalHook(s.restrictionHooksById[tokenId], from, to, tokenId);
+    }
+
+    function _runLegalHook(ITransferRestrictionHook hook, address from, address to, uint256 tokenId) private view {
+        if (address(hook) == address(0)) return;
+        (bool allowed, string memory reason) = hook.checkLegalTransferRestriction(from, to, tokenId, "");
+        if (!allowed) revert ILedgerEntryToken.TransferRestricted(reason);
+    }
+
+    /// @dev should be only called by _register() because the latter performs all necessary pre-checks
     function _setLegalOwner(CyberCertStorage storage s, uint256 tokenId, address newOwner, string memory name) private {
         OwnerDetails storage record = s.owners[tokenId];
         address current = record.ownerAddress;
@@ -923,10 +1006,6 @@ library LedgerEntryTokenStorage {
         cyberCertStorage().endorsements[tokenId].push(endorsement);
     }
 
-    function setOwnerDetails(uint256 tokenId, OwnerDetails memory details) internal {
-        _setLegalOwner(cyberCertStorage(), tokenId, details.ownerAddress, details.name);
-    }
-
     function setSecurityStatus(uint256 tokenId, SecurityStatus status) internal {
         cyberCertStorage().securityStatus[tokenId] = status;
     }
@@ -940,16 +1019,24 @@ library LedgerEntryTokenStorage {
         cyberCertStorage().certificateUri = _certificateUri;
     }
 
-    function setTransferable(bool _transferable) internal {
-        cyberCertStorage().transferable = _transferable;
-    }
-
     function setTokenTransferable(uint256 tokenId, bool value) internal {
         cyberCertStorage().tokenTransferable[tokenId] = value;
     }
 
     function isTokenTransferable(uint256 tokenId) internal view returns (bool) {
         return cyberCertStorage().tokenTransferable[tokenId];
+    }
+
+    function setLegalTransferable(bool value) internal {
+        cyberCertStorage().legalTransferable = value;
+    }
+
+    function setTokenLegalTransferable(uint256 tokenId, bool value) internal {
+        cyberCertStorage().tokenLegalTransferable[tokenId] = value;
+    }
+
+    function isTokenLegalTransferable(uint256 tokenId) internal view returns (bool) {
+        return cyberCertStorage().tokenLegalTransferable[tokenId];
     }
 
     function setRestrictionHook(uint256 tokenId, ITransferRestrictionHook hook) internal {

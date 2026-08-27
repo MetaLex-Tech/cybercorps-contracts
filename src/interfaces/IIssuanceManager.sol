@@ -130,7 +130,8 @@ interface IIssuanceManager {
         address from,
         uint256 tokenId,
         address investor,
-        CertificateDetails memory _details
+        CertificateDetails memory _details,
+        string memory investorName
     ) external;
 
     function createCertAndAssign(
