@@ -1180,6 +1180,18 @@ contract CyberCertPrinterTest is Test {
         printer.unvoidCert(tokenId);
     }
 
+    // MTLX1-16: voiding an id that holds no token used to leave a Void status behind. The next mint took
+    // that id and came out void — never counted in the tally and blocked from transfer.
+    function test_VoidCert_RevertsForNonexistentToken() public {
+        vm.prank(address(issuanceManager));
+        vm.expectRevert(ILedgerEntryToken.TokenDoesNotExist.selector);
+        printer.voidCert(5);
+
+        _mintCert(5, investor, 100, bytes(""));
+        assertFalse(printer.isVoided(5));
+        assertEq(printer.lookThroughHolderCount(), 1);
+    }
+
     function test_LookThrough_IndividualCountsAsOne() public {
         MockLookThroughBadge b = new MockLookThroughBadge();
         _setBadge(b);

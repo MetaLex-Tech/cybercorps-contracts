@@ -347,6 +347,7 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     // look-through holder tally: a fully-voided lot no longer counts its owner as a live holder, so the
     // tally is decremented via `recordVoidLegalOwner` (after the status flip).
     function voidCert(uint256 tokenId) external onlyIssuanceManagerOrAdmin {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
         LedgerEntryTokenStorage.setSecurityStatus(tokenId, SecurityStatus.Void);
         LedgerEntryTokenStorage.recordVoidLegalOwner(tokenId);
         emit ILedgerEntryToken.CertificateVoided(tokenId, block.timestamp);
