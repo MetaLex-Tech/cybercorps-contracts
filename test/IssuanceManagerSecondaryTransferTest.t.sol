@@ -4,7 +4,6 @@ pragma solidity ^0.8.13;
 import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
 import "../src/IssuanceManager.sol";
-import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import "../src/interfaces/ILedgerEntryToken.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
@@ -104,14 +103,15 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         _assertMirrorEndorsement(cert, expectedBuyerTokenId, "Bob");
     }
 
-    // A void lot must not be sold. DealManager also checks this. This guard is the last check before the
-    // units move.
+    // A void lot must not be sold. The printer's register gate is the invariant: a reissue names the lot it
+    // came from, so the gate rejects it before the buyer's lot is registered. DealManager checks earlier too,
+    // so a listing fails at post/accept rather than at settlement.
     function test_RevertIf_SecondaryTransfer_SellerCertVoided() public {
         ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
         cert.voidCert(0);
 
         bytes memory metadata = _dealMetadata(address(cert), 0, UNITS, "Bob", HostingMode.DIRECT, address(0));
-        vm.expectRevert(IssuanceManagerStorage.CertificateVoided.selector);
+        vm.expectRevert(ILedgerEntryToken.VoidCertificate.selector);
         issuanceManager.secondaryTransfer(metadata);
     }
 
@@ -162,6 +162,9 @@ contract IssuanceManagerSecondaryTransferTest is Test {
                 SecurityClass.CommonStock, SecuritySeries.SeriesA, address(0), bytes("")
             )
         );
+        cert.setGlobalLegalTransferable(true);
+        // Open the register: legalTransferable is deny-by-default.
+        cert.setGlobalLegalTransferable(true);
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
             signingOfficerTitle: "Title",
@@ -405,6 +408,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
                 bytes("")
             )
         );
+        // Open the register: legalTransferable is deny-by-default.
+        cert.setGlobalLegalTransferable(true);
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
             signingOfficerTitle: "Title",

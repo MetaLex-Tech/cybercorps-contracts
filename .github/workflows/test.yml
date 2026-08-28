@@ -33,7 +33,7 @@ jobs:
         run: forge --version
 
       - name: Build
-        run: forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes
+        run: forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes --skip test script
 
   unit:
     name: Unit tests

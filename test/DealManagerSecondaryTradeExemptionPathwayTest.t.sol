@@ -234,6 +234,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 bytes("")
             )
         );
+        // Open the register: legalTransferable is deny-by-default.
+        certPrinter.setGlobalLegalTransferable(true);
         // The printer's tally and HolderCapCondition must read the same badge.
         LedgerEntryToken(address(certPrinter)).setLookThroughBadge(address(badge));
         sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails());

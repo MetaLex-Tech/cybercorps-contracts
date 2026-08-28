@@ -310,6 +310,9 @@ contract DealManagerSecondaryTradeTest is Test {
             )
         );
         sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails(UNITS));
+        // Open the register: legalTransferable is deny-by-default, so a change of holder of record needs the
+        // SPV to enable it. Delivery is governed separately by `transferable`, which stays off here.
+        certPrinter.setGlobalLegalTransferable(true);
         vm.stopPrank();
 
         // Fund buyer
@@ -907,8 +910,10 @@ contract DealManagerSecondaryTradeTest is Test {
 
         uint256 sellerBefore = paymentToken.balanceOf(seller);
         uint256 buyerBefore = paymentToken.balanceOf(buyer);
+        // The printer's register gate is what stops it now: the reissue names the seller's lot, and a void
+        // lot cannot pass title. DealManager no longer repeats the check at finalize.
         vm.prank(keeper);
-        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        vm.expectRevert(ILedgerEntryToken.VoidCertificate.selector);
         dm.finalizeSecondaryTradeAgreement(settlementId);
 
         assertEq(paymentToken.balanceOf(seller), sellerBefore, "seller not paid for a void cert");
@@ -955,7 +960,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(owner);
         vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
-        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
+        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS), "New Owner");
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
         // the cert's reserve rule works as expected
@@ -2661,7 +2666,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(owner);
         vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
-        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
+        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS), "New Owner");
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
         // the cert's reserve rule works as expected
@@ -2681,7 +2686,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(owner);
         vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
-        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
+        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS), "New Owner");
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
         // the cert's reserve rule works as expected

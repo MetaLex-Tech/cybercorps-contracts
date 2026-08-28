@@ -573,10 +573,6 @@ library SecondaryTradeStorage {
         // position it'd still revert here and it could be resolved via the void/expiry path instead of mispaying.
         if (ILedgerEntryToken(offer.certPrinter).legalOwnerOf(secEscrow.tokenId) != seller)
             revert ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged();
-        // Check again for a void that occurred after acceptance. This stops the payment and the transfer.
-        // The lot then unwinds through the void/expiry path.
-        if (ILedgerEntryToken(offer.certPrinter).isVoided(secEscrow.tokenId))
-            revert ISecondaryTradeStorage.CertificateVoided();
         // Fee math (mirrors DealManager.computeFee / getPlatformPayable) computed directly from the factory
         address upgradeFactory = DealManagerStorage.getUpgradeFactory();
         uint256 fee = secEscrow.paymentAmount * IDealManagerFactory(upgradeFactory).getDefaultFeeRatio() / DealManagerFactoryStorage.BASIS_POINTS;

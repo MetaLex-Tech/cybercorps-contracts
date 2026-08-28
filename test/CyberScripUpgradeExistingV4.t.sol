@@ -210,6 +210,8 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
         vm.prank(companyOwner);
         certPrinter.setGlobalTransferable(true);
+        vm.prank(companyOwner);
+        certPrinter.setGlobalLegalTransferable(true); // legalTransferable is deny-by-default and governs the register; transferable governs delivery.
 
         address scrip = _deployDefaultScrip(
             issuanceManager,
@@ -744,6 +746,8 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         certPrinter.addEndorsement(tokenId, selfEndorsement);
         vm.prank(companyOwner);
         certPrinter.setTokenTransferable(tokenId, true);
+        vm.prank(companyOwner);
+        certPrinter.setTokenLegalTransferable(tokenId, true);
         vm.prank(to);
         certPrinter.safeTransferFrom(to, to, tokenId);
         vm.prank(companyOwner);
