@@ -253,6 +253,9 @@ interface ISecondaryTradeStorage {
     error NotCertOwner();
     error MissingCertPrinter();
     error UnknownCertPrinter();
+    /// @notice Administered hosting was chosen without an admin multisig. That address receives the buyer's
+    /// new lot, so a zero address makes the mint at finalize revert. Post and accept both reject it.
+    error MissingAdminMultisig();
     error NotPartyToAgreement();
     error OfferAlreadyExists();
     /// @notice Caller is not the signer they claim to be (signer must equal msg.sender)

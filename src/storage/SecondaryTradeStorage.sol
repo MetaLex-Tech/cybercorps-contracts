@@ -187,6 +187,10 @@ library SecondaryTradeStorage {
             revert ISecondaryTradeStorage.ExemptionPathwayRequired();
         if (params.exemptionPathway != ExemptionPathway.NONE) _requirePathwayEnabled(params.exemptionPathway);
 
+        // Buy offer: the offeror is the buyer, so its custody choice is set here. Sell offers get theirs
+        // from the acceptance, checked in _acceptOffer.
+        if (params.side == OfferSide.BUY) _requireHostingCustodian(params.buyerHostingMode, params.adminMultisig);
+
         // Validate min threshold against the whole offer
         _checkMinTradeThreshold(params.units, params.consideration);
 
@@ -458,6 +462,7 @@ library SecondaryTradeStorage {
             buyerHostingMode = params.buyerHostingMode;
             adminMultisig = params.adminMultisig;
         }
+        _requireHostingCustodian(buyerHostingMode, adminMultisig);
 
         // Fund the settlement escrow.
         // BUY: funds are already in contract from postOffer(); no token movement needed.
@@ -831,6 +836,14 @@ library SecondaryTradeStorage {
     function _requirePathwayEnabled(ExemptionPathway pathway) internal view {
         if (!secondaryTradeStorage().pathwayEnabled[pathway])
             revert ISecondaryTradeStorage.ExemptionPathwayNotEnabled(pathway);
+    }
+
+    /// @dev Administered hosting delivers the buyer's new lot to `adminMultisig`. A mint to the zero address
+    /// reverts, so the settlement could not finalize and would hold the seller's units and the buyer's
+    /// payment until expiry. Post and accept both reject the pair up front.
+    function _requireHostingCustodian(HostingMode hostingMode, address adminMultisig) internal pure {
+        if (hostingMode == HostingMode.ADMINISTERED && adminMultisig == address(0))
+            revert ISecondaryTradeStorage.MissingAdminMultisig();
     }
 
     /// @dev Rejects the zero address and duplicates so a condition list behaves as a set. Lists are small

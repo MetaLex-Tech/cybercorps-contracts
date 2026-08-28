@@ -823,6 +823,82 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(p);
     }
 
+    // Administered hosting mints the buyer's new lot to the admin multisig. A zero multisig makes that mint
+    // revert, so a settlement built on it could never finalize; the seller's units and the buyer's payment
+    // would sit locked until expiry. A buy offer carries the buyer's own custody choice, so postOffer rejects it.
+    function test_RevertIf_PostOffer_Buy_AdministeredWithZeroMultisig() public {
+        PostOfferParams memory p = _defaultBuyOfferParams();
+        p.buyerHostingMode = HostingMode.ADMINISTERED;
+        p.adminMultisig = address(0);
+
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.MissingAdminMultisig.selector);
+        dm.postOffer(p);
+    }
+
+    // The buy-side gate is scoped to buy offers. A sell offer's buyer fields are normalized to
+    // Direct / zero at post, so stray custody values must not block the post.
+    function test_PostOffer_Sell_IgnoresStrayAdministeredFields() public {
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.buyerHostingMode = HostingMode.ADMINISTERED;
+        p.adminMultisig = address(0);
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        Offer memory posted = dm.getOffer(offerId);
+        assertEq(uint8(posted.buyerHostingMode), uint8(HostingMode.DIRECT), "sell offer hosting mode normalized");
+        assertEq(posted.adminMultisig, address(0), "sell offer admin multisig normalized");
+    }
+
+    // A sell offer's buyer supplies custody at acceptance, so the same gate runs there.
+    function test_RevertIf_AcceptOffer_Sell_AdministeredWithZeroMultisig() public {
+        bytes32 offerId = _postSellOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.ADMINISTERED,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.MissingAdminMultisig.selector);
+        dm.acceptOffer(p);
+    }
+
+    // A buy-offer acceptance ignores the acceptor's custody fields (the offeror is the buyer), so a stray
+    // zero-multisig Administered pair on the seller's acceptance must not block the trade.
+    function test_AcceptOffer_Buy_IgnoresStrayAdministeredFields() public {
+        bytes32 offerId = _postBuyOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            exemptionPathway: ExemptionPathway.NONE,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.ADMINISTERED,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, seller, sellerKey),
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
+        });
+
+        vm.prank(seller);
+        bytes32 settlementId = dm.acceptOffer(p);
+
+        SecondaryEscrow memory se = dm.getSecondaryEscrow(settlementId);
+        assertEq(uint8(se.buyerHostingMode), uint8(HostingMode.DIRECT), "buy offer hosting mode governs");
+        assertEq(se.adminMultisig, address(0), "buy offer admin multisig governs");
+    }
+
     // A non-owner cannot list someone else's Ledger Entry Token for sale: without the ownership guard the
     // attacker would be paid at finalize while the real owner's cert is decremented (buyer does not own
     // sellerTokenId, which belongs to `seller`).
