@@ -1270,6 +1270,55 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.usLookThroughHolderCount(), 5);
     }
 
+    // Holders booked while no badge was wired sit at the unknown-holder seed of one U.S. owner. Wiring the
+    // badge later and re-running the backfill must re-read them, not skip them as already counted.
+    function test_LookThrough_BackfillRepairsHoldersCountedBeforeBadge() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 2);
+        assertEq(printer.usLookThroughHolderCount(), 2);
+
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 40);
+        b.setBo(recipient, 40);
+        b.setUs(recipient, true);
+        _setBadge(b);
+
+        printer.backfillLookThroughTally(0, 10);
+        assertEq(printer.lookThroughHolderCount(), 80);
+        assertEq(printer.usLookThroughHolderCount(), 40);
+    }
+
+    // The backfill is permissionless, so anyone can run it before the operator wires the badge. That run
+    // must not lock the holders at weight one.
+    function test_LookThrough_BackfillBeforeBadgeDoesNotLockWeights() public {
+        _mintCert(1, investor, 100, bytes(""));
+        printer.backfillLookThroughTally(0, 10);
+
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 12);
+        _setBadge(b);
+
+        printer.backfillLookThroughTally(0, 10);
+        assertEq(printer.lookThroughHolderCount(), 12);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
+    // The repair lives in _countLot, not in the backfill loop, so every path back through it re-reads the
+    // badge. unvoidCert on a live cert is one such path.
+    function test_LookThrough_RecountingALiveLotResyncsTheHolder() public {
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 1);
+
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 7);
+        _setBadge(b);
+
+        _unvoid(1);
+        assertEq(printer.lookThroughHolderCount(), 7);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
     function test_LookThrough_ResyncHoldersBatchReconcilesEach() public {
         MockLookThroughBadge b = new MockLookThroughBadge();
         b.setBo(investor, 3);

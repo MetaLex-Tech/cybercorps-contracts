@@ -540,23 +540,27 @@ library LedgerEntryTokenStorage {
     }
 
     /// @dev Mark tokenId as a live lot for `owner`, then let _resyncHolder apply the badge reading — one
-    /// sampling path for both a new holder and a further acquisition.
-    /// Idempotent via `liveCounted`; no-op for the zero address or a voided token.
+    /// sampling path for a new holder, a further acquisition, and a lot that is already counted. Booking is
+    /// idempotent via `liveCounted`, but the badge reading is not skipped with it: a lot counted while no
+    /// badge was wired holds the seed weight of one, and re-counting it is how that gets repaired.
+    /// No-op for the zero address or a voided token.
     function _countLot(CyberCertStorage storage s, uint256 tokenId, address owner) private {
-        if (owner == address(0) || s.liveCounted[tokenId] || !_isLive(s, tokenId)) return;
-        s.liveCounted[tokenId] = true;
-        HolderAcct storage a = s.holderAcct[owner];
-        if (a.liveLots == 0) {
-            // Book a new holder as one unknown U.S. holder, updating account and totals together so the
-            // resync below has a consistent base to apply its delta against. That seed is exactly what an
-            // uncredentialed holder should be, so for them the resync changes nothing.
-            a.liveLots = 1;
-            a.weight = 1;
-            a.isUS = true;
-            s.lookThroughHolderCount += 1;
-            s.usLookThroughHolderCount += 1;
-        } else {
-            a.liveLots += 1;
+        if (owner == address(0) || !_isLive(s, tokenId)) return;
+        if (!s.liveCounted[tokenId]) {
+            s.liveCounted[tokenId] = true;
+            HolderAcct storage a = s.holderAcct[owner];
+            if (a.liveLots == 0) {
+                // Book a new holder as one unknown U.S. holder, updating account and totals together so the
+                // resync below has a consistent base to apply its delta against. That seed is exactly what an
+                // uncredentialed holder should be, so for them the resync changes nothing.
+                a.liveLots = 1;
+                a.weight = 1;
+                a.isUS = true;
+                s.lookThroughHolderCount += 1;
+                s.usLookThroughHolderCount += 1;
+            } else {
+                a.liveLots += 1;
+            }
         }
         _resyncHolder(s, owner);
     }
@@ -619,9 +623,10 @@ library LedgerEntryTokenStorage {
         if (ascending && covered == s.nonUsHolderCount && covered > 0) s.usTallyExpiry = earliest;
     }
 
-    /// @dev One-time/idempotent backfill for printers upgraded to add the look-through tally: count each
-    /// live token in [startIndex, startIndex+count). Set the badge first. Permissionless, safe to re-run
-    /// (already-counted tokens are skipped). Call in batches over [0, totalSupply()).
+    /// @dev Idempotent backfill for printers upgraded to add the look-through tally: count each live token
+    /// in [startIndex, startIndex+count). Re-running it also re-reads every holder off the badge, so wiring
+    /// the badge late and running this again repairs the weights booked without it. Permissionless. Call in
+    /// batches over [0, totalSupply()).
     function backfillLookThroughTally(uint256 startIndex, uint256 count) external {
         CyberCertStorage storage s = cyberCertStorage();
         ILedgerEntryToken self = ILedgerEntryToken(address(this)); // delegatecalled: address(this) is the printer

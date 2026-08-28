@@ -615,7 +615,8 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     }
 
     /// @notice Wire the LeXcheXBadge the look-through tally samples. Set before the first mint on a new
-    /// printer (and before `backfillLookThroughTally` on an upgraded one).
+    /// printer. If holders were already counted without it, run `backfillLookThroughTally` over the supply
+    /// afterwards to re-read them off the badge.
     function setLookThroughBadge(address badge) external onlyIssuanceManagerOrAdmin {
         LedgerEntryTokenStorage.setLookThroughBadge(badge);
         emit ILedgerEntryToken.LookThroughBadgeSet(badge);
@@ -632,7 +633,8 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     }
 
     /// @notice Backfill the look-through tally for tokens in [startIndex, startIndex+count) after a beacon
-    /// upgrade. Set the badge first; permissionless and idempotent. Batch over [0, totalSupply()).
+    /// upgrade, or after wiring the badge late. Permissionless and idempotent: an already-counted token is
+    /// re-read off the badge. Batch over [0, totalSupply()).
     function backfillLookThroughTally(uint256 startIndex, uint256 count) external {
         LedgerEntryTokenStorage.backfillLookThroughTally(startIndex, count);
     }
