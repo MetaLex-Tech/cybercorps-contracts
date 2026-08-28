@@ -288,6 +288,11 @@ interface IIssuanceManager {
         uint256 amount
     ) external;
 
+    function voidEmptyCerts(
+        address certAddress,
+        uint256[] calldata tokenIds
+    ) external;
+
     // Unlike other CyberScrip compliance controls, this one must be called by IssuanceManager due to
     // its reliance on internal states.
     function forceScripBurn(

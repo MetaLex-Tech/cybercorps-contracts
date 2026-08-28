@@ -826,6 +826,14 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.isScripifyWhitelisted(certAddress, id);
     }
 
+    /// @notice Voids lots that hold no units and no vault claim, so the printer's holder tally stops
+    /// counting them. Permissionless: a lot that still holds units cannot be voided here.
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenIds IDs of the lots to void
+    function voidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external {
+        IssuanceManagerStorage.executeVoidEmptyCerts(certAddress, tokenIds);
+    }
+
     function convertScripToCert(address certAddress, uint256 amount) external {
         IssuanceManagerStorage.executeConvertScripToCert(
             certAddress,

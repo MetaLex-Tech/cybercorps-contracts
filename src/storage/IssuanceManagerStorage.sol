@@ -78,6 +78,7 @@ library IssuanceManagerStorage {
     error ClassDoesNotExist();
     error SecurityClassAlreadyDefined();
     error NotAPrinter();
+    error CertNotEmpty();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
     uint256 internal constant VAULT_RAY = 1e27;
@@ -934,6 +935,24 @@ library IssuanceManagerStorage {
             settlementAgreementId, certPrinter, buyer, tokenId, buyerTokenId, seller, units,
             sellerDetails.unitsRepresented, buyerUnitsAfter, sellerVoided, buyerTokenIsMinted
         );
+    }
+
+    /// @notice Voids lots that represent nothing, so they stop counting in the printer's holder tally.
+    /// @dev A fully scripified lot stays counted through its vault claim. Another party can remove that
+    /// claim: an empty vault pool retires every position at once. The lot then holds zero units, but its
+    /// status is not Void, so the tally still counts its holder and the holder cap refuses buyers on a count
+    /// that is too high. Permissionless, because a lot that still holds units cannot be voided here.
+    /// Already-void lots are skipped, so one of them does not fail the batch.
+    function executeVoidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external {
+        if (!isPrinter(certAddress)) revert NotAPrinter();
+        ILedgerEntryToken cert = ILedgerEntryToken(certAddress);
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            uint256 tokenId = tokenIds[i];
+            if (cert.isVoided(tokenId)) continue;
+            if (cert.getActiveCertificateDetails(tokenId).unitsRepresented != 0) revert CertNotEmpty();
+            if (_assetsOfVaultPosition(certAddress, tokenId) != 0) revert CertNotEmpty();
+            cert.voidCert(tokenId);
+        }
     }
 
     function executeSetScripRatio(
