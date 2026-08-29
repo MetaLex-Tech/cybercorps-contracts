@@ -176,8 +176,13 @@ touching the company or the cap table.
 
 > **Under the hood.** The payment and the company-record deployment are
 > one Multicall3 batch: a USDC `transferWithAuthorization` plus the
-> factory's `deployCyberCorp`, so the fee and the record land — or fail —
-> together. See
+> factory's `deployCyberCorp`. Within the batch the two execute — or
+> revert — together. The one edge case: a signed payment authorization
+> is submittable by anyone, so if it gets mined separately before your
+> batch, the fee (which only ever pays MetaLeX) transfers there and the
+> batch reverts on the used nonce without deploying — the status page's
+> recovery actions (verify transaction hash, reset payment attempt)
+> reconcile exactly this. See
 > [Integrate from a frontend](../how-to/integrate-from-frontend.md#atomic-fee--formation-via-multicall3).
 
 ## mainFrame — the company dashboard

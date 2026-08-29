@@ -221,8 +221,10 @@ one-time formation setup cannot be re-staged.
 ## Tokenizing a position
 
 **Tokenize →** on an offchain position mints an onchain certificate for
-it and links the ledger entry to the cert, which becomes the system of
-record from then on. The dialog pre-fills the certificate form from the
+it and links the ledger entry to the cert; the row mirrors the cert from
+then on (and where the company's governing documents designate the
+onchain system as its official register, the cert *is* the registered
+entry). The dialog pre-fills the certificate form from the
 ledger (investor, units, amounts, terms), lets you pick the recipient
 wallet if the holder has several, and warns you which ledger details do
 *not* carry onchain (vesting schedule, exercise price, discount, notes,
