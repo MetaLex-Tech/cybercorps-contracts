@@ -110,8 +110,8 @@ Investment Company Act §3(c)(1) / §3(c)(7)-style limits, counting
 credentialed beneficial owners look-through rather than wallets — an
 unattested acquirer conservatively counts as US. The cert register's
 holder-count views also support 12(g) threshold monitoring (US) and its
-analogues, and the Mainframe UI surfaces these alongside the holder lists
-for proactive management.
+analogues, and the cyberCORPs app's Tokenization Hub surfaces these
+alongside the holder lists for proactive management.
 
 ## See also
 

@@ -18,7 +18,7 @@ cyberCORPs is designed so that MetaLeX is **not** an intermediary.
   just-in-time. MetaLeX curates; it does not gatekeep.
 * Operates LeXcheX (an oracle), so MetaLeX or a delegate signs accreditation
   attestations into the credential registry.
-* Runs the reference UIs (the cyberCORPs Mainframe, ACE, LeXcheX onboarding,
+* Runs the reference UIs (the cyberCORPs app, ACE, LeXcheX onboarding,
   the landing page) — *as one possible front end*. Anyone can build their
   own.
 

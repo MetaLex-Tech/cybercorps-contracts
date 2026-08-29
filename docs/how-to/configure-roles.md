@@ -51,6 +51,11 @@ CyberCorp(cyberCorp).updateOfficer(2, CompanyOfficer({
 }));
 ```
 
+One caveat for corps whose legacy state lists the same address at more
+than one index: the old address keeps its role while any other entry
+still lists it — only removing or updating away its last entry revokes
+it.
+
 ## Remove an officer
 
 Either removes the officer record and revokes the level-`200` grant:
@@ -62,7 +67,9 @@ CyberCorp(cyberCorp).removeOfficerAt(2);
 ```
 
 Removal only zeroes a level that is exactly `200` — a custom level granted
-directly on the BorgAuth survives the officer's removal.
+directly on the BorgAuth survives the officer's removal — and only when
+the address isn't still listed at another index (legacy state may hold
+duplicates).
 
 ## Grant or revoke a role directly
 

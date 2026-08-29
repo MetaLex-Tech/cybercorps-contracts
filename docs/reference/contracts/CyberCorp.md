@@ -61,8 +61,10 @@ function getExtensionURI() external view returns (string);
 Officer lifecycle and BorgAuth roles: `addOfficer` rejects an `eoa` already
 listed (`DuplicateOfficer`) and grants it role `200` — unless it already
 holds a *higher* custom role, which is left untouched. `updateOfficer`
-replaces the record at an index; when the `eoa` changes, it revokes the old
-address's role and grants the new one under the same rules. `removeOfficer`
+replaces the record at an index; when the `eoa` changes, it grants the new
+address under the same rules and revokes the old one — but only if no
+other index still lists that `eoa` (legacy state may hold duplicates), and
+only an exact `200`. `removeOfficer`
 / `removeOfficerAt` revoke the role only when it is exactly `200` (a custom
 role granted outside the officer lifecycle survives) and only when the
 address is not still listed at another index.
