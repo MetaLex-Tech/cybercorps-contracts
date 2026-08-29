@@ -1,5 +1,5 @@
 ---
-description: One cap table for tokenized and un-tokenized positions, with AI-assisted import
+description: One cap table for tokenized and untokenized positions, with AI-assisted import
 ---
 
 # The cap table
@@ -11,8 +11,8 @@ only as ledger records, and beneficial holdings derived from cyberSCRIP
 balances all appear in the same view, with the same math.
 
 You reach it from the **capTable** item in the app sidebar, from the
-"Manage your capTable" card on the company home, or from the Mainframe's
-"Cap Table" button.
+"Manage your capTable" card on the mainFrame dashboard, or from the
+Tokenization Hub's "Cap Table" button.
 
 > **The cap table is in beta.** The feature is complete and validated
 > end-to-end, but the app tells you the safe posture itself: export your
@@ -38,18 +38,20 @@ general, live in the certificate's public metadata regardless.
 
 ## How to read the table
 
-Every position carries a source badge, and the badge tells you which
-record is definitive:
+Every position carries a source badge. The badge answers two independent
+questions — *where the record lives* (onchain or in the app) and
+*whether the units are tokenized* — and nothing more. Which record is
+the company's legally definitive securities ledger is set by the
+company's own bylaws and board action, not by token status or by where
+the data is stored:
 
-* **⛓ tokenized** — the position is an onchain cyberCERT. The chain is the
-  system of record; the ledger row just mirrors it.
-* **📄 offchain** — the position lives on the offchain stock ledger,
-  which is the company's record of un-tokenized holdings, in the role a
-  traditional stock ledger plays. Recording a row documents an issuance
-  rather than effecting one: the corporate authorization behind it (a
-  [board consent](boardroom.md#board-approvals), for instance) must
-  still exist, and once the position is tokenized the chain takes over
-  as the register. The badge links to the first attached document.
+* **⛓ tokenized** — the position's units exist as an onchain cyberCERT;
+  the cap-table row mirrors that cert.
+* **📄 offchain** — the position is recorded and edited in the app, as a
+  cap-table record of untokenized holdings. Recording a row documents an
+  issuance rather than effecting one: the corporate authorization behind
+  it (a [board consent](boardroom.md#board-approvals), for instance)
+  must still exist. The badge links to the first attached document.
 * **≈ tokenized (scrips)** — a *beneficial* claim derived from a
   cyberSCRIP balance. Scrips are fungible tokens, and holding them is an
   economic position without being registered stock.
@@ -57,20 +59,38 @@ record is definitive:
   vesting escrow; the chain enforces the schedule. See
   [Token grants and onchain vesting](grants.md).
 
+For a company whose governing documents designate the onchain system as
+its official register (see
+[Constitutive vs. pointer tokenization](../explanation/constitutive-vs-pointer.md)),
+the cyberCERTs *are* that register — but that is the bylaws' doing, and
+the app never infers it from a badge.
+
 Because scrip exists, the table supports two ownership lenses. The
 **Registered** lens shows record owners (the view that matters for
 stockholder lists and corporate law). The **Beneficial** lens follows the
 economics: scripified shares move from the certificate owner to the scrip
 holders. The toggle only appears once your company has issued scrip.
 
-The ledger view itself shows summary cards (issued & outstanding,
-semi-diluted, fully diluted, stakeholders, total raised, onchain
-certificates, offchain entries, suspected duplicates), a capitalization
+The **Securities cap table** tab itself shows summary cards (issued &
+outstanding, semi-diluted, fully diluted, stakeholders, total raised,
+onchain certificates, offchain entries, duplicates), a capitalization
 donut by class, and section tables for **Equity**, **Convertibles**,
 **Token instruments**, and **History** (void, terminated, tokenized,
 exercised, converted, kept for audit). You can group rows by stakeholder
 or by class/series, pick the basis for the % column (issued &
 outstanding, semi-diluted, or fully diluted), and search for a holder.
+Each section closes with per-class subtotal rows and an emphasized
+**Total** row that follow whatever lens, basis, and filter you have
+active; in the stakeholder grouping, a **Class/series** filter narrows
+the whole view to the classes you pick (a pinned class line and its cert
+printer count as one class; row percentages keep the company-wide
+denominator).
+
+Above the table, up to four review banners surface things that need a
+decision: **duplicate offchain entries**, **unregistered plan-reserve
+scrip**, **cert double counts**, and **class reconciliation** (unlinked
+cert printers and duplicate class lines). Each opens its own review
+dialog; all four are covered below.
 
 An **Integrity checks** panel at the bottom recomputes the table's
 invariants live: fully-diluted shares accounted for, SAFE ownership under
@@ -107,14 +127,16 @@ exercise prices are shown. Both are off until you enable them.
 
 ## Recording positions
 
-**+ Add Position** records an un-tokenized position on the offchain
-ledger. No transaction is involved; the ledger write is the record. The
-form covers the full range of instruments:
+**+ Add Position** records an untokenized position on the offchain
+cap table. No transaction is involved; the record write is the record.
+The form covers the full range of instruments:
 
-* the **class** (with inline creation of new classes and series) and, for
-  equity awards, an **award type** (stock option, RSU, or restricted
-  stock) sitting on its *underlying* class — a Common option is Award
-  type "Stock option" on class "Common Stock";
+* the **class** (with inline creation of new classes and series — though
+  creating a class whose name matches an existing line of the same
+  class/series is refused, pointing you at the existing line or a rename
+  via Class terms) and, for equity awards, an **award type** (stock
+  option, RSU, or restricted stock) sitting on its *underlying* class —
+  a Common option is Award type "Stock option" on class "Common Stock";
 * a **plan pool** the award draws from, with inline creation of a new
   plan and its reserve;
 * units, investment amount, price per unit, valuation, round label;
@@ -152,8 +174,14 @@ Carta or Pulley exports. Every row gets an explicit action before
 anything is written: create a new offchain record, update an existing
 position in place (rows exported from this app carry a `position_id`),
 link to an existing onchain cert instead of duplicating it, or skip.
-Blocking validation errors stop the import; the error worklist groups
-them by issue so you fix the sheet rather than hunt row by row.
+Class names are matched after canonicalization — "Common Stock - Acme,
+Inc." merges into your "Common Stock" line instead of creating a
+duplicate — and when an import *would* create new class lines beside
+existing ones of the same class/series, the preview warns you before
+you commit (right for a genuine new sub-series, wrong if the sheet just
+spells a class differently). Blocking validation errors stop the
+import; the error worklist groups them by issue so you fix the sheet
+rather than hunt row by row.
 
 ### AI-assisted import (GAIBE)
 
@@ -179,11 +207,16 @@ review.
 
 ### Starting over
 
-**Reset Ledger** clears all offchain positions, stakeholders, classes,
-and plans so you can re-import from scratch. Tokenized positions, which
-mirror onchain certs, are kept, and the audit journal is preserved so
-dated stockholder lists still work. It requires typing `RESET` to
-confirm, and it can't be undone, so export first.
+**Reset Ledger** (the dialog is titled *Clear offchain cap-table
+records?*) clears the removable offchain positions, stakeholders,
+classes, and plans so you can re-import from scratch. Kept: tokenized
+positions, which mirror onchain certs, and positions tied to a live
+MetaVesT escrow; the audit journal is preserved so dated stockholder
+lists still work. It requires typing `RESET` to confirm, and it can't be
+undone, so export first. Two formation caveats: the reset is unavailable
+while the table holds formation-managed positions with issued history,
+and clearing formation-managed *drafts* consumes them permanently — the
+one-time formation setup cannot be re-staged.
 
 ## Tokenizing a position
 
@@ -201,6 +234,27 @@ when the position is covered by one (see
 but the link-back fails, the dialog offers a repair path — retry the
 link, or enter the cert number by hand — so you never mint a duplicate.
 
+Beside **Tokenize →**, every eligible row also offers **Link existing
+cert** — the mint-free path. It links a certificate that *already
+exists* on the class's cert printer (the onchain contract that mints a
+class's tokenized certificates) to this position: you enter the cert
+number, the app verifies it — the cert must be live, unclaimed by any
+other position, held by a wallet belonging to this stakeholder, and
+carry exactly the position's registered units — and the position flips
+to tokenized, mirroring that cert, the same end state as Tokenize with
+nothing new minted. Use it to relink an orphaned cert after unlinking
+it from the wrong position, or when importing a table whose certs
+already exist onchain. If the cert's holder wallet wasn't yet linked to
+the stakeholder, completing the link records it.
+
+The reverse exists too: a **tokenized** row's one action is **Unlink
+cert**, a journaled correction for a mistaken link. The position
+returns to the cap table as an active offchain record and the cert
+itself is untouched — it stays live onchain — so until you resolve it
+the table shows *both* records and flags the pair in the cert
+double-count review. Resolve it promptly: relink the cert to the
+correct position with Link existing cert, or void the cert onchain.
+
 Two kinds of position tokenize differently:
 
 * **Equity awards** (options, RSUs, vesting restricted stock) don't
@@ -209,11 +263,54 @@ Two kinds of position tokenize differently:
   schedule. See [Token grants and onchain vesting](grants.md).
 * **Stock plan reserves** appear as their own rows. **Tokenize plan**
   mints one jumbo certificate to the company itself for the plan's full
-  reserve; you then **scripify** out of that cert to fund grants.
+  reserve; you then **scripify** out of that cert to fund grants. Once
+  the reserve is fully scripified, the Scripify action retires into a
+  passive "fully scripified" chip.
 
 If no cert printer exists yet for the position's class, the action
 becomes **Create cert printer →** and routes you through the standard
-create-class flow first.
+create-class flow first. If *several* printers match the class and the
+line isn't linked to one, the action becomes **Choose cert printer →**,
+asking which cert printer mints this class's certs.
+
+## Keeping classes and certs reconciled
+
+Three review worklists keep the two halves of the table honest. Each
+surfaces as a banner above the table when it has findings:
+
+* **Reconcile classes** — a tokenized legal series is one offchain class
+  line *linked to* its cert printer; linked, the pair renders as one
+  class everywhere (breakdown, donut, filters, subtotals). The dialog
+  lists series lines not yet linked to a matching printer (until the
+  link is set, the line and its certs count as two classes) and groups
+  of class lines that look like one class recorded twice — same
+  class/series, matching name — offering a journaled **merge** into a
+  survivor whose terms win. Class display labels derive from the
+  class/series, so renaming a line's stored legal name (via Class
+  terms) is safe.
+* **Review cert double counts** — pairs where a counting onchain cert
+  sits beside a counting live offchain entry for the same holder,
+  class, and size (the state an unlink or a declined import link leaves
+  behind). The dialog compares each pair field by field and tells you
+  the remedy per shape — usually Link existing cert on the entry, or
+  Unlink cert on a mis-linked position; it never assumes the cert is
+  the mistake. Pairs that are genuinely separate holdings can be
+  dismissed. The dialog only surfaces; every fix happens on the rows
+  themselves.
+* **Review unregistered scrip** — plan-reserve scrip sitting in wallets
+  beyond what grant withdrawals explain. Flagged positions carry an
+  **⚠ unregistered** chip, and the review can stage a *draft* position
+  prefilled from the onchain evidence — never an active row.
+
+## Positions seeded by formation
+
+For a company formed through the app, the cap table starts with the
+formation journey's output: a requested **Common Stock** class awaiting
+review, and a **Proposed initial ownership** section holding the draft
+positions from your private setup plan — badged *Proposed · not issued*
+and excluded from every issued, outstanding, diluted, and stakeholder
+total until each is recorded. A **Start your cap table** card on the
+mainFrame dashboard points here until real positions exist.
 
 ## Securities status
 
@@ -222,7 +319,15 @@ draft count) is the officer's worklist over the issuance loop, four
 queues derived live from the ledger and the chain:
 
 1. **Drafts** — staged positions; issue (as active or as "promised"),
-   edit, or delete them here.
+   edit, or delete them here. **Formation-managed drafts** work
+   differently: their action chain is **Review cash terms**, **Review
+   exemption**, **Review board approval** (in that order), then
+   **Record issuance** — no edit, and once recorded the entry can't
+   return to draft or be deleted; later corrections use the ordinary
+   Edit / Void / Terminate verbs. Only plain Common Stock qualifies for
+   direct recording; anything with restricted, award, plan,
+   convertible, or token terms stays a non-counting draft for a custom
+   workflow.
 2. **Awaiting signature** — proposed onchain, the recipient hasn't
    signed. Copy the cyberSign signing link and send it yourself; there is
    no email rail by design.

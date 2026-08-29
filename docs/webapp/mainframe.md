@@ -1,5 +1,5 @@
 ---
-description: "Create and run a company: cap table, board, issuance, grants, and cyberSign"
+description: "Create or form a company and run it: cap table, board, issuance, grants, and cyberSign"
 ---
 
 # The cyberCORPs app — manage your company
@@ -9,24 +9,25 @@ created and run. If you are a founder or officer, this is your company's
 onchain control panel. Once a company is selected, a **sidebar** on the left
 navigates its areas:
 
-* **Home** — the live company record: what's true now and what needs action.
-* **cyberRaise** — jumps to your raises in [cyberRAISE](cyberraise.md).
-* **incorporation** — the onchain formation record and founding documents.
+* **mainFrame** — the live company record: what's true now and what needs action.
+* **company record** — the onchain formation record and founding documents.
 * **boardRoom** — officers, governance documents, and board approvals.
-* **mainFrame** — the equity hub: configure, issue, and manage tokenized
-  securities.
-* **capTable** — tokenized and un-tokenized positions in one unified cap
+* **capTable** — tokenized and untokenized positions in one unified cap
   table.
 * **grants** — equity awards (options, RSUs, restricted stock) with onchain
   vesting.
+* **cyberRaise** — jumps to your raises in [cyberRAISE](cyberraise.md).
+* **Tokenization Hub** — the equity hub: configure, issue, and manage tokenized
+  securities.
 * **cyberSign** — sign and countersign the company's legal agreements (opens
   MetaLeX's standalone signing app).
 
 Hovering a sidebar item shows a short description of the area. The three
 largest areas have their own guides: [the cap table](captable.md),
 [token grants and onchain vesting](grants.md), and
-[the boardRoom](boardroom.md). This page covers company creation, the
-Mainframe, and how the areas fit together.
+[the boardRoom](boardroom.md). This page covers the two ways to get a
+company into the app, the Tokenization Hub, and how the areas fit
+together.
 
 ![The cyberCORPs app start screen](../.gitbook/assets/webapp/cybercorps-home.png)
 
@@ -34,27 +35,32 @@ Mainframe, and how the areas fit together.
 > [cyberRAISE](cyberraise.md). The cyberCORPs app is about the company
 > itself and its register of holders.
 
-> Creating a cyberCORP is a **desktop-only** flow.
-
 ## Getting started
 
-### Do you have a legal entity?
+### Has your company already been legally formed?
 
-The first question the app asks is whether you **already have an offchain
-legal entity** (a real company — a Delaware corp, an LLC, etc.).
+The first question the app asks is whether your company **already exists as
+a legal entity** (a Delaware corp, an LLC, etc.):
 
-* **Yes** — the standard path. You bring your existing entity onchain.
-  Forming a cyberCORP is free; setup costs roughly \$2–\$8 in gas.
-* **No** — buying a ready-made entity through MetaLeX is **coming soon** and
-  not yet available.
+* **Yes** — you set up your existing company on MetaLeX, free of charge
+  (network fee only): one wallet transaction creates its public onchain
+  company record. This is the three-step wizard below.
+* **No** — **Form a company** runs the whole thing in one guided flow, for
+  a flat **\$1,000, all inclusive, paid in USDC**: the state filing and
+  formation documents, filing of the initial tax documents, a 30-minute
+  lawyer consultation with @lex\_node on Telegram, and free lifetime
+  access to the cap-table features — fully synchronous and in-app, no
+  sales calls. The public onchain company record is created as part of the
+  process. See [Forming a new company](#forming-a-new-company-llc-or-c-corp).
 
-A cyberCORP is best understood as a *digital twin* of your real company.
+A cyberCORP is best understood as a *digital twin* of your real company —
+and on the formation path, the app arranges for the real company too.
 
 ![The onboarding question](../.gitbook/assets/webapp/cybercorps-onboarding.png)
 
-### Create your cyberCORP
+### Set up an existing company
 
-Creation is a three-step wizard. Your progress is saved as you go.
+Setup is a three-step wizard. Your progress is saved as you go.
 
 ![Step 1 of the wizard: Network & Treasury Setup](../.gitbook/assets/webapp/cybercorps-create-network.png)
 
@@ -94,39 +100,133 @@ confirms, your company exists onchain.
 > *why* the chain can be the official register, see
 > [Constitutive vs. pointer tokenization](../explanation/constitutive-vs-pointer.md).
 
-## The company home
+## Forming a new company (LLC or C-Corp)
 
-Once your cyberCORP exists, **Home** shows the live company record: a
+**Form a company** opens a single long-page form (not a wizard) that
+gathers everything the filing and the onchain record need. Nothing is
+saved automatically — a dialog on a fresh session tells you to save with
+the disk icon and to **keep the session link**, which reopens your saved
+draft in the same browser.
+
+What the form asks for, in order:
+
+* **Company** — entity type (C-Corporation or LLC), the legal name and its
+  ending, up to two optional **backup company names** (saved for manual
+  follow-up — automated filing submits only the reviewed primary name),
+  and the state of formation. For Delaware and a few other states the form
+  links the state's business-name database and has you attest **"I
+  searched the … database and my proposed primary name appears
+  available"** — the attestation resets if you later change the name. A
+  Delaware-specific preflight also catches names that are too long,
+  contain non-printable characters, or use approval-sensitive terms
+  (bank, trust, insurance, university). Search results are advisory; the
+  state makes the final call when it reviews the filing.
+* **Responsible party** (mostly private) — the IRS responsible party who
+  signs the tax paperwork, with the option to also list them as the first
+  public officer of the onchain record.
+* **Capitalization** (always private) — authorized share count and par
+  value for a C-Corp; the member list (ownership totalling 100%) for an
+  LLC.
+* **Officer roles** — President, Secretary, Treasurer, Director, each
+  defaulting to the responsible party, each optionally listed publicly.
+* **Proposed initial ownership** (always private) — proposed Common Stock
+  allocations, saved **encrypted** as a private setup plan. The form is
+  explicit that this does not create positions, reserve shares, or
+  promise stock — it pre-stages your cap table for later.
+* **Public company record** (always public) — the founding wallet, the
+  treasury address, the public contact and first public officer, and the
+  optional profile. On this path the network is **locked to the payment
+  chain** (Ethereum mainnet in production) rather than chosen freely.
+* A **legal attestation** that the details are accurate and the public
+  values are approved for permanent onchain publication.
+
+**Review incorporation** shows everything grouped by disclosure — private
+filing details, the private setup plan, and the public record — with the
+price notice, before **Save and continue**.
+
+### Paying and what happens next
+
+**Pay 1,000 USDC and start incorporation** runs two authorization steps
+that settle as **one onchain transaction**: a gasless payment
+authorization (a free typed-data signature that moves no funds by
+itself), then a single company-setup transaction that pays the \$1,000
+USDC and creates your public company record. The state filing goes to
+MetaLeX's formation partner only after both are verified.
+
+The **Formation Status** page then tracks the whole order: the filing
+checklist (request accepted, state filing, required signatures, company
+incorporated / LLC formed, EIN issued, documents available), signing
+sessions for the IRS Forms SS-4 and 8821, and authenticated downloads of
+your private legal documents — the page auto-refreshes while anything is
+in flight. **My formation orders** (in the profile dropdown) lists every
+formation you have running.
+
+Once the company record is deployed and your wallet owns it, the status
+page hands you off to the **company record** area, and the rest arrives
+as tasks on the mainFrame dashboard: publish your selected officers to
+the onchain roster from the boardRoom, review the auto-created **draft**
+cap-table positions from your private setup plan (visible, non-counting
+drafts — no stock is issued), onboard any stakeholders who don't have
+wallets yet via invitation links, and finish each issuance from the cap
+table's Securities status queue (review cash terms, the federal
+exemption, and the board approval, then record it). Cap-table setup opens
+as soon as the state filing completes — you don't wait for the EIN. A
+saved setup plan you no longer want can be discarded at any time without
+touching the company or the cap table.
+
+> **Under the hood.** The payment and the company-record deployment are
+> one Multicall3 batch: a USDC `transferWithAuthorization` plus the
+> factory's `deployCyberCorp`, so the fee and the record land — or fail —
+> together. See
+> [Integrate from a frontend](../how-to/integrate-from-frontend.md#atomic-fee--formation-via-multicall3).
+
+## mainFrame — the company dashboard
+
+Once your cyberCORP exists, **mainFrame** shows the live company record: a
 compact identity strip up top and, below it, an operations dashboard built
-from the same data as the cap table.
+from the same data as the cap table. Its **Tasks and reminders** card is
+also where an in-flight formation surfaces — payment, filing, signature,
+and setup steps appear here until the journey is done.
 
-For a **brand-new company** (no stakeholders or positions yet), the home
-instead leads with a **“Get set up — what's your next move?”** grid of
-cards:
+For a **brand-new company** (no stakeholders or positions yet), the
+mainFrame instead leads with a **“Get set up — what's your next move?”**
+grid of cards:
 
 * **Start or manage a cyberRaise** — jumps to [cyberRAISE](cyberraise.md).
-* **Open mainFrame** — the securities console.
+* **Open Tokenization Hub** — the securities console.
 * **Manage your capTable.**
 * **Enter the boardRoom.**
 
+(On smaller screens, where the sidebar is hidden, the grid adds cards for
+the company record, grants, and cyberSign and doubles as the app's
+navigation.)
+
 Once the company has a record, those destinations live in the sidebar and
-the home leads with the record itself.
+the mainFrame leads with the record itself.
 
-## incorporation
+## company record
 
-The **incorporation** area is the company's onchain formation record:
+The **company record** area is the company's formation record, private and
+public halves side by side:
 
-* **Formation record** — legal name, entity type, jurisdiction,
-  dispute-resolution method, the date the company was *cybernated*, the
-  contact, the treasury (company payable) address, and the addresses of the
-  company's contracts (cyberCORP, BorgAuth, and the issuance, deal, and
-  round managers), each linked to a block explorer.
+* **State formation record** (private) — the filing status, filing date
+  and number, the EIN, and any required signatures, for a company formed
+  through the app.
+* **Public company record** (onchain, public) — legal name, entity type,
+  jurisdiction, dispute-resolution method, the date the company was
+  *cybernated*, the contact, the treasury (company payable) address, and
+  the addresses of the company's contracts (cyberCORP, BorgAuth, and the
+  issuance, deal, and round managers), each linked to a block explorer.
 * **Founding documents** — the governing documents anchored at formation.
-* **Incorporate another cyberCORP** — starts the creation wizard again for a
-  second company.
+* A read-only officer roster with a **Manage officers in boardRoom →**
+  hand-off — officer changes happen in the boardRoom, not here.
+
+To create another company, use the cyberCORP selector's **Setup your
+cyberCORP** or the app grid's **deploy new cyberCORP** — both restart the
+onboarding choice.
 
 It is described alongside the boardRoom in
-[The boardRoom and incorporation records](boardroom.md#the-incorporation-page).
+[The boardRoom and company records](boardroom.md#the-company-record-page).
 
 ## boardRoom
 
@@ -138,12 +238,12 @@ hand-over flow and a preview of the coming BORG board multisig.
 
 The full guide, including how directors are seated, how consents route for
 signature, and what goes to public IPFS, is
-[The boardRoom and incorporation records](boardroom.md).
+[The boardRoom and company records](boardroom.md).
 
-## The Mainframe — your equity hub
+## The Tokenization Hub — your equity hub
 
-The Mainframe is the company's securities console. It requires you to
-connect your wallet, **Authenticate**, and be an owner of the cyberCORP.
+The Tokenization Hub is the company's securities console. It requires you
+to connect your wallet, **Authenticate**, and be an owner of the cyberCORP.
 
 The records here are not a copy of the official record — **they are the
 official record**.
@@ -172,8 +272,9 @@ Below the classes, a table of issued securities. Expanding a class shows:
 Voided certificates can be shown or hidden with a checkbox. If a holder has
 requested de-scripification, a banner prompts you to review it.
 
-Three buttons at the top of the Mainframe: **Cap Table**, **Create new
-Security Class**, and **Issue New Security under existing Security Class**.
+Three buttons at the top of the Tokenization Hub: **Cap Table**, **Create
+new Security Class**, and **Issue New Security under existing Security
+Class**.
 
 > **Under the hood.** Each security *class* is a
 > [`LedgerEntryToken`](../reference/contracts/LedgerEntryToken.md) (cert
@@ -200,7 +301,8 @@ asks for:
 * a **security name** (auto-generated from the series and company),
 * the **legal document** — either upload a PDF or paste a link to it.
 
-Submitting deploys the class onchain and returns you to the Mainframe.
+Submitting deploys the class onchain and returns you to the Tokenization
+Hub.
 
 > **Under the hood.** This deploys a new `CyberCertPrinter` for the chosen
 > [security type](../reference/security-types.md). The instrument-specific
@@ -264,8 +366,9 @@ isn't, the form points you to the **Upgrade** page first.
 ## Approving de-scripification
 
 When a scrip holder wants to become a registered holder, they request
-de-scripification. You approve it from the Mainframe's pending-request
-banner: the *Approve De-scripification* screen pre-fills the holder and
+de-scripification. You approve it from the Tokenization Hub's
+pending-request banner: the *Approve De-scripification* screen pre-fills
+the holder and
 share amount, you complete and sign the certificate details, and confirm.
 The holder is then put on the register.
 
@@ -278,10 +381,12 @@ The holder is then put on the register.
 
 The **capTable** area (in beta) is the company's unified capitalization
 workspace: offchain positions you record by hand or import, and the
-tokenized certificates from the Mainframe, side by side in one ledger,
-with an AI-assisted import for bringing in a cap table from any format.
-Modeling and compliance tooling (round modeling, exit waterfall, §219
-lists, 409A / Rule 701 / 3921 / 83(b) records) lives alongside it.
+tokenized certificates from the Tokenization Hub, side by side in one
+ledger, with an AI-assisted import for bringing in a cap table from any
+format. Modeling and compliance tooling (round modeling, exit waterfall,
+§219 lists, 409A / Rule 701 / 3921 / 83(b) records) lives alongside it.
+After an in-app formation, this is also where the requested Common Stock
+class and the draft positions from your private setup plan land.
 
 Two guides cover it: [The cap table](captable.md) for the ledger,
 importing, and tokenizing, and
@@ -300,7 +405,8 @@ The full guide is [Token grants and onchain vesting](grants.md).
 ## For stakeholders: invitations and My holdings
 
 Companies onboard their stakeholders with **invitation links** (managed
-from the cap table's **Invitations** panel). Claiming one attaches the
+from the cap table's **Invitations** panel — also where a formation's
+walletless stakeholders get onboarded). Claiming one attaches the
 stakeholder's wallet to their record and opens **My holdings** — their
 scoped portal of positions, certificates, documents, and grants.
 
