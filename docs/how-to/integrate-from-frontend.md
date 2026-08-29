@@ -53,8 +53,15 @@ one transaction through the canonical Multicall3
 EIP-3009 `transferWithAuthorization` (the user signs typed data naming the
 recipient, amount, validity window, and a random nonce), and the formation
 call takes the owner as a parameter — so neither inner call depends on
-`msg.sender`, and Multicall3 being the sender of both is harmless. Either
-both land or neither does. See
+`msg.sender`, and Multicall3 being the sender of both is harmless.
+
+The batch is all-or-nothing **only if you set `allowFailure: false` on both
+`Call3` entries** — that is what makes `aggregate3` revert the whole
+transaction when either call fails. With `allowFailure: true`, Multicall3
+continues past a failed call: the suite's
+`test_frontRunAuthorizationToleratedWithAllowFailure` shows formation
+succeeding while the fee call fails, which as a frontend default would
+deploy the corp without collecting the fee. See
 [`test/MulticallFormationFeeForkTest.t.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/test/MulticallFormationFeeForkTest.t.sol)
 for a worked Base-mainnet example, including the
 `TransferWithAuthorization` typed-data struct.
