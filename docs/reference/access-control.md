@@ -31,7 +31,7 @@ deployed:
 
 | Holder | Level | Why |
 |---|---|---|
-| Company officer (`CompanyOfficer.eoa`) | `200` | Set by `CyberCorp.addOfficer` / by the factory. `200 ≥ 99`, so officers also satisfy `onlyOwner`. |
+| Company officer (`CompanyOfficer.eoa`) | `200` | Set by `CyberCorp.addOfficer` / `updateOfficer` / by the factory (never downgrading a higher custom level; removal only zeroes an exact `200`). `200 ≥ 99`, so officers also satisfy `onlyOwner`. |
 | `CyberCorp` contract | `200` | So the corp can act on its own auth. |
 | `IssuanceManager`, `DealManager`, `RoundManager` | `99` (`OWNER_ROLE`) | So the manager contracts can call owner-gated functions on the suite. |
 

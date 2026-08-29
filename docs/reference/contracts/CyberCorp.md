@@ -42,6 +42,7 @@ function setDealManager(address) external;                        // onlyOwner
 function setRoundManager(address) external;                       // onlyOwner
 function setCompanyPayable(address) external;                     // onlyOwner
 function addOfficer(CompanyOfficer) external;                     // onlyOwner
+function updateOfficer(uint256 index, CompanyOfficer) external;   // onlyOwner
 function removeOfficer(address) external;                         // onlyOwner
 function removeOfficerAt(uint256) external;                       // onlyOwner
 function isCyberCORPOfficer(address) external view returns (bool);
@@ -57,8 +58,14 @@ function clearExtension() external;                                         // o
 function getExtensionURI() external view returns (string);
 ```
 
-`addOfficer` also grants the officer's `eoa` BorgAuth role `200`;
-`removeOfficer` / `removeOfficerAt` set it back to `0`.
+Officer lifecycle and BorgAuth roles: `addOfficer` rejects an `eoa` already
+listed (`DuplicateOfficer`) and grants it role `200` — unless it already
+holds a *higher* custom role, which is left untouched. `updateOfficer`
+replaces the record at an index; when the `eoa` changes, it revokes the old
+address's role and grants the new one under the same rules. `removeOfficer`
+/ `removeOfficerAt` revoke the role only when it is exactly `200` (a custom
+role granted outside the officer lifecycle survives) and only when the
+address is not still listed at another index.
 `isCyberCORPOfficer` reports whether an address holds a role at or above
 `OWNER_ROLE` (99). See [Access control](../access-control.md).
 
@@ -76,15 +83,16 @@ cyberCERT's metadata.
 
 ## Events
 
-`CyberCORPDetailsUpdated`, `OfficerAdded`, `OfficerRemoved`,
-`CompanyPayableUpdated`, `EscrowedOfficerSignatureAdded`,
+`CyberCORPDetailsUpdated`, `OfficerAdded`, `OfficerUpdated`,
+`OfficerRemoved`, `CompanyPayableUpdated`, `EscrowedOfficerSignatureAdded`,
 `EscrowedOfficerSignatureUpdated`, `CyberCORPExtensionSet`,
 `CyberCORPExtensionDataUpdated`.
 
 ## Errors
 
 `NotRefImplementation`, `SignatureRequired`, `InvalidEscrowSignatureIndex`,
-`InvalidExtension`, `ExtensionTypeNotSupported`, `ExtensionNotConfigured`.
+`InvalidOfficerIndex`, `DuplicateOfficer`, `InvalidExtension`,
+`ExtensionTypeNotSupported`, `ExtensionNotConfigured`.
 
 ## Upgrades
 

@@ -8,9 +8,10 @@ contracts coexist:
 * **LeXcheX** — the original accreditation credential (one `Accreditation`
   record per token).
 * **LeXcheXBadge** — the unified credential registry (`VERSION = 2`): one
-  deployment is one credentialing layer under one operator's BorgAuth,
-  carrying KYC/AML facts, accreditation statuses, and SPV-scoped
-  entitlements as typed fact-keys.
+  deployment carries KYC/AML facts, accreditation statuses, and SPV-scoped
+  entitlements as typed fact-keys. The deployment's admins (its BorgAuth)
+  run it, and can delegate per-fact-key issuing authority to additional
+  issuers, so several credentialing operators can share one registry.
 
 * **Sources:** [`src/creds/lexchex.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/creds/lexchex.sol),
   [`src/creds/lexchexBadge.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/creds/lexchexBadge.sol),
@@ -61,24 +62,42 @@ key is asserted. Value keys: `K_INVESTOR_TYPE`, `K_INVESTOR_JURISDICTION`,
 from physical jurisdiction), `K_US_STATE`, `K_BO_COUNT`, `K_DATA`. Status
 keys: `K_ACCREDITED`, `K_QP`, `K_QIB`, `K_BAD_ACTOR_CLEAR`, `K_NON_US`.
 SPV-scoped keys: `K_SPV_WHITELIST`, `K_SYNDICATE`. The `Credential` struct
-also carries `investorName`, a free-form `categoryId` issuer label,
-issuance/expiry dates, the backing `agreementId`, and an `evidenceHash`
-anchoring the offchain diligence record.
+also carries `investorName`, the `issuer` address that minted it (consumers
+filter on this to pick whose word they take), a `scope` (any key may carry
+one — the SPV the credential is about — and it is mandatory for the
+SPV-scoped keys), issuance/expiry dates, the backing `agreementId`, and an
+`evidenceHash` anchoring the offchain diligence record.
 
 ```solidity
-function mint(address to, Credential cred) external returns (uint256 tokenId); // onlyAdmin
+// Issuing authority
+function setIssuerKeys(address issuer, uint256 keys) external;                 // onlyAdmin
+function issuerKeys(address issuer) external view returns (uint256);
+
+// Lifecycle
+function mint(address to, Credential cred) external returns (uint256 tokenId); // admin, or issuer within its granted keys
 function supersede(uint256 staleTokenId, Credential cred, string reason)
-    external returns (uint256 tokenId);                                        // onlyAdmin
-function void(uint256 tokenId, string reason) external;                        // onlyAdmin
+    external returns (uint256 tokenId);                                        // void + mint, under the same rules
+function void(uint256 tokenId, string reason) external;                        // credential's own issuer, or any admin
 
 function sweep(address holder) external;                       // permissionless
 function sweepHolders(address[] holders) external;             // permissionless
 function sweepTokens(uint256[] tokenIds) external returns (uint256 evicted); // permissionless
 
 function isValid(uint256 tokenId) external view returns (bool);
-function hasValidCredential(address owner, bytes32 categoryId) external view returns (bool);
+
+// Filtered reads — full form plus shortcuts (kindKey only / + issuers / + scope)
+function hasValidCredentialOf(address owner, uint256 kindKey,
+    address[] issuers, address scope, address hook, bytes hookData) external view returns (bool);
 function hasValidCredentialOf(address owner, uint256 kindKey) external view returns (bool);
-function hasValidScopedCredentialOf(address owner, uint256 scopeKey, address spv) external view returns (bool);
+function hasValidCredentialOf(address owner, uint256 kindKey, address[] issuers) external view returns (bool);
+function hasValidCredentialOf(address owner, uint256 kindKey, address scope) external view returns (bool);
+function getMostRecentValidWith(address owner, uint256 kindKey,
+    address[] issuers, address scope, address hook, bytes hookData)
+    external view returns (uint256 tokenId, bool found);        // + the same three shortcuts
+function earliestValidIssuance(address owner, uint256 kindKey,
+    address[] issuers, address scope, address hook, bytes hookData)
+    external view returns (uint64);                             // + a kindKey-only shortcut
+
 function hasValidWhitelistFor(address owner, address spv) external view returns (bool);
 function hasValidSyndicateFor(address owner, address spv) external view returns (bool);
 function hasValidLexCheX(address owner) external view returns (bool); // v1-compatible read
@@ -89,7 +108,6 @@ function getEffectiveBeneficialOwnerCount(address owner) external view returns (
 function getInvestorJurisdiction(address owner) external view returns (string value, uint64 expiry);
 function getLookThroughJurisdiction(address owner) external view returns (string value, uint64 expiry);
 function getData(address owner) external view returns (bytes value, uint64 expiry);
-function earliestValidIssuance(address owner, uint256 kindKey) external view returns (uint64);
 
 function getTokenIdsByOwner(address owner) external view returns (uint256[]); // full audit history
 function getActiveTokenIds(address owner) external view returns (uint256[]);  // non-voided, not-yet-swept — may include expired; check isValid per id
@@ -99,12 +117,37 @@ function getCredentialByOwner(address owner) external view returns (uint256);
 
 Key semantics:
 
+* **Per-issuer authority.** `setIssuerKeys(issuer, keys)` (admin-only) is
+  the entire grant: `mint` rejects any asserted key outside the caller's
+  mask (`LexChexBadge_KeysNotAuthorized`), and a delegated issuer needs —
+  and picks up — no BorgAuth role. Admins (checked via `AUTH`, so role
+  adapters count) may assert anything. `mint` stamps `cred.issuer` with the
+  caller. `void` is issuer-scoped: an issuer voids only its own
+  credentials (no grant required, so an issuer cut off from minting can
+  still clean up its own work), while an admin can void anything.
+  `supersede` voids and re-issues in one call under the same rules.
 * **Immutable, append-only.** Credentials are never edited or burned. To
   change a fact, mint a newer credential (most-recent valid wins); to
-  retract one, void — `supersede` voids and re-issues in one call.
-* **Union reads.** `hasValidCredentialOf(owner, kindKey)` is satisfied when
-  the owner's valid credentials *together* assert every fact-key in
+  retract one, void.
+* **Union reads.** `hasValidCredentialOf(owner, kindKey, …)` is satisfied
+  when the owner's valid credentials *together* assert every fact-key in
   `kindKey` — the keys need not live on one credential.
+* **Query filters.** Every read (`hasValidCredentialOf`,
+  `getMostRecentValidWith`, `earliestValidIssuance`) takes the same four
+  optional filters, each off by default: `issuers` (only credentials from
+  these issuers count; empty accepts any), `scope` (the SPV a credential
+  must name; zero accepts any), and `hook`/`hookData` (an
+  `ICredentialQueryHook` the caller supplies to test each credential —
+  typically to interpret `Credential.data`, whose schema the badge never
+  learns). Filters apply per credential; a fully-empty query reverts
+  (`LexChexBadge_EmptyQuery`) so a blank parameterization cannot admit
+  everyone. Shortcut overloads cover the common forms.
+* **Authoritative reads.** `getMostRecentValidWith` resolves the owner's
+  authoritative credential — the most recent valid one carrying *all* of
+  `kindKey` on a single record (ties broken by higher tokenId) that clears
+  every filter. This is what the value getters run; use it directly when
+  matches can contradict each other (e.g. two credentials naming different
+  U.S. states, or an issuer tier where a newer seat demotes an older one).
 * **Value getters return `(value, expiry)`** — the expiry of the credential
   answering the read — and return the field's empty value (`0`, `""`,
   `bytes2(0)`) rather than reverting when no valid credential asserts the
@@ -119,8 +162,9 @@ Key semantics:
   must apply `isValid` per id. The full ERC-721 enumeration
   is retained for audit.
 
-**Events:** `CredentialIssued`, `CredentialVoided`, `CredentialSwept`
-(plus ERC-5484 `Issued`).
+**Events:** `CredentialIssued`, `CredentialVoided`, `CredentialSwept`,
+`IssuerKeysUpdated` (the issuer's complete new key set, not a delta) — plus
+ERC-5484 `Issued`.
 
 ## LeXcheXMinter
 
