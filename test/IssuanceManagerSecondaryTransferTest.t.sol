@@ -197,6 +197,65 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(cert.legalOwnerOf(1), buyer, "buyer owns new token");
     }
 
+    // A partly scripified lot whose RAW units are all sold is not empty: it still holds the vault position
+    // backing the seller's outstanding scrip. Secondary transfer should not void it because
+    // the seller would no longer redeem their own scrip without an admin recertification approval.
+    function test_SecondaryTransfer_ScripifiedSellerToken_FullRawSale_KeepsLotForVaultClaim() public {
+        ILedgerEntryToken cert = _deployPrinterWithScripifiedSellerCert(100, 30);
+
+        // Sell every raw unit the lot has left (70 of the original 100).
+        vm.expectEmit(true, true, true, true, address(issuanceManager));
+        emit IIssuanceManager.SecondaryTransferExecuted(
+            SETTLEMENT_ID, address(cert), buyer, 0, 1, seller, 70, 0, 70, false, true
+        );
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 70, "Bob", HostingMode.DIRECT, address(0)));
+
+        assertFalse(cert.isVoided(0), "lot keeps a live vault claim, so it must stay on the register");
+        assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 0, "raw units all sold");
+        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 30, "vault claim survives the sale");
+
+        // The seller redeems their own scrip through the surviving lot. No admin approval is needed.
+        vm.prank(seller);
+        issuanceManager.convertScripToCert(address(cert), 30);
+        assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 30, "scrip converts back onto the seller lot");
+        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 0, "vault position emptied");
+    }
+
+    // Since the partially-scripified & unburnt lot won't void at settlement, once the seller redeems the scrip the position is
+    // empty, and the permissionless sweeper retires the lot on the same rule the transfer applied.
+    function test_SecondaryTransfer_ScripifiedSellerToken_SweeperVoidsLotOnceClaimIsGone() public {
+        ILedgerEntryToken cert = _deployPrinterWithScripifiedSellerCert(100, 30);
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 70, "Bob", HostingMode.DIRECT, address(0)));
+
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+
+        // The claim is still live, so the sweeper refuses the lot for the same reason the transfer did.
+        vm.expectRevert(IssuanceManagerStorage.CertNotEmpty.selector);
+        issuanceManager.voidEmptyCerts(address(cert), ids);
+
+        // An admin force-burn of the last scrip empties the pool, which retires every position at once. The
+        // lot now holds nothing at all, and the sweeper retires it.
+        issuanceManager.forceScripBurn(address(cert), seller, 30);
+        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 0, "emptied pool retires the position");
+
+        issuanceManager.voidEmptyCerts(address(cert), ids);
+        assertTrue(cert.isVoided(0), "sweeper retires the lot once it holds nothing");
+    }
+
+    // A seller lot with no vault position keeps voiding on a full sale: the fix must not hold empty lots open.
+    function test_SecondaryTransfer_ScripifiedSellerToken_ScripRedeemedBeforeSale_StillVoids() public {
+        ILedgerEntryToken cert = _deployPrinterWithScripifiedSellerCert(100, 30);
+
+        // The seller converts the scrip back before selling, so the lot holds 100 raw units and no claim.
+        vm.prank(seller);
+        issuanceManager.convertScripToCert(address(cert), 30);
+        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 0, "no vault claim left");
+
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 100, "Bob", HostingMode.DIRECT, address(0)));
+        assertTrue(cert.isVoided(0), "a lot with nothing left still voids on a full sale");
+    }
+
     // Administered hosting (HostingMode.ADMINISTERED) custodies the new token with the admin multisig, but the
     // buyer is still the registered legal owner of record (spec §7.4A) — custody and ownership are distinct.
     function test_SecondaryTransfer_AdministeredHosting_MultisigCustodiesBuyerOwns() public {
@@ -392,6 +451,20 @@ contract IssuanceManagerSecondaryTransferTest is Test {
             extensionData: abi.encode(fid)
         });
         issuanceManager.createCertAndAssign(address(cert), seller, details);
+    }
+
+    /// @dev Same as `_deployPrinterWithSellerCert`, plus scrip: the seller scripifies `scripifiedUnits` of the
+    /// lot, so it holds `units - scripifiedUnits` raw units and a vault position worth `scripifiedUnits`.
+    function _deployPrinterWithScripifiedSellerCert(uint256 units, uint256 scripifiedUnits)
+        internal
+        returns (ILedgerEntryToken cert)
+    {
+        cert = _deployPrinterWithSellerCert(units);
+        _deployScrip(address(cert));
+        vm.prank(seller);
+        issuanceManager.scripifyCert(address(cert), 0, scripifiedUnits, address(0));
+        assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, units - scripifiedUnits, "raw after scripify");
+        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), scripifiedUnits, "vault claim after scripify");
     }
 
     /// @dev Deploys a printer and mints the seller's Ledger Entry Token (id 0, `units` units)

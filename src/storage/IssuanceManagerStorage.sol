@@ -901,7 +901,11 @@ library IssuanceManagerStorage {
         if (units > sellerDetails.unitsRepresented) revert AmountExceedsAvailableUnits();
         sellerDetails.unitsRepresented -= units;
         cert.updateCertificateDetails(tokenId, sellerDetails);
-        bool sellerVoided = sellerDetails.unitsRepresented == 0;
+        // A lot that keeps a vault claim is not empty: its scrip is still outstanding, and the seller redeems
+        // it through this lot. The actual voiding uses the same rule as executeVoidEmptyCerts, which sweeps
+        // the lot later, once the claim is gone.
+        bool sellerVoided = sellerDetails.unitsRepresented == 0
+            && _assetsOfVaultPosition(certPrinter, tokenId) == 0;
         // (c) Deliver the buyer's units as a fresh lot (fresh-mint-per-lot): each acquisition mints its own
         // Ledger Entry Token carrying its own acquisitionTimestamp (per-lot holding-period clock, stamped at
         // mint). The lot inherits the seller's non-basis terms; cost basis stays blank (no primary-issuance
