@@ -554,6 +554,119 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(details.extensionData, approvalDetails.extensionData);
     }
 
+    function test_convertScripToCert_RevertsWhenSourceAccountFrozen() public {
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
+        uint256 amount = 100;
+        uint256 sourceCertId = _mintCert(certPrinter, investor, amount);
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            amount * 1e18,
+            address(0)
+        );
+        assertEq(ICyberScrip(scrip).balanceOf(investor), amount * 1e18);
+
+        // Freeze the scrip holder; conversion back to cert must now be blocked
+        // even though burns bypass CyberScrip's own freeze checks.
+        CyberScrip(scrip).setFrozen(investor, true);
+
+        vm.prank(investor);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IssuanceManager.AccountFrozen.selector,
+                investor
+            )
+        );
+        issuanceManager.convertScripToCert(address(certPrinter), amount * 1e18);
+
+        // Unfreezing restores the conversion path.
+        CyberScrip(scrip).setFrozen(investor, false);
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), amount * 1e18);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+    }
+
+    function test_scripifyCert_RevertsWhenLegalOwnerFrozen() public {
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
+        uint256 amount = 100;
+        uint256 sourceCertId = _mintCert(certPrinter, investor, amount);
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        CyberScrip(scrip).setFrozen(investor, true);
+
+        // Frozen legal owner must not be able to reissue the position as scrip,
+        // regardless of the mint target.
+        vm.prank(investor);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IssuanceManager.AccountFrozen.selector,
+                investor
+            )
+        );
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            amount * 1e18,
+            otherInvestor
+        );
+
+        vm.prank(investor);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IssuanceManager.AccountFrozen.selector,
+                investor
+            )
+        );
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            amount * 1e18,
+            address(0)
+        );
+
+        // Unfreezing restores the scripify path.
+        CyberScrip(scrip).setFrozen(investor, false);
+        vm.prank(investor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            amount * 1e18,
+            otherInvestor
+        );
+        assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), amount * 1e18);
+    }
+
     function test_ScripifyAndUnscripify_WithConditions() public {
         ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 

@@ -73,6 +73,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error RecertificationApprovalRequired();
     error InvalidInvestor();
     error InvalidInvestorName();
+    error AccountFrozen(address account);
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,

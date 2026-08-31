@@ -71,6 +71,7 @@ library IssuanceManagerStorage {
     error CertificateVoided();
     error NotLegalOwner();
     error AmountExceedsAvailableUnits();
+    error AccountFrozen(address account);
     error ZeroSharesMinted();
     error EmptyVault();
     error VaultRedemptionExceedsClaim();
@@ -1075,6 +1076,13 @@ library IssuanceManagerStorage {
         if (certificate.isVoided(id)) revert CertificateVoided();
         if (certificate.legalOwnerOf(id) != account) revert NotLegalOwner();
 
+        // A frozen legal owner must not be able to reissue their position as scrip
+        // to an arbitrary (unfrozen) target, which would sidestep the freeze.
+        ICyberScrip scrip = ICyberScrip(scripifiedCert);
+        if (scrip.canFreeze() && scrip.frozen(account)) {
+            revert AccountFrozen(account);
+        }
+
         address toSend = target;
         if (toSend == address(0)) toSend = account;
 
@@ -1132,6 +1140,16 @@ library IssuanceManagerStorage {
     ) external {
         address scripifiedCert = getScripifiedCert(certAddress);
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+
+        // The burn in this flow bypasses CyberScrip's freeze check (burns skip
+        // _update restrictions), so reject frozen source accounts here.
+        {
+            ICyberScrip scrip = ICyberScrip(scripifiedCert);
+            if (scrip.canFreeze() && scrip.frozen(account)) {
+                revert AccountFrozen(account);
+            }
+        }
+
         uint256 minimum = getScripToCertMinimum(certAddress);
         if (minimum > 0 && amount < minimum) revert ScripToCertMinimumNotMet();
 

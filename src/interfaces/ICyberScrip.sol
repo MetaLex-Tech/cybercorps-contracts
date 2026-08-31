@@ -32,6 +32,8 @@ interface ICyberScrip is IERC20 {
     function disableForceBurn() external;
     function disableFreeze() external;
     function setFrozen(address account, bool isFrozen) external;
+    function canFreeze() external view returns (bool);
+    function frozen(address account) external view returns (bool);
     function forceTransfer(address from, address to, uint256 amount) external;
     function forceBurn(address account, uint256 amount) external;
     function holderCount() external view returns (uint256);
