@@ -77,7 +77,7 @@ contract DealManager is
     using DealManagerStorage for DealManagerStorage.DealManagerData;
     using SafeERC20 for IERC20;
 
-    string public constant DEPLOY_VERSION = "4.0.1"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
 
     // Library-emitted events/errors are inherited from the per-library interfaces (IDealManagerStorage,
     // ISecondaryTradeStorage and ILexScrowStorage) so their selectors/topics appear in DealManager's ABI.

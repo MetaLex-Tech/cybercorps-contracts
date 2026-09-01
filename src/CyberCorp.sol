@@ -51,7 +51,7 @@ import "./storage/extensions/ICyberCorpExtension.sol";
 /// @notice Main contract representing a corporation's on-chain presence and management
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
 contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
 
     // cyberCORP details
     /// @notice Legal name of the entity, including designation (e.g., "Inc." or "LLC")
