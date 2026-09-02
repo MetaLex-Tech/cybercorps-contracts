@@ -32,15 +32,44 @@ CyberCorp(cyberCorp).addOfficer(CompanyOfficer({
 }));
 ```
 
+Adding an address already listed as an officer reverts (`DuplicateOfficer`),
+and an address already holding a level *above* `200` keeps it — the grant
+never downgrades a custom role.
+
+## Update an officer
+
+`updateOfficer` replaces the record at an index — new title, contact, or a
+new address. When the address changes, the old one's level-`200` grant is
+revoked and the new one is granted under the same rules as `addOfficer`:
+
+```solidity
+CyberCorp(cyberCorp).updateOfficer(2, CompanyOfficer({
+    eoa:     replacementOfficer,
+    name:    "Pat Officer",
+    contact: "pat@acme.example",
+    title:   "Chief Financial Officer"
+}));
+```
+
+One caveat for corps whose legacy state lists the same address at more
+than one index: the old address keeps its role while any other entry
+still lists it — only removing or updating away its last entry revokes
+it.
+
 ## Remove an officer
 
-Either removes the officer record and sets their level back to `0`:
+Either removes the officer record and revokes the level-`200` grant:
 
 ```solidity
 CyberCorp(cyberCorp).removeOfficer(departedOfficer);
 // or by index:
 CyberCorp(cyberCorp).removeOfficerAt(2);
 ```
+
+Removal only zeroes a level that is exactly `200` — a custom level granted
+directly on the BorgAuth survives the officer's removal — and only when
+the address isn't still listed at another index (legacy state may hold
+duplicates).
 
 ## Grant or revoke a role directly
 

@@ -73,7 +73,9 @@ Reg D / Reg S gating is covered in
 * It stays in your wallet. Restricted rounds verify it automatically — you
   won't repeat the process for each one.
 * It is tied to the wallet that holds it. Invest from a different wallet and
-  that wallet won't carry the credential.
+  that wallet won't carry the credential — unlike your
+  [profile](profile.md), which follows your account across all its linked
+  wallets, the credential itself stays put.
 * **Credentials expire** — a certificate is generally valid for about three
   months. Your certificate page shows its status (active, expired, or
   voided) and time remaining, with a **Renew Certificate** button when it

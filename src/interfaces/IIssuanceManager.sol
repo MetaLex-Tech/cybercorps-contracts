@@ -136,7 +136,8 @@ interface IIssuanceManager {
         address from,
         uint256 tokenId,
         address investor,
-        CertificateDetails memory _details
+        CertificateDetails memory _details,
+        string memory investorName
     ) external;
 
     function createCertAndAssign(address certAddress, address investor, CertificateDetails memory _details)
@@ -240,6 +241,11 @@ interface IIssuanceManager {
     function getScripPoolSharesById(address certAddress, uint256 id) external view returns (uint256);
 
     function convertScripToCert(address certAddress, uint256 amount) external;
+
+    function voidEmptyCerts(
+        address certAddress,
+        uint256[] calldata tokenIds
+    ) external;
 
     // Unlike other CyberScrip compliance controls, this one must be called by IssuanceManager due to
     // its reliance on internal states.

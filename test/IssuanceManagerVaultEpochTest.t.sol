@@ -355,3 +355,200 @@ contract IssuanceManagerVaultEpochAdhocTest is VaultEpochHarness {
         assertEq(totalAssetsWad, 0, "vault emptied");
     }
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario matrix — empty lots in the look-through holder tally (MTLX1-36)
+//
+// A lot counts toward its holder's weight while its status is not Void. Units are not part of that test.
+// A fully scripified lot therefore stays counted through its vault claim, which is correct. But another
+// party can remove that claim: a conversion above the converter's own claim withdraws from the shared pool,
+// and an empty pool retires every position at once. The lot then holds zero effective units, its status is
+// still not Void, and the tally keeps counting its holder for ever. `voidEmptyCerts` is the repair.
+//
+// Lot state                         | raw | claim | counted | voidEmptyCerts     | Test
+// ----------------------------------|-----|-------|---------|--------------------|--------------------------
+// Fully scripified, pool intact     | 0   | >0    | yes     | CertNotEmpty       | ScripifiedLot_
+//                                   |     |       | correct |                    | StaysCountedAndIsNotEmpty
+// Claim drained by another holder's | 0   | 0     | stale   | voids, count drops | Drained_
+// conversion                        |     |       |         |                    | ViaCrossHolderConversion
+// Claim drained by admin force-burn | 0   | 0     | stale   | voids, count drops | Drained_ViaForceScripBurn
+// Many lots drained by one emptying | 0   | 0     | stale   | batch voids all    | Drained_BatchRepairsAll
+// Holds units                       | >0  | 0     | yes     | CertNotEmpty       | RefusesLotWithUnits
+// Already void                      | -   | -     | no      | skipped            | SkipsAlreadyVoidLot
+// Not a printer of this manager     | -   | -     | -       | NotAPrinter        | RejectsNonPrinter
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// @title IssuanceManagerEmptyLotTallyTest
+/// @notice Regression suite for MTLX1-36: a lot that represents nothing must not keep its holder in
+/// `lookThroughHolderCount`, because `HolderCapCondition` refuses buyers on that count.
+contract IssuanceManagerEmptyLotTallyTest is VaultEpochHarness {
+    address alice;
+    address bob;
+    address carol;
+    ILedgerEntryToken cert;
+    ICyberScrip pool;
+
+    function _newPrinter() internal {
+        alice = makeAddr("alice");
+        bob = makeAddr("bob");
+        carol = makeAddr("carol");
+        cert = ILedgerEntryToken(
+            issuanceManager.createCertPrinter(
+                new string[](0),
+                "Cert",
+                "CERT",
+                "uri://cert",
+                SecurityClass.CommonStock,
+                SecuritySeries.SeriesA,
+                address(0),
+                bytes("")
+            )
+        );
+    }
+
+    function _ids(uint256 id) internal pure returns (uint256[] memory ids) {
+        ids = new uint256[](1);
+        ids[0] = id;
+    }
+
+    /// Moves `from`'s whole scrip balance to `to`.
+    function _sendAllScrip(address from, address to) internal {
+        uint256 balance = pool.balanceOf(from);
+        vm.prank(from);
+        pool.transfer(to, balance);
+    }
+
+    /// Alice fully scripifies token 0 and sells the scrip to Bob, who holds token 1.
+    function _aliceScripifiesAndSellsToBob() internal {
+        _newPrinter();
+        issuanceManager.createCertAndAssign(address(cert), alice, _details(UNITS)); // token 0
+        issuanceManager.createCertAndAssign(address(cert), bob, _details(UNITS)); // token 1
+        pool = ICyberScrip(_deployScrip(address(cert)));
+        assertEq(cert.lookThroughHolderCount(), 2, "two holders to start");
+
+        vm.prank(alice);
+        issuanceManager.scripifyCert(address(cert), 0, UNITS, address(0));
+        _sendAllScrip(alice, bob);
+    }
+
+    /// A fully scripified lot still represents its units through the vault claim, so its holder must stay
+    /// counted and the lot must not be voidable.
+    function test_ScripifiedLot_StaysCountedAndIsNotEmpty() public {
+        _aliceScripifiesAndSellsToBob();
+
+        assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 0, "no raw units left");
+        assertEq(cert.getCertificateDetails(0).unitsRepresented, UNITS, "vault claim carries the units");
+        assertEq(cert.lookThroughHolderCount(), 2, "holder stays counted");
+
+        uint256[] memory ids = _ids(0);
+        vm.expectRevert(IssuanceManagerStorage.CertNotEmpty.selector);
+        issuanceManager.voidEmptyCerts(address(cert), ids);
+    }
+
+    /// Bob's own lot has no vault position, so converting the bought scrip is a socialized withdrawal that
+    /// empties the pool and retires Alice's claim. Alice then holds nothing but is still counted.
+    function test_Drained_ViaCrossHolderConversion() public {
+        _aliceScripifiesAndSellsToBob();
+
+        uint256 bobScrip = pool.balanceOf(bob);
+        vm.prank(bob);
+        issuanceManager.convertScripToCert(address(cert), bobScrip);
+
+        assertEq(cert.getCertificateDetails(0).unitsRepresented, 0, "alice's lot represents nothing");
+        assertFalse(cert.isVoided(0), "and its status is not Void");
+        assertEq(cert.lookThroughHolderCount(), 2, "so the tally is one too high");
+
+        issuanceManager.voidEmptyCerts(address(cert), _ids(0));
+
+        assertTrue(cert.isVoided(0), "the empty lot is voided");
+        assertFalse(cert.isLegalHolder(alice), "alice is no longer a holder");
+        assertEq(cert.lookThroughHolderCount(), 1, "tally matches the truth");
+        assertEq(cert.usLookThroughHolderCount(), 1, "us tally matches too");
+    }
+
+    /// An admin force-burn empties the pool without any conversion, and drains the claim the same way.
+    function test_Drained_ViaForceScripBurn() public {
+        _newPrinter();
+        issuanceManager.createCertAndAssign(address(cert), alice, _details(UNITS)); // token 0
+        issuanceManager.createCertAndAssign(address(cert), bob, _details(UNITS)); // token 1
+        pool = ICyberScrip(_deployScrip(address(cert)));
+
+        vm.prank(alice);
+        issuanceManager.scripifyCert(address(cert), 0, UNITS, address(0));
+        issuanceManager.forceScripBurn(address(cert), alice, pool.balanceOf(alice));
+
+        assertEq(cert.getCertificateDetails(0).unitsRepresented, 0, "alice's lot represents nothing");
+        assertEq(cert.lookThroughHolderCount(), 2, "tally is one too high");
+
+        issuanceManager.voidEmptyCerts(address(cert), _ids(0));
+        assertEq(cert.lookThroughHolderCount(), 1, "tally matches the truth");
+    }
+
+    /// The epoch bump retires every position at once, so one conversion can strand many holders. The batch
+    /// form repairs them in one call.
+    function test_Drained_BatchRepairsAll() public {
+        _newPrinter();
+        issuanceManager.createCertAndAssign(address(cert), alice, _details(UNITS)); // token 0
+        issuanceManager.createCertAndAssign(address(cert), carol, _details(UNITS)); // token 1
+        issuanceManager.createCertAndAssign(address(cert), bob, _details(UNITS)); // token 2
+        pool = ICyberScrip(_deployScrip(address(cert)));
+        assertEq(cert.lookThroughHolderCount(), 3, "three holders to start");
+
+        vm.prank(alice);
+        issuanceManager.scripifyCert(address(cert), 0, UNITS, address(0));
+        vm.prank(carol);
+        issuanceManager.scripifyCert(address(cert), 1, UNITS, address(0));
+        _sendAllScrip(alice, bob);
+        _sendAllScrip(carol, bob);
+
+        uint256 bobScrip = pool.balanceOf(bob);
+        vm.prank(bob);
+        issuanceManager.convertScripToCert(address(cert), bobScrip);
+
+        assertEq(cert.getCertificateDetails(2).unitsRepresented, 3 * UNITS, "bob holds everything");
+        assertEq(cert.lookThroughHolderCount(), 3, "tally is two too high");
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        issuanceManager.voidEmptyCerts(address(cert), ids);
+
+        assertEq(cert.lookThroughHolderCount(), 1, "tally matches the truth");
+        assertTrue(cert.isLegalHolder(bob), "bob is the only holder left");
+    }
+
+    /// The call is permissionless, so the emptiness test is the only protection: a lot that still holds
+    /// units must never be voidable through it.
+    function test_RefusesLotWithUnits() public {
+        _newPrinter();
+        issuanceManager.createCertAndAssign(address(cert), alice, _details(UNITS));
+
+        uint256[] memory ids = _ids(0);
+        vm.prank(bob);
+        vm.expectRevert(IssuanceManagerStorage.CertNotEmpty.selector);
+        issuanceManager.voidEmptyCerts(address(cert), ids);
+
+        assertEq(cert.lookThroughHolderCount(), 1, "alice keeps her place in the tally");
+    }
+
+    /// An already-void lot is skipped rather than refused, so it cannot fail a batch of real repairs.
+    function test_SkipsAlreadyVoidLot() public {
+        _newPrinter();
+        issuanceManager.createCertAndAssign(address(cert), alice, _details(UNITS)); // token 0
+        issuanceManager.createCertAndAssign(address(cert), bob, _details(UNITS)); // token 1
+        cert.voidCert(0);
+        assertEq(cert.lookThroughHolderCount(), 1, "voiding removed alice");
+
+        issuanceManager.voidEmptyCerts(address(cert), _ids(0));
+        assertEq(cert.lookThroughHolderCount(), 1, "and the call changed nothing");
+    }
+
+    /// The printer must be one this manager created, so the vault position read and the void act on the
+    /// same book.
+    function test_RejectsNonPrinter() public {
+        uint256[] memory ids = _ids(0);
+        vm.expectRevert(IssuanceManagerStorage.NotAPrinter.selector);
+        issuanceManager.voidEmptyCerts(makeAddr("notAPrinter"), ids);
+    }
+}

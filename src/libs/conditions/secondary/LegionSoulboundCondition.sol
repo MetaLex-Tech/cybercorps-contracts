@@ -7,32 +7,50 @@ import "./SecondaryTradingConditionBase.sol";
 import "./BadgeScopedCondition.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
+import {Credential} from "../../../creds/storage/lexchexBadgeStorage.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
-/// @title  LegionSoulboundCondition - issuer-specific credential category/tier gate
+/// @notice Legion's membership ladder, stored in `Credential.data`. The badge never learns what the bytes
+/// mean. Stands in for whatever ladder a real issuer runs.
+enum LegionTier {
+    NONE,
+    PROSPECT,
+    MEMBER,
+    LEAD
+}
+
+/// @title  LegionSoulboundCondition - issuer circle gate: seat plus rank
 /// @author MetaLeX Labs, Inc.
-/// @notice Shared singleton, configured per SPV. Gates on an issuer's own credential label — syndicate
-/// circles, non-accredited tiers — which generic credentials do not capture. Each SPV names the label its
-/// parties must hold and whether the seller is checked too. An SPV whose operator runs its own LeXcheXBadge
-/// layer is pointed at it through the per-SPV badge override.
+/// @notice Shared singleton, configured per SPV. Wants a seat in one issuer's circle and a minimum rank on
+/// its ladder — "MEMBER or better", not just "in the circle". For membership alone, name the lowest rung.
+/// An SPV running its own badge layer is pointed at it through the per-SPV override.
+/// @dev A qualifying credential carries both keys on one record: K_SYNDICATE scoped to this SPV (the seat)
+/// and K_DATA (the rank). A rank is a value, not a flag — two of them contradict — so the badge resolves the
+/// holder's current seat with getMostRecentValidWith, and the rank on THAT one is compared to the bar. A
+/// holder demoted by a newer seat reads as demoted even if the old seat was never voided.
 contract LegionSoulboundCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BadgeScopedCondition {
+    /// @notice What a qualifying credential must assert, on one record.
+    uint256 private constant SEAT_AND_RANK = K_SYNDICATE | K_DATA;
+
     struct SpvConfig {
-        bytes32 requiredCategoryId;  // issuer label the party must hold; zero = not configured
+        LegionTier minTier;  // lowest rank that clears the gate; NONE = not configured
         bool applyToSeller;
     }
 
     error InvalidSpv();
-    error InvalidCategory();
+    error InvalidTier();
 
-    event ConfigUpdated(address indexed spv, bytes32 requiredCategoryId, bool applyToSeller);
+    event ConfigUpdated(address indexed spv, LegionTier minTier, bool applyToSeller);
+    event IssuersUpdated(address[] issuers);
 
     struct LegionSoulboundStorage {
         mapping(address => SpvConfig) configs;
+        address[] issuers; // tier credentials must come from one of these; empty accepts any issuer
     }
 
     bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.legion-soulbound.storage.v1");
 
-    // Upgrade notes: reduced gap to account for the contract's variables (50 - 1 = 49)
+    // Upgrade notes: reduced gap to account for the contract's variables (50 - 2 = 48)
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -45,13 +63,19 @@ contract LegionSoulboundCondition is SecondaryTradingConditionBase, UUPSUpgradea
         __BadgeScopedCondition_init(_defaultBadge);
     }
 
-    /// @notice Sets an SPV's circle requirement; only the SPV's own BorgAuth admin
-    function setConfig(address spv, bytes32 _requiredCategoryId, bool _applyToSeller) external {
+    /// @notice Sets an SPV's tier requirement; only the SPV's own BorgAuth admin
+    function setConfig(address spv, LegionTier _minTier, bool _applyToSeller) external {
         if (spv == address(0)) revert InvalidSpv();
-        if (_requiredCategoryId == bytes32(0)) revert InvalidCategory();
+        if (_minTier == LegionTier.NONE) revert InvalidTier();
         _requireAuthAdmin(spv);
-        _legionStorage().configs[spv] = SpvConfig({requiredCategoryId: _requiredCategoryId, applyToSeller: _applyToSeller});
-        emit ConfigUpdated(spv, _requiredCategoryId, _applyToSeller);
+        _legionStorage().configs[spv] = SpvConfig({minTier: _minTier, applyToSeller: _applyToSeller});
+        emit ConfigUpdated(spv, _minTier, _applyToSeller);
+    }
+
+    /// @notice Whose seats count; empty accepts any issuer's.
+    function updateIssuers(address[] calldata _issuers) external onlyAdmin {
+        _legionStorage().issuers = _issuers;
+        emit IssuersUpdated(_issuers);
     }
 
     function checkCondition(
@@ -63,25 +87,56 @@ contract LegionSoulboundCondition is SecondaryTradingConditionBase, UUPSUpgradea
         Offer memory offer = dealManager.getOffer(offerId);
         SpvConfig storage config = _legionStorage().configs[offer.spvAddress];
 
-        // Attached but never configured. There is no circle to be a member of, and silence is not a finding
-        // that none applies, so nothing passes until the GP names one.
-        if (config.requiredCategoryId == bytes32(0)) return false;
+        // Never configured: no rank to have reached, so nothing passes until the GP names one.
+        if (config.minTier == LegionTier.NONE) return false;
 
         (address seller, address buyer,) = _resolveParties(dealManager, offer, agreementId);
         ILexChexBadge badge = badgeFor(offer.spvAddress);
 
-        if (buyer != address(0) && !badge.hasValidCredential(buyer, config.requiredCategoryId)) {
+        if (buyer != address(0) && !_holds(badge, buyer, offer.spvAddress, config.minTier)) {
             return false;
         }
-        if (config.applyToSeller && seller != address(0) && !badge.hasValidCredential(seller, config.requiredCategoryId)) {
+        if (config.applyToSeller && seller != address(0) && !_holds(badge, seller, offer.spvAddress, config.minTier)) {
             return false;
         }
         return true;
     }
 
-    /// @notice An SPV's circle requirement
+    /// @notice How a rank goes into `Credential.data`. Issuers mint through it so both sides agree.
+    function encodeTier(LegionTier tier) public pure returns (bytes memory) {
+        return abi.encode(uint256(tier));
+    }
+
+    /// @notice An SPV's tier requirement
     function configs(address spv) public view returns (SpvConfig memory) {
         return _legionStorage().configs[spv];
+    }
+
+    /// @notice Issuers whose tier credentials this gate accepts; empty means any.
+    function issuers() public view returns (address[] memory) {
+        return _legionStorage().issuers;
+    }
+
+    /// @dev The party's current rank in this SPV's circle, tested against the bar. `scope` keeps seats from
+    /// other SPVs out.
+    /// A rank the gate cannot read is no rank, so an unreadable newest seat blocks rather than letting an
+    /// older one answer in its place.
+    function _holds(ILexChexBadge badge, address party, address spv, LegionTier required)
+        private
+        view
+        returns (bool)
+    {
+        (uint256 tokenId, bool found) =
+            badge.getMostRecentValidWith(party, SEAT_AND_RANK, _legionStorage().issuers, spv, address(0), "");
+        if (!found) return false;
+        return _tierOf(badge.getCredential(tokenId).data) >= uint256(required);
+    }
+
+    /// @dev The rank in a payload; 0 when it is not one this gate wrote.
+    function _tierOf(bytes memory data) private pure returns (uint256) {
+        if (data.length != 32) return 0;
+        uint256 tier = abi.decode(data, (uint256));
+        return tier > uint256(type(LegionTier).max) ? 0 : tier;
     }
 
     function _legionStorage() private pure returns (LegionSoulboundStorage storage $) {

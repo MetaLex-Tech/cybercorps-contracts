@@ -39,6 +39,10 @@ under it. Every condition is a shared singleton — see `Config scope` for what 
 `AccreditedInvestorCondition` (`K_ACCREDITED`, buyer), `QualifiedPurchaserCondition` (`K_QP`, buyer +
 seller), `QualifiedInstitutionalBuyerCondition` (`K_QIB`, buyer), `NonUSNationalityCondition`
 (`K_NON_US`, buyer), plus the SPV-scoped entitlements (`K_SPV_WHITELIST`, `K_SYNDICATE`).
+A `K_SYNDICATE` parameterization answers membership in an issuer's circle. `LegionSoulboundCondition` is the
+gate for one operator's own circle and answers both halves: the seat (`K_SYNDICATE`, scoped to the SPV) and
+the rank within it (an ordered tier in `K_DATA`, read through a query hook, which a fact-key bitmask cannot
+express). A gate wanting membership alone names the lowest rung.
 `HolderCapCondition` covers §3(c)(1), §3(c)(1)(C) and Touche Remnant through its per-SPV config.
 
 **Badge** — `printer` = read from `offer.certPrinter.lookThroughBadge()`, which is the only registry that
@@ -59,7 +63,7 @@ never a finding. `USStateOfResidenceCondition` is the exception:
 | `CFIUSCondition`              | **blocks**   | no TID U.S. business determination; a recorded `tidUsBusiness = false` is the fund exception and passes |
 | `HolderCapCondition`          | **blocks**   | no ICA exception named — `cap == 0` is a real §3(c)(7) setting, so a `configured` flag keeps it apart   |
 | `RegSDistributionCompliance`  | **blocks**   | no issuer category or compliance period — same `configured` flag                                        |
-| `LegionSoulboundCondition`    | **blocks**   | no circle named                                                                                         |
+| `LegionSoulboundCondition`    | **blocks**   | no minimum rank named — and no rank means no circle to be seated in                                     |
 | `EligibilityCondition`        | **blocks**   | that SPV has cleared nobody                                                                             |
 | `Rule144` / `Section4a7`      | **blocks**   | no disclosure package on record                                                                         |
 | `USStateOfResidenceCondition` | **passes**   | nothing — it is a deny-list, so an empty one permits (NY still blocks by the Martin Act default)        |
@@ -203,7 +207,7 @@ automatically.
 | `HolderCapCondition`          | All SPVs                                                                    | ICA exception (`§3(c)(1)`, `§3(c)(1)(C)`, or `§3(c)(7)`); SPV domicile (for Touche Remnant U.S.-resident-only count); cap (100 / 250 / none)                                                        |
 | `QualifiedPurchaserCondition` | §3(c)(7) funds only                                                         | Parameterizes `LexChexBadgeKindCondition` with `kindKey = K_QP`, buyer + seller                                                                                                                     |
 | `CFIUSCondition`              | SPVs that do not satisfy the FIRRMA §800.307 fund exception                 | SPV CFIUS sensitivity flag; blocked jurisdictions                                                                                                                                                   |
-| `LegionSoulboundCondition`    | Optional; GP-configurable                                                   | Soulbound credential category/tier required of buyer (and optionally seller)                                                                                                                        |
+| `LegionSoulboundCondition`    | Optional; GP-configurable                                                   | Seat in the issuer's circle for this SPV plus a minimum rank on its ladder, required of buyer (and optionally seller); platform names whose circle counts                                           |
 | `GPLPApprovalCondition`       | Optional; only if governing documents require per-deal approval             | Authorized approver address (GP, managing member, or delegated compliance officer)                                                                                                                  |
 | `QMSModeCondition`            | Optional; per-SPV opt-in for §1.7704-1(g) QMS safe harbor                   | Frequency cap value (counsel-determined per SPV); listing timestamp stored at `postOffer`                                                                                                           |
 

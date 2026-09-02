@@ -62,7 +62,7 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {CompanyOfficer} from "../src/storage/LedgerEntryTokenStorage.sol";
-import {ToggleTransferHook} from "../src/hooks/transfer/ToggleTransferHook.sol";
+import {MockTransferHook} from "./mock/MockTransferHook.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
@@ -2707,6 +2707,7 @@ contract CyberCorpForkTest is Test {
         // Make the certificate transferable
         vm.startPrank(issuanceManager);
         LedgerEntryToken(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
+        LedgerEntryToken(cyberCertPrinterAddr[0]).setGlobalLegalTransferable(true); // legalTransferable is deny-by-default and governs the register; transferable governs delivery.
         vm.stopPrank();
 
         // Create and add endorsement
@@ -2934,6 +2935,7 @@ contract CyberCorpForkTest is Test {
         // Make the certificate transferable
         vm.startPrank(issuanceManager);
         LedgerEntryToken(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
+        LedgerEntryToken(cyberCertPrinterAddr[0]).setGlobalLegalTransferable(true); // legalTransferable is deny-by-default and governs the register; transferable governs delivery.
         vm.stopPrank();
 
         // Create and add endorsement
@@ -5565,135 +5567,6 @@ contract CyberCorpForkTest is Test {
         console.log("Current time:", block.timestamp);
     }
 
-    function testToggleTransferHookPerToken() public {
-        vm.startPrank(testAddress);
-        // Deploy a CyberCorp to obtain an issuance manager and printer
-        CertificateDetails[] memory _details = new CertificateDetails[](1);
-        CertificateDetails memory _detailsA = CertificateDetails({
-            signingOfficerName: "",
-            signingOfficerTitle: "",
-            investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeOfInvestment: 0,
-            unitsRepresented: 0,
-            legalDetails: "",
-            extensionData: ""
-        });
-        _details[0] = _detailsA;
-
-        CompanyOfficer memory officer = CompanyOfficer({
-            eoa: testAddress,
-            name: "Test Officer",
-            contact: "test@example.com",
-            title: "CEO"
-        });
-
-        (
-            address cyberCorp,
-            address authAddr,
-            address issuanceManager,
-            address dealManagerAddr,
-            address roundManagerAddr
-        ) = cyberCorpFactory.deployCyberCorp(
-            keccak256("ToggleHookTest"),
-            "ToggleHookCorp",
-            "Limited Liability Company",
-            "Delaware",
-            "Contact Details",
-            "Dispute",
-            testAddress,
-            officer
-        );
-        vm.stopPrank();
-
-        // Create a certificate printer
-        string[] memory ledger = new string[](1);
-        ledger[0] = "Legend";
-        vm.prank(testAddress);
-        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
-            ledger,
-            "Test Certificate",
-            "TEST",
-            "ipfs://test",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
-            address(0),
-            bytes("")
-        );
-
-        // Deploy and initialize the toggle hook with the corp's AUTH used by issuanceManager
-        ToggleTransferHook hook = new ToggleTransferHook();
-        BorgAuth corpAuthForIssuance = IssuanceManager(issuanceManager).AUTH();
-        hook.initialize(address(corpAuthForIssuance));
-
-        // Attach the global hook via IssuanceManager (admin)
-        vm.prank(testAddress);
-        LedgerEntryToken(certPrinter).setGlobalRestrictionHook(address(hook));
-
-        // Enable global transferable on the printer (so hook decides allow/deny)
-        vm.prank(issuanceManager);
-        LedgerEntryToken(certPrinter).setGlobalTransferable(true);
-
-        // Configure hook: default off, tokenId 1 on
-        vm.startPrank(testAddress);
-        hook.setDefaultTransferable(false);
-        hook.setTokenTransferable(1, true);
-        vm.stopPrank();
-
-        // Mint 3 certificates to an EOA owner (avoid receiver-hook issues if testAddress has code)
-        address certOwner = vm.addr(0xA11CE);
-        assertEq(certOwner.code.length, 0, "certOwner must be EOA");
-
-        // Mint 3 certificates to the owner
-        CertificateDetails memory cd = CertificateDetails({
-            signingOfficerName: "",
-            signingOfficerTitle: "",
-            investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeOfInvestment: 0,
-            unitsRepresented: 1,
-            legalDetails: "",
-            extensionData: ""
-        });
-
-        vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // tokenId 0
-        vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // tokenId 1
-        vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // tokenId 2
-
-        // Prepare recipient
-        address recipient = vm.addr(0xBEEF);
-
-        // Token 0 should be blocked by hook
-        vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfer disabled by global hook"));
-        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
-        vm.stopPrank();
-
-        // Token 1 should be allowed by hook, but endorsement is required by printer
-        vm.startPrank(certOwner);
-        Endorsement memory e = Endorsement({
-            endorser: certOwner,
-            timestamp: block.timestamp,
-            signatureHash: bytes("hook-test"),
-            registry: address(0),
-            agreementId: bytes32(0),
-            endorsee: recipient,
-            endorseeName: "Recipient"
-        });
-        LedgerEntryToken(certPrinter).addEndorsement(1, e);
-        vm.stopPrank();
-        vm.prank(certOwner);
-        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 1);
-        assertEq(LedgerEntryToken(certPrinter).ownerOf(1), recipient);
-
-        // Token 2 should be blocked
-        vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfer disabled by global hook"));
-        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 2);
-        vm.stopPrank();
-    }
-
     function testPerTokenTransferabilityFlag() public {
         vm.startPrank(testAddress);
         // Deploy a CyberCorp to obtain an issuance manager and printer
@@ -5775,6 +5648,8 @@ contract CyberCorpForkTest is Test {
         // Enable token 0 only
         vm.prank(issuanceManager);
         LedgerEntryToken(certPrinter).setTokenTransferable(0, true);
+        vm.prank(issuanceManager);
+        LedgerEntryToken(certPrinter).setTokenLegalTransferable(0, true);
 
         // Transfer without endorsement: ERC721 owner changes but legal owner record does not
         address midAddr = vm.addr(0xD0);
@@ -5929,6 +5804,8 @@ contract CyberCorpForkTest is Test {
         // Turn global on, transfer succeeds
         vm.prank(issuanceManager);
         LedgerEntryToken(certPrinter).setGlobalTransferable(true);
+        vm.prank(issuanceManager);
+        LedgerEntryToken(certPrinter).setGlobalLegalTransferable(true); // legalTransferable is deny-by-default and governs the register; transferable governs delivery.
         vm.prank(certOwner);
         LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient1, 0);
         assertEq(LedgerEntryToken(certPrinter).ownerOf(0), recipient1);
@@ -6015,15 +5892,14 @@ contract CyberCorpForkTest is Test {
         // Enable per-token transferability for token 0
         vm.prank(issuanceManager);
         LedgerEntryToken(certPrinter).setTokenTransferable(0, true);
+        vm.prank(issuanceManager);
+        LedgerEntryToken(certPrinter).setTokenLegalTransferable(0, true);
 
         // Install a denying global hook
-        ToggleTransferHook hook = new ToggleTransferHook();
-        BorgAuth corpAuth = IssuanceManager(issuanceManager).AUTH();
-        hook.initialize(address(corpAuth));
+        MockTransferHook hook = new MockTransferHook();
         vm.prank(testAddress);
         LedgerEntryToken(certPrinter).setGlobalRestrictionHook(address(hook));
-        vm.prank(testAddress);
-        hook.setDefaultTransferable(false);
+        hook.setAllowTransfers(false);
 
         // With endorsement, transfer should still be blocked by hook
         address recipient = vm.addr(0x2222);
@@ -6039,7 +5915,7 @@ contract CyberCorpForkTest is Test {
         vm.prank(certOwner);
         LedgerEntryToken(certPrinter).addEndorsement(0, e);
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfer disabled by global hook"));
+        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfers disabled in mock hook"));
         LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
     }

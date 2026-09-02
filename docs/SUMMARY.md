@@ -72,7 +72,7 @@
   * [The cap table](webapp/captable.md)
   * [Cap-table records, modeling and compliance](webapp/captable-tools.md)
   * [Token grants and onchain vesting](webapp/grants.md)
-  * [The boardRoom and incorporation records](webapp/boardroom.md)
+  * [The boardRoom and company records](webapp/boardroom.md)
 * [For holders: your securities](webapp/holders.md)
 * [cyberRAISE — raising and investing](webapp/cyberraise.md)
 * [ACE — token-community raises](webapp/ace.md)
