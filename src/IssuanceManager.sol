@@ -296,10 +296,28 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getPrinterClassId(_printer);
     }
 
-    /// @notice Creates a new certificate
+    // ─────────────────────────────────────────────────────────────────────────
+    // Issuance entry points. All four mint a lot and register a holder; they differ in what else they
+    // write. Pick by what the lot needs to carry, not by how many arguments you have.
+    //
+    //   createCert                   no endorsement, no name, no signature. The holder is whoever you
+    //                                mint to, including this contract's own callers minting into escrow.
+    //   createCertAndAssign          adds an issuance endorsement naming the investor. No name on the
+    //                                register, stamped now.
+    //   createCertAndAssignWithName  adds the holder's legal name and lets the caller set the endorsement
+    //                                date, so a reissue keeps the original one.
+    //   createCertSignAndAssign      binds the endorsement to a registry + agreement id. Always stamped now.
+    //
+    // `assignCert` is not in this family: it mints nothing and moves the register on an existing lot.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Creates a certificate and registers `to` as the holder of record, with a blank name.
+    /// @dev This is the bare mint. It writes no endorsement and no name.
+    /// The name does not mean unissued. `recordMint` registers `to`.
+    /// The two managers mint into escrow with `to = address(this)`, so the manager holds the register.
     /// @dev Only callable by owner
     /// @param certAddress Address of the certificate printer contract
-    /// @param to Recipient of the certificate
+    /// @param to Recipient of the certificate, and its holder of record
     /// @param _details Certificate details
     /// @return uint256 ID of the new certificate
     function createCert(
@@ -310,33 +328,41 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.executeCreateCert(certAddress, to, _details);
     }
 
-    /// @notice Assigns an existing certificate to a new investor
+    /// @notice Re-registers an existing certificate to a new holder of record.
+    /// @dev This mints nothing. It moves the register on a lot that already has a holder.
+    /// It has no payment step and writes no endorsement. Use it to correct the register.
+    /// Do not use it to settle a trade. The DealManager does that.
     /// @dev Only callable by owner
     /// @param certAddress Address of the certificate printer contract
-    /// @param from Current owner of the certificate
+    /// @param from Current holder of record — the register, not the possessor
     /// @param tokenId ID of the certificate
-    /// @param investor New owner of the certificate
+    /// @param investor Incoming holder of record
     /// @param _details Updated certificate details
+    /// @param investorName Incoming holder's legal name for the register
     function assignCert(
         address certAddress,
         address from,
         uint256 tokenId,
         address investor,
-        CertificateDetails memory _details
+        CertificateDetails memory _details,
+        string memory investorName
     ) public onlyOwner {
         IssuanceManagerStorage.executeAssignCert(
             certAddress,
             from,
             tokenId,
             investor,
-            _details
+            _details,
+            investorName
         );
     }
 
-    /// @notice Creates and assigns a new certificate in one transaction
-    /// @dev Only callable by owner, requires company details to be set
+    /// @notice Issues a certificate to an investor, with an issuance endorsement.
+    /// @dev This is the short form of `createCertAndAssignWithName`. It sends no name and no signature.
+    /// The investor gets both possession and the register.
+    /// @dev Only callable by owner or self. Requires company details to be set.
     /// @param certAddress Address of the certificate printer contract
-    /// @param investor Recipient of the certificate
+    /// @param investor Recipient of the certificate, and its holder of record
     /// @param _details Certificate details
     /// @return tokenId ID of the new certificate
     function createCertAndAssign(
@@ -355,6 +381,18 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             );
     }
 
+    /// @notice Issues a certificate to a named investor, and sets the endorsement date.
+    /// @dev This adds two things to `createCertAndAssign`: the holder's name, and a settable date.
+    /// A reissue uses the date to keep the original issuance date.
+    /// The endorsement points at no agreement. Use `createCertSignAndAssign` if it must.
+    /// @dev Only callable by owner or self. `executeConvertScripToCert` calls back in through it.
+    /// @param certAddress Address of the certificate printer contract
+    /// @param investor Recipient of the certificate, and its holder of record
+    /// @param _details Certificate details
+    /// @param investorName Holder's legal name for the register and the endorsement
+    /// @param endorsementSignature Officer signature; also added as an issuer signature when non-empty
+    /// @param timestamp Endorsement date, so a reissue can keep the original one
+    /// @return tokenId ID of the new certificate
     function createCertAndAssignWithName(
         address certAddress,
         address investor,
@@ -374,15 +412,17 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             );
     }
 
-    /// @notice Creates, assigns, signs, and endorses a new certificate in one transaction
+    /// @notice Issues a certificate, and points its endorsement at an agreement.
+    /// @dev This differs from `createCertAndAssignWithName` in two ways.
+    /// It records `registry` and `agreementId`. It always stamps the endorsement now.
     /// @dev Only callable by owner/self, requires company details to be set
     /// @param certAddress Address of the certificate printer contract
-    /// @param investor Recipient of the certificate
+    /// @param investor Recipient of the certificate, and its holder of record
     /// @param _details Certificate details
     /// @param endorsementSignature Signature hash to store in endorsement and cert signatures
-    /// @param registry Optional source registry associated with endorsement
-    /// @param agreementId Optional agreement id associated with endorsement
-    /// @param investorName Human-readable investor name stored in endorsement
+    /// @param registry Source registry the endorsement points at
+    /// @param agreementId Agreement the endorsement points at
+    /// @param investorName Holder's legal name for the register and the endorsement
     /// @return tokenId ID of the new certificate
     function createCertSignAndAssign(
         address certAddress,
@@ -785,6 +825,14 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint256 id
     ) external view returns (bool) {
         return IssuanceManagerStorage.isScripifyWhitelisted(certAddress, id);
+    }
+
+    /// @notice Voids lots that hold no units and no vault claim, so the printer's holder tally stops
+    /// counting them. Permissionless: a lot that still holds units cannot be voided here.
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenIds IDs of the lots to void
+    function voidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external {
+        IssuanceManagerStorage.executeVoidEmptyCerts(certAddress, tokenIds);
     }
 
     function convertScripToCert(address certAddress, uint256 amount) external {

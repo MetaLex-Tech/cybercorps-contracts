@@ -79,6 +79,7 @@ library IssuanceManagerStorage {
     error ClassDoesNotExist();
     error SecurityClassAlreadyDefined();
     error NotAPrinter();
+    error CertNotEmpty();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
     uint256 internal constant VAULT_RAY = 1e27;
@@ -760,9 +761,10 @@ library IssuanceManagerStorage {
         address from,
         uint256 tokenId,
         address investor,
-        CertificateDetails memory details
+        CertificateDetails memory details,
+        string memory investorName
     ) external {
-        ILedgerEntryToken(certAddress).assignCert(from, tokenId, investor, details);
+        ILedgerEntryToken(certAddress).assignCert(from, tokenId, investor, details, investorName);
     }
 
     function executeCreateCertAndAssign(
@@ -872,8 +874,11 @@ library IssuanceManagerStorage {
         );
 
         ILedgerEntryToken cert = ILedgerEntryToken(certPrinter);
+
         // Registered owner of the seller's Ledger Entry Token, unchanged by hosting mode (the token never moves).
         address seller = cert.legalOwnerOf(tokenId);
+
+        // We don't check if seller's cert is voided again here because the buyer's lot reissuance will check it.
 
         // (a) Materialize the seller's endorsement on the Ledger Entry Token. The seller signs in blank at
         // posting/acceptance (spec §7.3.1) and that signature rides in dealMetadata; the endorsement is written
@@ -897,10 +902,11 @@ library IssuanceManagerStorage {
         if (units > sellerDetails.unitsRepresented) revert AmountExceedsAvailableUnits();
         sellerDetails.unitsRepresented -= units;
         cert.updateCertificateDetails(tokenId, sellerDetails);
-        bool sellerVoided = sellerDetails.unitsRepresented == 0;
-        if (sellerVoided) {
-            cert.voidCert(tokenId);
-        }
+        // A lot that keeps a vault claim is not empty: its scrip is still outstanding, and the seller redeems
+        // it through this lot. The actual voiding uses the same rule as executeVoidEmptyCerts, which sweeps
+        // the lot later, once the claim is gone.
+        bool sellerVoided = sellerDetails.unitsRepresented == 0
+            && _assetsOfVaultPosition(certPrinter, tokenId) == 0;
         // (c) Deliver the buyer's units as a fresh lot (fresh-mint-per-lot): each acquisition mints its own
         // Ledger Entry Token carrying its own acquisitionTimestamp (per-lot holding-period clock, stamped at
         // mint). The lot inherits the seller's non-basis terms; cost basis stays blank (no primary-issuance
@@ -916,8 +922,15 @@ library IssuanceManagerStorage {
             legalDetails: sellerDetails.legalDetails,
             extensionData: sellerDetails.extensionData
         });
-        (, buyerTokenId) = _mintAssignedCert(certPrinter, custodian, buyer, buyerDetails, buyerName);
+        (, buyerTokenId) = _mintReissuedCert(certPrinter, tokenId, custodian, buyer, buyerDetails, buyerName);
         uint256 buyerUnitsAfter = units; // absolute post-mutation balance on the buyer token, reported in the event
+
+        // Void the emptied seller lot only after the buyer's lot is registered. The printer rejects a reissue
+        // from a void lot, and on a full sale this settlement is what empties it, so voiding first would make
+        // the trade reject itself.
+        if (sellerVoided) {
+            cert.voidCert(tokenId);
+        }
 
         // (d) Mirror the seller's endorsement onto the buyer's token: both tokens carry the identical
         // chain-of-title record (endorser = seller, endorsee = buyer, this agreement), so reuse the (b) struct.
@@ -927,6 +940,24 @@ library IssuanceManagerStorage {
             settlementAgreementId, certPrinter, buyer, tokenId, buyerTokenId, seller, units,
             sellerDetails.unitsRepresented, buyerUnitsAfter, sellerVoided, buyerTokenIsMinted
         );
+    }
+
+    /// @notice Voids lots that represent nothing, so they stop counting in the printer's holder tally.
+    /// @dev A fully scripified lot stays counted through its vault claim. Another party can remove that
+    /// claim: an empty vault pool retires every position at once. The lot then holds zero units, but its
+    /// status is not Void, so the tally still counts its holder and the holder cap refuses buyers on a count
+    /// that is too high. Permissionless, because a lot that still holds units cannot be voided here.
+    /// Already-void lots are skipped, so one of them does not fail the batch.
+    function executeVoidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external {
+        if (!isPrinter(certAddress)) revert NotAPrinter();
+        ILedgerEntryToken cert = ILedgerEntryToken(certAddress);
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            uint256 tokenId = tokenIds[i];
+            if (cert.isVoided(tokenId)) continue;
+            if (cert.getActiveCertificateDetails(tokenId).unitsRepresented != 0) revert CertNotEmpty();
+            if (_assetsOfVaultPosition(certAddress, tokenId) != 0) revert CertNotEmpty();
+            cert.voidCert(tokenId);
+        }
     }
 
     function executeSetScripRatio(
@@ -1385,6 +1416,27 @@ library IssuanceManagerStorage {
         cert = ILedgerEntryToken(certAddress);
         tokenId = cert.totalSupply();
         cert.safeMintAndAssign(to, owner, tokenId, details, ownerName);
+        _emitCertificateCreated(tokenId, certAddress, details);
+    }
+
+    /// @dev Secondary-trade counterpart of _mintAssignedCert. The two cannot share one helper: a fresh mint
+    /// looks identical to an issuance from the printer's side, so the reissue has to name the lot it came
+    /// from or the register gate cannot tell that title moved.
+    function _mintReissuedCert(
+        address certAddress,
+        uint256 sourceTokenId,
+        address to,
+        address owner,
+        CertificateDetails memory details,
+        string memory ownerName
+    )
+        internal
+        returns (ILedgerEntryToken cert, uint256 tokenId)
+    {
+        _requireCompanyDetailsSet();
+        cert = ILedgerEntryToken(certAddress);
+        tokenId = cert.totalSupply();
+        cert.safeMintFromAndAssign(sourceTokenId, to, owner, tokenId, details, ownerName);
         _emitCertificateCreated(tokenId, certAddress, details);
     }
 
