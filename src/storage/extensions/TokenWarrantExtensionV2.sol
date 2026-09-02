@@ -91,7 +91,7 @@ contract TokenWarrantExtensionV2 is UUPSUpgradeable, ICertificateExtension, Borg
         return extensionType == EXTENSION_TYPE;
     }
 
-    function getExtensionURI(bytes memory data) external view override returns (string memory) {
+    function getExtensionURI(bytes memory data) public view virtual override returns (string memory) {
         TokenWarrantDataV2 memory decoded = abi.decode(data, (TokenWarrantDataV2));
         
         string memory json = string(abi.encodePacked(

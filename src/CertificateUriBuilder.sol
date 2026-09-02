@@ -622,11 +622,17 @@ struct CertificateDetails {
 
         json = _appendCyberCorpExtensionData(json, contractAddress);
 
-        //add extensionData
-        if (extension != address(0) && details.extensionData.length > 0) {
-            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
+        // A V3 extension resolves the cert, series and class scopes itself and renders one complete
+        // section. Only when it does not, fall back to rendering the scopes one at a time.
+        bool resolved;
+        (json, resolved) = _appendResolvedExtensionData(json, contractAddress, tokenId, extension);
+        // not resolvable means it is legacy `extensionData`
+        if (!resolved) {
+            //add extensionData
+            if (extension != address(0) && details.extensionData.length > 0) {
+                json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
+            }
         }
-        json = _appendSeriesExtensionData(json, contractAddress);
 
         // Add endorsement history
         json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));
@@ -678,36 +684,30 @@ struct CertificateDetails {
         }
     }
 
-    /// @dev Adds printer-level series metadata when its shared extension implements
-    /// ICertificateExtensionV3. All calls are guarded so legacy printer implementations and V1/V2
-    /// extensions continue returning their existing metadata unchanged.
-    function _appendSeriesExtensionData(
+    /// @dev Adds the resolved certificate when the extension implements ICertificateExtensionV3. The
+    /// cert payload alone is not the whole picture once a section lives at the series or class scope,
+    /// so a V3 extension merges every scope and returns one section. All calls are guarded, so a V1
+    /// or V2 extension reports `false` and the caller keeps its existing per-scope output.
+    function _appendResolvedExtensionData(
         string memory json,
-        address certificate
-    ) private view returns (string memory) {
-        try ILedgerEntryToken(certificate).getSeriesInfo() returns (
-            address seriesExtension,
-            bytes memory seriesData
-        ) {
-            if (seriesExtension == address(0) || seriesData.length == 0) return json;
+        address certificate,
+        uint256 tokenId,
+        address extension
+    ) private view returns (string memory, bool) {
+        if (extension == address(0)) return (json, false);
 
-            try ICertificateExtensionV3(seriesExtension).supportsSeriesExtensionData() returns (
-                bool supported
-            ) {
-                if (!supported) return json;
-            } catch {
-                return json;
-            }
-
-            try ICertificateExtensionV3(seriesExtension).getSeriesExtensionURI(seriesData) returns (
-                string memory seriesJson
-            ) {
-                return bytes(seriesJson).length == 0 ? json : string.concat(json, seriesJson);
-            } catch {
-                return json;
-            }
+        try ICertificateExtensionV3(extension).supportsResolvedExtensionData() returns (bool supported) {
+            if (!supported) return (json, false);
         } catch {
-            return json;
+            return (json, false);
+        }
+
+        try ICertificateExtensionV3(extension).getResolvedExtensionURI(certificate, tokenId) returns (
+            string memory resolvedJson
+        ) {
+            return (bytes(resolvedJson).length == 0 ? json : string.concat(json, resolvedJson), true);
+        } catch {
+            return (json, false);
         }
     }
 
@@ -819,11 +819,16 @@ struct CertificateDetails {
 
         json = _appendCyberCorpExtensionData(json, contractAddress);
 
-        //add extensionData
-        if (extension != address(0) && details.extensionData.length > 0) {
-            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
+        // A V3 extension resolves the cert, series and class scopes itself and renders one complete
+        // section. Only when it does not, fall back to rendering the scopes one at a time.
+        bool resolved;
+        (json, resolved) = _appendResolvedExtensionData(json, contractAddress, tokenId, extension);
+        if (!resolved) {
+            // not resolvable means it is legacy `extensionData`
+            if (extension != address(0) && details.extensionData.length > 0) {
+                json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
+            }
         }
-        json = _appendSeriesExtensionData(json, contractAddress);
 
         // Add endorsement history
         json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));

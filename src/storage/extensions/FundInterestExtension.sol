@@ -19,6 +19,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {ScopedDataLayerLib} from "./ScopedDataLayerLib.sol";
 import "./ICertificateExtension.sol";
 import "../../libs/auth.sol";
 
@@ -56,6 +57,13 @@ struct FundInterestSeriesData {
 /// @dev Canonical fund-interest extension-type key.
 bytes32 constant FUND_INTEREST_EXTENSION_TYPE = keccak256("FUND_INTEREST");
 
+/// @notice The whole certificate: the series terms and the cert terms, side by side. The two scopes
+/// hold different fields, so this is a pairing and not a merge.
+struct FundInterestResolvedData {
+    FundInterestSeriesData series;
+    FundInterestData certificate;
+}
+
 /// @title FundInterestExtension - split LET and series data for fund interests
 /// @notice The printer's `seriesData` encodes FundInterestSeriesData; each certificate's
 /// `CertificateDetails.extensionData` encodes FundInterestData.
@@ -78,10 +86,9 @@ contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgA
         return extensionType == EXTENSION_TYPE;
     }
 
-    /// @notice Typed accessors so consumers read/rewrite the payload without knowing its layout. Each
-    /// deployed version decodes/encodes against its own FundInterestData, keeping the layout private here.
-    /// Like the sibling decode accessors these revert on empty/malformed data rather than defaulting; the
-    /// "no extension data" case is the caller's to guard (both current callers do).
+    /// @notice Typed accessors, so a consumer reads the payload without knowledge of its layout. Each
+    /// deployed version decodes against its own FundInterestData. Empty or bad data reverts, so the
+    /// caller must guard the "no extension data" case.
     function acquisitionDate(bytes memory data) external pure returns (uint64) {
         return abi.decode(data, (FundInterestData)).acquisitionDate;
     }
@@ -116,11 +123,7 @@ contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgA
         return abi.encode(data);
     }
 
-    function supportsSeriesExtensionData() external pure returns (bool) {
-        return true;
-    }
-
-    function getExtensionURI(bytes memory data) external pure override returns (string memory) {
+    function getExtensionURI(bytes memory data) public pure override returns (string memory) {
         if (data.length == 0) return "";
         FundInterestData memory decoded = abi.decode(data, (FundInterestData));
         return string(
@@ -134,7 +137,34 @@ contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgA
         );
     }
 
-    function getSeriesExtensionURI(bytes memory data) external pure returns (string memory) {
+    /// @notice Announces the resolved-render path to `CertificateUriBuilder`.
+    function supportsResolvedExtensionData() external pure returns (bool) {
+        return true;
+    }
+
+    /// @notice The typed whole certificate. A scope with no payload reads back as a blank struct.
+    function resolveCert(address printer, uint256 tokenId)
+        public
+        view
+        returns (FundInterestResolvedData memory resolved)
+    {
+        (bytes memory certData, bytes memory seriesData) = ScopedDataLayerLib.getScopedPayloads(printer, tokenId);
+        if (certData.length != 0) resolved.certificate = abi.decode(certData, (FundInterestData));
+        if (seriesData.length != 0) resolved.series = abi.decode(seriesData, (FundInterestSeriesData));
+    }
+
+    /// @notice Renders the whole certificate: the cert scope and the series scope in one section.
+    /// @dev The cert payload alone is not the whole certificate, so this replaces the per-scope calls.
+    ///      A scope with no payload is left out rather than rendered blank.
+    function getResolvedExtensionURI(address printer, uint256 tokenId) external view returns (string memory) {
+        (bytes memory certData, bytes memory seriesData) = ScopedDataLayerLib.getScopedPayloads(printer, tokenId);
+        return string.concat(
+            certData.length == 0 ? "" : getExtensionURI(certData),
+            _buildSeriesJson(seriesData)
+        );
+    }
+
+    function _buildSeriesJson(bytes memory data) internal pure returns (string memory) {
         if (data.length == 0) return "";
         FundInterestSeriesData memory decoded = abi.decode(data, (FundInterestSeriesData));
         return string.concat(
