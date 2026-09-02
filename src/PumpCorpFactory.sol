@@ -163,6 +163,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         SecurityClass securityClass;
         SecuritySeries securitySeries;
         address extension;
+        bytes seriesData;
         string[] defaultLegend;
     }
 
@@ -480,7 +481,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
                     _certData[i].securityClass,
                     _certData[i].securitySeries,
                     _certData[i].extension,
-                    bytes("")
+                    _certData[i].seriesData
                 )
             );
             certPrinterAddress[i] = address(certPrinter);

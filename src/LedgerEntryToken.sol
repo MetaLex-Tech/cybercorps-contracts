@@ -60,7 +60,7 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     using LedgerEntryTokenStorage for LedgerEntryTokenStorage.CyberCertStorage;
 
-    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
 
     modifier onlyIssuanceManager() {
         if (msg.sender != LedgerEntryTokenStorage.cyberCertStorage().issuanceManager) revert ILedgerEntryToken.NotIssuanceManager();
