@@ -137,18 +137,18 @@ one condition deployed alone belongs in that condition's unit suite.
 
 The earlier "not yet covered" list was stale; every item on it exists.
 
-| Case                   | Covered by                                                                                                 |
-|------------------------|------------------------------------------------------------------------------------------------------------|
-| Unmet hold             | `HoldingPeriodCondition::test_OneDayShort_Fails` (+ tacking, unconfigured fail-closed)                     |
-| Blocked state          | `USStateOfResidenceCondition::test_NewYork_Default_Fails`, `test_GpBlockedState_Fails`                     |
-| Holder-cap breach      | `HolderCapCondition::test_FreshUsBuyer_BreachesCap_Fails` (+ look-through, US-block modes)                 |
-| Unconfigured Reg S SPV | `RegSDistributionComplianceCondition::test_Unconfigured_FailsClosed`                                       |
-| Stale disclosure       | `Rule144DisclosureCondition::test_StaleByOneSecond_Fails`, `Section4a7…::test_Accepted_StalePackage_Fails` |
-| Missing GP sign-off    | `LegalOpinionCondition::test_Accepted_NoAssurance_Fails` (+ per-mechanism, revocation)                     |
-| Expired badge          | `LeXcheXBadge::test_HasValidCredentialOf_DeniedWhenExpiredOrVoided` and siblings                           |
-| Partial fills          | `test_UnpinnedOffer_BuyersElectDifferentPathways` (two half-fills of one offer)                            |
-| `setDelayOverride`     | `TimeSettlementPeriodCondition::test_Override2d_*`, `test_OverrideZero_RestoresDefault`                    |
-| Kill-switch rotation   | `KillSwitchCondition::test_RotateOwnSlot`, `test_RotateToExistingAdmin_Reverts`                            |
+| Case                   | Covered by                                                                                                                                                                         |
+|------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Unmet hold             | `HoldingPeriodCondition::test_OneDayShort_Fails` (+ tacking, unconfigured fail-closed)                                                                                             |
+| Blocked state          | `USStateOfResidenceCondition::test_NewYork_Default_Fails`, `test_GpBlockedState_Fails`                                                                                             |
+| Holder-cap breach      | `HolderCapCondition::test_FreshUsBuyer_BreachesCap_Fails` (+ look-through, US-block modes)                                                                                         |
+| Unconfigured Reg S SPV | `RegSDistributionComplianceCondition::test_Unconfigured_FailsClosed`                                                                                                               |
+| Stale disclosure       | `Rule144DisclosureCondition::test_StaleByOneSecond_Fails`, `Section4a7…::test_Accepted_StalePackage_Fails`                                                                         |
+| Missing GP sign-off    | `LegalOpinionCondition::test_Accepted_NoAssurance_Fails` (+ per-mechanism, revocation)                                                                                             |
+| Expired badge          | `LeXcheXBadge::test_HasValidCredentialOf_DeniedWhenExpiredOrVoided` and siblings                                                                                                   |
+| Partial fills          | `test_UnpinnedOffer_BuyersElectDifferentPathways` (two half-fills of one offer)                                                                                                    |
+| `setDelayOverride`     | `TimeSettlementPeriodCondition::test_Override2d_*`, `test_OverrideZero_RestoresDefault`                                                                                            |
+| Kill-switch rotation   | `KillSwitchCondition::test_RotateOwnSlot`, `test_RotateToExistingAdmin_Reverts`, `test_ProposeThenRotateThenConfirm_Reverts` (+ settlement scope, `test_LowerAfterRotation_Works`) |
 
 Expired badge needs no per-condition test: every badge-reading condition goes through
 `hasValidCredentialOf` / `_mostRecentValidWith`, which drop expired and voided credentials before the

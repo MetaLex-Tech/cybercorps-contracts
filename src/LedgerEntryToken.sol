@@ -60,7 +60,7 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     using LedgerEntryTokenStorage for LedgerEntryTokenStorage.CyberCertStorage;
 
-    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
 
     modifier onlyIssuanceManager() {
         if (msg.sender != LedgerEntryTokenStorage.cyberCertStorage().issuanceManager) revert ILedgerEntryToken.NotIssuanceManager();
@@ -103,6 +103,9 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         s.securitySeries = _securitySeries;
         s.certificateUri = _certificateUri;
         s.endorsementRequired = true;
+        // `transferable` and `legalTransferable` both stay false on purpose. A new printer issues freely
+        // (issuance skips both gates), but holders cannot move the certificate and the register cannot
+        // change until an admin opens each one. Secondary trading is therefore an explicit act per SPV.
         s.extension = _extension;
         s.seriesData = _seriesData;
     }
@@ -126,6 +129,19 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     function setGlobalTransferable(bool _transferable) external onlyIssuanceManagerOrAdmin {
         LedgerEntryTokenStorage.cyberCertStorage().transferable = _transferable;
         emit ILedgerEntryToken.GlobalTransferableSet(_transferable);
+    }
+
+    /// @notice Stop-transfer on the books: whether the holder of record may change at all.
+    /// Governs registration, not delivery. Original issuance is never gated by it.
+    function setGlobalLegalTransferable(bool value) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.setLegalTransferable(value);
+        emit ILedgerEntryToken.GlobalLegalTransferableSet(value);
+    }
+
+    /// @notice Per-lot override of the stop-transfer on the books; either flag being on permits registration.
+    function setTokenLegalTransferable(uint256 tokenId, bool value) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.setTokenLegalTransferable(tokenId, value);
+        emit ILedgerEntryToken.TokenLegalTransferableSet(tokenId, value);
     }
 
     function safeMint(
@@ -165,16 +181,47 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         return tokenId;
     }
 
+    /// @notice Mints the buyer's lot in a secondary trade. Names the lot the title came from.
+    /// @dev A reissue moves title, but it is a mint. Nothing on the new lot shows that.
+    /// `sourceTokenId` gives the register gate the seller, so the gate sees a transfer.
+    /// @param sourceTokenId The seller's lot. Supplies the outgoing holder of record.
+    /// @param to Takes possession. The custodian under administered hosting, else the buyer.
+    /// @param owner The buyer. Goes on the register.
+    /// @param tokenId ID for the new lot
+    /// @param details Certificate details, copied from the seller's lot
+    /// @param ownerName Buyer's legal name for the register
+    function safeMintFromAndAssign(
+        uint256 sourceTokenId,
+        address to,
+        address owner,
+        uint256 tokenId,
+        CertificateDetails memory details,
+        string memory ownerName
+    ) external onlyIssuanceManager returns (uint256) {
+        _safeMint(to, tokenId);
+        LedgerEntryTokenStorage.recordMintFromAndAssign(sourceTokenId, tokenId, owner, details, ownerName);
+        return tokenId;
+    }
+
+    /// @notice Re-registers a lot to a new holder of record.
+    /// @dev This moves the register, so it checks the register. `from` is the holder of record.
+    /// It is not the possessor. A lot with reserved units is committed to a deal and cannot move.
+    /// @param from Current holder of record
+    /// @param tokenId ID of the lot
+    /// @param to Incoming holder of record
+    /// @param details Updated certificate details
+    /// @param name Incoming holder's legal name for the register
     function assignCert(
         address from,
         uint256 tokenId,
         address to,
-        CertificateDetails memory details
+        CertificateDetails memory details,
+        string memory name
     ) external onlyIssuanceManager returns (uint256) {
-        if(ownerOf(tokenId) != from) revert ILedgerEntryToken.InvalidTokenId();
+        if(legalOwnerOf(tokenId) != from) revert ILedgerEntryToken.InvalidTokenId();
         // Reserved units are escrowed for a pending deal; legal ownership can't be reassigned while on escrow.
         if (LedgerEntryTokenStorage.getUnitsReserved(tokenId) > 0) revert ILedgerEntryToken.CertificateReserved();
-        LedgerEntryTokenStorage.recordAssign(tokenId, to, details);
+        LedgerEntryTokenStorage.recordAssign(tokenId, to, details, name);
         return tokenId;
     }
     
@@ -215,9 +262,13 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         LedgerEntryTokenStorage.updateTackedFromAcquisitionDate(tokenId, ts);
     }
 
+    /// @dev Goes through _update with msg.sender as the authorizer, so moving someone else's possession needs
+    /// their ERC-721 approval. A pledgee's or custodian's possession is not revocable by the holder of record.
     function endorseAndTransfer(uint256 tokenId, Endorsement memory newEndorsement, address from, address to) external {
         addEndorsement(tokenId, newEndorsement);
-        _transfer(from, to, tokenId);
+        if (to == address(0)) revert ILedgerEntryToken.InvalidTokenId();
+        address previousOwner = _update(to, tokenId, msg.sender);
+        if (previousOwner != from) revert ILedgerEntryToken.InvalidTokenId();
     }
     
     // Update agreement details
@@ -296,6 +347,7 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     // look-through holder tally: a fully-voided lot no longer counts its owner as a live holder, so the
     // tally is decremented via `recordVoidLegalOwner` (after the status flip).
     function voidCert(uint256 tokenId) external onlyIssuanceManagerOrAdmin {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
         LedgerEntryTokenStorage.setSecurityStatus(tokenId, SecurityStatus.Void);
         LedgerEntryTokenStorage.recordVoidLegalOwner(tokenId);
         emit ILedgerEntryToken.CertificateVoided(tokenId, block.timestamp);
@@ -389,6 +441,17 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         return LedgerEntryTokenStorage.cyberCertStorage().transferable;
     }
 
+    function legalTransferable() public view returns (bool) {
+        return LedgerEntryTokenStorage.cyberCertStorage().legalTransferable;
+    }
+
+    function isTokenLegalTransferable(uint256 tokenId) external view returns (bool) {
+        return LedgerEntryTokenStorage.isTokenLegalTransferable(tokenId);
+    }
+
+    /// @notice Distinct wallets that hold a lot of this series, counted on delivery.
+    /// @dev This counts possession, not the register. For the holder-of-record count that the §3(c)(1) cap
+    /// reads, use `lookThroughHolderCount()`.
     function holderCount() external view returns (uint256) {
         return LedgerEntryTokenStorage.getHolderCount();
     }
@@ -615,7 +678,8 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     }
 
     /// @notice Wire the LeXcheXBadge the look-through tally samples. Set before the first mint on a new
-    /// printer (and before `backfillLookThroughTally` on an upgraded one).
+    /// printer. If holders were already counted without it, run `backfillLookThroughTally` over the supply
+    /// afterwards to re-read them off the badge.
     function setLookThroughBadge(address badge) external onlyIssuanceManagerOrAdmin {
         LedgerEntryTokenStorage.setLookThroughBadge(badge);
         emit ILedgerEntryToken.LookThroughBadgeSet(badge);
@@ -632,7 +696,8 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     }
 
     /// @notice Backfill the look-through tally for tokens in [startIndex, startIndex+count) after a beacon
-    /// upgrade. Set the badge first; permissionless and idempotent. Batch over [0, totalSupply()).
+    /// upgrade, or after wiring the badge late. Permissionless and idempotent: an already-counted token is
+    /// re-read off the badge. Batch over [0, totalSupply()).
     function backfillLookThroughTally(uint256 startIndex, uint256 count) external {
         LedgerEntryTokenStorage.backfillLookThroughTally(startIndex, count);
     }

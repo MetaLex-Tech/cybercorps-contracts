@@ -187,6 +187,10 @@ library SecondaryTradeStorage {
             revert ISecondaryTradeStorage.ExemptionPathwayRequired();
         if (params.exemptionPathway != ExemptionPathway.NONE) _requirePathwayEnabled(params.exemptionPathway);
 
+        // Buy offer: the offeror is the buyer, so its custody choice is set here. Sell offers get theirs
+        // from the acceptance, checked in _acceptOffer.
+        if (params.side == OfferSide.BUY) _requireHostingCustodian(params.buyerHostingMode, params.adminMultisig);
+
         // Validate min threshold against the whole offer
         _checkMinTradeThreshold(params.units, params.consideration);
 
@@ -239,6 +243,10 @@ library SecondaryTradeStorage {
         if (params.side == OfferSide.SELL) {
             if (ILedgerEntryToken(params.certPrinter).legalOwnerOf(params.tokenId) != offeror)
                 revert ISecondaryTradeStorage.NotCertOwner();
+            // A void cert keeps its owner and its units. The other checks here do not stop one.
+            // A void cert is not valid, so it must not back an offer.
+            if (ILedgerEntryToken(params.certPrinter).isVoided(params.tokenId))
+                revert ISecondaryTradeStorage.CertificateVoided();
             // Reserve units on the seller's cert (the printer authorizes this DealManager as an admin)
             ILedgerEntryToken(params.certPrinter).increaseUnitsReserved(params.tokenId, params.units);
         } else {
@@ -342,17 +350,20 @@ library SecondaryTradeStorage {
         uint256 remainingUnits = offer.units - offer.unitsAccepted;
         if (params.units > remainingUnits) revert ISecondaryTradeStorage.UnitsExceedOffer();
 
-        // Pro-rata consideration for this (possibly partial) fill. The final lot that exhausts the
-        // remaining units takes the leftover consideration (offer.consideration - offer.paymentAccepted)
-        // rather than another floored pro-rata amount; otherwise flooring across partial fills strands
-        // the rounding remainder — unpaid to the seller, or stuck in custody for a buy offer.
-        uint256 partialConsideration = params.units == remainingUnits
-            ? offer.consideration - offer.paymentAccepted
-            : offer.consideration * params.units / offer.units;
+        // Pro-rata price for this (possibly partial) fill, taken from the offer's running total so rounding
+        // error does not grow with the number of fills. The lot that exhausts the offer targets the full
+        // consideration, so it pays the remainder.
+        uint256 targetPaid = offer.consideration * (offer.unitsAccepted + params.units) / offer.units;
 
-        // A priced offer must never settle a lot for nothing: flooring zeroes any fill worth less than one
-        // base unit of the payment token, which would deliver units free and shove the whole price onto the
-        // exhausting lot. Unpriced (zero-consideration) offers are a deliberate shape and stay allowed.
+        // targetPaid can fall to or below the amount already collected due to round-down, and a
+        // void refunds one lot's charge, which can be less than its share. Use zero instead of an underflow
+        // and let the next check decide whether to proceed.
+        uint256 partialConsideration = targetPaid > offer.paymentAccepted
+            ? targetPaid - offer.paymentAccepted
+            : 0;
+
+        // A priced offer must never settle a lot for nothing: a fill worth less than one base unit of the
+        // payment token rounds to zero. Unpriced (zero-consideration) offers are a deliberate shape and stay allowed.
         if (offer.consideration > 0 && partialConsideration == 0)
             revert ISecondaryTradeStorage.ZeroConsiderationFill();
 
@@ -364,7 +375,7 @@ library SecondaryTradeStorage {
         if (params.units < remainingUnits) {
             _checkMinTradeThreshold(params.units, partialConsideration);
             uint256 remainderUnits = remainingUnits - params.units;
-            uint256 remainderConsideration = (offer.consideration - offer.paymentAccepted) - partialConsideration;
+            uint256 remainderConsideration = offer.consideration - targetPaid;
             _checkMinTradeThreshold(remainderUnits, remainderConsideration);
         }
 
@@ -433,6 +444,9 @@ library SecondaryTradeStorage {
             // Reserve units on the seller's cert at acceptance (buy-offer flow, routed through IssuanceManager)
             ILedgerEntryToken(certPrinter).increaseUnitsReserved(tokenId, params.units);
         }
+        // The cert must not be void at acceptance. On a buy offer this is the first check of the seller's
+        // cert. On a sell offer the issuer can void the cert after the offer is posted.
+        if (ILedgerEntryToken(certPrinter).isVoided(tokenId)) revert ISecondaryTradeStorage.CertificateVoided();
 
         // Resolve the buyer info per side: buy offers carry it on the offer (the offeror is the buyer),
         // sells take it from the acceptance.
@@ -448,6 +462,7 @@ library SecondaryTradeStorage {
             buyerHostingMode = params.buyerHostingMode;
             adminMultisig = params.adminMultisig;
         }
+        _requireHostingCustodian(buyerHostingMode, adminMultisig);
 
         // Fund the settlement escrow.
         // BUY: funds are already in contract from postOffer(); no token movement needed.
@@ -821,6 +836,14 @@ library SecondaryTradeStorage {
     function _requirePathwayEnabled(ExemptionPathway pathway) internal view {
         if (!secondaryTradeStorage().pathwayEnabled[pathway])
             revert ISecondaryTradeStorage.ExemptionPathwayNotEnabled(pathway);
+    }
+
+    /// @dev Administered hosting delivers the buyer's new lot to `adminMultisig`. A mint to the zero address
+    /// reverts, so the settlement could not finalize and would hold the seller's units and the buyer's
+    /// payment until expiry. Post and accept both reject the pair up front.
+    function _requireHostingCustodian(HostingMode hostingMode, address adminMultisig) internal pure {
+        if (hostingMode == HostingMode.ADMINISTERED && adminMultisig == address(0))
+            revert ISecondaryTradeStorage.MissingAdminMultisig();
     }
 
     /// @dev Rejects the zero address and duplicates so a condition list behaves as a set. Lists are small

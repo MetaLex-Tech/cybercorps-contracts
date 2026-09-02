@@ -88,7 +88,19 @@ abstract contract BaseTransferHook is ITransferRestrictionHook, BorgAuthACL {
         
         return _checkTransferRestriction(from, to, tokenId, data);
     }
-    
+
+    /// @notice Check if a change of the holder of record is allowed
+    /// @dev Defaults to the delivery answer: a registration is at least as restricted as a delivery.
+    /// Override this to let a hook treat the two events differently.
+    function checkLegalTransferRestriction(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes memory data
+    ) public view virtual override returns (bool allowed, string memory reason) {
+        return checkTransferRestriction(from, to, tokenId, data);
+    }
+
     /// @notice Internal function to implement the actual transfer restriction logic
     /// @dev Override this function in derived contracts to implement specific restriction logic
     /// @param from The address tokens are being transferred from
