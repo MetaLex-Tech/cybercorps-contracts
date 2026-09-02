@@ -57,4 +57,20 @@ interface ITransferRestrictionHook {
         uint256 tokenId,
         bytes memory data
     ) external view returns (bool allowed, string memory reason);
+
+    /// @notice Check if a change of the holder of record is allowed
+    /// @dev Answers a different question from checkTransferRestriction, which is about possession.
+    /// Never called at original issuance, so `from` is always a real prior holder of record.
+    /// @param from The current holder of record
+    /// @param to The incoming holder of record
+    /// @param tokenId The ID of the token being registered
+    /// @param data Additional data passed to the hook
+    /// @return allowed Whether the registration is allowed
+    /// @return reason The reason if the registration is not allowed
+    function checkLegalTransferRestriction(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes memory data
+    ) external view returns (bool allowed, string memory reason);
 } 

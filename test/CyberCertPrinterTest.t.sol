@@ -19,6 +19,25 @@ import {
 } from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICertificateExtension, IFundInterestExtension} from "../src/storage/extensions/ICertificateExtension.sol";
 import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "../src/storage/extensions/FundInterestExtension.sol";
+import {MockTransferHook} from "./mock/MockTransferHook.sol";
+import {BaseTransferHook} from "../src/hooks/transfer/BaseTransferHook.sol";
+
+/// @dev Extends BaseTransferHook and overrides only the delivery answer, so the registration answer comes
+/// from the inherited default. Proves that default is fail-closed.
+contract DenyAllBaseHook is BaseTransferHook {
+    function initialize(address _auth) external initializer {
+        __BaseTransferHook_init(_auth);
+    }
+
+    function _checkTransferRestriction(address, address, uint256, bytes memory)
+        internal
+        pure
+        override
+        returns (bool, string memory)
+    {
+        return (false, "denied");
+    }
+}
 
 contract MockCyberCorp {
     address public dealManager;
@@ -319,6 +338,11 @@ contract CyberCertPrinterTest is Test {
             )
         );
         printer = LedgerEntryToken(address(new ERC1967Proxy(address(implementation), initData)));
+
+        // Open the register: legalTransferable is deny-by-default, so a change of holder of record
+        // needs the SPV to enable it. Delivery is governed separately by `transferable`.
+        vm.prank(address(issuanceManager));
+        printer.setGlobalLegalTransferable(true);
     }
 
     function test_AddIssuerSignature_StoresSignatureAndEmitsEvent() public {
@@ -504,10 +528,13 @@ contract CyberCertPrinterTest is Test {
     //  8 | Custodial secondary sale        | registered | n/a      | Cust    | Alice        | Cust    | Bob          | void + reissue (new tokenId) †
     //  9 | Registrar reassignment (held)   | registered | n/a      | Alice   | Alice        | Alice   | Bob          | assignCert, no token move
     // 10 | Bearer transfer                 | bearer     | n/a      | Alice   | Alice        | Bob     | Bob          | title tracks possession
+    // 11 | Replay after reassignment       | registered | Alice    | Alice   | Bob          | Alice   | Bob          | endorsement retired by #9 → no change
     // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
     //  † #8 is void-and-reissue (secondaryTransfer, administered): "before" is the seller's lot (then voided) and
     //    "after" is the freshly minted buyer lot under a NEW tokenId — not one token changing owner. #9 (assignCert)
     //    is the admin in-place reassignment it contrasts with. The full sale flow lives in the secondary-transfer / fork suites.
+    //  #11 follows #9: the endorsement names Alice, so her self-transfer still matches its `to`. It does not move
+    //    title, because the reassignment retired it (see `endorsementFloor`).
 
     // (1) Depositing with a custodian moves possession only; legal ownership stays with the depositor. The cert
     // is endorsed to its own owner (Alice) — the state Deal/Round issuance leaves — which the deposit doesn't match.
@@ -663,6 +690,23 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.legalOwnerOf(1), recipient); // title moved
     }
 
+    // (11) A registrar reassignment retires every endorsement written before it. Primary issuance leaves the cert
+    // endorsed to its own owner (Alice), so Alice must not replay that endorsement to take title back from Bob.
+    function test_Matrix_Registered_ReassignmentRetiresEarlierEndorsement() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _enableTransfers();
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, investor)); // endorsee == Alice
+
+        _reassignLegalOwner(1, investor, recipient); // title Alice -> Bob; the token stays with Alice
+
+        vm.prank(investor);
+        printer.transferFrom(investor, investor, 1); // replay attempt: to == the old endorsee
+
+        assertEq(printer.ownerOf(1), investor);
+        assertEq(printer.legalOwnerOf(1), recipient); // title stays with Bob
+    }
+
     // (10) Bearer (unrestricted) certs have no registrar title: legal ownership tracks possession and follows
     // the token down the transfer chain.
     function test_Matrix_Bearer_TitleTracksPossession() public {
@@ -770,8 +814,8 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.holderCount(), 1);
     }
 
-    // A same-owner write that changes the holder-of-record name emits LegalOwnerChanged (from == to) and leaves
-    // the acquisition clock untouched.
+    // A same-owner write that changes the holder-of-record name emits LegalOwnerChanged (from == to), carries
+    // the new name, and leaves the acquisition clock untouched.
     function test_SetLegalOwner_SameOwnerNameChange_EmitsWithoutRestamp() public {
         vm.prank(address(issuanceManager));
         printer.safeMintAndAssign(investor, 1, _details(100, bytes("")), "Alice");
@@ -779,9 +823,9 @@ contract CyberCertPrinterTest is Test {
         CertificateDetails memory d = _details(100, bytes(""));
 
         vm.expectEmit(true, true, true, true, address(printer));
-        emit ILedgerEntryToken.LegalOwnerChanged(1, investor, investor, "", acquiredAt);
+        emit ILedgerEntryToken.LegalOwnerChanged(1, investor, investor, "Alicia", acquiredAt);
         vm.prank(address(issuanceManager));
-        printer.assignCert(investor, 1, investor, d); // recordAssign resets the name to "" for the same owner
+        printer.assignCert(investor, 1, investor, d, "Alicia"); // a genuine same-owner rename
 
         assertEq(printer.acquisitionTimestamp(1), acquiredAt, "same-owner name change must not reset the clock");
     }
@@ -796,7 +840,7 @@ contract CyberCertPrinterTest is Test {
         vm.expectEmit(true, true, true, true, address(printer));
         emit ILedgerEntryToken.LegalOwnerChanged(1, investor, address(0), "", 0);
         vm.prank(address(issuanceManager));
-        printer.assignCert(investor, 1, address(0), d);
+        printer.assignCert(investor, 1, address(0), d, "");
 
         assertEq(printer.legalOwnerOf(1), address(0), "legal owner cleared");
         assertEq(printer.acquisitionTimestamp(1), 0, "clock cleared with the owner");
@@ -814,9 +858,9 @@ contract CyberCertPrinterTest is Test {
         CertificateDetails memory d = _details(100, bytes(""));
 
         vm.expectEmit(true, true, true, true, address(printer));
-        emit ILedgerEntryToken.LegalOwnerChanged(1, investor, recipient, "", uint64(block.timestamp));
+        emit ILedgerEntryToken.LegalOwnerChanged(1, investor, recipient, "Bob", uint64(block.timestamp));
         vm.prank(address(issuanceManager));
-        printer.assignCert(investor, 1, recipient, d);
+        printer.assignCert(investor, 1, recipient, d, "Bob");
 
         assertEq(printer.legalOwnerOf(1), recipient, "legal owner reassigned");
         assertEq(printer.acquisitionTimestamp(1), uint64(block.timestamp), "acquisition clock restamped to now");
@@ -1136,6 +1180,18 @@ contract CyberCertPrinterTest is Test {
         printer.unvoidCert(tokenId);
     }
 
+    // MTLX1-16: voiding an id that holds no token used to leave a Void status behind. The next mint took
+    // that id and came out void — never counted in the tally and blocked from transfer.
+    function test_VoidCert_RevertsForNonexistentToken() public {
+        vm.prank(address(issuanceManager));
+        vm.expectRevert(ILedgerEntryToken.TokenDoesNotExist.selector);
+        printer.voidCert(5);
+
+        _mintCert(5, investor, 100, bytes(""));
+        assertFalse(printer.isVoided(5));
+        assertEq(printer.lookThroughHolderCount(), 1);
+    }
+
     function test_LookThrough_IndividualCountsAsOne() public {
         MockLookThroughBadge b = new MockLookThroughBadge();
         _setBadge(b);
@@ -1248,6 +1304,55 @@ contract CyberCertPrinterTest is Test {
         printer.backfillLookThroughTally(0, 10);
         assertEq(printer.lookThroughHolderCount(), total);
         assertEq(printer.usLookThroughHolderCount(), 5);
+    }
+
+    // Holders booked while no badge was wired sit at the unknown-holder seed of one U.S. owner. Wiring the
+    // badge later and re-running the backfill must re-read them, not skip them as already counted.
+    function test_LookThrough_BackfillRepairsHoldersCountedBeforeBadge() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 2);
+        assertEq(printer.usLookThroughHolderCount(), 2);
+
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 40);
+        b.setBo(recipient, 40);
+        b.setUs(recipient, true);
+        _setBadge(b);
+
+        printer.backfillLookThroughTally(0, 10);
+        assertEq(printer.lookThroughHolderCount(), 80);
+        assertEq(printer.usLookThroughHolderCount(), 40);
+    }
+
+    // The backfill is permissionless, so anyone can run it before the operator wires the badge. That run
+    // must not lock the holders at weight one.
+    function test_LookThrough_BackfillBeforeBadgeDoesNotLockWeights() public {
+        _mintCert(1, investor, 100, bytes(""));
+        printer.backfillLookThroughTally(0, 10);
+
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 12);
+        _setBadge(b);
+
+        printer.backfillLookThroughTally(0, 10);
+        assertEq(printer.lookThroughHolderCount(), 12);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
+    // The repair lives in _countLot, not in the backfill loop, so every path back through it re-reads the
+    // badge. unvoidCert on a live cert is one such path.
+    function test_LookThrough_RecountingALiveLotResyncsTheHolder() public {
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 1);
+
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 7);
+        _setBadge(b);
+
+        _unvoid(1);
+        assertEq(printer.lookThroughHolderCount(), 7);
+        assertEq(printer.usLookThroughHolderCount(), 0);
     }
 
     function test_LookThrough_ResyncHoldersBatchReconcilesEach() public {
@@ -1677,9 +1782,11 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.usLookThroughHolderCount(), 2);
     }
 
-    // A voided lot contributes to neither owner's tally, so transferring it moves the legal-owner enumeration
-    // while the look-through totals stay put — the one place the two accounting systems diverge.
-    function test_LookThrough_VoidedCertTransferMovesOwnerNotTally() public {
+    // A void lot leaves the look-through tally immediately.
+    // Its title cannot move after that. A cancelled certificate must not get a new holder of record.
+    // Possession can still move. A holder can return a void lot, or an agent can collect it.
+    // A possession move changes neither the register nor the tally.
+    function test_LookThrough_VoidedCertBlocksTitleButNotPossession() public {
         MockLookThroughBadge b = new MockLookThroughBadge();
         b.setBo(investor, 3);
         b.setUs(investor, true);
@@ -1695,17 +1802,21 @@ contract CyberCertPrinterTest is Test {
         printer.setGlobalTransferable(true);
         vm.prank(investor);
         printer.addEndorsement(1, _endorsement(investor, recipient));
+
+        // This delivery would register the endorsee. The register gate stops it.
         vm.prank(investor);
+        vm.expectRevert(ILedgerEntryToken.VoidCertificate.selector);
         printer.transferFrom(investor, recipient, 1);
 
-        // Enumeration follows the move …
-        assertEq(printer.legalOwnerOf(1), recipient);
-        assertEq(printer.balanceOfLegalOwner(investor), 0);
-        assertEq(printer.balanceOfLegalOwner(recipient), 1);
-        // … the tally does not, and neither party is a live holder via this lot.
+        // This delivery goes to a different address. It moves possession only, so it does not reach the gate.
+        vm.prank(investor);
+        printer.transferFrom(investor, custodian, 1);
+
+        assertEq(printer.ownerOf(1), custodian, "possession moved");
+        assertEq(printer.legalOwnerOf(1), investor, "register untouched");
         assertEq(printer.lookThroughHolderCount(), 0);
         assertEq(printer.usLookThroughHolderCount(), 0);
-        assertFalse(printer.isLegalHolder(recipient));
+        assertFalse(printer.isLegalHolder(investor));
     }
 
 
@@ -1764,6 +1875,135 @@ contract CyberCertPrinterTest is Test {
         vm.prank(custodian);
         vm.expectRevert(ILedgerEntryToken.InvalidEndorsement.selector);
         printer.addEndorsement(1, _endorsement(custodian, custodian));
+    }
+
+    // ───────────────── Register gate: the two controls are independent ─────────────────
+
+    /// @dev setUp opens the register. Close it again to test the default posture.
+    function _closeRegister() private {
+        vm.prank(address(issuanceManager));
+        printer.setGlobalLegalTransferable(false);
+    }
+
+    // Issuance never meets either control: a printer straight out of initialize has both flags off, and a
+    // denying hook cannot see an issuance because there is no outgoing holder to judge.
+    function test_Gate_IssuanceIsExemptFromBothControls() public {
+        _closeRegister();
+        MockTransferHook hook = new MockTransferHook();
+        hook.setAllowTransfers(false);
+        hook.setAllowLegalTransfers(false);
+        vm.prank(address(issuanceManager));
+        printer.setGlobalRestrictionHook(address(hook));
+
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.legalOwnerOf(1), investor, "issuance registers the investor with both flags off");
+        assertFalse(printer.transferable());
+        assertFalse(printer.legalTransferable());
+    }
+
+    // The delivery flag says nothing about the register, and the register flag says nothing about delivery.
+    function test_Gate_FlagsAreIndependent() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _closeRegister();
+        _enableTransfers(); // delivery open, register shut
+
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+
+        // Delivery to the endorsee would move title, so the register flag stops it.
+        vm.prank(investor);
+        vm.expectRevert(ILedgerEntryToken.LegalOwnerNotTransferable.selector);
+        printer.transferFrom(investor, recipient, 1);
+
+        // The same delivery to anyone else moves possession only, so it passes.
+        vm.prank(investor);
+        printer.transferFrom(investor, custodian, 1);
+        assertEq(printer.ownerOf(1), custodian);
+        assertEq(printer.legalOwnerOf(1), investor, "register untouched by a custody move");
+    }
+
+    // Opening the register alone does not let a holder hand the certificate around.
+    function test_Gate_OpenRegisterDoesNotOpenDelivery() public {
+        _mintCert(1, investor, 100, bytes("")); // setUp already opened the register
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+
+        vm.prank(investor);
+        vm.expectRevert(ILedgerEntryToken.TokenNotTransferable.selector);
+        printer.transferFrom(investor, recipient, 1);
+    }
+
+    // A per-lot override opens one lot's register without opening the series.
+    function test_Gate_PerTokenLegalOverride() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, investor, 100, bytes(""));
+        _closeRegister();
+        _enableTransfers();
+        vm.prank(address(issuanceManager));
+        printer.setTokenLegalTransferable(1, true);
+        assertTrue(printer.isTokenLegalTransferable(1));
+        assertFalse(printer.isTokenLegalTransferable(2));
+
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 1);
+        assertEq(printer.legalOwnerOf(1), recipient, "the opened lot registers");
+
+        vm.prank(investor);
+        printer.addEndorsement(2, _endorsement(investor, recipient));
+        vm.prank(investor);
+        vm.expectRevert(ILedgerEntryToken.LegalOwnerNotTransferable.selector);
+        printer.transferFrom(investor, recipient, 2);
+    }
+
+    // The hooks answer the two events separately, and denying one leaves the other alone.
+    function test_Gate_HooksSplitDeliveryFromRegistration() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _enableTransfers();
+        MockTransferHook hook = new MockTransferHook();
+        vm.prank(address(issuanceManager));
+        printer.setGlobalRestrictionHook(address(hook));
+
+        // Deny registration only: a custody move still goes through.
+        hook.setAllowLegalTransfers(false);
+        vm.prank(investor);
+        printer.transferFrom(investor, custodian, 1);
+        assertEq(printer.ownerOf(1), custodian);
+
+        // The same hook blocks a delivery that would move title.
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+        vm.prank(custodian);
+        vm.expectRevert(
+            abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Legal transfers disabled in mock hook")
+        );
+        printer.transferFrom(custodian, recipient, 1);
+
+        // Deny delivery only: even a possession move stops.
+        hook.setAllowLegalTransfers(true);
+        hook.setAllowTransfers(false);
+        vm.prank(custodian);
+        vm.expectRevert(
+            abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfers disabled in mock hook")
+        );
+        printer.transferFrom(custodian, investor, 1);
+    }
+
+    // A hook that extends BaseTransferHook and overrides nothing must block a registration whenever it
+    // blocks a delivery, so silence is never read as permission.
+    function test_Gate_BaseHookDefaultIsFailClosed() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _enableTransfers();
+        DenyAllBaseHook hook = new DenyAllBaseHook();
+        hook.initialize(address(issuanceManager.auth()));
+        vm.prank(address(issuanceManager));
+        printer.setGlobalRestrictionHook(address(hook));
+
+        (bool allowedDelivery,) = hook.checkTransferRestriction(investor, recipient, 1, "");
+        (bool allowedLegal,) = hook.checkLegalTransferRestriction(investor, recipient, 1, "");
+        assertFalse(allowedDelivery, "delivery denied");
+        assertFalse(allowedLegal, "registration denied by the inherited default");
     }
 
     function _mintCert(
@@ -1828,7 +2068,7 @@ contract CyberCertPrinterTest is Test {
     // title without moving the token, mirroring what IssuanceManager does at settlement.
     function _reassignLegalOwner(uint256 tokenId, address from, address to) private {
         vm.prank(address(issuanceManager));
-        printer.assignCert(from, tokenId, to, _details(100, bytes("")));
+        printer.assignCert(from, tokenId, to, _details(100, bytes("")), "");
     }
 
     function _endorsement(
