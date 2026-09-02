@@ -87,7 +87,8 @@ external controller.
 Read back and archive:
 
 - controller proxy, implementation, auth, renderer, and `SHARE` support;
-- factory reference and `IssuanceManager(ref).DEPLOY_VERSION() == "4.2"`;
+- factory reference and `IssuanceManager(ref).DEPLOY_VERSION() == "5"` (the
+  class-terms manager ships as develop's v5; rollout gates track that string);
 - the factory's LedgerEntryToken reference: confirm it is the updated
   implementation (carries `syncClassTermsOnVoidStatus`) before step 4 of the
   per-corp section runs anywhere;

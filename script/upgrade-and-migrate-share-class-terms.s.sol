@@ -46,8 +46,8 @@ contract UpgradeAndMigrateShareClassTermsScript is Script {
         if (auth.userRoles(deployer) < auth.OWNER_ROLE()) {
             revert("Deployer is not issuance-manager AUTH owner");
         }
-        if (keccak256(bytes(targetImplementation.DEPLOY_VERSION())) != keccak256(bytes("4.2"))) {
-            revert("Target implementation is not IssuanceManager 4.2");
+        if (keccak256(bytes(targetImplementation.DEPLOY_VERSION())) != keccak256(bytes("5"))) {
+            revert("Target implementation is not IssuanceManager 5");
         }
         if (
             IIssuanceManagerFactory(issuanceManager.getUpgradeFactory()).getRefImplementation()
@@ -164,7 +164,7 @@ contract UpgradeAndMigrateShareClassTermsScript is Script {
         issuanceManager.upgradeToAndCall(implementation, migrationCall);
         vm.stopBroadcast();
 
-        vm.assertEq(issuanceManager.DEPLOY_VERSION(), "4.2", "IssuanceManager version mismatch");
+        vm.assertEq(issuanceManager.DEPLOY_VERSION(), "5", "IssuanceManager version mismatch");
         for (uint256 i = 0; i < printers.length; ++i) {
             LedgerEntryToken printer = LedgerEntryToken(printers[i]);
             vm.assertEq(printer.getExtension(0), controllerAddress, "Printer controller mismatch");

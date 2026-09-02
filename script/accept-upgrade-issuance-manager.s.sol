@@ -79,7 +79,7 @@ contract AcceptUpgradeIssuanceManagerScript is Script {
         im.upgradeToAndCall(refImplAddr, "");
         console2.log("CyberCorp: %s accepted IssuanceManager upgrade to: %s", corpAddr, refImplAddr);
 
-        vm.assertEq(im.DEPLOY_VERSION(), "4.2", "IssuanceManager version mismatch");
+        vm.assertEq(im.DEPLOY_VERSION(), "5", "IssuanceManager version mismatch");
 
         vm.stopBroadcast();
     }
