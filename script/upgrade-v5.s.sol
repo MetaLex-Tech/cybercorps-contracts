@@ -15,7 +15,6 @@ import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
-import {ParentCoFactory} from "../src/ParentCoFactory.sol";
 
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
@@ -54,7 +53,6 @@ contract UpgradeV5Script is Script {
         address roundManagerFactory;
         address registry;
         address certificateUriBuilder;
-        address parentCoFactory;
         address lexchexMinter;
     }
 
@@ -68,7 +66,6 @@ contract UpgradeV5Script is Script {
         address legalDocRegistry;
         address certificateUriBuilder;
         address pumpCertificateUriBuilder;
-        address parentCoFactory;
         address lexchexMinter;
         address pumpLexchexMinter;
     }
@@ -120,10 +117,6 @@ contract UpgradeV5Script is Script {
         if (block.chainid == BASE) {
             _upgradeProxy(targets.pumpCertificateUriBuilder, impls.certificateUriBuilder, "Pump CertificateUriBuilder");
             _upgradeProxy(targets.pumpLexchexMinter, impls.lexchexMinter, "Pump LeXcheXMinter");
-        }
-        // Zero on Ethereum mainnet, where the proxy already matches HEAD.
-        if (targets.parentCoFactory != address(0)) {
-            _upgradeProxy(targets.parentCoFactory, impls.parentCoFactory, "ParentCoFactory");
         }
         _upgradeProxy(targets.lexchexMinter, impls.lexchexMinter, "LeXcheXMinter");
 
@@ -208,11 +201,7 @@ contract UpgradeV5Script is Script {
 
         if (block.chainid == BASE) {
             targets.pumpCertificateUriBuilder = vm.envAddress("PUMP_CERTIFICATE_URI_BUILDER");
-            targets.parentCoFactory = vm.envAddress("PARENTCO_FACTORY");
             targets.pumpLexchexMinter = vm.envAddress("PUMP_LEXCHEX_MINTER");
-        } else if (block.chainid == BASE_SEPOLIA) {
-            targets.parentCoFactory =
-                vm.envOr("PARENTCO_FACTORY", DeploymentConstants.umia(block.chainid).parentCoFactory);
         }
     }
 
@@ -228,7 +217,6 @@ contract UpgradeV5Script is Script {
         impls.roundManagerFactory = address(new RoundManagerFactory());
         impls.registry = address(new CyberAgreementRegistry());
         impls.certificateUriBuilder = address(new CertificateUriBuilder());
-        impls.parentCoFactory = address(new ParentCoFactory());
         impls.lexchexMinter = address(new LeXcheXMinter());
 
         console2.log("V5 CyberCorpFactory:", impls.cyberCorpFactory);
@@ -242,7 +230,6 @@ contract UpgradeV5Script is Script {
         console2.log("V5 RoundManagerFactory:", impls.roundManagerFactory);
         console2.log("V5 CyberAgreementRegistry:", impls.registry);
         console2.log("V5 CertificateUriBuilder:", impls.certificateUriBuilder);
-        console2.log("V5 ParentCoFactory:", impls.parentCoFactory);
         console2.log("V5 LeXcheXMinter:", impls.lexchexMinter);
     }
 
