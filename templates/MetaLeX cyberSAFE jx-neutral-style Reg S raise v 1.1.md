@@ -3,11 +3,11 @@
 id: bytes32(uint256(32))
 
 legalURI:
-safeURI: IPFS://bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a
+safeURI: ipfs://bafybeigkcbocfq3p7rscojjej24jajyrhqk6mukgetmlsmyo4f6cp6iqry
 
-combined doc: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a
+combined doc: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeieh7jn553jmrjmwee3dsvwf5hkedomey2vhubc3mumlewfpumvlae)
 
-SAFE alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeifvtc4xupzf3mf6pgtzxsyby2uhxbzuh77cggy4bmgpddaupx5j4i
+SAFE alone: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeifvtc4xupzf3mf6pgtzxsyby2uhxbzuh77cggy4bmgpddaupx5j4i](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeigkcbocfq3p7rscojjej24jajyrhqk6mukgetmlsmyo4f6cp6iqry)
 
 ## Global Fields
 
@@ -18,6 +18,7 @@ SAFE alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeifvtc4xu
 | expirationTime       |         |
 | governingJurisdiction       |          |
 | disputeResolution       |         |
+| customProvisions  | an arbitrary string intended to insert any custom provision the parties agree upon |
 
 ## Party Fields
 
@@ -32,7 +33,12 @@ SAFE alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeifvtc4xu
 
 ## Certificate Extension
 
-none.
+name: SAFEExtension
+```solidity
+struct SAFEData {
+    string customProvisions; // an arbitrary string intended to insert any custom provision the parties agree upon
+}
+```
 
 ## CertificateDetails Struct (for reference)
 
