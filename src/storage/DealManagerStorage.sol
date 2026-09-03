@@ -329,15 +329,25 @@ library DealManagerStorage {
     }
 
     /// @notice Revokes a pending deal
-    /// @dev Access modifiers (if any) are carried by the DealManager wrapper that delegatecalls here.
-    /// TODO(#142): see test_RevokeDeal_VoidingRevokeStrandsEscrowAndCert
+    /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
+    ///      If this request tips the registry agreement into voided (e.g. the sole-signer proposer
+    ///      revokes), the same teardown as signToVoid must run here: voidContractFor rejects repeat
+    ///      requesters, so no later signToVoid could clean up and the escrow would be stranded
+    ///      PENDING with its corp certificates still live.
     function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
         if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
         if(msg.sender != signer) revert IDealManagerStorage.CounterPartyValueMismatch();
-        if(LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PENDING)
-            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
-        else
-            revert IDealManagerStorage.DealNotPending();
+        Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
+        if(deal.status != EscrowStatus.PENDING) revert IDealManagerStorage.DealNotPending();
+
+        address registry = LexScrowStorage.getDealRegistry();
+        ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
+        // The agreement is only voided once enough parties have requested; until then there is nothing to tear down.
+        if (!ICyberAgreementRegistry(registry).isVoided(agreementId)) return;
+
+        _voidCorpCerts(deal);
+        // Effect: update status (the deal is PENDING per the guard above, so there is no payment to refund)
+        LexScrowStorage.voidEscrow(agreementId);
     }
 
     /// @notice Signs to void a deal; refunds if the deal was paid
@@ -366,14 +376,29 @@ library DealManagerStorage {
             LexScrowStorage.voidEscrow(agreementId);
     }
 
-    /// @notice Refund a voided deal
+    /// @notice Sync the escrow of a deal whose agreement was voided externally, refunding if paid
     /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
-    /// TODO(#142): see test_RevertIf_RefundVoidedDeal_PendingDeal
+    ///      Handles PENDING as well as PAID escrows: parties can void the agreement directly in the
+    ///      registry before payment, and requiring PAID here would leave that escrow stranded with
+    ///      its corp certificates still live (voidAndRefund reverts EscrowNotPaid).
     function refundVoidedDeal(bytes32 agreementId) public {
         if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
-        _voidCorpCerts(LexScrowStorage.getEscrow(agreementId));
-        // Interaction: Re-sync Deal Manager internal escrow to VOIDED, then refund
-        LexScrowStorage.voidAndRefund(agreementId);
+        if (!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId))
+            revert LexScrowStorage.DealNotVoided();
+
+        Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
+        if (deal.status == EscrowStatus.PAID) {
+            _voidCorpCerts(deal);
+            // Interaction: Re-sync Deal Manager internal escrow to VOIDED, then refund
+            LexScrowStorage.voidAndRefund(agreementId);
+        } else if (deal.status == EscrowStatus.PENDING) {
+            _voidCorpCerts(deal);
+            // Effect: update status (nothing was paid, so there is nothing to refund)
+            LexScrowStorage.voidEscrow(agreementId);
+        } else {
+            // Already VOIDED (certs already torn down, nothing left to sync) or FINALIZED
+            revert LexScrowStorage.DealVoided();
+        }
     }
 
     /// @dev Teardown shared by every void path: the corp's certificates were minted to this manager at
