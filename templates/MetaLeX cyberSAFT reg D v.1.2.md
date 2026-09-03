@@ -2,11 +2,12 @@
 
 id: bytes32(uint256(24))
 
-combined doc: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4
+legalURI:
+saftURI: ipfs://bafybeid4xqmpm75krujhpzrzh4kvb6r2fjawdo37tbiq7o5kxwix64w5wa
 
-SAFT alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeif7wf53zdhbrcla6wlvvnj3oie4nlv5ojeqaykwiftas3irpdetme
+combined doc: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeieoljri2rwuv35rymjd654sr3u46kbcao7mymseqobfo7x6lxgdcy)
 
-Github: https://github.com/MetaLex-Tech/publicDocs/blob/main/cyberKs/cyberSAFT/MetaLeX%20cyberSAFT%20reg%20D%20v.1.0.pdf
+SAFT alone: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeif7wf53zdhbrcla6wlvvnj3oie4nlv5ojeqaykwiftas3irpdetme](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeid4xqmpm75krujhpzrzh4kvb6r2fjawdo37tbiq7o5kxwix64w5wa)
 
 
 ## Global Fields
@@ -23,6 +24,7 @@ Github: https://github.com/MetaLex-Tech/publicDocs/blob/main/cyberKs/cyberSAFT/M
 | unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
 | unlockingCliffPercentage       | e.g. "10.5%" |
 | unlockingIntervalType       |  "secondly", "hourly", "daily", "monthly", "blockly". Note that this affects both `unlockingPeriod` and `unlockingCliffPeriod`   |
+| customProvisions  | an arbitrary string intended to insert any custom provision the parties agree upon |
 
 
 ## Party Fields
@@ -39,7 +41,7 @@ Github: https://github.com/MetaLex-Tech/publicDocs/blob/main/cyberKs/cyberSAFT/M
 
 ## Certificate Extension
 
-name: TokenWarrantExtension
+name: SAFTExtension
 ```solidity
 struct SAFTData {
     UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be agreementStartTime, tgeTime, or setTime
@@ -48,6 +50,7 @@ struct SAFTData {
     uint256 unlockingCliffPeriod;
     uint256 unlockingCliffPercentage;
     UnlockingIntervalType unlockingIntervalType; - // blockly, secondly, daily, weekly, monthly
+    string customProvisions; // an arbitrary string intended to insert any custom provision the parties agree upon
 }
 ```
 
