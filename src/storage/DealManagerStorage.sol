@@ -330,14 +330,19 @@ library DealManagerStorage {
 
     /// @notice Revokes a pending deal
     /// @dev Access modifiers (if any) are carried by the DealManager wrapper that delegatecalls here.
-    /// TODO(#142): see test_RevokeDeal_VoidingRevokeStrandsEscrowAndCert
     function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
         if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
         if(msg.sender != signer) revert IDealManagerStorage.CounterPartyValueMismatch();
-        if(LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PENDING)
-            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
-        else
-            revert IDealManagerStorage.DealNotPending();
+
+        Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
+        if(deal.status != EscrowStatus.PENDING) revert IDealManagerStorage.DealNotPending();
+
+        address registry = LexScrowStorage.getDealRegistry();
+        ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
+        if (!ICyberAgreementRegistry(registry).isVoided(agreementId)) return;
+
+        _voidCorpCerts(deal);
+        LexScrowStorage.voidEscrow(agreementId);
     }
 
     /// @notice Signs to void a deal; refunds if the deal was paid
