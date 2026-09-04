@@ -220,10 +220,25 @@ library CertificateImageBuilder {
     }
 
     function _timestampToDate(uint256 timestamp) private pure returns (string memory) {
-        uint256 day = ((timestamp / 86400) % 31) + 1;
-        uint256 month = ((timestamp / 2629743) % 12) + 1;
-        uint256 year = (timestamp / 31556926) + 1970;
+        (uint256 year, uint256 month, uint256 day) = _civilFromDays(timestamp / 86400);
         return string(abi.encodePacked(_uintToString(month), '/', _uintToString(day), '/', _uintToString(year)));
+    }
+
+    /// @dev Converts days since the Unix epoch to a Gregorian calendar date.
+    function _civilFromDays(uint256 daysSinceEpoch)
+        private
+        pure
+        returns (uint256 year, uint256 month, uint256 day)
+    {
+        uint256 z = daysSinceEpoch + 719468;
+        uint256 era = z / 146097;
+        uint256 doe = z % 146097;
+        uint256 yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        uint256 doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        uint256 mp = (5 * doy + 2) / 153;
+        day = doy - (153 * mp + 2) / 5 + 1;
+        month = mp < 10 ? mp + 3 : mp - 9;
+        year = yoe + era * 400 + (month <= 2 ? 1 : 0);
     }
 
     function _uintToString(uint256 _i) private pure returns (string memory) {

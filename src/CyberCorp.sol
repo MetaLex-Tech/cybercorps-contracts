@@ -97,6 +97,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
     event CyberCORPExtensionSet(address indexed extension, bytes32 indexed extensionType);
     event CyberCORPExtensionDataUpdated(bytes32 indexed extensionType, bytes extensionData);
+    event IssuanceManagerUpdated(address indexed oldIssuanceManager, address indexed newIssuanceManager);
+    event DealManagerUpdated(address indexed oldDealManager, address indexed newDealManager);
+    event RoundManagerUpdated(address indexed oldRoundManager, address indexed newRoundManager);
 
     error NotRefImplementation();
     error SignatureRequired();
@@ -176,21 +179,27 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @dev Only callable by owner
     /// @param _issuanceManager New issuance manager contract address
     function setIssuanceManager(address _issuanceManager) external onlyOwner() {
+        address oldIssuanceManager = issuanceManager;
         issuanceManager = _issuanceManager;
+        emit IssuanceManagerUpdated(oldIssuanceManager, _issuanceManager);
     }
 
     /// @notice Updates the deal manager address
     /// @dev Only callable by owner
     /// @param _dealManager New deal manager contract address
     function setDealManager(address _dealManager) external onlyOwner() {
+        address oldDealManager = dealManager;
         dealManager = _dealManager;
+        emit DealManagerUpdated(oldDealManager, _dealManager);
     }
 
     /// @notice Updates the round manager address
     /// @dev Only callable by owner
     /// @param _roundManager New round manager contract address
     function setRoundManager(address _roundManager) external onlyOwner() {
+        address oldRoundManager = roundManager;
         roundManager = _roundManager;
+        emit RoundManagerUpdated(oldRoundManager, _roundManager);
     }
 
     /// @notice Checks if an address belongs to a company officer
