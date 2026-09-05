@@ -250,8 +250,10 @@ signature, and what goes to public IPFS, is
 The Tokenization Hub is the company's securities console. It requires you
 to connect your wallet, **Authenticate**, and be an owner of the cyberCORP.
 
-The records here are not a copy of the official record — **they are the
-official record**.
+The Tokenization Hub displays and manages the company's onchain securities
+records. For a cyberCORP whose governing documents designate the Tokenized
+Stock Ledger System as its official stock ledger, these records form part of
+that ledger. The app does not infer that legal status from tokenization alone.
 
 ### Security Classes
 
