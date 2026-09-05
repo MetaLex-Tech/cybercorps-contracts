@@ -87,6 +87,12 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     bytes32 public extensionType;
     /// @notice Raw extension payload interpreted by the active extension contract
     bytes public extensionData;
+    /// @notice Board state is appended after the extension fields for proxy
+    /// storage compatibility (extension fields are the released layout).
+    CompanyDirector[] public companyDirectors;
+    mapping(address => bool) public boardMembers;
+    mapping(address => bool) public officerMembers;
+    bool public boardGovernanceEnforced;
 
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
@@ -97,6 +103,10 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
     event CyberCORPExtensionSet(address indexed extension, bytes32 indexed extensionType);
     event CyberCORPExtensionDataUpdated(bytes32 indexed extensionType, bytes extensionData);
+    event DirectorAdded(address indexed director, uint256 index);
+    event DirectorRemoved(address indexed director, uint256 index);
+    event BoardGovernanceActivated(address indexed initialDirector);
+    event BoardAuthorityAdapterUpdated(address indexed adapter);
 
     error NotRefImplementation();
     error SignatureRequired();
@@ -106,6 +116,43 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     error InvalidExtension();
     error ExtensionTypeNotSupported();
     error ExtensionNotConfigured();
+    error BoardGovernanceNotEnforced();
+    error BoardGovernanceAlreadyEnforced();
+    error RoleManagerNotCyberCorp();
+    error InvalidOfficer();
+    error InvalidDirector();
+    error DuplicateDirector();
+    error LastOfficer();
+    error LastDirector();
+
+    /// @dev Modifier bodies are inlined at every use site; sharing one private function keeps
+    /// this contract under the EIP-170 runtime size limit (same pattern as IssuanceManager).
+    function _requireBoardAuthority() private view {
+        if (boardGovernanceEnforced) {
+            AUTH.onlyRole(AUTH.BOARD_ROLE(), msg.sender);
+        } else {
+            // Explicit legacy compatibility. This is not described as Board
+            // enforcement by the app or plans.
+            AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
+        }
+    }
+
+    function _requireEnforcedBoard() private view {
+        if (!boardGovernanceEnforced) {
+            revert BoardGovernanceNotEnforced();
+        }
+        AUTH.onlyRole(AUTH.BOARD_ROLE(), msg.sender);
+    }
+
+    modifier onlyBoardAuthority() {
+        _requireBoardAuthority();
+        _;
+    }
+
+    modifier onlyEnforcedBoard() {
+        _requireEnforcedBoard();
+        _;
+    }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -136,6 +183,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         address _roundManager
     ) public initializer {
         __BorgAuthACL_init(_auth);
+        // A zero founder would be seeded as the sole director and, after the one-way
+        // role-manager lock, no usable account could ever pass onlyEnforcedBoard again.
+        if (_officer.eoa == address(0)) revert InvalidOfficer();
 
         cyberCORPName = _cyberCORPName;
         cyberCORPType = _cyberCORPType;
@@ -145,8 +195,46 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         issuanceManager = _issuanceManager;
         companyPayable = _companyPayable;
         companyOfficers.push(_officer);
+        officerMembers[_officer.eoa] = true;
+        companyDirectors.push(
+            CompanyDirector({
+                eoa: _officer.eoa,
+                name: _officer.name,
+                contact: _officer.contact
+            })
+        );
+        boardMembers[_officer.eoa] = true;
         upgradeFactory = _upgradeFactory;
         roundManager = _roundManager;
+    }
+
+    /// @notice Finalizes the one-way BorgAuth role-manager handoff for a newly
+    ///         deployed corp and promotes the founder to the Board role.
+    /// @dev Permissionless to call because it can only succeed after BorgAuth
+    ///      has irrevocably selected this CyberCorp as its role manager.
+    function activateBoardGovernance() external {
+        if (boardGovernanceEnforced) {
+            revert BoardGovernanceAlreadyEnforced();
+        }
+        // Claim the one-way role-manager lock from the corp's own authority (this corp holds
+        // role 200, which clears BorgAuth's owner threshold). Claiming corp-side lets the
+        // deploying factory revoke its own deploy-time owner role BEFORE activation — otherwise
+        // the lock would freeze the upgradeable factory's cross-corp privilege in place forever.
+        // Legacy corps cannot be hijacked through this permissionless path: they have no
+        // directors (appended storage reads empty), so the LastDirector guard below rejects them.
+        if (AUTH.roleManager() == address(0)) {
+            AUTH.setRoleManager(address(this));
+        } else if (AUTH.roleManager() != address(this)) {
+            revert RoleManagerNotCyberCorp();
+        }
+        if (companyDirectors.length == 0) revert LastDirector();
+
+        address initialDirector = companyDirectors[0].eoa;
+        if (AUTH.userRoles(initialDirector) < AUTH.BOARD_ROLE()) {
+            AUTH.updateRole(initialDirector, AUTH.BOARD_ROLE());
+        }
+        boardGovernanceEnforced = true;
+        emit BoardGovernanceActivated(initialDirector);
     }
 
     /// @notice Updates the corporation's basic details
@@ -162,7 +250,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         string memory _cyberCORPJurisdiction,
         string memory _cyberCORPContactDetails,
         string memory _defaultDisputeResolution
-    ) external onlyOwner() {
+    ) external onlyBoardAuthority {
         cyberCORPName = _cyberCORPName;
         cyberCORPType = _cyberCORPType;
         cyberCORPJurisdiction = _cyberCORPJurisdiction;
@@ -175,74 +263,156 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @notice Updates the issuance manager address
     /// @dev Only callable by owner
     /// @param _issuanceManager New issuance manager contract address
-    function setIssuanceManager(address _issuanceManager) external onlyOwner() {
+    function setIssuanceManager(
+        address _issuanceManager
+    ) external onlyBoardAuthority {
+        address previous = issuanceManager;
         issuanceManager = _issuanceManager;
+        _rotateManagerRole(previous, _issuanceManager);
     }
 
     /// @notice Updates the deal manager address
     /// @dev Only callable by owner
     /// @param _dealManager New deal manager contract address
-    function setDealManager(address _dealManager) external onlyOwner() {
+    function setDealManager(address _dealManager) external onlyBoardAuthority {
+        address previous = dealManager;
         dealManager = _dealManager;
+        _rotateManagerRole(previous, _dealManager);
     }
 
     /// @notice Updates the round manager address
     /// @dev Only callable by owner
     /// @param _roundManager New round manager contract address
-    function setRoundManager(address _roundManager) external onlyOwner() {
+    function setRoundManager(
+        address _roundManager
+    ) external onlyBoardAuthority {
+        address previous = roundManager;
         roundManager = _roundManager;
+        _rotateManagerRole(previous, _roundManager);
+    }
+
+    /// @dev On a corp that is BorgAuth's role manager, swapping a manager pointer must rotate
+    ///      the AUTH role with it: the factory granted the original managers OWNER_ROLE and then
+    ///      irreversibly locked role mutation to this corp, so without rotation a replacement
+    ///      manager cannot make owner-gated cross-manager calls while the superseded one stays
+    ///      privileged forever. Runs after the pointer update so the still-referenced check sees
+    ///      the new state — an address that still serves as another manager keeps its role
+    ///      (tests and early corps have pointed two slots at one contract). Legacy corps without
+    ///      the role-manager lock keep their historical behavior: BorgAuth's owner rotates roles
+    ///      directly.
+    function _rotateManagerRole(address previousManager, address newManager) private {
+        if (!_isRoleManagedByThisCorp()) return;
+        if (previousManager == newManager) return;
+        if (
+            previousManager != address(0) && previousManager != issuanceManager
+                && previousManager != dealManager && previousManager != roundManager
+        ) {
+            // Restore the residual role rather than zeroing: a superseded manager address that
+            // also holds a director or officer seat keeps that seat's authority.
+            _restoreResidualIfLifecycleRole(previousManager, AUTH.OWNER_ROLE());
+        }
+        // Grant only when the address does not already satisfy the owner threshold. BorgAuth
+        // stores a single role per user and officers (200) / directors (300) already clear the
+        // numeric owner gate (99), so overwriting would demote a roster seat — a sole director
+        // pointing a manager slot at themselves must not lose Board authority.
+        if (newManager != address(0) && AUTH.userRoles(newManager) < AUTH.OWNER_ROLE()) {
+            AUTH.updateRole(newManager, AUTH.OWNER_ROLE());
+        }
+    }
+
+    /// @dev Roster and manager mutations only rewrite a role their own lifecycle granted (the
+    ///      exact seat value); anything else — e.g. a pre-lock custom grant on a legacy corp —
+    ///      is left untouched, so removing a seat cannot clobber authority the lifecycle never
+    ///      issued. Within that rule the departing address falls back to its residual
+    ///      entitlement below.
+    function _restoreResidualIfLifecycleRole(address account, uint256 lifecycleRole) private {
+        if (AUTH.userRoles(account) == lifecycleRole) {
+            AUTH.updateRole(account, _residualRole(account));
+        }
+    }
+
+    /// @dev The role an address is entitled to from its REMAINING seats, evaluated after the
+    ///      roster mutation: roster seats dominate (300/200 both clear the owner threshold), and
+    ///      an address still referenced by a manager pointer keeps OWNER_ROLE — removing a
+    ///      roster seat must not strip manager access, mirroring how pointer rotation preserves
+    ///      roster authority. BorgAuth stores one role per user, so every role write must fold
+    ///      all of an address's capacities into one number.
+    function _residualRole(address account) private view returns (uint256) {
+        if (boardMembers[account]) return AUTH.BOARD_ROLE();
+        if (officerMembers[account]) return AUTH.OFFICER_ROLE();
+        if (account == issuanceManager || account == dealManager || account == roundManager) {
+            return AUTH.OWNER_ROLE();
+        }
+        return 0;
+    }
+
+    /// @dev Probed, not called directly: a legacy corp upgraded to this implementation keeps its
+    ///      immutable pre-lock BorgAuth, which has no roleManager() selector — a direct call
+    ///      would revert every manager setter on exactly the corps the legacy fallback exists
+    ///      for. Missing selector reads as "not role-managed", so those corps keep their
+    ///      historical direct-role-administration behavior.
+    function _isRoleManagedByThisCorp() private view returns (bool) {
+        (bool ok, bytes memory ret) = address(AUTH).staticcall(abi.encodeWithSignature("roleManager()"));
+        return ok && ret.length >= 32 && abi.decode(ret, (address)) == address(this);
     }
 
     /// @notice Checks if an address belongs to a company officer
     /// @param _address Address to check
     /// @return bool True if the address belongs to an officer
     function isCyberCORPOfficer(address _address) external view returns (bool) {
-        return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
-    }
-
-    /// @notice Checks whether an EOA is listed as an officer at any index other than `_skipIndex`
-    /// @dev Pass type(uint256).max as `_skipIndex` to scan the whole array
-    function _isOfficerAtOtherIndex(address _eoa, uint256 _skipIndex) internal view returns (bool) {
-        for (uint256 i = 0; i < companyOfficers.length; i++) {
-            if (i != _skipIndex && companyOfficers[i].eoa == _eoa) return true;
+        if (!boardGovernanceEnforced) {
+            return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
         }
-        return false;
+        return officerMembers[_address];
     }
 
-    /// @dev Grants the standard officer role without downgrading a higher custom role
-    function _grantOfficerRole(address _eoa) internal {
-        if (AUTH.userRoles(_eoa) < 200) AUTH.updateRole(_eoa, 200);
+    function isCyberCORPDirector(address account) external view returns (bool) {
+        return boardMembers[account];
     }
 
-    /// @dev Revokes only the standard officer role; custom roles set outside the
-    /// officer lifecycle (anything other than exactly 200) are left untouched
-    function _revokeOfficerRole(address _eoa) internal {
-        if (AUTH.userRoles(_eoa) == 200) AUTH.updateRole(_eoa, 0);
+    function getCompanyOfficerCount() external view returns (uint256) {
+        return companyOfficers.length;
+    }
+
+    function getCompanyDirectorCount() external view returns (uint256) {
+        return companyDirectors.length;
     }
 
     /// @notice Adds a new officer to the company
-    /// @dev Only callable by owner, sets officer role to 200
+    /// @dev Board authority (P1); the roster mapping is the duplicate check, and the role grant
+    /// never downgrades an address already holding a higher role.
     /// @param _officer Officer details including address and role
-    function addOfficer(CompanyOfficer memory _officer) external onlyOwner() {
-        if (_isOfficerAtOtherIndex(_officer.eoa, type(uint256).max)) revert DuplicateOfficer();
+    function addOfficer(CompanyOfficer memory _officer) external onlyBoardAuthority {
+        if (_officer.eoa == address(0)) revert InvalidOfficer();
+        if (officerMembers[_officer.eoa]) revert DuplicateOfficer();
         companyOfficers.push(_officer);
-        _grantOfficerRole(_officer.eoa);
+        officerMembers[_officer.eoa] = true;
+        if (AUTH.userRoles(_officer.eoa) < AUTH.OFFICER_ROLE()) {
+            AUTH.updateRole(_officer.eoa, AUTH.OFFICER_ROLE());
+        }
         emit OfficerAdded(_officer.eoa, companyOfficers.length - 1);
     }
 
     /// @notice Updates an existing officer's details by index
-    /// @dev Only callable by owner. If the EOA changes, revokes the old role and grants the new one
+    /// @dev Board authority (P1); when the EOA changes, roster membership and AUTH roles rotate
+    /// with it — the departing address falls back to its residual role (board seat, manager
+    /// pointer, or nothing) and the incoming address is raised to OFFICER_ROLE only if it does
+    /// not already hold a higher role.
     /// @param _index Index of the officer to update
     /// @param _officer Updated officer details including address and role
-    function updateOfficer(uint256 _index, CompanyOfficer memory _officer) external onlyOwner() {
+    function updateOfficer(uint256 _index, CompanyOfficer memory _officer) external onlyBoardAuthority {
         if (_index >= companyOfficers.length) revert InvalidOfficerIndex();
+        if (_officer.eoa == address(0)) revert InvalidOfficer();
 
         address oldEOA = companyOfficers[_index].eoa;
         if (oldEOA != _officer.eoa) {
-            if (_isOfficerAtOtherIndex(_officer.eoa, _index)) revert DuplicateOfficer();
-            // Legacy state may hold duplicates; keep the role while another entry lists this EOA
-            if (!_isOfficerAtOtherIndex(oldEOA, _index)) _revokeOfficerRole(oldEOA);
-            _grantOfficerRole(_officer.eoa);
+            if (officerMembers[_officer.eoa]) revert DuplicateOfficer();
+            officerMembers[oldEOA] = false;
+            officerMembers[_officer.eoa] = true;
+            _restoreResidualIfLifecycleRole(oldEOA, AUTH.OFFICER_ROLE());
+            if (AUTH.userRoles(_officer.eoa) < AUTH.OFFICER_ROLE()) {
+                AUTH.updateRole(_officer.eoa, AUTH.OFFICER_ROLE());
+            }
         }
 
         companyOfficers[_index] = _officer;
@@ -252,31 +422,96 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @notice Removes an officer by their address
     /// @dev Only callable by owner, revokes officer role
     /// @param _address Address of the officer to remove
-    function removeOfficer(address _address) external onlyOwner() {
+    function removeOfficer(address _address) external onlyBoardAuthority {
+        if (!officerMembers[_address]) revert InvalidOfficer();
+        if (companyOfficers.length == 1) revert LastOfficer();
         for (uint256 i = 0; i < companyOfficers.length; i++) {
             if (companyOfficers[i].eoa == _address) {
                 companyOfficers[i] = companyOfficers[companyOfficers.length - 1];
                 companyOfficers.pop();
-                if (!_isOfficerAtOtherIndex(_address, type(uint256).max)) _revokeOfficerRole(_address);
+                officerMembers[_address] = false;
+                _restoreResidualIfLifecycleRole(_address, AUTH.OFFICER_ROLE());
                 emit OfficerRemoved(_address, i);
-                break;
+                return;
             }
         }
+        revert InvalidOfficer();
     }
 
     /// @notice Removes an officer by their index in the officers array
     /// @dev Only callable by owner, revokes officer role
     /// @param _index Index of the officer to remove
-    function removeOfficerAt(uint256 _index) external onlyOwner() {
-        require(_index < companyOfficers.length, "Index out of bounds");
+    function removeOfficerAt(uint256 _index) external onlyBoardAuthority {
+        if (_index >= companyOfficers.length) revert InvalidOfficer();
+        if (companyOfficers.length == 1) revert LastOfficer();
         address officerEOA = companyOfficers[_index].eoa;
         companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
         companyOfficers.pop();
-        if (!_isOfficerAtOtherIndex(officerEOA, type(uint256).max)) _revokeOfficerRole(officerEOA);
+        officerMembers[officerEOA] = false;
+        _restoreResidualIfLifecycleRole(officerEOA, AUTH.OFFICER_ROLE());
         emit OfficerRemoved(officerEOA, _index);
     }
 
-    function setCompanyPayable(address _companyPayable) external onlyOwner() {
+    function addDirector(
+        CompanyDirector calldata director
+    ) external onlyEnforcedBoard {
+        if (director.eoa == address(0)) revert InvalidDirector();
+        if (boardMembers[director.eoa]) revert DuplicateDirector();
+        companyDirectors.push(director);
+        boardMembers[director.eoa] = true;
+        if (AUTH.userRoles(director.eoa) < AUTH.BOARD_ROLE()) {
+            AUTH.updateRole(director.eoa, AUTH.BOARD_ROLE());
+        }
+        emit DirectorAdded(director.eoa, companyDirectors.length - 1);
+    }
+
+    function removeDirector(address director) external onlyEnforcedBoard {
+        if (!boardMembers[director]) revert InvalidDirector();
+        if (companyDirectors.length == 1) revert LastDirector();
+        for (uint256 i = 0; i < companyDirectors.length; i++) {
+            if (companyDirectors[i].eoa == director) {
+                companyDirectors[i] =
+                    companyDirectors[companyDirectors.length - 1];
+                companyDirectors.pop();
+                boardMembers[director] = false;
+                _restoreResidualIfLifecycleRole(director, AUTH.BOARD_ROLE());
+                emit DirectorRemoved(director, i);
+                return;
+            }
+        }
+        revert InvalidDirector();
+    }
+
+    function removeDirectorAt(uint256 index) external onlyEnforcedBoard {
+        if (index >= companyDirectors.length) revert InvalidDirector();
+        if (companyDirectors.length == 1) revert LastDirector();
+        address director = companyDirectors[index].eoa;
+        companyDirectors[index] =
+            companyDirectors[companyDirectors.length - 1];
+        companyDirectors.pop();
+        boardMembers[director] = false;
+        _restoreResidualIfLifecycleRole(director, AUTH.BOARD_ROLE());
+        emit DirectorRemoved(director, index);
+    }
+
+    /// @notice Connects a stockholder-governance executor (or other
+    ///         IAuthAdapter) to Board authority.
+    function setBoardAuthorityAdapter(
+        address adapter
+    ) external onlyEnforcedBoard {
+        AUTH.setRoleAdapter(AUTH.BOARD_ROLE(), adapter);
+        emit BoardAuthorityAdapterUpdated(adapter);
+    }
+
+    // NOTE deliberately absent: no wrapper for BorgAuth.initTransferOwnership. Accepting that
+    // handoff grants the recipient a raw OWNER_ROLE outside the roster/manager model, which the
+    // role-manager lock then makes irrevocable — no residual-role rotation covers it and the
+    // corp exposes no raw revocation. Every legitimate authority is expressible as a roster
+    // seat (director/officer) or a manager pointer, all of which rotate and revoke properly.
+
+    function setCompanyPayable(
+        address _companyPayable
+    ) external onlyBoardAuthority {
         address oldCompanyPayable = companyPayable;
         companyPayable = _companyPayable;
         emit CompanyPayableUpdated(companyPayable, oldCompanyPayable);
@@ -323,7 +558,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     function setExtension(
         address _extension,
         bytes32 _extensionType
-    ) external onlyOwner {
+    ) external onlyBoardAuthority {
         if (_extension == address(0)) {
             if (_extensionType != bytes32(0)) revert InvalidExtension();
             extension = address(0);
@@ -347,14 +582,14 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     }
 
     /// @notice Update the raw extension payload for the active CyberCorp extension
-    function setExtensionData(bytes calldata _extensionData) external onlyOwner {
+    function setExtensionData(bytes calldata _extensionData) external onlyBoardAuthority {
         if (extension == address(0)) revert ExtensionNotConfigured();
         extensionData = _extensionData;
         emit CyberCORPExtensionDataUpdated(extensionType, _extensionData);
     }
 
     /// @notice Clear the active CyberCorp extension and any stored extension data
-    function clearExtension() external onlyOwner {
+    function clearExtension() external onlyBoardAuthority {
         extension = address(0);
         extensionType = bytes32(0);
         delete extensionData;
@@ -377,7 +612,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
     function _authorizeUpgrade(
         address newImplementation
-    ) internal override onlyOwner {
+    ) internal override onlyBoardAuthority {
         if(
             ICyberCorpSingleFactory(upgradeFactory).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();

@@ -3806,9 +3806,11 @@ contract CyberCorpForkTest is Test {
         CyberCorp cyberCorp = CyberCorp(cyberCorpAddr);
         BorgAuth corpAuth = BorgAuth(authAddr);
 
-        // Must be a factory-deployed corp: AUTH owner is CyberCorpFactory, and factory grants CyberCorp role 200
+        // Factory-deployed corp under the P1 model: the factory revoked its deploy-time owner
+        // role before activation, and the corp holds the one-way role-manager lock.
         assertEq(address(cyberCorp.AUTH()), authAddr);
-        assertEq(corpAuth.userRoles(address(cyberCorpFactory)), corpAuth.OWNER_ROLE());
+        assertEq(corpAuth.userRoles(address(cyberCorpFactory)), 0, "factory must be revoked at deploy");
+        assertEq(corpAuth.roleManager(), cyberCorpAddr, "corp must hold the role-manager lock");
         assertEq(corpAuth.userRoles(address(cyberCorp)), 200);
         assertGe(corpAuth.userRoles(address(cyberCorp)), corpAuth.OWNER_ROLE());
 
@@ -3887,19 +3889,21 @@ contract CyberCorpForkTest is Test {
             1, CompanyOfficer({eoa: testAddress, name: "Dup", contact: "dup@example.com", title: "CTO"})
         );
 
-        // Give the next officer a custom role above 200 before adding them;
-        // officer lifecycle must not downgrade it (testAddress has role 200 >= OWNER_ROLE)
+        // Under the P1 role-manager lock, custom roles cannot be granted post-deploy at all —
+        // only the corp may mutate roles, through its roster/manager lifecycles. (Custom-role
+        // preservation on pre-lock grants is covered in CyberCorpBoardAuthorityTest.)
+        vm.expectRevert(
+            abi.encodeWithSelector(BorgAuth.BorgAuth_NotRoleManager.selector, testAddress)
+        );
         corpAuth.updateRole(customRoleOfficer, 500);
+
+        // Replacing officerB rotates roles through the lifecycle: officerB held exactly 200
+        // (granted via addOfficer), so it is revoked to its residual (nothing).
         cyberCorp.updateOfficer(
             1, CompanyOfficer({eoa: customRoleOfficer, name: "Custom", contact: "c@example.com", title: "CTO"})
         );
-        assertEq(corpAuth.userRoles(customRoleOfficer), 500, "custom role must not be flattened to 200");
-        // officerB held exactly 200 (granted via addOfficer), so it is revoked
+        assertEq(corpAuth.userRoles(customRoleOfficer), 200, "incoming officer granted the seat role");
         assertEq(corpAuth.userRoles(officerB), 0);
-
-        // Removing the custom-role officer must leave the custom role untouched
-        cyberCorp.removeOfficer(customRoleOfficer);
-        assertEq(corpAuth.userRoles(customRoleOfficer), 500, "custom role must survive removal");
 
         vm.stopPrank();
     }

@@ -9,7 +9,7 @@ import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 /// @dev Upgrade the existing proxy separately on each chain after deployment.
 contract DeployCyberAgreementRegistryScript is Script {
     string internal constant DEFAULT_SALT_STRING =
-        "MetaLex.CyberAgreementRegistry.UpgradeV3.2.0";
+        "MetaLex.CyberAgreementRegistry.UpgradeV3.3.0";
 
     function run() public returns (CyberAgreementRegistry implementation) {
         return

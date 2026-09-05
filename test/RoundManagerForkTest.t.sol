@@ -102,8 +102,9 @@ contract RoundManagerFCFSForkTest is Test {
         );
         RoundManager rm = RoundManager(rmAddr);
 
-        // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
+        // Allow RoundManager to transfer certs by setting it as the corp's dealManager.
+        // The corp is board-governed after factory deploy (P1), so this is a Board action:
+        // this test contract is the founding director and calls directly, not via the factory.
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
@@ -199,8 +200,9 @@ contract RoundManagerFCFSForkTest is Test {
         );
         RoundManager rm = RoundManager(rmAddr);
 
-        // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
+        // Allow RoundManager to transfer certs by setting it as the corp's dealManager.
+        // The corp is board-governed after factory deploy (P1), so this is a Board action:
+        // this test contract is the founding director and calls directly, not via the factory.
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
@@ -360,8 +362,9 @@ contract RoundManagerFCFSForkTest is Test {
         );
         RoundManager rm = RoundManager(rmAddr);
 
-        // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
+        // Allow RoundManager to transfer certs by setting it as the corp's dealManager.
+        // The corp is board-governed after factory deploy (P1), so this is a Board action:
+        // this test contract is the founding director and calls directly, not via the factory.
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
@@ -588,8 +591,7 @@ contract RoundManagerFCFSForkTest is Test {
         );
         RoundManager rmPub = RoundManager(rmAddrPub);
 
-        // Allow RoundManager to transfer certs
-        vm.prank(address(corpFactory));
+        // Allow RoundManager to transfer certs (Board action — see note above)
         CyberCorp(corpPub).setDealManager(address(rmPub));
 
         // Create Public FCFS Round

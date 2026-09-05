@@ -57,6 +57,7 @@ import {ILexChexBadge} from "../interfaces/ILexChexBadge.sol";
 import {LookThroughPolicy} from "../libs/policies/LookThroughPolicy.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
+import "../interfaces/IShareClassTermsController.sol";
 import "./extensions/ICertificateExtension.sol";
 import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
 
@@ -1064,6 +1065,30 @@ library LedgerEntryTokenStorage {
     // Extension management
     function setExtension(uint256 tokenId, address extension) internal {
         cyberCertStorage().extension = extension;
+    }
+
+    /// @dev Keeps the class-terms controller's issuedUnits in sync with void/unvoid, whoever calls
+    ///      it (IssuanceManager, DealManager teardown, or an admin directly on the token). MUST run
+    ///      BEFORE the status flip: release reads the pre-void active units and requires the lot
+    ///      not yet voided; restore requires it still voided.
+    ///      Detection is exact — only an extension that answers getClassTerms (and is configured)
+    ///      is a controller. A plain ShareExtension fails the staticcall and is skipped, so
+    ///      unmigrated legacy printers keep voiding without class-terms accounting rather than
+    ///      bricking. Once a controller is installed the calls are strict: a restore that would
+    ///      breach authorizedShares reverts the unvoid instead of bypassing the cap.
+    function syncClassTermsOnVoidStatus(uint256 tokenId, bool voiding) external {
+        address ext = cyberCertStorage().extension;
+        if (ext == address(0) || ext.code.length == 0) return;
+        (bool ok, bytes memory ret) =
+            ext.staticcall(abi.encodeCall(IShareClassTermsController.getClassTerms, (address(this))));
+        if (!ok || ret.length < 160) return;
+        (,,,, bool configured) = abi.decode(ret, (bytes, bytes32, uint256, uint256, bool));
+        if (!configured) return;
+        if (voiding) {
+            IShareClassTermsController(ext).releaseCertificateUnits(address(this), tokenId);
+        } else {
+            IShareClassTermsController(ext).restoreCertificateUnits(address(this), tokenId);
+        }
     }
 
     function getExtension(uint256 tokenId) internal view returns (address) {

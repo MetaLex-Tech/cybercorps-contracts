@@ -26,6 +26,7 @@ import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpCon
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
+import {ShareClassTermsController} from "../src/storage/extensions/ShareClassTermsController.sol";
 import {
     ShareExtension,
     ShareCertData,
@@ -83,6 +84,7 @@ contract ShareExtensionForkTest is Test {
     LedgerEntryToken internal certPrinter;
     CertificateUriBuilder internal uriBuilder;
     ShareExtension internal shareExtension;
+    ShareClassTermsController internal classTermsController;
     ShareExtensionLogic internal shareLogic;
     MockPaymentToken internal paymentToken;
 
@@ -119,7 +121,7 @@ contract ShareExtensionForkTest is Test {
 
     function testSetUp_MintsSeriesAShareCertThroughFactoryRoundFlow() public {
         assertEq(certPrinter.totalSupply(), 1);
-        assertEq(certPrinter.getExtension(tokenId), address(shareExtension));
+        assertEq(certPrinter.getExtension(tokenId), address(classTermsController));
         assertEq(keccak256(certPrinter.getExtensionData(tokenId)), keccak256(initialShareData));
 
         CertificateDetails memory details = certPrinter.getCertificateDetails(tokenId);
@@ -403,6 +405,14 @@ contract ShareExtensionForkTest is Test {
             address(new ShareExtension()),
             abi.encodeWithSelector(ShareExtension.initialize.selector, address(extensionAuth))
         )));
+        // P2: share printers carry the class-terms controller as their extension; it delegates
+        // rendering/parsing to the ShareExtension and auto-configures canonical terms on first
+        // mint. A bare ShareExtension printer is the unmigrated-legacy config the upgraded
+        // IssuanceManager deliberately fails closed on.
+        classTermsController = ShareClassTermsController(address(new ERC1967Proxy(
+            address(new ShareClassTermsController()),
+            abi.encodeCall(ShareClassTermsController.initialize, (address(extensionAuth), address(shareExtension)))
+        )));
         shareLogic = new ShareExtensionLogic();
     }
 
@@ -485,7 +495,7 @@ contract ShareExtensionForkTest is Test {
             uri: "ipfs://series-a-cert",
             securityClass: SecurityClass.PreferredStock,
             securitySeries: SecuritySeries.SeriesA,
-            extension: address(shareExtension),
+            extension: address(classTermsController),
             seriesData: bytes(""),
             defaultLegend: legend
         });

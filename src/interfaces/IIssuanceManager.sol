@@ -1,32 +1,32 @@
-/*    .o.                                                                                             
-     .888.                                                                                            
-    .8"888.                                                                                           
-   .8' `888.                                                                                          
-  .88ooo8888.                                                                                         
- .8'     `888.                                                                                        
-o88o     o8888o                                                                                       
-                                                                                                      
-                                                                                                      
-                                                                                                      
-ooo        ooooo               .             ooooo                  ooooooo  ooooo                    
-`88.       .888'             .o8             `888'                   `8888    d8'                     
- 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P                       
- 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'                        
- 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.                       
- 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b                      
-o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o                    
-                                                                                                      
-                                                                                                      
-                                                                                                      
-  .oooooo.                .o8                            .oooooo.                                     
- d8P'  `Y8b              "888                           d8P'  `Y8b                                    
-888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
-888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
-888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
-`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
- `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
-             .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+/*    .o.
+     .888.
+    .8"888.
+   .8' `888.
+  .88ooo8888.
+ .8'     `888.
+o88o     o8888o
+
+
+
+ooo        ooooo               .             ooooo                  ooooooo  ooooo
+`88.       .888'             .o8             `888'                   `8888    d8'
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o
+
+
+
+  .oooooo.                .o8                            .oooooo.
+ d8P'  `Y8b              "888                           d8P'  `Y8b
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o.
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
+             .o..P'                                                                     888
+             `Y8P'                                                                     o888o
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -34,9 +34,9 @@ are copyright MetaLeX Labs, Inc., a Delaware corporation.
 
 All rights reserved.
 
-The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published, 
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published,
 distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
-mechanical, including photocopying, recording, or by any information storage and retrieval system, 
+mechanical, including photocopying, recording, or by any information storage and retrieval system,
 except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
@@ -71,11 +71,7 @@ interface IIssuanceManager {
         string certificateUri
     );
     event CertificateCreated(
-        uint256 indexed tokenId,
-        address indexed certificate,
-        uint256 amount,
-        uint256 cap,
-        CertificateDetails details
+        uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details
     );
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
     event CertPrinterBeaconImplementationUpgraded(address implementation);
@@ -101,12 +97,7 @@ interface IIssuanceManager {
     );
 
     // Issuance Manager Functions
-    function initialize(
-        address _auth,
-        address _CORP,
-        address _uriBuilder,
-        address _upgradeFactory
-    ) external;
+    function initialize(address _auth, address _CORP, address _uriBuilder, address _upgradeFactory) external;
 
     function createCertPrinter(
         string[] memory _ledger,
@@ -119,11 +110,26 @@ interface IIssuanceManager {
         bytes memory _seriesData
     ) external returns (address);
 
-    function createCert(
-        address certAddress,
-        address to,
-        CertificateDetails memory _details
-    ) external returns (uint256);
+    function createCertPrinterWithClassTerms(
+        string[] memory _ledger,
+        string memory _name,
+        string memory _ticker,
+        string memory _certificateUri,
+        SecurityClass _securityType,
+        SecuritySeries _securitySeries,
+        address _extension,
+        bytes calldata _extensionData
+    ) external returns (address);
+
+    function migrateClassTermsControllers(
+        address[] calldata certAddresses,
+        address controller,
+        bytes[] calldata extensionData
+    ) external;
+
+    function amendClassTerms(address certAddress, bytes calldata extensionData) external;
+
+    function createCert(address certAddress, address to, CertificateDetails memory _details) external returns (uint256);
 
     function assignCert(
         address certAddress,
@@ -134,11 +140,9 @@ interface IIssuanceManager {
         string memory investorName
     ) external;
 
-    function createCertAndAssign(
-        address certAddress,
-        address investor,
-        CertificateDetails memory _details
-    ) external returns (uint256 tokenId);
+    function createCertAndAssign(address certAddress, address investor, CertificateDetails memory _details)
+        external
+        returns (uint256 tokenId);
 
     function createCertAndAssignWithName(
         address certAddress,
@@ -161,15 +165,11 @@ interface IIssuanceManager {
 
     function getUpgradeFactory() external view returns (address);
 
-    function upgradeCertPrinterBeaconImplementation(
-        address _newImplementation
-    ) external;
+    function upgradeCertPrinterBeaconImplementation(address _newImplementation) external;
 
     function getCertPrinterBeaconImplementation() external view returns (address);
 
-    function upgradeScripBeaconImplementation(
-        address _newImplementation
-    ) external;
+    function upgradeScripBeaconImplementation(address _newImplementation) external;
 
     function getScripBeaconImplementation() external view returns (address);
 
@@ -188,31 +188,15 @@ interface IIssuanceManager {
         bool enableFreeze
     ) external returns (address);
 
-    function scripifyCert(
-        address certAddress,
-        uint256 id,
-        uint256 amount,
-        address recipient
-    ) external;
+    function scripifyCert(address certAddress, uint256 id, uint256 amount, address recipient) external;
 
-    function setScripRatio(
-        address certAddress,
-        uint256 numerator,
-        uint256 denominator
-    ) external;
+    function setScripRatio(address certAddress, uint256 numerator, uint256 denominator) external;
 
-    function getScripRatio(
-        address certAddress
-    ) external view returns (uint256 numerator, uint256 denominator);
+    function getScripRatio(address certAddress) external view returns (uint256 numerator, uint256 denominator);
 
-    function setScripToCertMinimum(
-        address certAddress,
-        uint256 minimum
-    ) external;
+    function setScripToCertMinimum(address certAddress, uint256 minimum) external;
 
-    function getScripToCertMinimum(
-        address certAddress
-    ) external view returns (uint256);
+    function getScripToCertMinimum(address certAddress) external view returns (uint256);
 
     function setRecertificationApproval(
         address certAddress,
@@ -222,15 +206,9 @@ interface IIssuanceManager {
         bytes calldata officerSignature
     ) external;
 
-    function clearRecertificationApproval(
-        address certAddress,
-        address investor
-    ) external;
+    function clearRecertificationApproval(address certAddress, address investor) external;
 
-    function getRecertificationApproval(
-        address certAddress,
-        address investor
-    )
+    function getRecertificationApproval(address certAddress, address investor)
         external
         view
         returns (
@@ -241,52 +219,28 @@ interface IIssuanceManager {
             uint256 endorsementTimestamp
         );
 
-    function setScripifyWhitelistEnabled(
-        address certAddress,
-        bool enabled
-    ) external;
+    function setScripifyWhitelistEnabled(address certAddress, bool enabled) external;
 
-    function addScripifyWhitelistIds(
-        address certAddress,
-        uint256[] memory ids
-    ) external;
+    function addScripifyWhitelistIds(address certAddress, uint256[] memory ids) external;
 
-    function removeScripifyWhitelistIds(
-        address certAddress,
-        uint256[] memory ids
-    ) external;
+    function removeScripifyWhitelistIds(address certAddress, uint256[] memory ids) external;
 
-    function getScripifyWhitelistEnabled(
-        address certAddress
-    ) external view returns (bool);
+    function getScripifyWhitelistEnabled(address certAddress) external view returns (bool);
 
-    function isScripifyWhitelisted(
-        address certAddress,
-        uint256 id
-    ) external view returns (bool);
+    function isScripifyWhitelisted(address certAddress, uint256 id) external view returns (bool);
 
-    function getCertScripifiedStatus(
-        address certAddress,
-        uint256 id
-    )
+    function getCertScripifiedStatus(address certAddress, uint256 id)
         external
         view
         returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented);
 
-    function getScripPoolAmountById(
-        address certAddress,
-        uint256 id
-    ) external view returns (uint256);
+    function getScripVaultAssets(address certAddress) external view returns (uint256 totalAssetsWad);
 
-    function getScripPoolSharesById(
-        address certAddress,
-        uint256 id
-    ) external view returns (uint256);
+    function getScripPoolAmountById(address certAddress, uint256 id) external view returns (uint256);
 
-    function convertScripToCert(
-        address certAddress,
-        uint256 amount
-    ) external;
+    function getScripPoolSharesById(address certAddress, uint256 id) external view returns (uint256);
+
+    function convertScripToCert(address certAddress, uint256 amount) external;
 
     function voidEmptyCerts(
         address certAddress,

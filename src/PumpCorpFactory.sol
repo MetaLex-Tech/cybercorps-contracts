@@ -267,6 +267,48 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             address roundManagerAddress
         )
     {
+        (cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress) =
+        _deployCyberCorpCore(
+            salt,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            _officer
+        );
+        _finalizeGovernance(authAddress, cyberCorpAddress);
+    }
+
+    /// @dev Runs LAST in every deploy entry point: revoke this factory's deploy-time owner role,
+    /// then let the corp claim the one-way role-manager lock and activate Board governance.
+    /// Composite flows (offer/round creation) need the factory's role for their post-deploy
+    /// owner-gated work, so finalization cannot live inside the core deploy.
+    function _finalizeGovernance(address authAddress, address cyberCorpAddress) private {
+        BorgAuth(authAddress).zeroOwner();
+        ICyberCorp(cyberCorpAddress).activateBoardGovernance();
+    }
+
+    function _deployCyberCorpCore(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer
+    )
+        internal
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress
+        )
+    {
         if (salt == bytes32(0)) revert InvalidSalt();
 
         // Deploy BorgAuth with CREATE2 with new param address owner
@@ -457,7 +499,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployCyberCorp(
+        ) = _deployCyberCorpCore(
             corpSalt,
             companyName,
             companyType,
@@ -504,6 +546,9 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             secretHash,
             expiry
         );
+
+        // Composite work above needs the factory's deploy-time role; strip it and lock last.
+        _finalizeGovernance(authAddress, cyberCorpAddress);
     }
 
     function deployCyberCorpAndCreateRoundFor(
@@ -588,7 +633,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployCyberCorp(
+        ) = _deployCyberCorpCore(
             corpSalt,
             companyName,
             companyType,
@@ -634,6 +679,9 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
                 certData
             );
         }
+
+        // Composite work above needs the factory's deploy-time role; strip it and lock last.
+        _finalizeGovernance(authAddress, cyberCorpAddress);
     }
 
     /// @notice Deploy, initialize and grant LeXCheX access to a new RoundManager for the given cyber corp

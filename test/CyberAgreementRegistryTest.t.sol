@@ -97,6 +97,149 @@ contract CyberAgreementRegistryTest is Test {
         vm.stopPrank();
     }
 
+    function test_createTemplateCallerChosenIdIsOwnerOnly() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BorgAuth.BorgAuth_NotAuthorized.selector,
+                coreAuth.OWNER_ROLE(),
+                alice
+            )
+        );
+        vm.prank(alice);
+        registry.createTemplate(
+            keccak256("squattable-id"),
+            "Untrusted",
+            "ipfs://untrusted",
+            testGlobalFields,
+            testPartyFields
+        );
+    }
+
+    function test_createTemplatePublicIsContentAddressedAndPermissionless()
+        public
+    {
+        vm.prank(alice);
+        bytes32 templateId = registry.createTemplatePublic(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields
+        );
+
+        assertEq(templateId, expectedStandaloneTemplateId);
+        (
+            string memory legalContractUri,
+            string memory title,
+            string[] memory globalFields,
+            string[] memory partyFields
+        ) = registry.getTemplateDetails(templateId);
+        assertEq(legalContractUri, testLegalContractUri);
+        assertEq(title, testTitle);
+        assertEq(globalFields, testGlobalFields);
+        assertEq(partyFields, testPartyFields);
+    }
+
+    function test_createTemplatePublicIsIdempotent() public {
+        vm.prank(alice);
+        bytes32 first = registry.createTemplatePublic(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields
+        );
+
+        vm.prank(bob);
+        bytes32 second = registry.createTemplatePublic(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields
+        );
+
+        assertEq(first, second);
+    }
+
+    function test_createTemplatePublicRejectsSquattedMismatchedRecord() public {
+        // Interim-era squat: the owner-curated path stores DIFFERENT content at exactly the
+        // content address a later public registration derives. Idempotent adoption must verify
+        // the stored record re-derives the id, or callers would accept the attacker's template.
+        bytes32 squattedId =
+            keccak256(abi.encode(testTitle, testLegalContractUri, testGlobalFields, testPartyFields));
+        vm.prank(deployer);
+        registry.createTemplate(
+            squattedId, "Hostile Title", "ipfs://hostile", testGlobalFields, testPartyFields
+        );
+
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistry.TemplateContentMismatch.selector);
+        registry.createTemplatePublic(testTitle, testLegalContractUri, testGlobalFields, testPartyFields);
+    }
+
+    function test_createStandaloneRejectsSquattedMismatchedRecord() public {
+        // The standalone path must route through the same verified adoption as
+        // createTemplatePublic: a bare existence check would let the caller sign a squatted
+        // hostile record stored at this content address during the interim deployment.
+        bytes32 squattedId =
+            keccak256(abi.encode(testTitle, testLegalContractUri, testGlobalFields, testPartyFields));
+        vm.prank(deployer);
+        registry.createTemplate(
+            squattedId, "Hostile Title", "ipfs://hostile", testGlobalFields, testPartyFields
+        );
+
+        address[] memory parties = new address[](1);
+        parties[0] = alice;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = testPartyValues[0];
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistry.TemplateContentMismatch.selector);
+        registry.createStandaloneContractAndSign(
+            testTitle, testLegalContractUri, testGlobalFields, testPartyFields,
+            uint256(keccak256("standalone-squat")), testGlobalValues, parties, partyValues,
+            block.timestamp + 10, ""
+        );
+    }
+
+    function test_createTemplatePublicRejectsEmptyLegalContractUri() public {
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistry.LegalContractUriEmpty.selector);
+        registry.createTemplatePublic(
+            testTitle,
+            "",
+            testGlobalFields,
+            testPartyFields
+        );
+    }
+
+    function test_upgradePreservesExistingTemplatesAndPublicRegistration()
+        public
+    {
+        address implementation = address(new CyberAgreementRegistry());
+
+        vm.prank(deployer);
+        registry.upgradeToAndCall(implementation, "");
+
+        (
+            string memory legalContractUri,
+            string memory title,
+            string[] memory globalFields,
+            string[] memory partyFields
+        ) = registry.getTemplateDetails(testTemplateId);
+        assertEq(legalContractUri, testLegalContractUri);
+        assertEq(title, "Test");
+        assertEq(globalFields, testGlobalFields);
+        assertEq(partyFields, testPartyFields);
+
+        vm.prank(alice);
+        bytes32 publicTemplateId = registry.createTemplatePublic(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields
+        );
+        assertEq(publicTemplateId, expectedStandaloneTemplateId);
+    }
+
     /// @notice Contract should automatically finalize if (1) all parties are signed, and (2) finalizer is undefined
     function test_signContractAndFinalize() public {
         uint256 salt = uint256(keccak256("test_signContractAndFinalize"));
@@ -1137,9 +1280,9 @@ contract CyberAgreementRegistryTest is Test {
 
         // Attacker front-runs with a hostile finalizer -> different contractId, no collision
         vm.startPrank(chad);
-        registry.createTemplate(
-            expectedStandaloneTemplateId, testTitle, testLegalContractUri, testGlobalFields, testPartyFields
-        );
+        // Option A re-gates caller-chosen-id createTemplate to the owner; a front-runner instead
+        // uses the permissionless content-addressed entry point, which derives the same id.
+        registry.createTemplatePublic(testTitle, testLegalContractUri, testGlobalFields, testPartyFields);
         bytes32 attackerId = registry.createContract(
             expectedStandaloneTemplateId, salt, testGlobalValues, parties, partyValues,
             bytes32(0), chad, expiry
@@ -1175,9 +1318,9 @@ contract CyberAgreementRegistryTest is Test {
 
         // Attacker front-runs with a different expiry -> SAME contractId, so the id is taken
         vm.startPrank(chad);
-        registry.createTemplate(
-            expectedStandaloneTemplateId, testTitle, testLegalContractUri, testGlobalFields, testPartyFields
-        );
+        // Option A re-gates caller-chosen-id createTemplate to the owner; a front-runner instead
+        // uses the permissionless content-addressed entry point, which derives the same id.
+        registry.createTemplatePublic(testTitle, testLegalContractUri, testGlobalFields, testPartyFields);
         bytes32 attackerId = registry.createContract(
             expectedStandaloneTemplateId, salt, testGlobalValues, parties, partyValues,
             bytes32(0), address(0), block.timestamp + 1000
@@ -1235,9 +1378,9 @@ contract CyberAgreementRegistryTest is Test {
 
         // Attacker front-runs with a hostile secretHash -> different contractId, no collision
         vm.startPrank(chad);
-        registry.createTemplate(
-            expectedStandaloneTemplateId, testTitle, testLegalContractUri, testGlobalFields, testPartyFields
-        );
+        // Option A re-gates caller-chosen-id createTemplate to the owner; a front-runner instead
+        // uses the permissionless content-addressed entry point, which derives the same id.
+        registry.createTemplatePublic(testTitle, testLegalContractUri, testGlobalFields, testPartyFields);
         bytes32 attackerId = registry.createContract(
             expectedStandaloneTemplateId, salt, testGlobalValues, parties, partyValues,
             keccak256(abi.encode("chad-secret")), address(0), expiry

@@ -27,6 +27,7 @@ import {
     DividendType,
     RedemptionType
 } from "../src/storage/extensions/ShareExtension.sol";
+import {ShareClassTermsController} from "../src/storage/extensions/ShareClassTermsController.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
@@ -122,6 +123,7 @@ contract LifeCycleGasLimitTest is Test {
     CyberCorpFactory corpFactory;
     MockERC20 usdc;
     ShareExtension shareExtension;
+    ShareClassTermsController shareClassTermsController;
 
     address officer;
     uint256 officerKey;
@@ -139,6 +141,13 @@ contract LifeCycleGasLimitTest is Test {
         shareExtension = ShareExtension(address(new ERC1967Proxy(
             address(new ShareExtension()),
             abi.encodeWithSelector(ShareExtension.initialize.selector, address(shareAuth))
+        )));
+        shareClassTermsController = ShareClassTermsController(address(new ERC1967Proxy(
+            address(new ShareClassTermsController()),
+            abi.encodeCall(
+                ShareClassTermsController.initialize,
+                (address(shareAuth), address(shareExtension))
+            )
         )));
     }
 
@@ -397,7 +406,7 @@ contract LifeCycleGasLimitTest is Test {
             uri: IPFS_URI,
             securityClass: SecurityClass.PreferredStock,
             securitySeries: SecuritySeries.SeriesSeed,
-            extension: address(shareExtension),
+            extension: address(shareClassTermsController),
             seriesData: bytes(""),
             defaultLegend: legend
         });

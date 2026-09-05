@@ -1,32 +1,32 @@
-/*    .o.                                                                                             
-     .888.                                                                                            
-    .8"888.                                                                                           
-   .8' `888.                                                                                          
-  .88ooo8888.                                                                                         
- .8'     `888.                                                                                        
-o88o     o8888o                                                                                       
-                                                                                                      
-                                                                                                      
-                                                                                                      
-ooo        ooooo               .             ooooo                  ooooooo  ooooo                    
-`88.       .888'             .o8             `888'                   `8888    d8'                     
- 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P                       
- 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'                        
- 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.                       
- 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b                      
-o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o                    
-                                                                                                      
-                                                                                                      
-                                                                                                      
-  .oooooo.                .o8                            .oooooo.                                     
- d8P'  `Y8b              "888                           d8P'  `Y8b                                    
-888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
-888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
-888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
-`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
- `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
-             .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+/*    .o.
+     .888.
+    .8"888.
+   .8' `888.
+  .88ooo8888.
+ .8'     `888.
+o88o     o8888o
+
+
+
+ooo        ooooo               .             ooooo                  ooooooo  ooooo
+`88.       .888'             .o8             `888'                   `8888    d8'
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o
+
+
+
+  .oooooo.                .o8                            .oooooo.
+ d8P'  `Y8b              "888                           d8P'  `Y8b
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o.
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
+             .o..P'                                                                     888
+             `Y8P'                                                                     o888o
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -34,9 +34,9 @@ are copyright MetaLeX Labs, Inc., a Delaware corporation.
 
 All rights reserved.
 
-The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published, 
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published,
 distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
-mechanical, including photocopying, recording, or by any information storage and retrieval system, 
+mechanical, including photocopying, recording, or by any information storage and retrieval system,
 except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
@@ -50,11 +50,13 @@ import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberScrip.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IIssuanceManagerFactory.sol";
+import "../interfaces/IShareClassTermsController.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import {ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
 import "./LedgerEntryTokenStorage.sol";
 
 library IssuanceManagerStorage {
+    bytes32 private constant SHARE_EXTENSION_TYPE = keccak256("SHARE");
     error ConditionCheckFailed();
     error ScripifiedCertNotAllowed();
     error ScripToCertMinimumNotMet();
@@ -78,6 +80,8 @@ library IssuanceManagerStorage {
     error ClassDoesNotExist();
     error SecurityClassAlreadyDefined();
     error NotAPrinter();
+    error ClassTermsControllerAlreadyInstalled();
+    error ClassTermsMigrationLengthMismatch();
     error CertNotEmpty();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
@@ -104,19 +108,11 @@ library IssuanceManagerStorage {
         string certificateUri
     );
     event CertificateCreated(
-        uint256 indexed tokenId,
-        address indexed certificate,
-        uint256 amount,
-        uint256 cap,
-        CertificateDetails details
+        uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details
     );
     event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
     event ScripifyWhitelistEnabledSet(address indexed certAddress, bool enabled);
-    event ScripifyWhitelistUpdated(
-        address indexed certAddress,
-        uint256 indexed id,
-        bool isWhitelisted
-    );
+    event ScripifyWhitelistUpdated(address indexed certAddress, uint256 indexed id, bool isWhitelisted);
     event CyberScripDeployed(
         address indexed certPrinterAddress,
         address indexed cyberScripAddress,
@@ -126,15 +122,8 @@ library IssuanceManagerStorage {
         bool enableForceBurn,
         bool enableFreeze
     );
-    event RecertificationApprovalSet(
-        address indexed certAddress,
-        address indexed investor,
-        string investorName
-    );
-    event RecertificationApprovalCleared(
-        address indexed certAddress,
-        address indexed investor
-    );
+    event RecertificationApprovalSet(address indexed certAddress, address indexed investor, string investorName);
+    event RecertificationApprovalCleared(address indexed certAddress, address indexed investor);
     event ScripRecertified(
         address indexed certAddress,
         address indexed user,
@@ -145,6 +134,7 @@ library IssuanceManagerStorage {
         uint256 newTotalAssetsWad,
         uint256 newTotalNominalShares
     );
+
     event ScripAddedToExistingCert(
         address indexed certAddress,
         address indexed user,
@@ -311,7 +301,7 @@ library IssuanceManagerStorage {
 
     function removePrinter(address _printer) internal {
         IssuanceManagerData storage s = issuanceManagerStorage();
-        
+
         // Find and remove from array
         uint256 length = s.printers.length;
         for (uint256 i = 0; i < length; i++) {
@@ -326,54 +316,9 @@ library IssuanceManagerStorage {
         }
     }
 
-    // Class-level LET designations. Mutators are external (delegatecalled) to keep IssuanceManager itself
-    // under the EIP-170 size limit; wrappers there enforce access control before delegating here.
-
-    /// @notice Registers a new class; classIds are sequential starting at 1 (0 = unclassified).
-    function executeDefineSecurityClass(
-        SecurityClass classType,
-        string memory documentURI,
-        address dataExtension,
-        bytes memory classData
-    ) external returns (uint256 classId) {
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        if (s.classIdByType[classType] != 0) revert SecurityClassAlreadyDefined();
-        classId = ++s.securityClassCount;
-        s.securityClasses[classId] = SecurityClassInfo(classType, documentURI, dataExtension, classData);
-        s.classIdByType[classType] = classId;
-        emit SecurityClassDefined(classId, classType, documentURI, dataExtension);
-    }
-
-    function executeUpdateSecurityClass(
-        uint256 classId,
-        SecurityClass classType,
-        string memory documentURI,
-        address dataExtension,
-        bytes memory classData
-    ) external {
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        if (classId == 0 || classId > s.securityClassCount) revert ClassDoesNotExist();
-        // Re-index classIdByType when the type changes, otherwise the reverse index keeps pointing at the
-        // old type and the new type reads as undefined, letting a second class be created for it.
-        SecurityClass oldType = s.securityClasses[classId].classType;
-        if (classType != oldType) {
-            if (s.classIdByType[classType] != 0) revert SecurityClassAlreadyDefined();
-            delete s.classIdByType[oldType];
-            s.classIdByType[classType] = classId;
-        }
-        s.securityClasses[classId] = SecurityClassInfo(classType, documentURI, dataExtension, classData);
-        emit SecurityClassUpdated(classId, classType, documentURI, dataExtension);
-    }
-
-    /// @notice Assigns a printer (the series scope) to a class; classId 0 clears the assignment.
-    /// Also the backfill path for printers created before the class registry existed.
-    function executeSetPrinterClass(address printer, uint256 classId) external {
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        if (!isPrinter(printer)) revert NotAPrinter();
-        if (classId > s.securityClassCount) revert ClassDoesNotExist();
-        s.printerClassIds[printer] = classId;
-        emit PrinterClassAssigned(printer, classId);
-    }
+    // Class-level LET designation MUTATORS and class-terms controller administration live in
+    // IssuanceManagerClassStorage: this library crossed EIP-170 at the develop merge, and those
+    // are the cold owner-gated entry points. Same delegatecall context, same namespaced slot.
 
     function getSecurityClass(uint256 classId) internal view returns (SecurityClassInfo storage) {
         return issuanceManagerStorage().securityClasses[classId];
@@ -427,7 +372,7 @@ library IssuanceManagerStorage {
 
     function setScripToCertConditions(address certAddress, ICondition[] memory conditions) internal {
         delete issuanceManagerStorage().scripToCertConditions[certAddress];
-        for (uint i = 0; i < conditions.length; i++) {
+        for (uint256 i = 0; i < conditions.length; i++) {
             issuanceManagerStorage().scripToCertConditions[certAddress].push(conditions[i]);
         }
     }
@@ -440,37 +385,25 @@ library IssuanceManagerStorage {
         issuanceManagerStorage().scripToCertMinimums[certAddress] = minimum;
     }
 
-    function isScripifyWhitelisted(
-        address certAddress,
-        uint256 id
-    ) internal view returns (bool) {
+    function isScripifyWhitelisted(address certAddress, uint256 id) internal view returns (bool) {
         return issuanceManagerStorage().scripifyWhitelist[certAddress][id];
     }
 
-    function setScripifyWhitelistEnabled(
-        address certAddress,
-        bool enabled
-    ) internal {
+    function setScripifyWhitelistEnabled(address certAddress, bool enabled) internal {
         issuanceManagerStorage().scripifyWhitelistEnabled[certAddress] = enabled;
     }
 
-    function getScripifyWhitelistEnabled(
-        address certAddress
-    ) internal view returns (bool) {
+    function getScripifyWhitelistEnabled(address certAddress) internal view returns (bool) {
         return issuanceManagerStorage().scripifyWhitelistEnabled[certAddress];
     }
 
-    function setScripifyWhitelisted(
-        address certAddress,
-        uint256 id,
-        bool isWhitelisted
-    ) internal {
+    function setScripifyWhitelisted(address certAddress, uint256 id, bool isWhitelisted) internal {
         issuanceManagerStorage().scripifyWhitelist[certAddress][id] = isWhitelisted;
     }
 
     function setCertToScripConditions(address certAddress, ICondition[] memory conditions) internal {
         delete issuanceManagerStorage().certToScripConditions[certAddress];
-        for (uint i = 0; i < conditions.length; i++) {
+        for (uint256 i = 0; i < conditions.length; i++) {
             issuanceManagerStorage().certToScripConditions[certAddress].push(conditions[i]);
         }
     }
@@ -480,27 +413,16 @@ library IssuanceManagerStorage {
     }
 
     function setScripRatio(address certAddress, uint256 numerator, uint256 denominator) internal {
-        issuanceManagerStorage().scripRatios[certAddress] = ScripRatio({
-            numerator: numerator,
-            denominator: denominator
-        });
+        issuanceManagerStorage().scripRatios[certAddress] = ScripRatio({numerator: numerator, denominator: denominator});
     }
 
-    function getCertScripState(
-        address certAddress,
-        uint256 id
-    ) internal view returns (CertScripState storage) {
+    function getCertScripState(address certAddress, uint256 id) internal view returns (CertScripState storage) {
         return issuanceManagerStorage().certScripStates[certAddress][id];
     }
 
     /// @notice Underlying wad claim for one certificate’s vault position (pro-rata on total pool).
-    function _assetsOfVaultPosition(
-        address certAddress,
-        uint256 tokenId
-    ) internal view returns (uint256 assetsWad) {
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
+    function _assetsOfVaultPosition(address certAddress, uint256 tokenId) internal view returns (uint256 assetsWad) {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
         if (pool.totalNominalShares == 0) {
             return 0;
         }
@@ -542,10 +464,11 @@ library IssuanceManagerStorage {
     }
 
     /// @dev Scrip-token-equivalent claim for a single certificate's vault position.
-    function getScripPoolAmountById(
-        address certAddress,
-        uint256 tokenId
-    ) internal view returns (uint256 scripEquivalent) {
+    function getScripPoolAmountById(address certAddress, uint256 tokenId)
+        internal
+        view
+        returns (uint256 scripEquivalent)
+    {
         (uint256 num, uint256 den) = _getScripRatioOrDefault(certAddress);
         uint256 assetsWad = _assetsOfVaultPosition(certAddress, tokenId);
         if (assetsWad == 0) return 0;
@@ -560,19 +483,15 @@ library IssuanceManagerStorage {
         return _vaultSharesOf(certAddress, tokenId);
     }
 
-    function getRecertificationApproval(
-        address certAddress,
-        address investor
-    ) internal view returns (RecertificationApproval storage) {
-        return issuanceManagerStorage().recertificationApprovals[certAddress][
-            investor
-        ];
+    function getRecertificationApproval(address certAddress, address investor)
+        internal
+        view
+        returns (RecertificationApproval storage)
+    {
+        return issuanceManagerStorage().recertificationApprovals[certAddress][investor];
     }
 
-    function getRecertificationApprovalData(
-        address certAddress,
-        address investor
-    )
+    function getRecertificationApprovalData(address certAddress, address investor)
         internal
         view
         returns (
@@ -583,10 +502,7 @@ library IssuanceManagerStorage {
             uint256 endorsementTimestamp
         )
     {
-        RecertificationApproval storage approval = getRecertificationApproval(
-            certAddress,
-            investor
-        );
+        RecertificationApproval storage approval = getRecertificationApproval(certAddress, investor);
         approved = approval.approved;
         investorName = approval.investorName;
         details = approval.details;
@@ -601,59 +517,44 @@ library IssuanceManagerStorage {
         CertificateDetails memory details,
         bytes memory officerSignature
     ) internal {
-        issuanceManagerStorage().recertificationApprovals[certAddress][
-            investor
-        ] = RecertificationApproval({
-            approved: true,
-            investorName: investorName,
-            details: details,
-            officerSignature: officerSignature,
-            endorsementTimestamp: block.timestamp
-        });
+        issuanceManagerStorage().recertificationApprovals[certAddress][investor] =
+            RecertificationApproval({
+                approved: true,
+                investorName: investorName,
+                details: details,
+                officerSignature: officerSignature,
+                endorsementTimestamp: block.timestamp
+            });
     }
 
-    function clearRecertificationApproval(
-        address certAddress,
-        address investor
-    ) internal {
-        delete issuanceManagerStorage().recertificationApprovals[certAddress][
-            investor
-        ];
+    function clearRecertificationApproval(address certAddress, address investor) internal {
+        delete issuanceManagerStorage().recertificationApprovals[certAddress][investor];
     }
 
     /// @return totalTrackedScrip ERC20 scrip total supply (canonical circulating scrip).
     /// @return pricePerShareRay underlying wad per nominal vault share, ray precision (0 if empty vault).
-    function getScripPoolTotals(
-        address certAddress
-    )
+    function getScripPoolTotals(address certAddress)
         internal
         view
         returns (uint256 totalTrackedScrip, uint256 pricePerShareRay)
     {
         address scrip = getScripifiedCert(certAddress);
         totalTrackedScrip = scrip == address(0) ? 0 : ICyberScrip(scrip).totalSupply();
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
-        pricePerShareRay = pool.totalNominalShares == 0
-            ? 0
-            : pool.totalAssetsWad * VAULT_RAY / pool.totalNominalShares;
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
+        pricePerShareRay = pool.totalNominalShares == 0 ? 0 : pool.totalAssetsWad * VAULT_RAY / pool.totalNominalShares;
     }
 
-    function getCertScripUnitVault(
-        address certAddress
-    ) internal view returns (uint256 totalAssetsWad, uint256 totalNominalShares) {
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
+    function getCertScripUnitVault(address certAddress)
+        internal
+        view
+        returns (uint256 totalAssetsWad, uint256 totalNominalShares)
+    {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
         totalAssetsWad = pool.totalAssetsWad;
         totalNominalShares = pool.totalNominalShares;
     }
 
-    function getCertScripifiedStatus(
-        address certAddress,
-        uint256 id
-    )
+    function getCertScripifiedStatus(address certAddress, uint256 id)
         internal
         view
         returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented)
@@ -664,10 +565,7 @@ library IssuanceManagerStorage {
         maxUnitsRepresented = certState.maxUnitsRepresented;
     }
 
-    function getCurrentCertScripifiedUnits(
-        address certAddress,
-        uint256 id
-    ) internal view returns (uint256) {
+    function getCurrentCertScripifiedUnits(address certAddress, uint256 id) internal view returns (uint256) {
         return _assetsOfVaultPosition(certAddress, id);
     }
 
@@ -715,6 +613,13 @@ library IssuanceManagerStorage {
         address extension,
         bytes memory seriesData
     ) external returns (address newCert) {
+        // KNOWN OPEN INVARIANT (P2 follow-up): a CommonStock/PreferredStock printer created here
+        // with a zero or non-SHARE extension escapes class-terms accounting entirely — the
+        // _account* helpers skip when no controller is detected, so such a printer can mint
+        // stock no authorized-share cap ever sees. Gating stock classes on a controller at
+        // creation is the fix, but it requires the whole stock-minting test corpus (and any
+        // integration that mints with empty extension data) to carry real SeriesTerms payloads,
+        // so it lands as its own change. Tracked in notes/plans/protocol-improvement-plan.md.
         bytes32 salt = keccak256(abi.encodePacked(getPrinters().length, address(this)));
         newCert = Create2.deploy(0, salt, _getBytecodeCertPrinter());
         addPrinter(newCert);
@@ -750,6 +655,7 @@ library IssuanceManagerStorage {
         CertificateDetails memory details
     ) external returns (uint256 id) {
         ILedgerEntryToken cert = ILedgerEntryToken(certAddress);
+        _accountNewIssuance(certAddress, details, true);
         uint256 tokenId = cert.totalSupply();
         id = cert.safeMint(tokenId, to, details);
         _emitCertificateCreated(tokenId, certAddress, details);
@@ -763,6 +669,7 @@ library IssuanceManagerStorage {
         CertificateDetails memory details,
         string memory investorName
     ) external {
+        _accountCertificateUpdate(certAddress, tokenId, details, true);
         ILedgerEntryToken(certAddress).assignCert(from, tokenId, investor, details, investorName);
     }
 
@@ -900,6 +807,9 @@ library IssuanceManagerStorage {
         CertificateDetails memory sellerDetails = cert.getActiveCertificateDetails(tokenId);
         if (units > sellerDetails.unitsRepresented) revert AmountExceedsAvailableUnits();
         sellerDetails.unitsRepresented -= units;
+        // Class-terms accounting: the seller's decrement offsets the buyer's fresh mint below
+        // (booked in _mintAssignedCert), so a secondary trade is issued-units neutral.
+        _accountCertificateUpdate(certPrinter, tokenId, sellerDetails, true);
         cert.updateCertificateDetails(tokenId, sellerDetails);
         // A lot that keeps a vault claim is not empty: its scrip is still outstanding, and the seller redeems
         // it through this lot. The actual voiding uses the same rule as executeVoidEmptyCerts, which sweeps
@@ -921,6 +831,11 @@ library IssuanceManagerStorage {
             legalDetails: sellerDetails.legalDetails,
             extensionData: sellerDetails.extensionData
         });
+        // Transfer-specific accounting: the buyer's lot carries the seller's terms snapshot, which
+        // may predate an amendment — accountTransferMint validates against that snapshot (or the
+        // canonical terms) where accountNewIssuance would reject it, and books the +units that the
+        // seller-side decrement above offsets.
+        _accountTransferMint(certPrinter, tokenId, buyerDetails.extensionData, units);
         (, buyerTokenId) = _mintReissuedCert(certPrinter, tokenId, custodian, buyer, buyerDetails, buyerName);
         uint256 buyerUnitsAfter = units; // absolute post-mutation balance on the buyer token, reported in the event
 
@@ -978,27 +893,17 @@ library IssuanceManagerStorage {
         setScripRatio(certAddress, numerator, denominator);
     }
 
-    function executeSetScripToCertMinimum(
-        address certAddress,
-        uint256 minimum
-    ) external {
+    function executeSetScripToCertMinimum(address certAddress, uint256 minimum) external {
         setScripToCertMinimum(certAddress, minimum);
         emit ScripToCertMinimumSet(certAddress, minimum);
     }
 
-    function executeSetScripifyWhitelistEnabled(
-        address certAddress,
-        bool enabled
-    ) external {
+    function executeSetScripifyWhitelistEnabled(address certAddress, bool enabled) external {
         setScripifyWhitelistEnabled(certAddress, enabled);
         emit ScripifyWhitelistEnabledSet(certAddress, enabled);
     }
 
-    function executeSetScripifyWhitelistIds(
-        address certAddress,
-        uint256[] memory ids,
-        bool isWhitelisted
-    ) external {
+    function executeSetScripifyWhitelistIds(address certAddress, uint256[] memory ids, bool isWhitelisted) external {
         for (uint256 i = 0; i < ids.length; i++) {
             setScripifyWhitelisted(certAddress, ids[i], isWhitelisted);
             emit ScripifyWhitelistUpdated(certAddress, ids[i], isWhitelisted);
@@ -1068,13 +973,9 @@ library IssuanceManagerStorage {
         }
     }
 
-    function executeScripifyCert(
-        address certAddress,
-        uint256 id,
-        uint256 amount,
-        address target,
-        address account
-    ) external {
+    function executeScripifyCert(address certAddress, uint256 id, uint256 amount, address target, address account)
+        external
+    {
         if (amount == 0) revert InvalidAmount();
 
         address scripifiedCert = getScripifiedCert(certAddress);
@@ -1085,19 +986,11 @@ library IssuanceManagerStorage {
                 revert ScripifyNotWhitelisted();
             }
         }
-        
+
         ICondition[] storage conditions = getCertToScripConditions(certAddress);
-        bytes4 selector = bytes4(
-            keccak256("scripifyCert(address,uint256,uint256,address)")
-        );
+        bytes4 selector = bytes4(keccak256("scripifyCert(address,uint256,uint256,address)"));
         for (uint256 i = 0; i < conditions.length; i++) {
-            if (
-                !conditions[i].checkCondition(
-                    certAddress,
-                    selector,
-                    abi.encode(id, amount, target)
-                )
-            ) {
+            if (!conditions[i].checkCondition(certAddress, selector, abi.encode(id, amount, target))) {
                 revert ConditionCheckFailed();
             }
         }
@@ -1109,8 +1002,7 @@ library IssuanceManagerStorage {
         address toSend = target;
         if (toSend == address(0)) toSend = account;
 
-        CertificateDetails memory details = certificate
-            .getActiveCertificateDetails(id);
+        CertificateDetails memory details = certificate.getActiveCertificateDetails(id);
 
         // Reserved units are committed to pending deals; only free units may be scripified,
         // otherwise scripify could pull collateral out from under a live reservation.
@@ -1118,16 +1010,11 @@ library IssuanceManagerStorage {
             revert AmountExceedsAvailableUnits();
         }
 
-        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
-            certAddress
-        );
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
         uint256 scripAmount = amount * numerator;
         scripAmount = scripAmount / denominator;
         CertScripState storage certState = getCertScripState(certAddress, id);
-        uint256 currentScripifiedUnits = getCurrentCertScripifiedUnits(
-            certAddress,
-            id
-        );
+        uint256 currentScripifiedUnits = getCurrentCertScripifiedUnits(certAddress, id);
         uint256 totalUnits = details.unitsRepresented + currentScripifiedUnits;
         if (totalUnits > certState.maxUnitsRepresented) {
             certState.maxUnitsRepresented = totalUnits;
@@ -1138,11 +1025,9 @@ library IssuanceManagerStorage {
 
         _depositCertScripUnits(certAddress, id, amount);
         details.unitsRepresented = details.unitsRepresented - amount;
-        certificate.updateCertificateDetails(id, details);
+        _updateCertificateDetailsPreservingIssuedUnits(certificate, id, details);
         ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
-        (uint256 newTotalAssetsWad, uint256 newTotalNominalShares) = getCertScripUnitVault(
-            certAddress
-        );
+        (uint256 newTotalAssetsWad, uint256 newTotalNominalShares) = getCertScripUnitVault(certAddress);
         emit ScripifiedCert(
             certAddress,
             id,
@@ -1155,33 +1040,21 @@ library IssuanceManagerStorage {
         );
     }
 
-    function executeConvertScripToCert(
-        address certAddress,
-        uint256 amount,
-        address account,
-        bytes4 convertSelector
-    ) external {
+    function executeConvertScripToCert(address certAddress, uint256 amount, address account, bytes4 convertSelector)
+        external
+    {
         address scripifiedCert = getScripifiedCert(certAddress);
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
         uint256 minimum = getScripToCertMinimum(certAddress);
         if (minimum > 0 && amount < minimum) revert ScripToCertMinimumNotMet();
 
-        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
-            certAddress
-        );
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
         uint256 units = amount * denominator;
         units = units / numerator;
 
-
         ICondition[] storage conditions = getScripToCertConditions(certAddress);
         for (uint256 i = 0; i < conditions.length; i++) {
-            if (
-                !conditions[i].checkCondition(
-                    certAddress,
-                    convertSelector,
-                    abi.encode(amount, account)
-                )
-            ) {
+            if (!conditions[i].checkCondition(certAddress, convertSelector, abi.encode(amount, account))) {
                 revert ConditionCheckFailed();
             }
         }
@@ -1214,18 +1087,11 @@ library IssuanceManagerStorage {
             // Redeem vault shares for this certificate up to pool claim; burn nominals. Conversion
             // above claim is still backed by burned scrip, so dilute remaining pool pro-rata via
             // _withdrawVaultAssets (same economics as excess scrip burning without a cert position).
-            uint256 claimWad = _assetsOfVaultPosition(
-                certAddress,
-                selection.activeTokenId
-            );
+            uint256 claimWad = _assetsOfVaultPosition(certAddress, selection.activeTokenId);
             uint256 fromVaultWad = units < claimWad ? units : claimWad;
             uint256 redeemedWad;
             if (fromVaultWad > 0) {
-                redeemedWad = _redeemVaultForCert(
-                    certAddress,
-                    selection.activeTokenId,
-                    fromVaultWad
-                );
+                redeemedWad = _redeemVaultForCert(certAddress, selection.activeTokenId, fromVaultWad);
             }
             if (units > redeemedWad) {
                 _withdrawVaultAssets(certAddress, units - redeemedWad);
@@ -1237,28 +1103,20 @@ library IssuanceManagerStorage {
         ICyberScrip(scripifiedCert).burnFrom(account, amount);
 
         if (selection.foundActive) {
-            CertificateDetails memory activeDetails = certificate
-                .getActiveCertificateDetails(selection.activeTokenId);
-            activeDetails.unitsRepresented =
-                activeDetails.unitsRepresented +
-                units;
-            certificate.updateCertificateDetails(
-                selection.activeTokenId,
-                activeDetails
-            );
-            _setCertMaxFromCurrent(
-                certAddress,
-                selection.activeTokenId,
-                activeDetails.unitsRepresented
-            );
-            CertificateDetails memory effectiveDetails = certificate
-                .getCertificateDetails(selection.activeTokenId);
-            CertificateDetails memory activeAfter = certificate
-                .getActiveCertificateDetails(selection.activeTokenId);
-            (
-                uint256 newTotalAssetsWad,
-                uint256 newTotalNominalShares
-            ) = getCertScripUnitVault(certAddress);
+            // KNOWN OPEN DESIGN ITEM (P2 follow-up, from Codex review on PR #144): scrip is one
+            // fungible ERC20 per printer with no terms provenance. When class terms have been
+            // amended and old- and new-term certificates coexist, this fold-into-first-active-cert
+            // redemption can move units across terms snapshots, changing their economic rights.
+            // Resolving it needs an amendment policy decision (segregate scrip by snapshot, scope
+            // recert targets to matching terms, or declare scrip redeems at canonical terms) —
+            // tracked in notes/plans/protocol-improvement-plan.md.
+            CertificateDetails memory activeDetails = certificate.getActiveCertificateDetails(selection.activeTokenId);
+            activeDetails.unitsRepresented = activeDetails.unitsRepresented + units;
+            _updateCertificateDetailsPreservingIssuedUnits(certificate, selection.activeTokenId, activeDetails);
+            _setCertMaxFromCurrent(certAddress, selection.activeTokenId, activeDetails.unitsRepresented);
+            CertificateDetails memory effectiveDetails = certificate.getCertificateDetails(selection.activeTokenId);
+            CertificateDetails memory activeAfter = certificate.getActiveCertificateDetails(selection.activeTokenId);
+            (uint256 newTotalAssetsWad, uint256 newTotalNominalShares) = getCertScripUnitVault(certAddress);
             emit ScripAddedToExistingCert(
                 certAddress,
                 account,
@@ -1280,27 +1138,27 @@ library IssuanceManagerStorage {
         } else {
             CertificateDetails memory details = approval.details;
             details.unitsRepresented = units;
-            uint256 createdTokenId = IIssuanceManager(address(this))
-                .createCertAndAssignWithName(
-                    certAddress,
-                    account,
-                    details,
-                    approval.investorName,
-                    approval.officerSignature,
-                    approval.endorsementTimestamp
-                );
+            (, uint256 createdTokenId) =
+                _mintAssignedCertFromScrip(certAddress, account, details, approval.investorName);
+            Endorsement memory recertificationEndorsement = Endorsement({
+                endorser: address(this),
+                timestamp: approval.endorsementTimestamp,
+                signatureHash: approval.officerSignature,
+                registry: address(0),
+                agreementId: 0,
+                endorsee: account,
+                endorseeName: approval.investorName
+            });
+            certificate.addEndorsement(createdTokenId, recertificationEndorsement);
+            certificate.addIssuerSignature(createdTokenId, approval.officerSignature);
+            bytes memory escrowedOfficerSignature = _getEscrowedOfficerSignature();
+            if (escrowedOfficerSignature.length > 0) {
+                certificate.addIssuerSignature(createdTokenId, escrowedOfficerSignature);
+            }
             clearRecertificationApproval(certAddress, account);
-            _setCertMaxFromCurrent(
-                certAddress,
-                createdTokenId,
-                details.unitsRepresented
-            );
-            CertificateDetails memory effectiveDetails = certificate
-                .getCertificateDetails(createdTokenId);
-            (
-                uint256 newTotalAssetsWad,
-                uint256 newTotalNominalShares
-            ) = getCertScripUnitVault(certAddress);
+            _setCertMaxFromCurrent(certAddress, createdTokenId, details.unitsRepresented);
+            CertificateDetails memory effectiveDetails = certificate.getCertificateDetails(createdTokenId);
+            (uint256 newTotalAssetsWad, uint256 newTotalNominalShares) = getCertScripUnitVault(certAddress);
             emit ScripRecertified(
                 certAddress,
                 account,
@@ -1314,24 +1172,22 @@ library IssuanceManagerStorage {
         }
     }
 
-    function executeForceScripBurn(
-        address certAddress,
-        address account,
-        uint256 amount
-    ) external {
+    function executeForceScripBurn(address certAddress, address account, uint256 amount) external {
         if (amount == 0) revert InvalidAmount();
 
         address scripifiedCert = getScripifiedCert(certAddress);
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
 
-        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
-            certAddress
-        );
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
         uint256 units = amount * denominator;
         units = units / numerator;
 
         _withdrawVaultAssets(certAddress, units);
         ICyberScrip(scripifiedCert).forceBurn(account, amount);
+        // The burnt scrip's units are outstanding in the class-terms controller (counted at
+        // issuance, kept through their certificate's void); destroying the ERC20 is what
+        // extinguishes them, so release them here or issuedUnits stays overstated forever.
+        _releaseScripUnits(certAddress, units);
     }
 
     function executeSetRecertificationApproval(
@@ -1344,20 +1200,11 @@ library IssuanceManagerStorage {
         if (investor == address(0)) revert InvalidInvestor();
         if (bytes(investorName).length == 0) revert InvalidInvestorName();
         if (officerSignature.length == 0) revert SignatureRequired();
-        setRecertificationApproval(
-            certAddress,
-            investor,
-            investorName,
-            details,
-            officerSignature
-        );
+        setRecertificationApproval(certAddress, investor, investorName, details, officerSignature);
         emit RecertificationApprovalSet(certAddress, investor, investorName);
     }
 
-    function executeClearRecertificationApproval(
-        address certAddress,
-        address investor
-    ) external {
+    function executeClearRecertificationApproval(address certAddress, address investor) external {
         clearRecertificationApproval(certAddress, investor);
         emit RecertificationApprovalCleared(certAddress, investor);
     }
@@ -1394,12 +1241,116 @@ library IssuanceManagerStorage {
         internal
         returns (ILedgerEntryToken cert, uint256 tokenId)
     {
+        _accountNewIssuance(certAddress, details, true);
+        return _mintAssignedCertUnaccounted(certAddress, to, owner, details, ownerName);
+    }
+
+    /// @dev Mint without class-terms accounting — for the secondary-transfer path, whose
+    ///      accounting is transfer-specific (accountTransferMint validates against the seller
+    ///      lot's snapshot, since the buyer inherits pre-amendment terms).
+    function _mintAssignedCertUnaccounted(
+        address certAddress,
+        address to,
+        address owner,
+        CertificateDetails memory details,
+        string memory ownerName
+    )
+        internal
+        returns (ILedgerEntryToken cert, uint256 tokenId)
+    {
         _requireCompanyDetailsSet();
         cert = ILedgerEntryToken(certAddress);
         tokenId = cert.totalSupply();
         cert.safeMintAndAssign(to, owner, tokenId, details, ownerName);
         _emitCertificateCreated(tokenId, certAddress, details);
     }
+
+    function _mintAssignedCertFromScrip(
+        address certAddress,
+        address investor,
+        CertificateDetails memory details,
+        string memory investorName
+    ) internal returns (ILedgerEntryToken cert, uint256 tokenId) {
+        _requireCompanyDetailsSet();
+        cert = ILedgerEntryToken(certAddress);
+        _accountNewIssuance(certAddress, details, false);
+        tokenId = cert.totalSupply();
+        cert.safeMintAndAssign(investor, tokenId, details, investorName);
+        _emitCertificateCreated(tokenId, certAddress, details);
+    }
+
+    function _updateCertificateDetailsPreservingIssuedUnits(
+        ILedgerEntryToken certificate,
+        uint256 tokenId,
+        CertificateDetails memory details
+    ) internal {
+        _accountCertificateUpdate(address(certificate), tokenId, details, false);
+        certificate.updateCertificateDetails(tokenId, details);
+    }
+
+    function _accountNewIssuance(address certAddress, CertificateDetails memory details, bool increasesIssuedUnits)
+        private
+    {
+        address controller = _shareClassTermsController(certAddress);
+        if (controller != address(0)) {
+            IShareClassTermsController(controller)
+                .accountNewIssuance(certAddress, details.extensionData, details.unitsRepresented, increasesIssuedUnits);
+        }
+    }
+
+    function _accountCertificateUpdate(
+        address certAddress,
+        uint256 tokenId,
+        CertificateDetails memory details,
+        bool changesIssuedUnits
+    ) private {
+        address controller = _shareClassTermsController(certAddress);
+        if (controller != address(0)) {
+            IShareClassTermsController(controller)
+                .accountCertificateUpdate(
+                    certAddress, tokenId, details.extensionData, details.unitsRepresented, changesIssuedUnits
+                );
+        }
+    }
+
+    // Void/unvoid accounting is wired at the token itself (LedgerEntryTokenStorage
+    // .syncClassTermsOnVoidStatus), so every caller — this manager, the DealManager's
+    // teardown, or an admin driving the token directly — hits the controller.
+
+    function _releaseScripUnits(address certAddress, uint256 units) private {
+        address controller = _shareClassTermsController(certAddress);
+        if (controller != address(0)) {
+            IShareClassTermsController(controller).releaseScripUnits(certAddress, units);
+        }
+    }
+
+    function _accountTransferMint(address certAddress, uint256 fromTokenId, bytes memory extensionData, uint256 units)
+        private
+    {
+        address controller = _shareClassTermsController(certAddress);
+        if (controller != address(0)) {
+            IShareClassTermsController(controller).accountTransferMint(certAddress, fromTokenId, extensionData, units);
+        }
+    }
+
+    function _shareClassTermsController(address certAddress) private view returns (address extension) {
+        // Older test/non-printer integrations predate the extension getter and
+        // are not share printers. A real legacy LedgerEntryToken does expose
+        // this getter; if its extension advertises SHARE but lacks controller
+        // hooks, the subsequent lifecycle call still fails closed.
+        try ILedgerEntryToken(certAddress).getExtension(0) returns (address foundExtension) {
+            extension = foundExtension;
+        } catch {
+            return address(0);
+        }
+        if (extension == address(0)) return address(0);
+        try ICertificateExtension(extension).supportsExtensionType(SHARE_EXTENSION_TYPE) returns (bool supported) {
+            return supported ? extension : address(0);
+        } catch {
+            return address(0);
+        }
+    }
+
 
     /// @dev Secondary-trade counterpart of _mintAssignedCert. The two cannot share one helper: a fresh mint
     /// looks identical to an issuance from the printer's side, so the reissue has to name the lot it came
@@ -1428,33 +1379,17 @@ library IssuanceManagerStorage {
         }
     }
 
-    function _emitCertificateCreated(
-        uint256 tokenId,
-        address certAddress,
-        CertificateDetails memory details
-    ) internal {
+    function _emitCertificateCreated(uint256 tokenId, address certAddress, CertificateDetails memory details) internal {
         emit CertificateCreated(
-            tokenId,
-            certAddress,
-            details.investmentAmountUSD,
-            details.issuerUSDValuationAtTimeOfInvestment,
-            details
+            tokenId, certAddress, details.investmentAmountUSD, details.issuerUSDValuationAtTimeOfInvestment, details
         );
     }
 
-    function _getEscrowedOfficerSignature()
-        internal
-        view
-        returns (bytes memory escrowedOfficerSignature)
-    {
+    function _getEscrowedOfficerSignature() internal view returns (bytes memory escrowedOfficerSignature) {
         address corp = getCORP();
-        try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (
-            uint256 count
-        ) {
+        try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (uint256 count) {
             if (count > 0) {
-                try ICyberCorp(corp).getEscrowedOfficerSignature(0) returns (
-                    bytes memory sig
-                ) {
+                try ICyberCorp(corp).getEscrowedOfficerSignature(0) returns (bytes memory sig) {
                     escrowedOfficerSignature = sig;
                 } catch {}
             }
@@ -1463,23 +1398,19 @@ library IssuanceManagerStorage {
 
     function _getBytecodeCertPrinter() internal view returns (bytes memory bytecode) {
         bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(
-            sourceCodeBytes,
-            abi.encode(getCyberCertPrinterBeacon(), "")
-        );
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(getCyberCertPrinterBeacon(), ""));
     }
 
     function _getBytecodeScrip() internal view returns (bytes memory bytecode) {
         bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(
-            sourceCodeBytes,
-            abi.encode(getCyberScripBeacon(), "")
-        );
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(getCyberScripBeacon(), ""));
     }
 
-    function _getScripRatioOrDefault(
-        address certAddress
-    ) internal view returns (uint256 numerator, uint256 denominator) {
+    function _getScripRatioOrDefault(address certAddress)
+        internal
+        view
+        returns (uint256 numerator, uint256 denominator)
+    {
         ScripRatio storage ratio = getScripRatio(certAddress);
         numerator = ratio.numerator;
         denominator = ratio.denominator;
@@ -1488,14 +1419,9 @@ library IssuanceManagerStorage {
         }
     }
 
-    function _setCertMaxFromCurrent(
-        address certAddress,
-        uint256 tokenId,
-        uint256 currentUnits
-    ) internal {
+    function _setCertMaxFromCurrent(address certAddress, uint256 tokenId, uint256 currentUnits) internal {
         CertScripState storage certState = getCertScripState(certAddress, tokenId);
-        uint256 currentTotal = currentUnits +
-            getCurrentCertScripifiedUnits(certAddress, tokenId);
+        uint256 currentTotal = currentUnits + getCurrentCertScripifiedUnits(certAddress, tokenId);
         if (currentTotal > certState.maxUnitsRepresented) {
             certState.maxUnitsRepresented = currentTotal;
         }
@@ -1515,9 +1441,8 @@ library IssuanceManagerStorage {
             tokenId
         );
 
-        uint256 sharesMinted = pool.totalNominalShares == 0
-            ? assetsWad
-            : assetsWad * pool.totalNominalShares / pool.totalAssetsWad;
+        uint256 sharesMinted =
+            pool.totalNominalShares == 0 ? assetsWad : assetsWad * pool.totalNominalShares / pool.totalAssetsWad;
         if (sharesMinted == 0) revert ZeroSharesMinted();
 
         certState.vaultNominalShares += sharesMinted;
@@ -1527,11 +1452,10 @@ library IssuanceManagerStorage {
 
     /// @notice ERC4626-style withdraw: burn this certificate's nominal shares and pull `assetsWad`
     ///         from the vault (exact asset burn; shares burnt round up).
-    function _redeemVaultForCert(
-        address certAddress,
-        uint256 tokenId,
-        uint256 assetsWad
-    ) internal returns (uint256 assetsRemovedWad) {
+    function _redeemVaultForCert(address certAddress, uint256 tokenId, uint256 assetsWad)
+        internal
+        returns (uint256 assetsRemovedWad)
+    {
         if (assetsWad == 0) return 0;
         CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
             certAddress
@@ -1565,13 +1489,8 @@ library IssuanceManagerStorage {
 
     /// @notice Remove underlying from vault; all certificate positions diluted pro-rata
     ///         (nominal shares unchanged, price per share in underlying drops).
-    function _withdrawVaultAssets(
-        address certAddress,
-        uint256 assetsOutWad
-    ) internal {
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
+    function _withdrawVaultAssets(address certAddress, uint256 assetsOutWad) internal {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
         if (pool.totalAssetsWad == 0) revert EmptyVault();
         if (assetsOutWad > pool.totalAssetsWad) {
             revert VaultWithdrawalExceedsAssets();

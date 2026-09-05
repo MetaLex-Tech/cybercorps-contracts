@@ -252,6 +252,18 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return abi.encode(data);
     }
 
+    /// @notice Returns the canonical class-level portion of share extension data.
+    /// @dev LedgerEntryToken hashes `termsData` and stores it once per printer.
+    ///      CertificateData and the variable-length rights/history arrays remain
+    ///      certificate-specific and are intentionally excluded.
+    function getSeriesTermsData(
+        bytes calldata data
+    ) external pure returns (bytes memory termsData, uint256 authorizedShares) {
+        ShareCertData memory share = abi.decode(data, (ShareCertData));
+        termsData = abi.encode(share.terms);
+        authorizedShares = share.terms.authorizedShares;
+    }
+
     function supportsExtensionType(bytes32 extensionType) external pure virtual override returns (bool) {
         return extensionType == EXTENSION_TYPE;
     }

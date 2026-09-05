@@ -1,0 +1,330 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.28;
+
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
+import {CyberCorp} from "../src/CyberCorp.sol";
+import {
+    CompanyDirector,
+    CompanyOfficer
+} from "../src/CyberCorpConstants.sol";
+import {IAuthAdapter} from "../src/interfaces/IAuthAdapter.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
+
+contract BoardAuthorityAdapterMock is IAuthAdapter {
+    mapping(address => uint256) internal roles;
+
+    function setRole(address account, uint256 role) external {
+        roles[account] = role;
+    }
+
+    function isAuthorized(
+        address account
+    ) external view returns (uint256) {
+        return roles[account];
+    }
+}
+
+contract CyberCorpBoardAuthorityTest is Test {
+    address internal founder = address(0xF0);
+    address internal officer = address(0x0F);
+    address internal director = address(0xD1);
+    address internal stockholderExecutor = address(0x57);
+
+    BorgAuth internal auth;
+    CyberCorp internal corp;
+
+    function setUp() public {
+        auth = new BorgAuth(address(this));
+        auth.updateRole(founder, auth.OFFICER_ROLE());
+
+        CompanyOfficer memory initialOfficer = CompanyOfficer({
+            eoa: founder,
+            name: "Founder",
+            contact: "founder@example.com",
+            title: "President"
+        });
+        corp = CyberCorp(
+            address(
+                new ERC1967Proxy(
+                    address(new CyberCorp()),
+                    abi.encodeCall(
+                        CyberCorp.initialize,
+                        (
+                            address(auth),
+                            "Test Corp, Inc.",
+                            "Corporation",
+                            "Delaware",
+                            "contact@example.com",
+                            "Delaware courts",
+                            address(0x1),
+                            address(0x2),
+                            initialOfficer,
+                            address(0x3),
+                            address(0x4)
+                        )
+                    )
+                )
+            )
+        );
+        auth.updateRole(address(corp), auth.OFFICER_ROLE());
+        auth.setRoleManager(address(corp));
+        corp.activateBoardGovernance();
+    }
+
+    function test_ActivationSeatsFounderAsDirectorAndOfficer() public view {
+        assertTrue(corp.boardGovernanceEnforced());
+        assertTrue(corp.isCyberCORPDirector(founder));
+        assertTrue(corp.isCyberCORPOfficer(founder));
+        assertEq(corp.getCompanyDirectorCount(), 1);
+        assertEq(corp.getCompanyOfficerCount(), 1);
+        assertEq(auth.userRoles(founder), auth.BOARD_ROLE());
+        assertEq(auth.roleManager(), address(corp));
+    }
+
+    function test_OfficerCannotMutateAuthOrAppointOfficers() public {
+        vm.prank(founder);
+        corp.addOfficer(_officer(officer));
+        assertEq(auth.userRoles(officer), auth.OFFICER_ROLE());
+
+        uint256 boardRole = auth.BOARD_ROLE();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BorgAuth.BorgAuth_NotRoleManager.selector,
+                officer
+            )
+        );
+        vm.prank(officer);
+        auth.updateRole(officer, boardRole);
+
+        vm.expectRevert();
+        vm.prank(officer);
+        corp.addOfficer(_officer(address(0x22)));
+    }
+
+    function test_BoardControlsOfficersAndLastOfficerGuard() public {
+        vm.startPrank(founder);
+        corp.addOfficer(_officer(officer));
+        corp.removeOfficer(officer);
+        assertEq(auth.userRoles(officer), 0);
+
+        vm.expectRevert(CyberCorp.LastOfficer.selector);
+        corp.removeOfficer(founder);
+        vm.stopPrank();
+    }
+
+    function test_BoardSelfManagementPreservesOfficerRoleOnRemoval() public {
+        vm.startPrank(founder);
+        corp.addOfficer(_officer(director));
+        corp.addDirector(_director(director));
+        assertEq(auth.userRoles(director), auth.BOARD_ROLE());
+
+        corp.removeDirector(director);
+        assertFalse(corp.isCyberCORPDirector(director));
+        assertTrue(corp.isCyberCORPOfficer(director));
+        assertEq(auth.userRoles(director), auth.OFFICER_ROLE());
+
+        vm.expectRevert(CyberCorp.LastDirector.selector);
+        corp.removeDirector(founder);
+        vm.stopPrank();
+    }
+
+    function test_ManagerSwapRotatesAuthRoles() public {
+        address oldManager = address(0x501);
+        address newManager = address(0x502);
+        vm.startPrank(founder);
+        corp.setDealManager(oldManager);
+        assertEq(auth.userRoles(oldManager), auth.OWNER_ROLE(), "manager not granted on set");
+
+        // Replacing the manager revokes the superseded address and privileges the new one:
+        // the role-manager lock makes this corp the only possible role mutator.
+        corp.setDealManager(newManager);
+        assertEq(auth.userRoles(oldManager), 0, "superseded manager keeps privilege");
+        assertEq(auth.userRoles(newManager), auth.OWNER_ROLE(), "replacement not privileged");
+
+        // An address still referenced by another manager slot keeps its role.
+        corp.setRoundManager(newManager);
+        corp.setDealManager(address(0x503));
+        assertEq(auth.userRoles(newManager), auth.OWNER_ROLE(), "shared manager lost its role");
+        vm.stopPrank();
+    }
+
+    function test_PreLockCustomRolesSurviveRosterLifecycle() public {
+        // A custom role granted BEFORE the role-manager lock (the only time raw grants are
+        // possible) must survive roster churn: lifecycle writes only touch a role the lifecycle
+        // itself granted (the exact seat value).
+        BorgAuth customAuth = new BorgAuth(address(this));
+        customAuth.updateRole(founder, customAuth.OFFICER_ROLE());
+        CompanyOfficer memory initialOfficer =
+            CompanyOfficer({eoa: founder, name: "Founder", contact: "f@example.com", title: "President"});
+        CyberCorp c = CyberCorp(
+            address(
+                new ERC1967Proxy(
+                    address(new CyberCorp()),
+                    abi.encodeCall(
+                        CyberCorp.initialize,
+                        (
+                            address(customAuth),
+                            "Custom Corp",
+                            "Corporation",
+                            "Delaware",
+                            "contact@example.com",
+                            "Delaware courts",
+                            address(0x1),
+                            address(0x2),
+                            initialOfficer,
+                            address(0x3),
+                            address(0x4)
+                        )
+                    )
+                )
+            )
+        );
+        address custom = address(0x901);
+        customAuth.updateRole(custom, 500);
+        customAuth.updateRole(address(c), customAuth.OFFICER_ROLE());
+        customAuth.setRoleManager(address(c));
+        c.activateBoardGovernance();
+
+        vm.startPrank(founder);
+        c.addOfficer(_officer(custom));
+        assertEq(customAuth.userRoles(custom), 500, "add flattened the custom role");
+        c.removeOfficer(custom);
+        assertEq(customAuth.userRoles(custom), 500, "removal clobbered the custom role");
+        vm.stopPrank();
+    }
+
+    function test_InitializeRejectsZeroFounder() public {
+        // A zero founder would be seeded as the sole director; after the one-way role-manager
+        // lock nobody could ever pass onlyEnforcedBoard again, bricking the corp.
+        CompanyOfficer memory zeroOfficer =
+            CompanyOfficer({eoa: address(0), name: "", contact: "", title: ""});
+        CyberCorp implementation = new CyberCorp();
+        vm.expectRevert(CyberCorp.InvalidOfficer.selector);
+        new ERC1967Proxy(
+            address(implementation),
+            abi.encodeCall(
+                CyberCorp.initialize,
+                (
+                    address(auth),
+                    "Zero Corp",
+                    "Corporation",
+                    "Delaware",
+                    "contact@example.com",
+                    "Delaware courts",
+                    address(0x1),
+                    address(0x2),
+                    zeroOfficer,
+                    address(0x3),
+                    address(0x4)
+                )
+            )
+        );
+    }
+
+    function test_RosterRemovalPreservesManagerAccess() public {
+        address dual = address(0x701);
+        vm.startPrank(founder);
+        corp.setDealManager(dual);
+        corp.addDirector(_director(dual));
+        assertEq(auth.userRoles(dual), auth.BOARD_ROLE());
+
+        // Removing the director seat must fall back to OWNER_ROLE while the address is still a
+        // manager pointer, mirroring how pointer rotation preserves roster authority.
+        corp.removeDirector(dual);
+        assertEq(auth.userRoles(dual), auth.OWNER_ROLE(), "manager access stripped by roster removal");
+        vm.stopPrank();
+    }
+
+    function test_ManagerRotationPreservesRosterRoles() public {
+        vm.startPrank(founder);
+        // The sole director points a manager slot at themselves: granting must not demote the
+        // Board seat (BorgAuth stores one role per user, and 300 already clears the 99 gate).
+        corp.setDealManager(founder);
+        assertEq(auth.userRoles(founder), auth.BOARD_ROLE(), "sole director demoted by self-set");
+
+        // Replacing them restores the roster-derived role, not zero.
+        corp.setDealManager(address(0x601));
+        assertEq(auth.userRoles(founder), auth.BOARD_ROLE(), "director role not restored on swap");
+
+        // Same for an officer serving as a manager.
+        corp.addOfficer(_officer(officer));
+        assertEq(auth.userRoles(officer), auth.OFFICER_ROLE());
+        corp.setRoundManager(officer);
+        assertEq(auth.userRoles(officer), auth.OFFICER_ROLE(), "officer demoted while manager");
+        corp.setRoundManager(address(0x602));
+        assertEq(auth.userRoles(officer), auth.OFFICER_ROLE(), "officer role not restored");
+        vm.stopPrank();
+    }
+
+    function test_StockholderAdapterCanExecuteBoardReplacement() public {
+        BoardAuthorityAdapterMock adapter =
+            new BoardAuthorityAdapterMock();
+        adapter.setRole(stockholderExecutor, auth.BOARD_ROLE());
+
+        vm.prank(founder);
+        corp.setBoardAuthorityAdapter(address(adapter));
+
+        vm.prank(stockholderExecutor);
+        corp.addDirector(_director(director));
+        assertTrue(corp.isCyberCORPDirector(director));
+        assertEq(auth.userRoles(director), auth.BOARD_ROLE());
+    }
+
+    function test_RootConfigurationIsBoardOnlyWhenEnforced() public {
+        vm.prank(founder);
+        corp.addOfficer(_officer(officer));
+
+        uint256 boardRole = auth.BOARD_ROLE();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BorgAuth.BorgAuth_NotAuthorized.selector,
+                boardRole,
+                officer
+            )
+        );
+        vm.prank(officer);
+        corp.setCompanyPayable(address(0xCAFE));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BorgAuth.BorgAuth_NotAuthorized.selector,
+                boardRole,
+                officer
+            )
+        );
+        vm.prank(officer);
+        corp.setIssuanceManager(address(0xBEEF));
+
+        vm.prank(founder);
+        corp.setCompanyPayable(address(0xCAFE));
+        assertEq(corp.companyPayable(), address(0xCAFE));
+    }
+
+    function test_RoleManagerLockIsOneWay() public {
+        vm.expectRevert(BorgAuth.BorgAuth_RoleManagerAlreadySet.selector);
+        auth.setRoleManager(address(0x999));
+    }
+
+    function _officer(
+        address account
+    ) internal pure returns (CompanyOfficer memory) {
+        return CompanyOfficer({
+            eoa: account,
+            name: "Officer",
+            contact: "officer@example.com",
+            title: "Secretary"
+        });
+    }
+
+    function _director(
+        address account
+    ) internal pure returns (CompanyDirector memory) {
+        return CompanyDirector({
+            eoa: account,
+            name: "Director",
+            contact: "director@example.com"
+        });
+    }
+}

@@ -156,6 +156,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     error TemplateAlreadyExists();
     error TemplateDoesNotExist();
+    error TemplateContentMismatch();
     error ContractAlreadyExists();
     error ContractDoesNotExist();
     error NotAParty();
@@ -175,6 +176,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error InvalidSecret();
     error MismatchedPartyValuesLength();
     error FinalizerNotDefined();
+    error LegalContractUriEmpty();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -227,15 +229,16 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         _;
     }
 
-    /// @notice Create a new agreement template. Only the owner can do it externally; however, the registry itself can
-    /// do it as well for just-in-time operations.
+    /// @notice Create a curated agreement template with a caller-chosen ID.
+    /// @dev Caller-chosen IDs are owner-gated because making this path public
+    ///      allows namespace squatting and front-running.
     function createTemplate(
         bytes32 templateId,
         string memory title,
         string memory legalContractUri,
         string[] memory globalFields,
         string[] memory partyFields
-    ) external {
+    ) external onlyOwner {
         _createTemplate(
             templateId,
             title,
@@ -243,6 +246,57 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             globalFields,
             partyFields
         );
+    }
+
+    /// @notice Permissionlessly register a content-addressed agreement template.
+    /// @dev The ID is the hash of the complete template content, so another
+    ///      caller cannot squat or front-run an ID with different content.
+    ///      Re-registering identical content is intentionally idempotent.
+    function createTemplatePublic(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) external returns (bytes32 templateId) {
+        return _adoptOrCreateContentAddressedTemplate(title, legalContractUri, globalFields, partyFields);
+    }
+
+    /// @dev The single verified-adoption path for content-addressed templates: create when the
+    ///      slot is empty, adopt idempotently ONLY when the stored record re-derives this id.
+    ///      An upgraded registry can carry interim-era records at arbitrary caller-chosen ids —
+    ///      including one squatted at exactly this content address with DIFFERENT content — and
+    ///      any entry point that skipped this check would let its caller sign an attacker's
+    ///      legal template.
+    function _adoptOrCreateContentAddressedTemplate(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) internal returns (bytes32 templateId) {
+        templateId = keccak256(
+            abi.encode(title, legalContractUri, globalFields, partyFields)
+        );
+
+        if (bytes(templates[templateId].legalContractUri).length == 0) {
+            _createTemplate(
+                templateId,
+                title,
+                legalContractUri,
+                globalFields,
+                partyFields
+            );
+        } else {
+            Template storage existing = templates[templateId];
+            if (
+                keccak256(
+                    abi.encode(
+                        existing.title, existing.legalContractUri, existing.globalFields, existing.partyFields
+                    )
+                ) != templateId
+            ) {
+                revert TemplateContentMismatch();
+            }
+        }
     }
 
     function createContract(
@@ -369,24 +423,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address signer,
         bytes calldata signature
     ) public returns (bytes32 contractId) {
-        // Derive template ID
-        bytes32 templateId = keccak256(abi.encode(
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        ));
-
-        // Create the template if needed
-        if (bytes(templates[templateId].legalContractUri).length == 0) {
-            _createTemplate(
-                templateId,
-                title,
-                legalContractUri,
-                globalFields,
-                partyFields
-            );
-        }
+        // Create-or-adopt through the single verified path: a bare existence check here would
+        // let a standalone caller create and sign against an interim-era squatted record whose
+        // content does not re-derive this id.
+        bytes32 templateId =
+            _adoptOrCreateContentAddressedTemplate(title, legalContractUri, globalFields, partyFields);
 
         contractId = createContract(
             templateId,
@@ -1005,6 +1046,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         if (bytes(title).length == 0) {
             revert TitleEmpty();
+        }
+        if (bytes(legalContractUri).length == 0) {
+            revert LegalContractUriEmpty();
         }
 
         templates[templateId] = Template({
