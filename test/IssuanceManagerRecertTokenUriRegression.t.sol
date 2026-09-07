@@ -158,15 +158,10 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
             address(0)
         );
         assertEq(certPrinter.getActiveCertificateDetails(0).unitsRepresented, 0);
-        // ratio is 100:1, so 100 units become 10,000 nominal scrip in pool amount.
-        assertEq(
-            IssuanceManager(issuanceManager).getScripPoolAmountById(
-                address(certPrinter),
-                0
-            ),
-            10_000 * 1e18
-        );
-        assertEq(IssuanceManager(issuanceManager).getScripPoolSharesById(address(certPrinter), 0), 100 * 1e18);
+        // The lot gave the units to the pool and kept nothing. Ratio is 100:1, so the investor holds
+        // 10,000 scrip against the pool's 100 units.
+        assertEq(IssuanceManager(issuanceManager).getCertScripUnitVault(address(certPrinter)), 100 * 1e18);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 10_000 * 1e18);
 
         vm.prank(investor);
         ICyberScrip(scrip).transfer(investor2, 1000 * 1e18);
@@ -188,23 +183,16 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
         assertEq(certPrinter.ownerOf(1), investor2);
 
         vm.expectEmit(true, true, true, true);
-        emit IssuanceManager.ScripAddedToExistingCert(
-            address(certPrinter),
-            investor,
-            0,
-            5000 * 1e18,
-            90 * 1e18 - 1,
-            40 * 1e18 - 1
-        );
+        emit IssuanceManager.ScripAddedToExistingCert(address(certPrinter), investor, 0, 5000 * 1e18, 50 * 1e18);
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 5000 * 1e18);
 
-        // Active units are exact. The conservative index leaves one wei of attribution in the pool.
-        // This test builder truncates to whole units, so 90e18 - 1 displays as 89, not 90.
+        // The lot reports the units it holds. Units given up to scrip are not counted here, so the
+        // number is exact and the URI shows it.
         string memory certZeroUri = certPrinter.tokenURI(0);
         assertEq(certPrinter.getActiveCertificateDetails(0).unitsRepresented, 50 * 1e18);
-        assertEq(certPrinter.getCertificateDetails(0).unitsRepresented, 90 * 1e18 - 1);
-        assertTrue(_contains(certZeroUri, '"unitsRepresented":"89"'));
+        assertEq(certPrinter.getCertificateDetails(0).unitsRepresented, 50 * 1e18);
+        assertTrue(_contains(certZeroUri, '"unitsRepresented":"50"'));
     }
 
     function test_HolderOneScripify50ThenRecertify25() public {
@@ -238,23 +226,18 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
         );
 
         assertEq(certPrinter.getActiveCertificateDetails(certId).unitsRepresented, 50 * 1e18);
-        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 100 * 1e18);
+        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 50 * 1e18);
 
         vm.expectEmit(true, true, true, true);
         emit IssuanceManager.ScripAddedToExistingCert(
-            address(certPrinter),
-            investor,
-            certId,
-            2500 * 1e18,
-            100 * 1e18,
-            25 * 1e18
+            address(certPrinter), investor, certId, 2500 * 1e18, 75 * 1e18
         );
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 2500 * 1e18);
 
         assertEq(certPrinter.getActiveCertificateDetails(certId).unitsRepresented, 75 * 1e18);
-        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 100 * 1e18);
-        assertTrue(_contains(certPrinter.tokenURI(certId), '"unitsRepresented":"100"'));
+        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 75 * 1e18);
+        assertTrue(_contains(certPrinter.tokenURI(certId), '"unitsRepresented":"75"'));
     }
 
     function _contains(

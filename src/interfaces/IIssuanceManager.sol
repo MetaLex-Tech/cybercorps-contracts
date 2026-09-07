@@ -56,9 +56,7 @@ interface IIssuanceManager {
         address indexed scripifiedCert,
         uint256 amount,
         uint256 newUnitsRepresented,
-        uint256 newCertNominalShares,
-        uint256 newTotalAssetsWad,
-        uint256 newTotalNominalShares
+        uint256 newTotalAssetsWad
     );
     event CertPrinterCreated(
         address indexed certificate,
@@ -87,17 +85,14 @@ interface IIssuanceManager {
         uint256 indexed certId,
         uint256 scripAmount,
         uint256 newUnitsRepresented,
-        uint256 newCertNominalShares,
-        uint256 newTotalAssetsWad,
-        uint256 newTotalNominalShares
+        uint256 newTotalAssetsWad
     );
     event ScripAddedToExistingCert(
         address indexed certAddress,
         address indexed user,
         uint256 indexed certId,
         uint256 scripsAdded,
-        uint256 newUnitsRepresented,
-        uint256 newUnitsScripified
+        uint256 newUnitsRepresented
     );
 
     // Issuance Manager Functions
@@ -265,23 +260,8 @@ interface IIssuanceManager {
         uint256 id
     ) external view returns (bool);
 
-    function getCertScripifiedStatus(
-        address certAddress,
-        uint256 id
-    )
-        external
-        view
-        returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented);
 
-    function getScripPoolAmountById(
-        address certAddress,
-        uint256 id
-    ) external view returns (uint256);
 
-    function getScripPoolSharesById(
-        address certAddress,
-        uint256 id
-    ) external view returns (uint256);
 
     function convertScripToCert(
         address certAddress,
