@@ -896,7 +896,7 @@ contract CyberCertPrinterTest is Test {
     }
 
 
-    // An owner-write (endorsed transfer) on a legacy token lazily backfills it under the new owner — and the
+    // An owner-write (endorsed transfer) on a legacy token backfills it under the new owner — and the
     // implicit remove from the old owner is a safe no-op (no underflow).
     function test_LegalOwnerEnumeration_LegacyOwnerWriteLazilyBackfills() public {
         _mintCert(1, investor, 100, bytes(""));

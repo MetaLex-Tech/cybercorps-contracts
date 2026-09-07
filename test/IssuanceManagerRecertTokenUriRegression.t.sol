@@ -127,7 +127,7 @@ contract UriBuilderWithUnits is IUriBuilder {
 contract IssuanceManagerRecertTokenUriRegressionTest is
     IssuanceManagerConversionTest
 {
-    function test_ReCertBackToOriginalCert_TokenURIShowsInflatedUnits() public {
+    function test_ReCertBackToOriginalCert_TokenURIReflectsFlooredAttribution() public {
         UriBuilderWithUnits uriBuilder = new UriBuilderWithUnits();
         issuanceManager.setUriBuilder(address(uriBuilder));
 
@@ -193,17 +193,18 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
             investor,
             0,
             5000 * 1e18,
-            90 * 1e18,
-            40 * 1e18
+            90 * 1e18 - 1,
+            40 * 1e18 - 1
         );
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 5000 * 1e18);
 
-        // Repro: event says 50 on cert #0, but tokenURI uses getCertificateDetails and reports 90.
+        // Active units are exact. The conservative index leaves one wei of attribution in the pool.
+        // This test builder truncates to whole units, so 90e18 - 1 displays as 89, not 90.
         string memory certZeroUri = certPrinter.tokenURI(0);
         assertEq(certPrinter.getActiveCertificateDetails(0).unitsRepresented, 50 * 1e18);
-        assertEq(certPrinter.getCertificateDetails(0).unitsRepresented, 90 * 1e18);
-        assertTrue(_contains(certZeroUri, '"unitsRepresented":"90"'));
+        assertEq(certPrinter.getCertificateDetails(0).unitsRepresented, 90 * 1e18 - 1);
+        assertTrue(_contains(certZeroUri, '"unitsRepresented":"89"'));
     }
 
     function test_HolderOneScripify50ThenRecertify25() public {

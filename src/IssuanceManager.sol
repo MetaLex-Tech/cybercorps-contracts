@@ -786,7 +786,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     }
 
     /// @notice `totalTrackedScrip` is CyberScrip `totalSupply`. Second value is vault price per
-    ///         nominal share: `totalAssetsWad * 1e27 / totalNominalShares` (ray), or 0 if empty.
+    ///         nominal share (ray), or 0 if empty. Initialized proportional pools report 1e27.
     function getScripPoolTotals(
         address certAddress
     )
@@ -797,7 +797,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getScripPoolTotals(certAddress);
     }
 
-    /// @notice Underlying units (wad) and total nominal shares in the scripified-units vault.
+    /// @notice Underlying units (wad) and normalized nominal shares, equal after index initialization.
+    /// @dev Individually floored certificate positions may sum to less than the total due to pool dust.
     function getCertScripUnitVault(address certAddress)
         external
         view
@@ -813,6 +814,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getScripPoolAmountById(certAddress, id);
     }
 
+    /// @notice Effective rebasing shares; excludes sub-wei attribution dust held by the pool.
     function getScripPoolSharesById(
         address certAddress,
         uint256 id

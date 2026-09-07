@@ -920,8 +920,8 @@ contract IssuanceManagerConversionTest is Test {
         vm.expectRevert(IssuanceManagerStorage.ScripOutstanding.selector);
         issuanceManager.setScripRatio(address(certPrinter), 1, 1);
 
-        // Redeeming at the unchanged ratio returns exactly the deposit, leaving the investor's
-        // units in the vault.
+        // Redeeming returns exactly the deposit in active units. The remaining backing is
+        // attributed equally to both certificates under proportional redemption.
         vm.prank(insider);
         issuanceManager.convertScripToCert(address(certPrinter), 200 * 1e18);
         assertEq(
@@ -930,7 +930,7 @@ contract IssuanceManagerConversionTest is Test {
         );
         assertEq(
             issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
-            100 * 1e18
+            50 * 1e18
         );
     }
 
@@ -1626,8 +1626,8 @@ contract IssuanceManagerConversionTest is Test {
             otherInvestor,
             otherInvestorCertId,
             150 * 1e18,
-            150 * 1e18,
-            0
+            175 * 1e18,
+            25 * 1e18
         );
         vm.expectEmit(true, true, true, true);
         emit IssuanceManager.ScripRecertified(
@@ -1635,10 +1635,10 @@ contract IssuanceManagerConversionTest is Test {
             otherInvestor,
             otherInvestorCertId,
             150 * 1e18,
-            150 * 1e18,
-            0,
+            175 * 1e18,
+            25 * 1e18,
             50 * 1e18,
-            100 * 1e18
+            50 * 1e18
         );
         vm.prank(otherInvestor);
         issuanceManager.convertScripToCert(address(certPrinter), 150 * 1e18);
@@ -1661,28 +1661,28 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(investorActiveFinal.unitsRepresented, 0);
         assertEq(otherActiveFinal.unitsRepresented, 150 * 1e18);
         assertTrue(investorIsScripified);
-        assertEq(investorScripified, 50 * 1e18);
-        assertFalse(otherIsScripified);
-        assertEq(otherScripified, 0);
-        assertEq(investorFinal.unitsRepresented, 50 * 1e18);
-        assertEq(otherFinal.unitsRepresented, 150 * 1e18);
+        assertEq(investorScripified, 25 * 1e18);
+        assertTrue(otherIsScripified);
+        assertEq(otherScripified, 25 * 1e18);
+        assertEq(investorFinal.unitsRepresented, 25 * 1e18);
+        assertEq(otherFinal.unitsRepresented, 175 * 1e18);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 50 * 1e18);
         assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 0);
         assertEq(
             issuanceManager.getScripPoolAmountById(address(certPrinter), investorCertId),
-            50 * 1e18
+            25 * 1e18
         );
         assertEq(
             issuanceManager.getScripPoolAmountById(address(certPrinter), otherInvestorCertId),
-            0
+            25 * 1e18
         );
         assertEq(
             issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
-            100 * 1e18
+            25 * 1e18
         );
         assertEq(
             issuanceManager.getScripPoolSharesById(address(certPrinter), otherInvestorCertId),
-            0
+            25 * 1e18
         );
     }
 
@@ -1905,9 +1905,14 @@ contract IssuanceManagerConversionTest is Test {
             .getCertScripifiedStatus(address(certPrinter), 5);
 
         assertTrue(isScripifiedA);
-        assertFalse(isScripifiedB);
+        assertTrue(isScripifiedB);
         assertTrue(isScripifiedC);
         assertTrue(isScripifiedD);
+        // Four equal source positions share the 160-unit residual equally, independent of recipients.
+        assertApproxEqAbs(scripifiedA, 40e18, 1);
+        assertApproxEqAbs(scripifiedB, 40e18, 1);
+        assertApproxEqAbs(scripifiedC, 40e18, 1);
+        assertApproxEqAbs(scripifiedD, 40e18, 1);
         assertFalse(isScripifiedNewOne);
         assertFalse(isScripifiedNewTwo);
 
@@ -1969,20 +1974,20 @@ contract IssuanceManagerConversionTest is Test {
             scripifiedNewOne +
             scripifiedNewTwo;
         // Per-cert claims use integer division (floor); summing (scrip/wad)/1e18 per cert truncates
-        // again and can under-count vs vault. Sum wads first — multi-step fixed-point can differ by ≤1 wei.
+        // again and can under-count vs vault. Each of the four positions can lose one wei here.
         (uint256 vaultAssetsWad,) = issuanceManager.getCertScripUnitVault(
             address(certPrinter)
         );
         assertApproxEqAbs(
             totalScripifiedWad,
             vaultAssetsWad,
-            1,
+            4,
             "scripified wad sum vs vault totalAssetsWad"
         );
         assertApproxEqAbs(
             totalActiveWad + totalScripifiedWad,
             400e18,
-            1,
+            4,
             "active + scripified units vs pool cap"
         );
 
@@ -2147,26 +2152,26 @@ contract IssuanceManagerConversionTest is Test {
             .getCertScripifiedStatus(address(certPrinter), 6);
 
         assertTrue(isScripifiedA);
-        assertEq(scripifiedA, 54 * 1e18);
-        assertFalse(isScripifiedB);
-        assertEq(scripifiedB, 0);
+        assertApproxEqAbs(scripifiedA, 24e18, 1);
+        assertTrue(isScripifiedB);
+        assertApproxEqAbs(scripifiedB, 24e18, 1);
         assertTrue(isScripifiedC);
-        // Vault share→asset conversion can floor nominal claims by ≤1 unit vs naive expectations
+        // All five source positions retain one fifth of the 120-unit residual, to within one wei.
         assertApproxEqAbs(
             scripifiedC,
-            6 * 1e18,
-            1 * 1e18,
+            24e18,
+            1,
             "holder C scripified wad (rounding)"
         );
         assertTrue(isScripifiedD);
         assertApproxEqAbs(
             scripifiedD,
-            6 * 1e18,
-            1 * 1e18,
+            24e18,
+            1,
             "holder D scripified wad (rounding)"
         );
         assertTrue(isScripifiedE);
-        assertEq(scripifiedE, 54 * 1e18);
+        assertApproxEqAbs(scripifiedE, 24e18, 1);
         assertFalse(isScripifiedNewOne);
         assertEq(scripifiedNewOne, 0);
         assertFalse(isScripifiedNewTwo);
@@ -2270,7 +2275,7 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter)
         );
         // More holders / conversions → slightly larger aggregated rounding vs vault assets
-        uint256 fiveHolderWadTol = 3;
+        uint256 fiveHolderWadTol = 5; // At most one floored wei per source position in this scenario.
         assertApproxEqAbs(
             totalScripifiedWadFive,
             vaultAssetsWadFive,
@@ -2368,5 +2373,3 @@ contract IssuanceManagerConversionTest is Test {
         });
     }
 }
-
-

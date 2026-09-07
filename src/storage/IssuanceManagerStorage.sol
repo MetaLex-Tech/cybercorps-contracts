@@ -44,6 +44,8 @@ pragma solidity 0.8.28;
 import "openzeppelin-contracts/proxy/beacon/BeaconProxy.sol";
 import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
+import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
+import {ProportionalVaultMath} from "../libs/ProportionalVaultMath.sol";
 import "../interfaces/ICondition.sol";
 import "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/ICyberCorp.sol";
@@ -209,8 +211,8 @@ library IssuanceManagerStorage {
         uint256 activeTokenId;
     }
 
-    /// @notice Per-certificate vault position: nominal shares in the scripified-units vault.
-    ///         Claim on underlying (wad) = vaultNominalShares * totalAssetsWad / totalNominalShares.
+    /// @notice Per-certificate normalized shares, reduced by the pool loss index when evaluated.
+    /// @dev Current shares equal the floored underlying claim. Stored shares belong to the snapshot index.
     /// @dev Three slots preserve layout vs legacy (amount, reductionDebt, maxUnitsRepresented);
     ///      `vaultEpoch` is appended, so existing positions read epoch 0 and match a fresh pool.
     struct CertScripState {
@@ -220,6 +222,9 @@ library IssuanceManagerStorage {
         uint256 maxUnitsRepresented;
         /// @dev Vault epoch `vaultNominalShares` was recorded in; a stale epoch means zero shares.
         uint256 vaultEpoch;
+        // Position snapshot; a zero index means no shares have been deposited.
+        uint256 lossIndex;
+        uint256 lossScale;
     }
 
     /// @notice ERC4626-style pool for scripified certificate units (underlying in 18-dec wad).
@@ -228,6 +233,9 @@ library IssuanceManagerStorage {
         uint256 totalNominalShares;
         /// @dev Bumped whenever the pool empties, invalidating every outstanding position at once.
         uint256 vaultEpoch;
+        // Initialized on the first deposit.
+        uint256 lossIndex;
+        uint256 lossScale;
     }
 
     struct RecertificationApproval {
@@ -494,52 +502,35 @@ library IssuanceManagerStorage {
         return issuanceManagerStorage().certScripStates[certAddress][id];
     }
 
-    /// @notice Underlying wad claim for one certificate’s vault position (pro-rata on total pool).
-    function _assetsOfVaultPosition(
-        address certAddress,
-        uint256 tokenId
-    ) internal view returns (uint256 assetsWad) {
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
-        if (pool.totalNominalShares == 0) {
-            return 0;
-        }
-        return
-            _vaultSharesOf(certAddress, tokenId) * pool.totalAssetsWad /
-            pool.totalNominalShares;
+    /// @notice Current underlying claim, rounded down. Rounding dust stays in the shared backing pool.
+    function _assetsOfVaultPosition(address certAddress, uint256 tokenId)
+        internal view returns (uint256)
+    {
+        return _vaultSharesOf(certAddress, tokenId);
     }
 
-    /// @dev Shares this certificate holds in the pool's current epoch. A position recorded before the pool
-    ///      last emptied is worthless and reads as zero without needing to have been written back.
-    function _vaultSharesOf(
-        address certAddress,
-        uint256 tokenId
-    ) internal view returns (uint256) {
-        CertScripState storage certState = getCertScripState(certAddress, tokenId);
-        if (
-            certState.vaultEpoch !=
-            issuanceManagerStorage().certScripUnitPools[certAddress].vaultEpoch
-        ) {
-            return 0;
-        }
-        return certState.vaultNominalShares;
+    /// @dev Effective normalized shares; stale epochs never participate in a refilled pool.
+    function _vaultSharesOf(address certAddress, uint256 tokenId) internal view returns (uint256) {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
+        CertScripState storage position = getCertScripState(certAddress, tokenId);
+        if (position.vaultEpoch != pool.vaultEpoch) return 0;
+        if (position.lossIndex == 0) return 0;
+        return ProportionalVaultMath.balance(
+            position.vaultNominalShares, pool.lossIndex, position.lossIndex, pool.lossScale - position.lossScale
+        );
     }
 
-    /// @dev Same position, normalized into the current epoch so it is safe to write to: a stale position is
-    ///      cleared before use, so the deposit path can never add new shares on top of dead ones.
-    function _vaultPositionForWrite(
-        address certAddress,
-        uint256 tokenId
-    ) internal returns (CertScripState storage certState) {
-        certState = getCertScripState(certAddress, tokenId);
-        uint256 epoch = issuanceManagerStorage()
-            .certScripUnitPools[certAddress]
-            .vaultEpoch;
-        if (certState.vaultEpoch != epoch) {
-            certState.vaultNominalShares = 0;
-            certState.vaultEpoch = epoch;
-        }
+    /// @dev Materialize only the depositing position. Discard sub-wei fractions toward the pool.
+    function _vaultPositionForWrite(address certAddress, uint256 tokenId)
+        internal returns (CertScripState storage position)
+    {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
+        if (pool.lossIndex == 0) pool.lossIndex = ProportionalVaultMath.ONE;
+        position = getCertScripState(certAddress, tokenId);
+        position.vaultNominalShares = _vaultSharesOf(certAddress, tokenId);
+        position.vaultEpoch = pool.vaultEpoch;
+        position.lossIndex = pool.lossIndex;
+        position.lossScale = pool.lossScale;
     }
 
     /// @dev Scrip-token-equivalent claim for a single certificate's vault position.
@@ -550,7 +541,7 @@ library IssuanceManagerStorage {
         (uint256 num, uint256 den) = _getScripRatioOrDefault(certAddress);
         uint256 assetsWad = _assetsOfVaultPosition(certAddress, tokenId);
         if (assetsWad == 0) return 0;
-        return assetsWad * num / den;
+        return Math.mulDiv(assetsWad, num, den);
     }
 
     /// @dev Nominal vault shares held by a single certificate.
@@ -638,7 +629,7 @@ library IssuanceManagerStorage {
         ];
         pricePerShareRay = pool.totalNominalShares == 0
             ? 0
-            : pool.totalAssetsWad * VAULT_RAY / pool.totalNominalShares;
+            : Math.mulDiv(pool.totalAssetsWad, VAULT_RAY, pool.totalNominalShares);
     }
 
     function getCertScripUnitVault(
@@ -1228,30 +1219,9 @@ library IssuanceManagerStorage {
             approval.endorsementTimestamp = endorsementTimestamp;
         }
 
-        if (selection.foundActive) {
-            // Redeem vault shares for this certificate up to pool claim; burn nominals. Conversion
-            // above claim is still backed by burned scrip, so dilute remaining pool pro-rata via
-            // _withdrawVaultAssets (same economics as excess scrip burning without a cert position).
-            uint256 claimWad = _assetsOfVaultPosition(
-                certAddress,
-                selection.activeTokenId
-            );
-            uint256 fromVaultWad = units < claimWad ? units : claimWad;
-            uint256 redeemedWad;
-            if (fromVaultWad > 0) {
-                redeemedWad = _redeemVaultForCert(
-                    certAddress,
-                    selection.activeTokenId,
-                    fromVaultWad
-                );
-            }
-            if (units > redeemedWad) {
-                _withdrawVaultAssets(certAddress, units - redeemedWad);
-            }
-        } else {
-            // No active cert: socialized withdrawal from the shared vault (nominals unchanged).
-            _withdrawVaultAssets(certAddress, units);
-        }
+        // Every conversion retires backing and normalized shares proportionally, regardless of
+        // which certificate receives the active units. ERC20 ownership authorizes redemption.
+        _withdrawVaultAssets(certAddress, units);
         ICyberScrip(scripifiedCert).burnFrom(account, amount);
 
         if (selection.foundActive) {
@@ -1519,95 +1489,44 @@ library IssuanceManagerStorage {
         }
     }
 
-    /// @notice Deposit units (wad) into the shared vault; mint nominal shares to this certificate.
-    function _depositCertScripUnits(
-        address certAddress,
-        uint256 tokenId,
-        uint256 assetsWad
-    ) internal {
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
-        CertScripState storage certState = _vaultPositionForWrite(
-            certAddress,
-            tokenId
-        );
-
-        uint256 sharesMinted = pool.totalNominalShares == 0
-            ? assetsWad
-            : assetsWad * pool.totalNominalShares / pool.totalAssetsWad;
-        if (sharesMinted == 0) revert ZeroSharesMinted();
-
-        certState.vaultNominalShares += sharesMinted;
-        pool.totalNominalShares += sharesMinted;
+    /// @notice Deposit underlying units and mint normalized shares 1:1 to their source certificate.
+    function _depositCertScripUnits(address certAddress, uint256 tokenId, uint256 assetsWad) internal {
+        if (assetsWad == 0) revert ZeroSharesMinted();
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
+        CertScripState storage position = _vaultPositionForWrite(certAddress, tokenId);
+        position.vaultNominalShares += assetsWad;
         pool.totalAssetsWad += assetsWad;
+        pool.totalNominalShares = pool.totalAssetsWad;
     }
 
-    /// @notice ERC4626-style withdraw: burn this certificate's nominal shares and pull `assetsWad`
-    ///         from the vault (exact asset burn; shares burnt round up).
-    function _redeemVaultForCert(
-        address certAddress,
-        uint256 tokenId,
-        uint256 assetsWad
-    ) internal returns (uint256 assetsRemovedWad) {
-        if (assetsWad == 0) return 0;
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
-        CertScripState storage certState = _vaultPositionForWrite(
-            certAddress,
-            tokenId
-        );
-        uint256 S = pool.totalNominalShares;
-        uint256 T = pool.totalAssetsWad;
-        if (S == 0 || T == 0) revert EmptyVault();
+    /// @notice Socialize a withdrawal across all positions in O(1), reducing both assets and shares.
+    /// @dev Effective position shares are calculated when read. They round down; their sum cannot exceed
+    /// the global total. Unattributed rounding dust remains backing for outstanding fungible scrip,
+    /// and is redeemable even if every individual certificate claim rounds to zero.
+    function _withdrawVaultAssets(address certAddress, uint256 assetsOutWad) internal {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
+        uint256 previous = pool.totalAssetsWad;
+        if (previous == 0) revert EmptyVault();
+        if (assetsOutWad > previous) revert VaultWithdrawalExceedsAssets();
 
-        uint256 claimWad = certState.vaultNominalShares * T / S;
-        if (assetsWad > claimWad) revert VaultRedemptionExceedsClaim();
-
-        uint256 sharesBurned = (assetsWad * S + T - 1) / T;
-        if (sharesBurned > certState.vaultNominalShares) {
-            sharesBurned = certState.vaultNominalShares;
-            assetsWad = sharesBurned * T / S;
-        }
-
-        certState.vaultNominalShares -= sharesBurned;
-        pool.totalNominalShares -= sharesBurned;
-        pool.totalAssetsWad -= assetsWad;
-
-        if (pool.totalAssetsWad == 0) {
+        uint256 remaining = previous - assetsOutWad;
+        pool.totalAssetsWad = remaining;
+        pool.totalNominalShares = remaining;
+        if (remaining == 0) {
             _resetVaultPositions(certAddress);
-        }
-        return assetsWad;
-    }
-
-    /// @notice Remove underlying from vault; all certificate positions diluted pro-rata
-    ///         (nominal shares unchanged, price per share in underlying drops).
-    function _withdrawVaultAssets(
-        address certAddress,
-        uint256 assetsOutWad
-    ) internal {
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
-        if (pool.totalAssetsWad == 0) revert EmptyVault();
-        if (assetsOutWad > pool.totalAssetsWad) {
-            revert VaultWithdrawalExceedsAssets();
-        }
-
-        pool.totalAssetsWad -= assetsOutWad;
-        if (pool.totalAssetsWad == 0) {
-            _resetVaultPositions(certAddress);
+        } else if (assetsOutWad != 0) {
+            (pool.lossIndex, pool.lossScale) = ProportionalVaultMath.reduce(
+                pool.lossIndex, pool.lossScale, remaining, previous
+            );
         }
     }
 
-    /// @dev Retires every outstanding position in one step by bumping the epoch, so an emptied pool costs
-    ///      O(1) instead of a walk over the printer's whole (permanently growing) token supply.
+    /// @dev O(1) retirement of all positions and their index snapshots when the backing pool empties.
     function _resetVaultPositions(address certAddress) internal {
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
         pool.totalNominalShares = 0;
         pool.vaultEpoch++;
+        pool.lossIndex = ProportionalVaultMath.ONE;
+        pool.lossScale = 0;
     }
 }

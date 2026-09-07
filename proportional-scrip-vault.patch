@@ -1,0 +1,1083 @@
+diff --git a/src/IssuanceManager.sol b/src/IssuanceManager.sol
+index 1fbce03..26f4a30 100644
+--- a/src/IssuanceManager.sol
++++ b/src/IssuanceManager.sol
+@@ -786,7 +786,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
+     }
+ 
+     /// @notice `totalTrackedScrip` is CyberScrip `totalSupply`. Second value is vault price per
+-    ///         nominal share: `totalAssetsWad * 1e27 / totalNominalShares` (ray), or 0 if empty.
++    ///         nominal share (ray), or 0 if empty. Initialized proportional pools report 1e27.
+     function getScripPoolTotals(
+         address certAddress
+     )
+@@ -797,7 +797,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
+         return IssuanceManagerStorage.getScripPoolTotals(certAddress);
+     }
+ 
+-    /// @notice Underlying units (wad) and total nominal shares in the scripified-units vault.
++    /// @notice Underlying units (wad) and normalized nominal shares, equal after index initialization.
++    /// @dev Individually floored certificate positions may sum to less than the total due to pool dust.
+     function getCertScripUnitVault(address certAddress)
+         external
+         view
+@@ -813,6 +814,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
+         return IssuanceManagerStorage.getScripPoolAmountById(certAddress, id);
+     }
+ 
++    /// @notice Effective rebasing shares; excludes sub-wei attribution dust held by the pool.
+     function getScripPoolSharesById(
+         address certAddress,
+         uint256 id
+diff --git a/src/libs/ProportionalVaultMath.sol b/src/libs/ProportionalVaultMath.sol
+new file mode 100644
+index 0000000..1261226
+--- /dev/null
++++ b/src/libs/ProportionalVaultMath.sol
+@@ -0,0 +1,48 @@
++// SPDX-License-Identifier: UNLICENSED
++pragma solidity 0.8.28;
++
++import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
++
++/// @notice Bounded-precision cumulative loss index for proportional certificate attribution.
++/// @dev An index is mantissa / 2**scale, with mantissa in [2**255, 2**256).
++/// Keeping the exponent separately prevents repeated withdrawals from underflowing a fixed-point index.
++/// This is accounting metadata: neither the mantissa nor the exponent is a redeemable share supply.
++library ProportionalVaultMath {
++    uint256 internal constant ONE = 1 << 255;
++
++    /// @dev Requires 0 < remaining <= previous and a normalized mantissa. Rounds toward the pool.
++    /// The unnormalized quotient has at least 254 significant bits, even for a one-wei residual pool.
++    function reduce(uint256 mantissa, uint256 scale, uint256 remaining, uint256 previous)
++        internal
++        pure
++        returns (uint256 nextMantissa, uint256 nextScale)
++    {
++        uint256 shift = Math.log2(previous) - Math.log2(remaining);
++        if (shift != 0) --shift;
++        // remaining << shift <= previous, so neither the shift nor mulDiv's quotient can overflow.
++        uint256 quotient = Math.mulDiv(mantissa, remaining << shift, previous);
++        uint256 normalize = 255 - Math.log2(quotient);
++        nextMantissa = quotient << normalize;
++        nextScale = scale + shift + normalize;
++    }
++
++    /// @dev Exact floor(amount * current / snapshot / 2**scaleDifference), using normalized mantissas.
++    /// Unlike mulDiv followed by a shift, this also handles a 257-bit intermediate quotient.
++    function balance(uint256 amount, uint256 current, uint256 snapshot, uint256 scaleDifference)
++        internal
++        pure
++        returns (uint256)
++    {
++        if (amount == 0 || scaleDifference > 256) return 0;
++        if (scaleDifference == 0) return Math.mulDiv(amount, current, snapshot);
++
++        // Divide the amount by two before mulDiv, then recover the exact carry from its remainder.
++        // current < 2 * snapshot, so the half-product quotient and the carry always fit uint256.
++        uint256 half = amount >> 1;
++        uint256 quotient = Math.mulDiv(half, current, snapshot);
++        if ((amount & 1) != 0 && mulmod(half, current, snapshot) >= snapshot - (current >> 1)) {
++            ++quotient;
++        }
++        return quotient >> (scaleDifference - 1);
++    }
++}
+diff --git a/src/storage/IssuanceManagerStorage.sol b/src/storage/IssuanceManagerStorage.sol
+index 5ea9f50..cc9f8c5 100644
+--- a/src/storage/IssuanceManagerStorage.sol
++++ b/src/storage/IssuanceManagerStorage.sol
+@@ -44,6 +44,8 @@ pragma solidity 0.8.28;
+ import "openzeppelin-contracts/proxy/beacon/BeaconProxy.sol";
+ import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
+ import "openzeppelin-contracts/utils/Create2.sol";
++import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
++import {ProportionalVaultMath} from "../libs/ProportionalVaultMath.sol";
+ import "../interfaces/ICondition.sol";
+ import "../interfaces/ILedgerEntryToken.sol";
+ import "../interfaces/ICyberCorp.sol";
+@@ -209,8 +211,8 @@ library IssuanceManagerStorage {
+         uint256 activeTokenId;
+     }
+ 
+-    /// @notice Per-certificate vault position: nominal shares in the scripified-units vault.
+-    ///         Claim on underlying (wad) = vaultNominalShares * totalAssetsWad / totalNominalShares.
++    /// @notice Per-certificate normalized shares, lazily reduced by the pool loss index.
++    /// @dev Current shares equal the floored underlying claim. Stored shares belong to the snapshot index.
+     /// @dev Three slots preserve layout vs legacy (amount, reductionDebt, maxUnitsRepresented);
+     ///      `vaultEpoch` is appended, so existing positions read epoch 0 and match a fresh pool.
+     struct CertScripState {
+@@ -220,6 +222,9 @@ library IssuanceManagerStorage {
+         uint256 maxUnitsRepresented;
+         /// @dev Vault epoch `vaultNominalShares` was recorded in; a stale epoch means zero shares.
+         uint256 vaultEpoch;
++        // Appended fields: zero index identifies an unmigrated legacy position.
++        uint256 lossIndex;
++        uint256 lossScale;
+     }
+ 
+     /// @notice ERC4626-style pool for scripified certificate units (underlying in 18-dec wad).
+@@ -228,6 +233,12 @@ library IssuanceManagerStorage {
+         uint256 totalNominalShares;
+         /// @dev Bumped whenever the pool empties, invalidating every outstanding position at once.
+         uint256 vaultEpoch;
++        // Appended for upgrade safety. Initialized lazily on the first vault mutation.
++        uint256 lossIndex;
++        uint256 lossScale;
++        // Frozen legacy exchange rate allows positions to migrate without enumeration.
++        uint256 legacyAssetsWad;
++        uint256 legacyNominalShares;
+     }
+ 
+     struct RecertificationApproval {
+@@ -494,52 +505,58 @@ library IssuanceManagerStorage {
+         return issuanceManagerStorage().certScripStates[certAddress][id];
+     }
+ 
+-    /// @notice Underlying wad claim for one certificate’s vault position (pro-rata on total pool).
+-    function _assetsOfVaultPosition(
+-        address certAddress,
+-        uint256 tokenId
+-    ) internal view returns (uint256 assetsWad) {
+-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+-            certAddress
+-        ];
+-        if (pool.totalNominalShares == 0) {
+-            return 0;
++    /// @notice Current underlying claim, rounded down. Rounding dust stays in the shared backing pool.
++    function _assetsOfVaultPosition(address certAddress, uint256 tokenId)
++        internal view returns (uint256)
++    {
++        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
++        if (pool.totalNominalShares == 0) return 0;
++        uint256 shares = _vaultSharesOf(certAddress, tokenId);
++        // Before first mutation, preserve the legacy exchange rate, using full-precision arithmetic.
++        return pool.lossIndex == 0
++            ? Math.mulDiv(shares, pool.totalAssetsWad, pool.totalNominalShares)
++            : shares;
++    }
++
++    /// @dev Effective normalized shares; stale epochs never participate in a refilled pool.
++    function _vaultSharesOf(address certAddress, uint256 tokenId) internal view returns (uint256) {
++        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
++        CertScripState storage position = getCertScripState(certAddress, tokenId);
++        if (position.vaultEpoch != pool.vaultEpoch) return 0;
++        if (pool.lossIndex == 0) return position.vaultNominalShares;
++
++        uint256 amount = position.vaultNominalShares;
++        uint256 index = position.lossIndex;
++        uint256 scale = position.lossScale;
++        if (index == 0) {
++            if (pool.legacyNominalShares == 0) return 0;
++            amount = Math.mulDiv(amount, pool.legacyAssetsWad, pool.legacyNominalShares);
++            index = ProportionalVaultMath.ONE;
++            scale = 0;
+         }
+-        return
+-            _vaultSharesOf(certAddress, tokenId) * pool.totalAssetsWad /
+-            pool.totalNominalShares;
++        return ProportionalVaultMath.balance(amount, pool.lossIndex, index, pool.lossScale - scale);
+     }
+ 
+-    /// @dev Shares this certificate holds in the pool's current epoch. A position recorded before the pool
+-    ///      last emptied is worthless and reads as zero without needing to have been written back.
+-    function _vaultSharesOf(
+-        address certAddress,
+-        uint256 tokenId
+-    ) internal view returns (uint256) {
+-        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+-        if (
+-            certState.vaultEpoch !=
+-            issuanceManagerStorage().certScripUnitPools[certAddress].vaultEpoch
+-        ) {
+-            return 0;
+-        }
+-        return certState.vaultNominalShares;
++    /// @dev Normalize a legacy pool once, without changing its assets or walking certificate positions.
++    function _initializeVaultIndex(CertScripUnitPool storage pool) internal {
++        if (pool.lossIndex != 0) return;
++        pool.legacyAssetsWad = pool.totalAssetsWad;
++        pool.legacyNominalShares = pool.totalNominalShares;
++        pool.lossIndex = ProportionalVaultMath.ONE;
++        pool.totalNominalShares = pool.totalAssetsWad;
+     }
+ 
+-    /// @dev Same position, normalized into the current epoch so it is safe to write to: a stale position is
+-    ///      cleared before use, so the deposit path can never add new shares on top of dead ones.
+-    function _vaultPositionForWrite(
+-        address certAddress,
+-        uint256 tokenId
+-    ) internal returns (CertScripState storage certState) {
+-        certState = getCertScripState(certAddress, tokenId);
+-        uint256 epoch = issuanceManagerStorage()
+-            .certScripUnitPools[certAddress]
+-            .vaultEpoch;
+-        if (certState.vaultEpoch != epoch) {
+-            certState.vaultNominalShares = 0;
+-            certState.vaultEpoch = epoch;
+-        }
++    /// @dev Materialize only the depositing position. Discard sub-wei fractions toward the pool.
++    function _vaultPositionForWrite(address certAddress, uint256 tokenId)
++        internal returns (CertScripState storage position)
++    {
++        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
++        _initializeVaultIndex(pool);
++        position = getCertScripState(certAddress, tokenId);
++        position.vaultNominalShares = _vaultSharesOf(certAddress, tokenId);
++        position.vaultEpoch = pool.vaultEpoch;
++        position.lossIndex = pool.lossIndex;
++        position.lossScale = pool.lossScale;
+     }
+ 
+     /// @dev Scrip-token-equivalent claim for a single certificate's vault position.
+@@ -550,7 +567,7 @@ library IssuanceManagerStorage {
+         (uint256 num, uint256 den) = _getScripRatioOrDefault(certAddress);
+         uint256 assetsWad = _assetsOfVaultPosition(certAddress, tokenId);
+         if (assetsWad == 0) return 0;
+-        return assetsWad * num / den;
++        return Math.mulDiv(assetsWad, num, den);
+     }
+ 
+     /// @dev Nominal vault shares held by a single certificate.
+@@ -638,7 +655,7 @@ library IssuanceManagerStorage {
+         ];
+         pricePerShareRay = pool.totalNominalShares == 0
+             ? 0
+-            : pool.totalAssetsWad * VAULT_RAY / pool.totalNominalShares;
++            : Math.mulDiv(pool.totalAssetsWad, VAULT_RAY, pool.totalNominalShares);
+     }
+ 
+     function getCertScripUnitVault(
+@@ -1228,30 +1245,9 @@ library IssuanceManagerStorage {
+             approval.endorsementTimestamp = endorsementTimestamp;
+         }
+ 
+-        if (selection.foundActive) {
+-            // Redeem vault shares for this certificate up to pool claim; burn nominals. Conversion
+-            // above claim is still backed by burned scrip, so dilute remaining pool pro-rata via
+-            // _withdrawVaultAssets (same economics as excess scrip burning without a cert position).
+-            uint256 claimWad = _assetsOfVaultPosition(
+-                certAddress,
+-                selection.activeTokenId
+-            );
+-            uint256 fromVaultWad = units < claimWad ? units : claimWad;
+-            uint256 redeemedWad;
+-            if (fromVaultWad > 0) {
+-                redeemedWad = _redeemVaultForCert(
+-                    certAddress,
+-                    selection.activeTokenId,
+-                    fromVaultWad
+-                );
+-            }
+-            if (units > redeemedWad) {
+-                _withdrawVaultAssets(certAddress, units - redeemedWad);
+-            }
+-        } else {
+-            // No active cert: socialized withdrawal from the shared vault (nominals unchanged).
+-            _withdrawVaultAssets(certAddress, units);
+-        }
++        // Every conversion retires backing and normalized shares proportionally, regardless of
++        // which certificate receives the active units. ERC20 ownership authorizes redemption.
++        _withdrawVaultAssets(certAddress, units);
+         ICyberScrip(scripifiedCert).burnFrom(account, amount);
+ 
+         if (selection.foundActive) {
+@@ -1519,95 +1515,47 @@ library IssuanceManagerStorage {
+         }
+     }
+ 
+-    /// @notice Deposit units (wad) into the shared vault; mint nominal shares to this certificate.
+-    function _depositCertScripUnits(
+-        address certAddress,
+-        uint256 tokenId,
+-        uint256 assetsWad
+-    ) internal {
+-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+-            certAddress
+-        ];
+-        CertScripState storage certState = _vaultPositionForWrite(
+-            certAddress,
+-            tokenId
+-        );
+-
+-        uint256 sharesMinted = pool.totalNominalShares == 0
+-            ? assetsWad
+-            : assetsWad * pool.totalNominalShares / pool.totalAssetsWad;
+-        if (sharesMinted == 0) revert ZeroSharesMinted();
+-
+-        certState.vaultNominalShares += sharesMinted;
+-        pool.totalNominalShares += sharesMinted;
++    /// @notice Deposit underlying units and mint normalized shares 1:1 to their source certificate.
++    function _depositCertScripUnits(address certAddress, uint256 tokenId, uint256 assetsWad) internal {
++        if (assetsWad == 0) revert ZeroSharesMinted();
++        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
++        CertScripState storage position = _vaultPositionForWrite(certAddress, tokenId);
++        position.vaultNominalShares += assetsWad;
+         pool.totalAssetsWad += assetsWad;
+-    }
+-
+-    /// @notice ERC4626-style withdraw: burn this certificate's nominal shares and pull `assetsWad`
+-    ///         from the vault (exact asset burn; shares burnt round up).
+-    function _redeemVaultForCert(
+-        address certAddress,
+-        uint256 tokenId,
+-        uint256 assetsWad
+-    ) internal returns (uint256 assetsRemovedWad) {
+-        if (assetsWad == 0) return 0;
+-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+-            certAddress
+-        ];
+-        CertScripState storage certState = _vaultPositionForWrite(
+-            certAddress,
+-            tokenId
+-        );
+-        uint256 S = pool.totalNominalShares;
+-        uint256 T = pool.totalAssetsWad;
+-        if (S == 0 || T == 0) revert EmptyVault();
+-
+-        uint256 claimWad = certState.vaultNominalShares * T / S;
+-        if (assetsWad > claimWad) revert VaultRedemptionExceedsClaim();
+-
+-        uint256 sharesBurned = (assetsWad * S + T - 1) / T;
+-        if (sharesBurned > certState.vaultNominalShares) {
+-            sharesBurned = certState.vaultNominalShares;
+-            assetsWad = sharesBurned * T / S;
+-        }
+-
+-        certState.vaultNominalShares -= sharesBurned;
+-        pool.totalNominalShares -= sharesBurned;
+-        pool.totalAssetsWad -= assetsWad;
+-
+-        if (pool.totalAssetsWad == 0) {
+-            _resetVaultPositions(certAddress);
+-        }
+-        return assetsWad;
+-    }
+-
+-    /// @notice Remove underlying from vault; all certificate positions diluted pro-rata
+-    ///         (nominal shares unchanged, price per share in underlying drops).
+-    function _withdrawVaultAssets(
+-        address certAddress,
+-        uint256 assetsOutWad
+-    ) internal {
+-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+-            certAddress
+-        ];
+-        if (pool.totalAssetsWad == 0) revert EmptyVault();
+-        if (assetsOutWad > pool.totalAssetsWad) {
+-            revert VaultWithdrawalExceedsAssets();
+-        }
+-
+-        pool.totalAssetsWad -= assetsOutWad;
+-        if (pool.totalAssetsWad == 0) {
++        pool.totalNominalShares = pool.totalAssetsWad;
++    }
++
++    /// @notice Socialize a withdrawal across all positions in O(1), reducing both assets and shares.
++    /// @dev Effective position shares are evaluated lazily. They round down; their sum cannot exceed
++    /// the global total. Unattributed rounding dust remains backing for outstanding fungible scrip,
++    /// and is redeemable even if every individual certificate claim rounds to zero.
++    function _withdrawVaultAssets(address certAddress, uint256 assetsOutWad) internal {
++        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
++        uint256 previous = pool.totalAssetsWad;
++        if (previous == 0) revert EmptyVault();
++        if (assetsOutWad > previous) revert VaultWithdrawalExceedsAssets();
++        _initializeVaultIndex(pool);
++
++        uint256 remaining = previous - assetsOutWad;
++        pool.totalAssetsWad = remaining;
++        pool.totalNominalShares = remaining;
++        if (remaining == 0) {
+             _resetVaultPositions(certAddress);
++        } else if (assetsOutWad != 0) {
++            (pool.lossIndex, pool.lossScale) = ProportionalVaultMath.reduce(
++                pool.lossIndex, pool.lossScale, remaining, previous
++            );
+         }
+     }
+ 
+-    /// @dev Retires every outstanding position in one step by bumping the epoch, so an emptied pool costs
+-    ///      O(1) instead of a walk over the printer's whole (permanently growing) token supply.
++    /// @dev O(1) retirement of all positions and their index snapshots when the backing pool empties.
+     function _resetVaultPositions(address certAddress) internal {
+-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+-            certAddress
+-        ];
++        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
+         pool.totalNominalShares = 0;
+         pool.vaultEpoch++;
++        pool.lossIndex = ProportionalVaultMath.ONE;
++        pool.lossScale = 0;
++        pool.legacyAssetsWad = 0;
++        pool.legacyNominalShares = 0;
+     }
+ }
+diff --git a/test/IssuanceManagerConversionTest.t.sol b/test/IssuanceManagerConversionTest.t.sol
+index 9f80746..0cc0878 100644
+--- a/test/IssuanceManagerConversionTest.t.sol
++++ b/test/IssuanceManagerConversionTest.t.sol
+@@ -920,8 +920,8 @@ contract IssuanceManagerConversionTest is Test {
+         vm.expectRevert(IssuanceManagerStorage.ScripOutstanding.selector);
+         issuanceManager.setScripRatio(address(certPrinter), 1, 1);
+ 
+-        // Redeeming at the unchanged ratio returns exactly the deposit, leaving the investor's
+-        // units in the vault.
++        // Redeeming returns exactly the deposit in active units. The remaining backing is
++        // attributed equally to both certificates under proportional redemption.
+         vm.prank(insider);
+         issuanceManager.convertScripToCert(address(certPrinter), 200 * 1e18);
+         assertEq(
+@@ -930,7 +930,7 @@ contract IssuanceManagerConversionTest is Test {
+         );
+         assertEq(
+             issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
+-            100 * 1e18
++            50 * 1e18
+         );
+     }
+ 
+@@ -1626,8 +1626,8 @@ contract IssuanceManagerConversionTest is Test {
+             otherInvestor,
+             otherInvestorCertId,
+             150 * 1e18,
+-            150 * 1e18,
+-            0
++            175 * 1e18,
++            25 * 1e18
+         );
+         vm.expectEmit(true, true, true, true);
+         emit IssuanceManager.ScripRecertified(
+@@ -1635,10 +1635,10 @@ contract IssuanceManagerConversionTest is Test {
+             otherInvestor,
+             otherInvestorCertId,
+             150 * 1e18,
+-            150 * 1e18,
+-            0,
++            175 * 1e18,
++            25 * 1e18,
+             50 * 1e18,
+-            100 * 1e18
++            50 * 1e18
+         );
+         vm.prank(otherInvestor);
+         issuanceManager.convertScripToCert(address(certPrinter), 150 * 1e18);
+@@ -1661,28 +1661,28 @@ contract IssuanceManagerConversionTest is Test {
+         assertEq(investorActiveFinal.unitsRepresented, 0);
+         assertEq(otherActiveFinal.unitsRepresented, 150 * 1e18);
+         assertTrue(investorIsScripified);
+-        assertEq(investorScripified, 50 * 1e18);
+-        assertFalse(otherIsScripified);
+-        assertEq(otherScripified, 0);
+-        assertEq(investorFinal.unitsRepresented, 50 * 1e18);
+-        assertEq(otherFinal.unitsRepresented, 150 * 1e18);
++        assertEq(investorScripified, 25 * 1e18);
++        assertTrue(otherIsScripified);
++        assertEq(otherScripified, 25 * 1e18);
++        assertEq(investorFinal.unitsRepresented, 25 * 1e18);
++        assertEq(otherFinal.unitsRepresented, 175 * 1e18);
+         assertEq(ICyberScrip(scrip).balanceOf(investor), 50 * 1e18);
+         assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 0);
+         assertEq(
+             issuanceManager.getScripPoolAmountById(address(certPrinter), investorCertId),
+-            50 * 1e18
++            25 * 1e18
+         );
+         assertEq(
+             issuanceManager.getScripPoolAmountById(address(certPrinter), otherInvestorCertId),
+-            0
++            25 * 1e18
+         );
+         assertEq(
+             issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
+-            100 * 1e18
++            25 * 1e18
+         );
+         assertEq(
+             issuanceManager.getScripPoolSharesById(address(certPrinter), otherInvestorCertId),
+-            0
++            25 * 1e18
+         );
+     }
+ 
+@@ -1905,9 +1905,14 @@ contract IssuanceManagerConversionTest is Test {
+             .getCertScripifiedStatus(address(certPrinter), 5);
+ 
+         assertTrue(isScripifiedA);
+-        assertFalse(isScripifiedB);
++        assertTrue(isScripifiedB);
+         assertTrue(isScripifiedC);
+         assertTrue(isScripifiedD);
++        // Four equal source positions share the 160-unit residual equally, independent of recipients.
++        assertApproxEqAbs(scripifiedA, 40e18, 1);
++        assertApproxEqAbs(scripifiedB, 40e18, 1);
++        assertApproxEqAbs(scripifiedC, 40e18, 1);
++        assertApproxEqAbs(scripifiedD, 40e18, 1);
+         assertFalse(isScripifiedNewOne);
+         assertFalse(isScripifiedNewTwo);
+ 
+@@ -1969,20 +1974,20 @@ contract IssuanceManagerConversionTest is Test {
+             scripifiedNewOne +
+             scripifiedNewTwo;
+         // Per-cert claims use integer division (floor); summing (scrip/wad)/1e18 per cert truncates
+-        // again and can under-count vs vault. Sum wads first — multi-step fixed-point can differ by ≤1 wei.
++        // again and can under-count vs vault. Each of the four positions can lose one wei here.
+         (uint256 vaultAssetsWad,) = issuanceManager.getCertScripUnitVault(
+             address(certPrinter)
+         );
+         assertApproxEqAbs(
+             totalScripifiedWad,
+             vaultAssetsWad,
+-            1,
++            4,
+             "scripified wad sum vs vault totalAssetsWad"
+         );
+         assertApproxEqAbs(
+             totalActiveWad + totalScripifiedWad,
+             400e18,
+-            1,
++            4,
+             "active + scripified units vs pool cap"
+         );
+ 
+@@ -2147,26 +2152,26 @@ contract IssuanceManagerConversionTest is Test {
+             .getCertScripifiedStatus(address(certPrinter), 6);
+ 
+         assertTrue(isScripifiedA);
+-        assertEq(scripifiedA, 54 * 1e18);
+-        assertFalse(isScripifiedB);
+-        assertEq(scripifiedB, 0);
++        assertApproxEqAbs(scripifiedA, 24e18, 1);
++        assertTrue(isScripifiedB);
++        assertApproxEqAbs(scripifiedB, 24e18, 1);
+         assertTrue(isScripifiedC);
+-        // Vault share→asset conversion can floor nominal claims by ≤1 unit vs naive expectations
++        // All five source positions retain one fifth of the 120-unit residual, to within one wei.
+         assertApproxEqAbs(
+             scripifiedC,
+-            6 * 1e18,
+-            1 * 1e18,
++            24e18,
++            1,
+             "holder C scripified wad (rounding)"
+         );
+         assertTrue(isScripifiedD);
+         assertApproxEqAbs(
+             scripifiedD,
+-            6 * 1e18,
+-            1 * 1e18,
++            24e18,
++            1,
+             "holder D scripified wad (rounding)"
+         );
+         assertTrue(isScripifiedE);
+-        assertEq(scripifiedE, 54 * 1e18);
++        assertApproxEqAbs(scripifiedE, 24e18, 1);
+         assertFalse(isScripifiedNewOne);
+         assertEq(scripifiedNewOne, 0);
+         assertFalse(isScripifiedNewTwo);
+@@ -2270,7 +2275,7 @@ contract IssuanceManagerConversionTest is Test {
+             address(certPrinter)
+         );
+         // More holders / conversions → slightly larger aggregated rounding vs vault assets
+-        uint256 fiveHolderWadTol = 3;
++        uint256 fiveHolderWadTol = 5; // At most one floored wei per source position in this scenario.
+         assertApproxEqAbs(
+             totalScripifiedWadFive,
+             vaultAssetsWadFive,
+@@ -2368,5 +2373,3 @@ contract IssuanceManagerConversionTest is Test {
+         });
+     }
+ }
+-
+-
+diff --git a/test/IssuanceManagerProportionalVaultTest.t.sol b/test/IssuanceManagerProportionalVaultTest.t.sol
+new file mode 100644
+index 0000000..434854c
+--- /dev/null
++++ b/test/IssuanceManagerProportionalVaultTest.t.sol
+@@ -0,0 +1,351 @@
++// SPDX-License-Identifier: UNLICENSED
++pragma solidity 0.8.28;
++
++import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
++import {ProportionalVaultMath} from "../src/libs/ProportionalVaultMath.sol";
++import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol";
++import {VaultEpochHarness} from "./IssuanceManagerVaultEpochTest.t.sol";
++import {Test} from "forge-std/Test.sol";
++import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
++
++contract ProportionalVaultHarness {
++    address internal constant PRINTER = address(1);
++
++    function deposit(uint256 id, uint256 amount) external {
++        IssuanceManagerStorage._depositCertScripUnits(PRINTER, id, amount);
++    }
++
++    function withdraw(uint256 amount) external {
++        IssuanceManagerStorage._withdrawVaultAssets(PRINTER, amount);
++    }
++
++    function claim(uint256 id) external view returns (uint256) {
++        return IssuanceManagerStorage._assetsOfVaultPosition(PRINTER, id);
++    }
++
++    function shares(uint256 id) external view returns (uint256) {
++        return IssuanceManagerStorage.getScripPoolSharesById(PRINTER, id);
++    }
++
++    function totals() external view returns (uint256, uint256) {
++        return IssuanceManagerStorage.getCertScripUnitVault(PRINTER);
++    }
++
++    function index() external view returns (uint256, uint256) {
++        IssuanceManagerStorage.CertScripUnitPool storage pool =
++            IssuanceManagerStorage.issuanceManagerStorage().certScripUnitPools[PRINTER];
++        return (pool.lossIndex, pool.lossScale);
++    }
++
++    function seedLegacy(uint256 assets, uint256 nominalShares, uint256 first, uint256 second) external {
++        IssuanceManagerStorage.IssuanceManagerData storage ds = IssuanceManagerStorage.issuanceManagerStorage();
++        ds.certScripUnitPools[PRINTER].totalAssetsWad = assets;
++        ds.certScripUnitPools[PRINTER].totalNominalShares = nominalShares;
++        ds.certScripStates[PRINTER][0].vaultNominalShares = first;
++        ds.certScripStates[PRINTER][1].vaultNominalShares = second;
++        ds.certScripStates[PRINTER][2].vaultNominalShares = nominalShares;
++        ds.certScripStates[PRINTER][2].vaultEpoch = 123; // An already-retired position must not migrate.
++    }
++}
++
++contract IssuanceManagerProportionalVaultTest is Test {
++    ProportionalVaultHarness internal vault;
++
++    function setUp() public {
++        vault = new ProportionalVaultHarness();
++    }
++
++    function test_ThreeActors_1000_100_Redeem750() public {
++        vault.deposit(0, 1000e18);
++        vault.deposit(1, 100e18);
++        vault.withdraw(750e18);
++        _assertTotals(350e18);
++        assertApproxEqAbs(vault.claim(0), Math.mulDiv(1000e18, 350, 1100), 1);
++        assertApproxEqAbs(vault.claim(1), Math.mulDiv(100e18, 350, 1100), 1);
++        assertEq(vault.shares(0), vault.claim(0));
++        assertEq(vault.shares(1), vault.claim(1));
++        assertLe(vault.claim(0) + vault.claim(1), 350e18);
++
++        uint256 firstBefore = vault.claim(0);
++        uint256 secondBefore = vault.claim(1);
++        vault.deposit(2, 750e18);
++        _assertTotals(1100e18);
++        assertEq(vault.claim(2), 750e18);
++        assertEq(vault.claim(0), firstBefore, "deposit cannot steal prior backing");
++        assertEq(vault.claim(1), secondBefore);
++    }
++
++    function test_OriginalAttack_RepeatedCrossCertificateCycles() public {
++        vault.deposit(0, 100e18);
++        for (uint256 i; i < 200; ++i) {
++            vault.deposit(1, 900e18);
++            _assertTotals(1000e18);
++            vault.withdraw(900e18);
++            _assertTotals(100e18);
++            assertLe(vault.claim(0) + vault.claim(1), 100e18);
++        }
++        (, uint256 scale) = vault.index();
++        assertGt(scale, 256, "exercise multiple index normalizations beyond uint256 precision");
++        assertEq(vault.claim(0), 0, "sub-wei historical attribution does not revive");
++        vault.deposit(2, 900e18);
++        assertEq(vault.claim(2), 900e18, "new deposit remains live at a very old index");
++    }
++
++    function test_DustCanBeRedeemedEvenWhenAllClaimsRoundToZero() public {
++        vault.deposit(0, 1);
++        vault.deposit(1, 1);
++        vault.withdraw(1);
++        assertEq(vault.claim(0), 0);
++        assertEq(vault.claim(1), 0);
++        _assertTotals(1);
++        vault.withdraw(1);
++        _assertTotals(0);
++        vault.deposit(1, 10);
++        assertEq(vault.claim(0), 0);
++        assertEq(vault.claim(1), 10);
++    }
++
++    function test_MaxUintDepositAndOneWeiResidualDoNotOverflowOrUnderflow() public {
++        vault.deposit(0, type(uint256).max);
++        vault.withdraw(type(uint256).max - 1);
++        _assertTotals(1);
++        assertLe(vault.claim(0), 1);
++        (uint256 mantissa,) = vault.index();
++        assertGe(mantissa, uint256(1) << 255);
++        vault.deposit(1, type(uint256).max - 1);
++        _assertTotals(type(uint256).max);
++        vault.withdraw(type(uint256).max);
++        assertEq(vault.claim(0), 0);
++        assertEq(vault.claim(1), 0);
++    }
++
++    function test_LegacyInflatedPoolMigratesWithoutEnumeration() public {
++        uint256 shares = type(uint256).max - 1;
++        vault.seedLegacy(100e18, shares, shares / 2, shares / 2);
++        assertEq(vault.claim(0), 50e18, "legacy multiplication must use full precision");
++        vault.deposit(3, 100e18);
++        _assertTotals(200e18);
++        assertEq(vault.claim(0), 50e18);
++        assertEq(vault.claim(1), 50e18);
++        assertEq(vault.claim(2), 0, "retired epoch stays retired");
++        vault.withdraw(100e18);
++        assertEq(vault.claim(0), 25e18);
++        assertEq(vault.claim(1), 25e18);
++        assertEq(vault.claim(3), 50e18);
++        vault.deposit(0, 10e18);
++        assertEq(vault.claim(0), 35e18, "touching a legacy position migrates once");
++        vault.withdraw(110e18);
++        vault.deposit(1, 7e18);
++        assertEq(vault.claim(0), 0);
++        assertEq(vault.claim(1), 7e18);
++        assertEq(vault.claim(3), 0);
++    }
++
++    function test_LegacyFirstWithdrawalPreservesProportions() public {
++        vault.seedLegacy(1000, 10000, 1000, 9000);
++        vault.withdraw(900);
++        _assertTotals(100);
++        assertApproxEqAbs(vault.claim(0), 10, 1);
++        assertApproxEqAbs(vault.claim(1), 90, 1);
++    }
++
++    function test_InvalidWithdrawalsAndZeroDeposit() public {
++        vm.expectRevert(IssuanceManagerStorage.EmptyVault.selector);
++        vault.withdraw(1);
++        vm.expectRevert(IssuanceManagerStorage.ZeroSharesMinted.selector);
++        vault.deposit(0, 0);
++        vault.deposit(0, 10);
++        vm.expectRevert(IssuanceManagerStorage.VaultWithdrawalExceedsAssets.selector);
++        vault.withdraw(11);
++        vault.withdraw(0);
++        _assertTotals(10);
++        assertEq(vault.claim(0), 10);
++    }
++
++    function test_PartialWithdrawalGasDoesNotScaleWithLivePositions() public {
++        uint256 small = _withdrawalGas(2);
++        uint256 large = _withdrawalGas(128);
++        assertApproxEqAbs(large, small, 1000, "no per-position term in withdrawal cost");
++    }
++
++    function _withdrawalGas(uint256 count) internal returns (uint256 used) {
++        ProportionalVaultHarness instance = new ProportionalVaultHarness();
++        for (uint256 i; i < count; ++i) {
++            instance.deposit(i, 100e18);
++        }
++        uint256 beforeGas = gasleft();
++        instance.withdraw(count * 50e18);
++        used = beforeGas - gasleft();
++    }
++
++    function testFuzz_WithdrawalMatchesProportionalAllocation(uint128 a, uint128 b, uint256 out) public {
++        uint256 first = uint256(a) + 1;
++        uint256 second = uint256(b) + 1;
++        uint256 total = first + second;
++        out = bound(out, 0, total);
++        vault.deposit(0, first);
++        vault.deposit(1, second);
++        vault.withdraw(out);
++        uint256 remaining = total - out;
++        _assertTotals(remaining);
++        uint256 expectedFirst = Math.mulDiv(first, remaining, total);
++        uint256 expectedSecond = Math.mulDiv(second, remaining, total);
++        assertLe(vault.claim(0), expectedFirst);
++        assertLe(vault.claim(1), expectedSecond);
++        assertApproxEqAbs(vault.claim(0), expectedFirst, 1);
++        assertApproxEqAbs(vault.claim(1), expectedSecond, 1);
++    }
++
++    function testFuzz_StatefulConservation(bytes32 seed) public {
++        uint256[4] memory upperClaims;
++        uint256 expectedAssets;
++        // An independently rounded-up allocation bounds every lazy claim after arbitrary sequences.
++        for (uint256 i; i < 80; ++i) {
++            seed = keccak256(abi.encode(seed, i));
++            uint256 id = uint256(seed) % 4;
++            if (expectedAssets == 0 || uint256(seed) & 4 == 0) {
++                uint256 amount = uint256(seed) % 1e24 + 1;
++                vault.deposit(id, amount);
++                upperClaims[id] += amount;
++                expectedAssets += amount;
++            } else {
++                uint256 amount = uint256(seed) % expectedAssets + 1;
++                uint256 remaining = expectedAssets - amount;
++                for (uint256 j; j < 4; ++j) {
++                    upperClaims[j] = Math.mulDiv(upperClaims[j], remaining, expectedAssets, Math.Rounding.Ceil);
++                }
++                vault.withdraw(amount);
++                expectedAssets = remaining;
++            }
++            _assertTotals(expectedAssets);
++            uint256 sum;
++            for (uint256 j; j < 4; ++j) {
++                uint256 claim = vault.claim(j);
++                assertLe(claim, upperClaims[j]);
++                // At these magnitudes index error is below one wei per step; checkpoint/floor error
++                // remains bounded by the number of operations, never an unbounded percentage loss.
++                assertApproxEqAbs(claim, upperClaims[j], 2 * (i + 1));
++                sum += claim;
++            }
++            assertLe(sum, expectedAssets, "attribution must never exceed backing");
++        }
++    }
++
++    function _assertTotals(uint256 expected) internal view {
++        (uint256 assets, uint256 shares) = vault.totals();
++        assertEq(assets, expected);
++        assertEq(shares, expected, "share count is bounded by current backing");
++    }
++}
++
++contract ProportionalVaultMathTest is Test {
++    function test_FullWidthBigIntegerReferenceVectors() public view {
++        string memory json = vm.readFile("test/res/proportional-vault-vectors.json");
++        for (uint256 i; i < 64; ++i) {
++            uint256[] memory row = vm.parseJsonUintArray(json, string.concat(".vectors[", vm.toString(i), "]"));
++            assertEq(ProportionalVaultMath.balance(row[0], row[1], row[2], row[3]), row[4]);
++        }
++    }
++
++    function test_257BitIntermediateQuotient() public pure {
++        uint256 one = uint256(1) << 255;
++        assertEq(ProportionalVaultMath.balance(type(uint256).max, type(uint256).max, one, 1), type(uint256).max - 1);
++        assertEq(ProportionalVaultMath.balance(type(uint256).max, type(uint256).max, one, 256), 1);
++        assertEq(ProportionalVaultMath.balance(type(uint256).max, type(uint256).max, one, 257), 0);
++    }
++
++    function testFuzz_BalanceMatchesFullPrecision(uint256 amount, uint256 current, uint256 snapshot, uint16 scale)
++        public
++        pure
++    {
++        current |= uint256(1) << 255;
++        snapshot |= uint256(1) << 255;
++        amount >>= 1; // Independent reference quotient fits; full-width overflow vectors are above.
++        uint256 shift = uint256(scale) % 300;
++        uint256 expected = Math.mulDiv(amount, current, snapshot) >> shift;
++        assertEq(ProportionalVaultMath.balance(amount, current, snapshot, shift), expected);
++    }
++
++    function testFuzz_ReductionIsNormalizedAndConservative(uint256 mantissa, uint256 total, uint256 remaining)
++        public
++        pure
++    {
++        mantissa |= uint256(1) << 255;
++        total = bound(total, 1, type(uint256).max);
++        remaining = bound(remaining, 1, total);
++        (uint256 next, uint256 scale) = ProportionalVaultMath.reduce(mantissa, 0, remaining, total);
++        assertGe(next, uint256(1) << 255);
++        // Exact expected balance for a position equal to the entire old pool is remaining.
++        uint256 actual = ProportionalVaultMath.balance(total, next, mantissa, scale);
++        assertLe(actual, remaining);
++        assertApproxEqAbs(actual, remaining, 8, "full-uint256 index rounding bound");
++    }
++}
++
++contract IssuanceManagerProportionalConversionTest is VaultEpochHarness {
++    function test_ExistingCertificateConversionSocializesItsOwnClaimToo() public {
++        (ILedgerEntryToken cert,) = _setUpVaultWithSupply(2);
++        uint256 otherId = issuanceManager.createCertAndAssign(address(cert), otherHolder, _details(100));
++        vm.prank(otherHolder);
++        issuanceManager.scripifyCert(address(cert), otherId, 100, address(0));
++        vm.prank(holder);
++        issuanceManager.convertScripToCert(address(cert), 50);
++        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 75);
++        assertEq(issuanceManager.getScripPoolAmountById(address(cert), otherId), 75);
++        assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 50);
++        assertEq(scrip.balanceOf(holder), 50);
++        assertEq(scrip.balanceOf(otherHolder), 100);
++    }
++
++    function test_SingleCertificateCyclesStayLiveThroughManyNormalizations() public {
++        (ILedgerEntryToken cert,) = _setUpVaultWithSupply(1);
++        uint256 otherId = issuanceManager.createCertAndAssign(address(cert), otherHolder, _details(900));
++        for (uint256 i; i < 100; ++i) {
++            vm.startPrank(otherHolder);
++            issuanceManager.scripifyCert(address(cert), otherId, 900, address(0));
++            issuanceManager.convertScripToCert(address(cert), 900);
++            vm.stopPrank();
++            (uint256 assets, uint256 shares) = issuanceManager.getCertScripUnitVault(address(cert));
++            assertEq(assets, 100);
++            assertEq(shares, 100);
++            assertEq(scrip.totalSupply(), 100);
++            assertEq(cert.getActiveCertificateDetails(otherId).unitsRepresented, 900);
++            cert.getCertificateDetails(otherId); // Previously overflowing claim/detail path stays live.
++        }
++    }
++
++    function test_NewCertificateThreeActorConversion() public {
++        (ILedgerEntryToken cert,) = _setUpVaultWithSupply(1); // A has scripified 100 units.
++        uint256 otherId = issuanceManager.createCertAndAssign(address(cert), otherHolder, _details(1000));
++        vm.prank(otherHolder);
++        issuanceManager.scripifyCert(address(cert), otherId, 1000, address(0));
++        address buyer = makeAddr("buyer");
++        vm.prank(otherHolder);
++        scrip.transfer(buyer, 750);
++        issuanceManager.setRecertificationApproval(address(cert), buyer, "Buyer", _details(0), bytes("signature"));
++        vm.prank(buyer);
++        issuanceManager.convertScripToCert(address(cert), 750);
++        uint256 buyerId = cert.tokenOfLegalOwnerByIndex(buyer, 0);
++        assertEq(cert.getActiveCertificateDetails(buyerId).unitsRepresented, 750);
++        assertEq(issuanceManager.getScripPoolAmountById(address(cert), buyerId), 0);
++        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 31);
++        assertEq(issuanceManager.getScripPoolAmountById(address(cert), otherId), 318);
++        assertEq(scrip.totalSupply(), 350);
++        assertEq(scrip.balanceOf(holder), 100);
++        assertEq(scrip.balanceOf(otherHolder), 250);
++        assertEq(scrip.balanceOf(buyer), 0);
++    }
++
++    function test_ForceBurnSocializesBothPositions() public {
++        (ILedgerEntryToken cert,) = _setUpVaultWithSupply(1);
++        uint256 otherId = issuanceManager.createCertAndAssign(address(cert), otherHolder, _details(100));
++        vm.prank(otherHolder);
++        issuanceManager.scripifyCert(address(cert), otherId, 100, address(0));
++        issuanceManager.forceScripBurn(address(cert), holder, 50);
++        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 75);
++        assertEq(issuanceManager.getScripPoolAmountById(address(cert), otherId), 75);
++        (uint256 assets, uint256 shares) = issuanceManager.getCertScripUnitVault(address(cert));
++        assertEq(assets, 150);
++        assertEq(shares, 150);
++    }
++}
+diff --git a/test/IssuanceManagerRecertTokenUriRegression.t.sol b/test/IssuanceManagerRecertTokenUriRegression.t.sol
+index c71dfe2..a8d914a 100644
+--- a/test/IssuanceManagerRecertTokenUriRegression.t.sol
++++ b/test/IssuanceManagerRecertTokenUriRegression.t.sol
+@@ -127,7 +127,7 @@ contract UriBuilderWithUnits is IUriBuilder {
+ contract IssuanceManagerRecertTokenUriRegressionTest is
+     IssuanceManagerConversionTest
+ {
+-    function test_ReCertBackToOriginalCert_TokenURIShowsInflatedUnits() public {
++    function test_ReCertBackToOriginalCert_TokenURIReflectsFlooredAttribution() public {
+         UriBuilderWithUnits uriBuilder = new UriBuilderWithUnits();
+         issuanceManager.setUriBuilder(address(uriBuilder));
+ 
+@@ -193,17 +193,18 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
+             investor,
+             0,
+             5000 * 1e18,
+-            90 * 1e18,
+-            40 * 1e18
++            90 * 1e18 - 1,
++            40 * 1e18 - 1
+         );
+         vm.prank(investor);
+         issuanceManager.convertScripToCert(address(certPrinter), 5000 * 1e18);
+ 
+-        // Repro: event says 50 on cert #0, but tokenURI uses getCertificateDetails and reports 90.
++        // Active units are exact. The conservative index leaves one wei of attribution in the pool.
++        // This test builder truncates to whole units, so 90e18 - 1 displays as 89, not 90.
+         string memory certZeroUri = certPrinter.tokenURI(0);
+         assertEq(certPrinter.getActiveCertificateDetails(0).unitsRepresented, 50 * 1e18);
+-        assertEq(certPrinter.getCertificateDetails(0).unitsRepresented, 90 * 1e18);
+-        assertTrue(_contains(certZeroUri, '"unitsRepresented":"90"'));
++        assertEq(certPrinter.getCertificateDetails(0).unitsRepresented, 90 * 1e18 - 1);
++        assertTrue(_contains(certZeroUri, '"unitsRepresented":"89"'));
+     }
+ 
+     function test_HolderOneScripify50ThenRecertify25() public {
+diff --git a/test/res/generate-proportional-vault-vectors.cjs b/test/res/generate-proportional-vault-vectors.cjs
+new file mode 100644
+index 0000000..43267b9
+--- /dev/null
++++ b/test/res/generate-proportional-vault-vectors.cjs
+@@ -0,0 +1,21 @@
++// Run with Node.js from any directory. BigInt supplies an independent unlimited-precision oracle.
++const fs = require('node:fs');
++const path = require('node:path');
++const max = (1n << 256n) - 1n;
++const one = 1n << 255n;
++let seed = 7643293n;
++function random() {
++  seed = (seed * 6364136223846793005n + 1442695040888963407n) & max;
++  return seed;
++}
++const rows = [];
++for (let i = 0; i < 64; i++) {
++  const amount = random(), current = random() | one, snapshot = random() | one;
++  const scale = random() % 300n;
++  const expected = (amount * current / snapshot) >> scale;
++  if (expected <= max) rows.push([amount, current, snapshot, scale, expected]);
++  // Advance the seed through the three reduction inputs from the original reference run.
++  random(); random(); random();
++}
++fs.writeFileSync(path.join(__dirname, 'proportional-vault-vectors.json'),
++  '{"vectors":[' + rows.map(row => '[' + row.join(',') + ']').join(',\n') + ']}\n');
+diff --git a/test/res/proportional-vault-vectors.json b/test/res/proportional-vault-vectors.json
+new file mode 100644
+index 0000000..b59560e
+--- /dev/null
++++ b/test/res/proportional-vault-vectors.json
+@@ -0,0 +1,64 @@
++{"vectors":[[48642959293469666936528872,57896044618658097711785492504344263497054267008132656738422556761881243923735,57896044618660067860104629904951598426251580974698281343791111732978018533210,265,0],
++[71031629192044383569682736165798162127094988847966797145249275140930201027557,66690177154378478358568702030497201645281280522060767425433674578847488756624,93717950632254630259759522170859062531084627869929081089476503962499700767135,98,159496548248393794482583410043830678884094287650],
++[11886166763205633827307278641278385083491189165099266944691448955417057709334,109438156025665504381871826212239998294877769504497349878607963497219227318317,85997508462045325031605630177826652702666223349496058636057684358458787525688,19,28850596668238131645191509178903735826937860728399901228661274538765888],
++[33181595282799593924696972296483787950970428209187867651132841848442819491147,73435690489540954959996693445589131944462343522130819340316849246679150793854,80633048452783517255698637298108160026865049417587567002727214822969542974837,228,70057131],
++[113891820108767794343485604721570489727063701421563165721248007303719432696212,94862037703233251684459071221077932236064514782428376615105173325580947661907,69623866808539541320589276517415991959836141728545621463298575489115413778662,161,53088143863828282042505685491],
++[107811459823347396333790461328548366758834799596683729733908229745507178000193,106658583564697649455821021768448115157127371173620151957991487009427256774332,108890049691690137382643599957341265969496948057156095980609060803516885982299,74,5590528469500235323227235612296324364399816334057827867],
++[90136946874644120334070638470796053505277977530050877438857705727284235044066,103052791252144129859098143017937669663158981772002900199472203503799761238793,78171964288464191532218240651659059192444905131929465030454379690401270012132,19,226642660902111402305769402327663327105677089896472837685005296392912619],
++[97692614968738079715299123758415996012821814731996290517118518554954807764807,91358447133430623748910281937831165272694368315707559328840702853588921639370,108601540655668979678720059493144545155680128516373381582312948737806823712721,68,278442004902014337845801318555409222144151913972784362573],
++[87515911968858092722442495992747070796704081318512226819787855592867856085632,77705701588916407040266863915049420300562206964965518444278943836535866532303,108535427709357310784833349174095339843448229279242248978834387141962878821298,229,72627213],
++[62999473684594468357053396552486283760114375367705244112318692334042857248477,113212509182242691281821736698161910963373769716048193655077627065675852065064,113407689102219435955880289216500855774111279342742454125470788948635841992023,50,55858472206231245841554659624625492473512866644568572695333034],
++[100645416411450987830493828789775493177867568462929882503002142518858023041518,63113913055543203231343364879735110194972870820049500583884287271186874466853,87203204418774057716732941288533868845103704371587881998817674467438311685328,263,0],
++[2967092672038833826292732072796564869027937066051084790648235106750496381827,105404683751894804891457376574241541157269638964360444320892509776064419681366,95921466828872575480462431822583120780758052944902472049205024775951954345581,48,11583383025342038818966116399900806252787024225452811418998810],
++[88393411126166545908346765869689874928181563826829149129128083380636148485804,102481663437787875918896320545305511303292857999421351995583809536534918277515,109055696437145068331712937470054762663717830688584014922034203281630251631550,1,41532465084805793027260085130663597480574434233531936700549733974432622147073],
++[83797625992753326901260681060874610300154464003245271426109693760322655671993,105663009141248149040290649867381128866233372078945667625012148529710859683540,75213244187584581684658409041353098103169939125443339037966692711474275147923,174,4916331089233223815918294],
++[75633119379285549265277130361015140540130938052544690140835726896845530806330,58233928602521399303737346407903187394453035394573482706501231517859288394113,99458286034447245481393876797924933811660046100782910372927621571751176948732,155,969611602323017668988649082625],
++[10217400519032701735430364301574482016250291918354960851110666524574736322047,63071057665485764028532028776593449392572331530971733006916057612389257869346,63906597205817193366139843173440593652854507727384419032430226417001509649737,160,6899625713636508535757390518],
++[12265627016328096028176921393423726028611270590834658029215466090386712687128,75016666307786418124342849143602669669006707845045981590023857219954732365703,100069291263810392884262306324800952987161445218001509064687978530571303779594,21,4384466758570817319728191116961279057097542495378202384498789824746726],
++[97645692346922402905031377567219492589703231923056985200705897864210987305685,76275896861440979985318843252253384554848211805908281297374462140003412890560,111623276733324569291085624788541406385734489864797082647911004641630403066383,94,3368728822101852717752684538286240369010565420240],
++[13280550413851623327258987073613689944315564963472856939819411226971408305094,100075686643630296434469039661613343740435893552740386396536282323769988271389,108812235991540859350228437233627196589024116482237210588549586940593611338344,15,372749426273097756927915654429554215253702687955338077893551657186136206],
++[69739249081318887097591791368026011218122692008460867034980516094994875988667,88356817546035692142955313275465431116683797752432452240227601522934084147502,75588469754314339732196035291719979905156101326389411925527566096849015783525,292,0],
++[98463503497136723573504253419340363446943709454672777055783613788190693968068,111112275474093889439976235538900687052229486732617048591792040768464303425475,63619251173826571563347423056537064413287923681531564161469696519306357611414,85,4445280207598151835961591255674881071376029451585956],
++[40118196299780906116510870211091719719330135914110623308680922535347770658609,84964001515007086081991310353130001767486950184866595314120807731142554483692,63035873714289806192078799638439309000333580421319413195481868617136849280459,270,0],
++[50049719006790724658090353968675624639307365902747660486044494452609864990866,78779270192091478218100063210179962069142726179244946454598586385241045502201,58441011126363395054347270505383561243548411095635436345231452207102075083796,115,1624225685263448389163841852674405515724416],
++[56957195712244024681283800785801917956634430715794042222619866409252920974775,68721083093441738088500435237364864486370599995522820539251562203183616869242,83678816309042727190860281821381163840385828987854394231281951823413510693825,276,0],
++[73588399780779106025823313933529386493464251911730750294004827740108572753584,75375802876237715775043217292179362578017655643030077010077493369708388357695,78252386097986286744332335472307372350610107009372565352283707664406414142306,169,94727146239661172561526413],
++[59090623527122170703101385160992485876625616622128775510448608449027084615629,93050621615794913241894825259133849067057559857284664236630674881587514485592,76511364976059192816463674152834347874355601178600492252131852671391207147463,162,12292850612902979423826917418],
++[107518841952610983762715705381805514728561421068135588925956816092369517142686,83129738784205715757565546803574274007208256519813061011708483836360694085909,104317881678526557769921673657769220100488153416271375800784115274337751168256,243,6061],
++[27800697632638777461243415618731402125788060455649913106956743659222554473203,80553430142612520565703989028814513118258652241364089943448179196424008385286,90328911527072055463992533799625089938491049250804370972020956493296224650077,180,16177586705568039577841],
++[25111342472763522569191292883442551387067532446888887301556701685498244333532,91031272149380795654336607700843806547769075791213829748877786030336155131643,110210874771888652821036696156428334775035860731164495284011913971954924091502,241,5869],
++[1027672948888511341667025744607014027198085231542413951481582001367842109609,73563404105362724942925494228945879902856330132904163003489383662694946524676,99109673058887639291031695043625797317427525073078146661681480612609182938115,294,0],
++[74677373390514228451271480713607384714063097150533029377314283941925942115818,108779893969269914122833084533499620308141256547762434626991826460404162230641,103123170378550428663801516757508062872439708847197146991469166526849704683820,119,118525535194716022641491681100765748741576],
++[40806804105112367134179635353710993035960637498234268533016312477142977656431,75701613061521502533545782997481917077818318451156813940559431783458387502034,97577549380493413632139561413452231735481357928112208130466743829795795532601,168,84615229836400512033772365],
++[31005827631046809907438254325702550146475384317464877443139408625599358793800,69204434121785721598160899767514661518867714558634599332343420644079664455159,98812415046780845099384811191114350016650537033248378936992894801319129616058,285,0],
++[61494909178915336013612603582169548247522182886194212935901981575749772449221,73942768032085497585849095705718232758066319673990269589916563089924279767024,86508931258088984119314690745983518362447889981859329569090584082688622091903,186,535913538436744746007],
++[96173971221542856061585060981699990355534634450922291293714625504587642887798,86929154130767394182742033537823667141875429044638560353857603105596725601805,95351995170116652434218918542404744022391759101386659525929610100296109827224,135,2013000133277679873831385156744401027],
++[60776518828583210999125608768204270373252861696291125053432712363050288882731,84129775926720192194077380069258788634317183288040979759139149258949882491358,94970312743354865421982962006262465734582585308618857825281622313053960693589,156,589411169103590976758712846863],
++[39902872151989175690651209294376901784559625216877292156447659253697337971700,97304443084864036382690766864046120540973942507388188395680605682260060491571,88323038865421647970035138518042029551832163250873818923718371287762047580742,225,815293163],
++[86342399485688207134362721459278840278508070441317789215149215474106033681185,89992844002417450679420320178198715051739419374931460125054650084711665458460,97145801269704561342803615233122471502938542890715351054991862724788958774075,22,19069888386284940098848669552110656070709388622998726527774441295794472],
++[40493169232522585058928749924420583310596485355916344344344144491917931663426,99191974398520509970005266810471946030048090318004676662548402179685802269417,106342288906109019143422898626691028179335166127887086727620418613776655389508,43,4294004409407858991474536927650084194551688353440324067937673634],
++[13187490323245207827081450965020515261582385646787535519936690005474635741223,61172026525901299160446933067430218791192772813109898207951960552564306311466,74406641705462522126689752061330648234554449396775488394716289598731899347889,148,30385330218409135736064266445470],
++[79579432806419105069608242414936327534046246828661883136972222979086215233248,106473940581624991340279894060271137281356053678919455124699005016552778673839,110959709564958695745241842798018619086053077653868050481725967092628763445010,101,30119606493084314385769870825244621648881827918],
++[85768727672575767344484531505125589694106599464871621790469046946448460868797,65881223528112827759246477427695300931474069063634959219322327445216451944840,93784486615378484384119109571676144377112428062315403360113827887339512634935,166,644140102706923355891471182],
++[6020913094436614470348728683590182882294950284949813782818670348419418709838,104805273145887443737925263887484657012880839822128025823073380448908388856837,84971356795079843259324703779023171930801482634581709002355782975534021271856,175,155068540259700743290961],
++[82379459453965943558128034001114488608197713881423728559959821205407720320611,66077173195301093431275176677958046337092280984104020643009167587930790708662,114519316439303409695628813183644668871476375520234862089516146232183786769485,168,127043478019112383913786783],
++[97892078481268647909332340867713058728177426900301735628879079441696263808268,83324313475396817408160295948307252145564622904970169139129479928791398971499,98634704080488069395204500903507400070758656215498999155794652338988088672542,229,95856273],
++[9404445440909193689264506707394923354020333345453207062152475377209724296857,86453525403448033475735360652436044128573138438721735637533449003728837249332,68554389636446335684164546434743532983589719378698868054363349062787808062323,262,0],
++[54568743837018909019728110520592728245591611296921182341047175184183374354330,108221352970105773110754448520840723944469119578875452464418341117339976895841,89894250771386510803060910361719955914922627189794900400342179655600727423580,27,489457644226358636265817113403230678897245682502942463917495146961245],
++[94634487063967907507210380385756718516732195579191556203579984785669645337311,112713644935329304957706237231982717053228154389012848792342508821364629742466,61539400215238977627359135195283124243787434446007546416789952317456708910377,272,0],
++[86224821102629529203086740203649594256328226295885187378036235236480621097592,76750674743855164472538426109321182248732021404417910826166210714191504599143,77181314585179199326193472113942497438470850664190075757677019101416727082090,245,1516],
++[9894862323492021189729498754401268878885299131240857367662484143718404973749,94881436300750907696391716399827414876639584359505481822804861021818766327840,90227907961261182572253144770024519941728722211006413045464627666526996457199,274,0],
++[76550343244941591093507132960281346040314598506069209073810326013226167420198,58781075173731163385043936427247695966120287197006090835294398918748213019389,114260864100131637541724081950215381056262579413945458407555804153932240620232,243,2786],
++[59365379476890828750776572761142081332852013560521288564675412246023387279771,105400986924896162193165541835413737849384342064878456505658511194694244949646,68438697950663601389305677726257127204640223220927942124197710480385365578309,128,268680867724273071302978294793062912043],
++[111559160733570911070981519513680735388302926431876013281341334026637837849380,105018877826585999784332071195427258536890416929046279020320324293939702954659,104257914831212905850155095498933325128387396552342239159555306603154814594294,21,53583819597035132685855549909180611481114303159454098495951105125268705],
++[103505748117605983989595406098753686043034371711695845668760414976467801709329,98847298820666915652165453319372804846080475151345910070723573358766447407692,67049435993969001353630736401807962011077511009137364617722548129423196949675,178,398285886721856412589955],
++[21029954698774069082376225939637963093753878721440305893919646626288040735730,59218703934244697905028726448778422629909102563956959707394545725283782455513,94640244232430642484670511250678951414822787224217693507718565712010040114804,215,249903486498],
++[64896223334732243081484922548808331771156525637158365247317962930094052849303,65643292554796600690136173720235759204632001806878269682926089002059167466202,62039865760242854365457462857440117066670751580572454424154628152158505576353,32,15987445215546990546209056795362764224082875013077763035250902775510],
++[33380142677190863680772830674747621591587548543360819434649572987373933605648,74726804726933682682270367921338239493327826315400665690834521067101235964703,110761419178664289558342736222927785935831259644113251943173250864034874078914,165,481533831265460292601868417],
++[12514579558858425884294062805344714538028266879893271199649072370602379894189,96840056733500968878825912143021714350410601628356491138191635310919317474232,78128364057956951262518289560119170197968397072816097740869725788553221314727,70,13139016912627437021482870480984855722684906875260316583],
++[98631823306718407641681840023470369100251418739529498685552510683939588173822,62793335618932572827896872826132271430823566446341595022937232350073643217653,105036143315632025362193789115164523807773478623289466647459122725088462831968,255,1],
++[101912072044996145844372710264822844241295187642221194403217935674050218741203,105191904837629454391270415145726150641184616654840544009880969246449957624934,92470421153842463581834690888236672974717416143546124472012140389584759707965,120,87217902033393319563025366520711560164443],
++[38055742060262600347898822236490449160996711114237479109177229725902081310268,67959229807816778863621668369274513520088818152735482809937954984982023321051,96436557775938200836422896060037185562869969243334900312959274457496482520526,21,12787835293731643880852241499512000727841874277317764602551966893387919],
++[107680530266125974731424887917483501445146407275970675677176059636637162457225,110530004728357547627493350480408171419075911958935913391055198421391851763812,72120088892323818746337203281813649270889295339749287469407243159281035806435,282,0],
++[43914767584931011140795888789506418654895051314676202636709430600194578236746,110439725704405506215873588378731793117947019281478770497573663459230611137873,66007990830973987324404318442737194537237639175341157563165818155027079298956,51,32629439624426193446265054899768167050851774176139798677256106],
++[37281839348019196744454724593679778033029843845788568129787585608554059920207,78024208425816786308545197988324016774603080120073131046913985285661123180338,99710783196736644692129587599295141335812258581861234401203242041786502497049,108,89896967688236058294932909340389425026074377]]}
