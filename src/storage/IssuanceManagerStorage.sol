@@ -60,7 +60,6 @@ library IssuanceManagerStorage {
     error ScripifiedCertNotAllowed();
     error ScripToCertMinimumNotMet();
     error ScripifyNotWhitelisted();
-    error ScripifyOverMax();
     error RecertificationApprovalRequired();
     error CompanyDetailsNotSet();
     error InvalidScripRatio();
@@ -73,9 +72,9 @@ library IssuanceManagerStorage {
     error NotLegalOwner();
     error AmountExceedsAvailableUnits();
     error AccountFrozen(address account);
-    error ZeroSharesMinted();
+    error ZeroScripMinted();
+    error ZeroUnitsConverted();
     error EmptyVault();
-    error VaultRedemptionExceedsClaim();
     error VaultWithdrawalExceedsAssets();
     error ClassDoesNotExist();
     error SecurityClassAlreadyDefined();
@@ -911,6 +910,9 @@ library IssuanceManagerStorage {
         (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
         uint256 scripAmount = amount * numerator;
         scripAmount = scripAmount / denominator;
+        // The ratio floors. An amount too small for the ratio mints no scrip, and the lot would give
+        // up its units for nothing.
+        if (scripAmount == 0) revert ZeroScripMinted();
 
         // The lot gives up the units for good. It keeps no claim on the pool, so a lot that
         // scripifies everything is empty and can be swept. The scrip is the claim.
@@ -944,6 +946,9 @@ library IssuanceManagerStorage {
         (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
         uint256 units = amount * denominator;
         units = units / numerator;
+        // Same floor in the other direction: an amount too small for the ratio would burn the scrip
+        // and hand back no units.
+        if (units == 0) revert ZeroUnitsConverted();
 
         ICondition[] storage conditions = getScripToCertConditions(certAddress);
         for (uint256 i = 0; i < conditions.length; i++) {
@@ -1026,6 +1031,7 @@ library IssuanceManagerStorage {
         (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
         uint256 units = amount * denominator;
         units = units / numerator;
+        if (units == 0) revert ZeroUnitsConverted();
 
         _withdrawVaultAssets(certAddress, units);
         ICyberScrip(scripifiedCert).forceBurn(account, amount);
@@ -1153,7 +1159,6 @@ library IssuanceManagerStorage {
 
     /// @notice Move units into the printer's scrip pool.
     function _depositCertScripUnits(address certAddress, uint256 assetsWad) internal {
-        if (assetsWad == 0) revert InvalidAmount();
         issuanceManagerStorage().certScripUnitPools[certAddress].totalAssetsWad += assetsWad;
     }
 
