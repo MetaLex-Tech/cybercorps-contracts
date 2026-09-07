@@ -199,9 +199,9 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     }
 
     // A lot that scripified keeps no claim on the pool. So once its raw units are all sold it holds
-    // nothing, and the settlement voids it. The seller's scrip still redeems, because the scrip is the
-    // claim and it does not need this lot.
-    // TODO the redemption half of this scenario lands with the permissionless withdrawal change.
+    // nothing, and the settlement voids it. The seller keeps their scrip, and the pool keeps the units
+    // that back it. To convert back the seller needs a recertification approval, because the sale took
+    // their last live lot.
     function test_SecondaryTransfer_ScripifiedSellerToken_FullRawSale_VoidsTheEmptyLot() public {
         ILedgerEntryToken cert = _deployPrinterWithScripifiedSellerCert(100, 30);
 

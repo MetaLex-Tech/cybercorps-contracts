@@ -605,13 +605,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getScripifyWhitelistEnabled(certAddress);
     }
 
-    /// @notice `totalTrackedScrip` is CyberScrip `totalSupply`. Second value is 1e27 (ray) while the
-    ///         pool holds units, or 0 when it is empty. Units and scrip move one for one.
-    function getScripPoolTotals(address certAddress)
-        external
-        view
-        returns (uint256 totalTrackedScrip, uint256 pricePerShareRay)
-    {
+    /// @notice CyberScrip `totalSupply` for this printer. Use `getCertScripUnitVault` for the units
+    ///         those scrip stand for, because the two differ by the scrip ratio.
+    function getScripPoolTotals(address certAddress) external view returns (uint256 totalTrackedScrip) {
         return IssuanceManagerStorage.getScripPoolTotals(certAddress);
     }
 

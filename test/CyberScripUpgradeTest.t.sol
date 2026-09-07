@@ -728,7 +728,7 @@ contract CyberScripUpgradeForkTest is Test {
         vm.prank(investor);
         issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
 
-        (uint256 totalTrackedBefore,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedBefore = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
         assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
@@ -738,7 +738,7 @@ contract CyberScripUpgradeForkTest is Test {
         vm.prank(companyOwner);
         issuanceManager.forceScripBurn(address(certPrinter), investor, 8);
 
-        (uint256 totalTrackedAfter,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedAfter = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
         assertEq(ICyberScrip(scrip).balanceOf(investor), 12);
@@ -781,7 +781,7 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(f.issuanceManager.getCertScripUnitVault(address(f.certPrinter)), 80);
 
         {
-            (uint256 totalTrackedBefore,) = f.issuanceManager.getScripPoolTotals(
+            uint256 totalTrackedBefore = f.issuanceManager.getScripPoolTotals(
                 address(f.certPrinter)
             );
             assertEq(totalTrackedBefore, 80);
@@ -797,7 +797,7 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 40);
         assertEq(ICyberScrip(f.scrip).balanceOf(f.newInvestor), 0);
 
-        (uint256 totalTrackedAfter,) = f.issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedAfter = f.issuanceManager.getScripPoolTotals(
             address(f.certPrinter)
         );
         assertEq(totalTrackedAfter, 64);

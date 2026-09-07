@@ -74,15 +74,12 @@ library IssuanceManagerStorage {
     error AccountFrozen(address account);
     error ZeroScripMinted();
     error ZeroUnitsConverted();
-    error EmptyVault();
-    error VaultWithdrawalExceedsAssets();
     error ClassDoesNotExist();
     error SecurityClassAlreadyDefined();
     error NotAPrinter();
     error CertNotEmpty();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
-    uint256 internal constant VAULT_RAY = 1e27;
 
     event ScripifiedCert(
         address indexed certAddress,
@@ -195,11 +192,10 @@ library IssuanceManagerStorage {
         uint256 deprecatedLossScale;
     }
 
-    /// @notice Units held by the printer's scrip pool, in 18-dec wad.
-    /// @dev `totalAssetsWad` is the only live field. It does not equal `scrip.totalSupply()` converted
-    /// by the ratio: the floor in the conversion strands dust in the pool, and this is its record.
+    /// @notice Dead slots. The pool is not stored. The outstanding scrip is the pool, so the total
+    /// comes from the supply and the ratio. The slots stay so the layout does not move.
     struct CertScripUnitPool {
-        uint256 totalAssetsWad;
+        uint256 deprecatedTotalAssetsWad;
         uint256 deprecatedTotalNominalShares;
         uint256 deprecatedVaultEpoch;
         uint256 deprecatedLossIndex;
@@ -501,20 +497,19 @@ library IssuanceManagerStorage {
     }
 
     /// @return totalTrackedScrip ERC20 scrip total supply (canonical circulating scrip).
-    /// @return pricePerShareRay underlying wad per nominal vault share, ray precision (0 if empty vault).
-    function getScripPoolTotals(address certAddress)
-        internal
-        view
-        returns (uint256 totalTrackedScrip, uint256 pricePerShareRay)
-    {
+    function getScripPoolTotals(address certAddress) internal view returns (uint256 totalTrackedScrip) {
         address scrip = getScripifiedCert(certAddress);
-        totalTrackedScrip = scrip == address(0) ? 0 : ICyberScrip(scrip).totalSupply();
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
-        pricePerShareRay = pool.totalAssetsWad == 0 ? 0 : VAULT_RAY;
+        return scrip == address(0) ? 0 : ICyberScrip(scrip).totalSupply();
     }
 
+    /// @notice Units the printer's scrip pool holds, in 18-dec wad.
+    /// @dev Not stored. The outstanding scrip is the pool, so this reads the supply and applies the
+    /// ratio. The ratio cannot move while any scrip is outstanding, so the answer is stable.
     function getCertScripUnitVault(address certAddress) internal view returns (uint256 totalAssetsWad) {
-        return issuanceManagerStorage().certScripUnitPools[certAddress].totalAssetsWad;
+        address scrip = getScripifiedCert(certAddress);
+        if (scrip == address(0)) return 0;
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
+        return Math.mulDiv(ICyberScrip(scrip).totalSupply(), denominator, numerator);
     }
 
     /// @notice Deploys the LedgerEntryToken and CyberScrip beacons and wires up core storage.
@@ -916,7 +911,6 @@ library IssuanceManagerStorage {
 
         // The lot gives up the units for good. It keeps no claim on the pool, so a lot that
         // scripifies everything is empty and can be swept. The scrip is the claim.
-        _depositCertScripUnits(certAddress, amount);
         details.unitsRepresented = details.unitsRepresented - amount;
         certificate.updateCertificateDetails(id, details);
         ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
@@ -978,9 +972,8 @@ library IssuanceManagerStorage {
             approval.endorsementTimestamp = endorsementTimestamp;
         }
 
-        // Every conversion retires backing and normalized shares proportionally, regardless of
-        // which certificate receives the active units. ERC20 ownership authorizes redemption.
-        _withdrawVaultAssets(certAddress, units);
+        // Burn first. Holding the scrip is the authority to redeem it. The units below are credited
+        // only if this burn succeeds.
         ICyberScrip(scripifiedCert).burnFrom(account, amount);
 
         if (selection.foundActive) {
@@ -1028,12 +1021,9 @@ library IssuanceManagerStorage {
         address scripifiedCert = getScripifiedCert(certAddress);
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
 
-        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
-        uint256 units = amount * denominator;
-        units = units / numerator;
-        if (units == 0) revert ZeroUnitsConverted();
-
-        _withdrawVaultAssets(certAddress, units);
+        // No zero-unit guard here. The other two paths have one to stop a holder losing value in a
+        // bad trade. This path is an admin remedy that destroys a position on purpose, and it must be
+        // able to clear a dust balance that maps to no whole unit.
         ICyberScrip(scripifiedCert).forceBurn(account, amount);
     }
 
@@ -1155,20 +1145,5 @@ library IssuanceManagerStorage {
         if (numerator == 0 || denominator == 0) {
             return (1, 1);
         }
-    }
-
-    /// @notice Move units into the printer's scrip pool.
-    function _depositCertScripUnits(address certAddress, uint256 assetsWad) internal {
-        issuanceManagerStorage().certScripUnitPools[certAddress].totalAssetsWad += assetsWad;
-    }
-
-    /// @notice Move units out of the printer's scrip pool. The caller burns the matching scrip.
-    /// @dev The pool can keep a small residue when the scrip ratio is not 1:1, because the unit count
-    /// per burned scrip is floored. That residue is stranded, and `totalAssetsWad` is its only record.
-    function _withdrawVaultAssets(address certAddress, uint256 assetsOutWad) internal {
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
-        if (pool.totalAssetsWad == 0) revert EmptyVault();
-        if (assetsOutWad > pool.totalAssetsWad) revert VaultWithdrawalExceedsAssets();
-        pool.totalAssetsWad -= assetsOutWad;
     }
 }

@@ -134,8 +134,8 @@ contract AuditScripVaultClaimGriefTest is Test {
 
     /// @notice A lot that scripified everything holds nothing, so the permissionless sweep retires it.
     /// The units went to the pool, and the scrip is the claim on them.
-    /// TODO redemption after the sweep still needs a recertification approval. The permissionless
-    /// withdrawal change removes that, and this test then gains the redemption half.
+    /// @dev After the sweep the holder needs a recertification approval to convert back, because they
+    /// have no live lot to convert into. That is accepted.
     function test_FullyScripifiedLotIsEmptyAndSweepable() public {
         uint256[] memory ids = new uint256[](1);
         ids[0] = victimCertId;
