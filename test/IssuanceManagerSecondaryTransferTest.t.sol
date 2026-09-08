@@ -176,20 +176,21 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         });
         issuanceManager.createCertAndAssign(address(cert), seller, details);
 
-        // Scripify 30 of the 100 units: raw -> 70, scripified 30, effective stays 100.
+        // Scripify 30 of the 100 units. The lot keeps 70 and gives the other 30 to the pool.
         _deployScrip(address(cert));
         vm.prank(seller);
         issuanceManager.scripifyCert(address(cert), 0, 30, address(0));
         assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 70, "raw after scripify");
-        assertEq(cert.getCertificateDetails(0).unitsRepresented, 100, "effective after scripify");
+        assertEq(cert.getCertificateDetails(0).unitsRepresented, 70, "reported after scripify");
 
         // Sell 40 of the raw 70.
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0)));
 
-        // Seller raw drops by exactly the sold units (70 -> 30); the scripified portion is untouched, so the
-        // effective view is 30 + 30. An effective read-write would have stored 60 raw (effective 90) — corruption.
+        // Seller raw drops by exactly the sold units (70 -> 30). The 30 that went to the pool are not on
+        // the lot any more, so the reported number is the raw one. An effective read-write would have
+        // stored 60 raw — corruption.
         assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 30, "seller raw should decrement and not include scripified units");
-        assertEq(cert.getCertificateDetails(0).unitsRepresented, 60, "seller effective = raw + scripified");
+        assertEq(cert.getCertificateDetails(0).unitsRepresented, 30, "reported units are the units the lot holds");
         assertFalse(cert.isVoided(0), "partial sale keeps seller token active");
 
         // Buyer gets a fresh token for the sold units only.
@@ -197,48 +198,41 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(cert.legalOwnerOf(1), buyer, "buyer owns new token");
     }
 
-    // A partly scripified lot whose RAW units are all sold is not empty: it still holds the vault position
-    // backing the seller's outstanding scrip. Secondary transfer should not void it because
-    // the seller would no longer redeem their own scrip without an admin recertification approval.
-    function test_SecondaryTransfer_ScripifiedSellerToken_FullRawSale_KeepsLotForVaultClaim() public {
+    // A lot that scripified keeps no claim on the pool. So once its raw units are all sold it holds
+    // nothing, and the settlement voids it. The seller keeps their scrip, and the pool keeps the units
+    // that back it. To convert back the seller needs a recertification approval, because the sale took
+    // their last live lot.
+    function test_SecondaryTransfer_ScripifiedSellerToken_FullRawSale_VoidsTheEmptyLot() public {
         ILedgerEntryToken cert = _deployPrinterWithScripifiedSellerCert(100, 30);
 
         // Sell every raw unit the lot has left (70 of the original 100).
         vm.expectEmit(true, true, true, true, address(issuanceManager));
         emit IIssuanceManager.SecondaryTransferExecuted(
-            SETTLEMENT_ID, address(cert), buyer, 0, 1, seller, 70, 0, 70, false, true
+            SETTLEMENT_ID, address(cert), buyer, 0, 1, seller, 70, 0, 70, true, true
         );
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 70, "Bob", HostingMode.DIRECT, address(0)));
 
-        assertFalse(cert.isVoided(0), "lot keeps a live vault claim, so it must stay on the register");
+        assertTrue(cert.isVoided(0), "a lot holding nothing voids on a full sale");
         assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 0, "raw units all sold");
-        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 30, "vault claim survives the sale");
 
-        // The seller redeems their own scrip through the surviving lot. No admin approval is needed.
-        vm.prank(seller);
-        issuanceManager.convertScripToCert(address(cert), 30);
-        assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 30, "scrip converts back onto the seller lot");
-        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 0, "vault position emptied");
+        // The pool still backs the seller's outstanding scrip.
+        assertEq(issuanceManager.getCertScripUnitVault(address(cert)), 30, "pool still backs the scrip");
     }
 
-    // Since the partially-scripified & unburnt lot won't void at settlement, once the seller redeems the scrip the position is
-    // empty, and the permissionless sweeper retires the lot on the same rule the transfer applied.
-    function test_SecondaryTransfer_ScripifiedSellerToken_SweeperVoidsLotOnceClaimIsGone() public {
+    // The sweeper applies the same rule as the settlement: a lot with no units is empty.
+    function test_SecondaryTransfer_ScripifiedSellerToken_SweeperVoidsAnEmptiedLot() public {
         ILedgerEntryToken cert = _deployPrinterWithScripifiedSellerCert(100, 30);
-        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 70, "Bob", HostingMode.DIRECT, address(0)));
 
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
 
-        // The claim is still live, so the sweeper refuses the lot for the same reason the transfer did.
+        // 70 raw units are still on the lot, so the sweeper refuses it.
         vm.expectRevert(IssuanceManagerStorage.CertNotEmpty.selector);
         issuanceManager.voidEmptyCerts(address(cert), ids);
 
-        // An admin force-burn of the last scrip empties the pool, which retires every position at once. The
-        // lot now holds nothing at all, and the sweeper retires it.
-        issuanceManager.forceScripBurn(address(cert), seller, 30);
-        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 0, "emptied pool retires the position");
-
+        // Scripify the rest. The lot now holds nothing and the sweeper retires it.
+        vm.prank(seller);
+        issuanceManager.scripifyCert(address(cert), 0, 70, address(0));
         issuanceManager.voidEmptyCerts(address(cert), ids);
         assertTrue(cert.isVoided(0), "sweeper retires the lot once it holds nothing");
     }
@@ -247,10 +241,10 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     function test_SecondaryTransfer_ScripifiedSellerToken_ScripRedeemedBeforeSale_StillVoids() public {
         ILedgerEntryToken cert = _deployPrinterWithScripifiedSellerCert(100, 30);
 
-        // The seller converts the scrip back before selling, so the lot holds 100 raw units and no claim.
+        // The seller converts the scrip back before selling, so the lot holds 100 raw units again.
         vm.prank(seller);
         issuanceManager.convertScripToCert(address(cert), 30);
-        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 0, "no vault claim left");
+        assertEq(issuanceManager.getCertScripUnitVault(address(cert)), 0, "pool emptied");
 
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 100, "Bob", HostingMode.DIRECT, address(0)));
         assertTrue(cert.isVoided(0), "a lot with nothing left still voids on a full sale");
@@ -464,7 +458,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         vm.prank(seller);
         issuanceManager.scripifyCert(address(cert), 0, scripifiedUnits, address(0));
         assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, units - scripifiedUnits, "raw after scripify");
-        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), scripifiedUnits, "vault claim after scripify");
+        assertEq(issuanceManager.getCertScripUnitVault(address(cert)), scripifiedUnits, "pool after scripify");
     }
 
     /// @dev Deploys a printer and mints the seller's Ledger Entry Token (id 0, `units` units)

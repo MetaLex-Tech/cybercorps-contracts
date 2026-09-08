@@ -245,9 +245,11 @@ interface ILedgerEntryToken is IERC721 {
     function voidCert(uint256 tokenId) external;
     function unvoidCert(uint256 tokenId) external;
     function isVoided(uint256 tokenId) external view returns (bool);
+    /// @notice Full certificate details. `unitsRepresented` is the units the lot holds.
     function getCertificateDetails(
         uint256 tokenId
     ) external view returns (CertificateDetails memory);
+    /// @notice Same value as `getCertificateDetails`. Kept for backward compatibility, do not remove.
     function getActiveCertificateDetails(
         uint256 tokenId
     ) external view returns (CertificateDetails memory);

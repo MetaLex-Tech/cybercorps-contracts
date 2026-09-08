@@ -85,12 +85,6 @@ contract MockIssuanceManager {
         return "Mock Corp";
     }
 
-    function getCertScripifiedStatus(
-        address,
-        uint256
-    ) external pure returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented) {
-        return (false, 0, 0);
-    }
 }
 
 contract MockUriBuilder is IUriBuilder {

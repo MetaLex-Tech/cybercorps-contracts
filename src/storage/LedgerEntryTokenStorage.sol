@@ -964,30 +964,20 @@ library LedgerEntryTokenStorage {
         return cyberCertStorage().certificateDetails[tokenId];
     }
 
-    function getActiveCertificateDetails(
+    /// @notice The lot's stored details. `unitsRepresented` is the units the lot holds.
+    /// @dev Units given up to scrip belong to the printer's pool, and the scrip is the claim on them,
+    /// so they are not counted here.
+    function getCertificateDetails(
         uint256 tokenId
     ) internal view returns (CertificateDetails memory details) {
         details = cyberCertStorage().certificateDetails[tokenId];
     }
 
-    function getCertificateDetails(
+    /// @notice Alias of `getCertificateDetails`. Do not delete it. See the printer for why.
+    function getActiveCertificateDetails(
         uint256 tokenId
     ) internal view returns (CertificateDetails memory details) {
-        CyberCertStorage storage s = cyberCertStorage();
-        details = getActiveCertificateDetails(tokenId);
-
-        (
-            bool isScripified,
-            uint256 scripifiedUnits,
-            uint256 _maxUnitsRepresented
-        ) = IIssuanceManager(s.issuanceManager).getCertScripifiedStatus(
-                address(this),
-                tokenId
-            );
-
-        if (isScripified) {
-            details.unitsRepresented = details.unitsRepresented + scripifiedUnits;
-        }
+        return getCertificateDetails(tokenId);
     }
 
     function getEndorsements(uint256 tokenId) internal view returns (Endorsement[] storage) {

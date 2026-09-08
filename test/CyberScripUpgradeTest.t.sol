@@ -90,6 +90,7 @@ struct PoolAccountingFixture {
 contract CyberScripUpgradeForkTest is Test {
     using ERC1967ProxyLib for address;
     using RoundLib for Round;
+    uint256 internal constant PRE_UPGRADE_BLOCK = 46_300_000;
     address internal constant METALEX_SAFE =
         0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     address internal constant LEXCHEX_OWNER =
@@ -114,7 +115,8 @@ contract CyberScripUpgradeForkTest is Test {
     address internal otherInvestor;
 
     function setUp() public {
-        vm.createSelectFork("base_sepolia");
+        // These scenarios create a legacy stack before upgrading it in-place.
+        vm.createSelectFork("base_sepolia", PRE_UPGRADE_BLOCK);
 
         deployment = DeploymentConstants.coreV2(block.chainid);
 
@@ -576,8 +578,14 @@ contract CyberScripUpgradeForkTest is Test {
         issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
 
         assertEq(ICyberScrip(scrip).balanceOf(investor), 10);
+        // The lot gave 10 units to the pool and kept 15
         assertEq(certPrinter.getActiveCertificateDetails(certId).unitsRepresented, 15);
-        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 25);
+        // getActiveCertificateDetails() is functionally equivalent to getCertificateDetails()
+        // and was only kept for backward-compatibility
+        assertEq(
+            certPrinter.getCertificateDetails(certId).unitsRepresented,
+            certPrinter.getActiveCertificateDetails(certId).unitsRepresented
+        );
     }
 
     function test_PostUpgrade_ConversionGatesAndConditions() public {
@@ -728,28 +736,22 @@ contract CyberScripUpgradeForkTest is Test {
         vm.prank(investor);
         issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
 
-        (uint256 totalTrackedBefore,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedBefore = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
-        (bool isScripifiedBefore, uint256 scripifiedUnitsBefore,) = issuanceManager
-            .getCertScripifiedStatus(address(certPrinter), certId);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
         assertEq(totalTrackedBefore, 20);
-        assertTrue(isScripifiedBefore);
-        assertEq(scripifiedUnitsBefore, 10);
+        assertEq(issuanceManager.getCertScripUnitVault(address(certPrinter)), 10);
 
         vm.prank(companyOwner);
         issuanceManager.forceScripBurn(address(certPrinter), investor, 8);
 
-        (uint256 totalTrackedAfter,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedAfter = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
-        (bool isScripifiedAfter, uint256 scripifiedUnitsAfter,) = issuanceManager
-            .getCertScripifiedStatus(address(certPrinter), certId);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 12);
         assertEq(totalTrackedAfter, 12);
-        assertTrue(isScripifiedAfter);
-        assertEq(scripifiedUnitsAfter, 6);
+        assertEq(issuanceManager.getCertScripUnitVault(address(certPrinter)), 6);
     }
 
     function test_PostUpgrade_MultiHolderTransferAndRecertificationPoolAccounting()
@@ -760,16 +762,16 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(f.certPrinter.getActiveCertificateDetails(f.certIdA).unitsRepresented, 0);
         assertEq(f.certPrinter.getActiveCertificateDetails(f.certIdB).unitsRepresented, 0);
         assertEq(f.certPrinter.getActiveCertificateDetails(f.certIdC).unitsRepresented, 0);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdA).unitsRepresented, 10);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdB).unitsRepresented, 20);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdC).unitsRepresented, 50);
+        // The lots gave their units to the pool and kept nothing, so they report zero.
+        assertEq(f.certPrinter.getCertificateDetails(f.certIdA).unitsRepresented, 0);
+        assertEq(f.certPrinter.getCertificateDetails(f.certIdB).unitsRepresented, 0);
+        assertEq(f.certPrinter.getCertificateDetails(f.certIdC).unitsRepresented, 0);
 
+        // The scrip balance is the claim.
         assertEq(ICyberScrip(f.scrip).balanceOf(investor), 10);
         assertEq(ICyberScrip(f.scrip).balanceOf(otherInvestor), 20);
         assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 50);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdA), 10);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdB), 20);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdC), 50);
+        assertEq(f.issuanceManager.getCertScripUnitVault(address(f.certPrinter)), 80);
 
         vm.prank(investor);
         ICyberScrip(f.scrip).transfer(f.newInvestor, 2);
@@ -783,13 +785,11 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 40);
         assertEq(ICyberScrip(f.scrip).balanceOf(f.newInvestor), 16);
 
-        // ERC20 transfers do not move pool ownership.
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdA), 10);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdB), 20);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdC), 50);
+        // An ERC20 transfer moves the claim with it. The pool total does not change.
+        assertEq(f.issuanceManager.getCertScripUnitVault(address(f.certPrinter)), 80);
 
         {
-            (uint256 totalTrackedBefore,) = f.issuanceManager.getScripPoolTotals(
+            uint256 totalTrackedBefore = f.issuanceManager.getScripPoolTotals(
                 address(f.certPrinter)
             );
             assertEq(totalTrackedBefore, 80);
@@ -805,23 +805,22 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 40);
         assertEq(ICyberScrip(f.scrip).balanceOf(f.newInvestor), 0);
 
-        (uint256 totalTrackedAfter,) = f.issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedAfter = f.issuanceManager.getScripPoolTotals(
             address(f.certPrinter)
         );
         assertEq(totalTrackedAfter, 64);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdA), 8);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdB), 16);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdC), 40);
+        // The redeemed 16 left the pool. The other holders keep their scrip, so their claim is unchanged.
+        assertEq(f.issuanceManager.getCertScripUnitVault(address(f.certPrinter)), 64);
 
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdA).unitsRepresented, 8);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdB).unitsRepresented, 16);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdC).unitsRepresented, 40);
+        // The old lots still hold nothing of their own.
+        assertEq(f.certPrinter.getCertificateDetails(f.certIdA).unitsRepresented, 0);
+        assertEq(f.certPrinter.getCertificateDetails(f.certIdB).unitsRepresented, 0);
+        assertEq(f.certPrinter.getCertificateDetails(f.certIdC).unitsRepresented, 0);
 
         uint256 newCertId = 3;
         assertEq(f.certPrinter.totalSupply(), 4);
         assertEq(f.certPrinter.ownerOf(newCertId), f.newInvestor);
         assertEq(f.certPrinter.getCertificateDetails(newCertId).unitsRepresented, 16);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), newCertId), 0);
         assertEq(f.certPrinter.getActiveCertificateDetails(newCertId).unitsRepresented, 16);
     }
 

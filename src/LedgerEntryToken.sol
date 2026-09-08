@@ -309,14 +309,16 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         return super._update(to, tokenId, auth);
     }
     
-    /// @notice `CertificateDetails.unitsRepresented` is re-purposed to `details.unitsRepresented + scripifiedUnits` in this case
-    ///         If you need raw `unitsRepresented`, use `getActiveCertificateDetails()` instead
-    // Get full agreement details
+    /// @notice Full certificate details. `unitsRepresented` is the units the lot holds.
+    /// @dev Units given up to scrip belong to the printer's pool and are not counted here. The holder's
+    /// scrip balance is the claim on them.
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
         if (ownerOf(tokenId) == address(0)) revert ILedgerEntryToken.TokenDoesNotExist();
         return LedgerEntryTokenStorage.getCertificateDetails(tokenId);
     }
 
+    /// @notice Returns the same details as `getCertificateDetails`.
+    /// @dev KEEP THIS. It is a backward compatibility alias.
     function getActiveCertificateDetails(
         uint256 tokenId
     ) external view returns (CertificateDetails memory) {

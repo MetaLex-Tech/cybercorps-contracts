@@ -235,8 +235,14 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
 
         assertEq(ICyberScrip(scrip).balanceOf(investor), 10);
+        // The lot gave 10 units to the pool and kept 15
         assertEq(certPrinter.getActiveCertificateDetails(certId).unitsRepresented, 15);
-        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 25);
+        // getActiveCertificateDetails() is functionally equivalent to getCertificateDetails()
+        // and was only kept for backward-compatibility
+        assertEq(
+            certPrinter.getCertificateDetails(certId).unitsRepresented,
+            certPrinter.getActiveCertificateDetails(certId).unitsRepresented
+        );
     }
 
     function test_PostUpgrade_ConversionGatesAndConditions() public {
@@ -368,28 +374,22 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         vm.prank(investor);
         issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
 
-        (uint256 totalTrackedBefore,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedBefore = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
-        (bool isScripifiedBefore, uint256 scripifiedUnitsBefore,) = issuanceManager
-            .getCertScripifiedStatus(address(certPrinter), certId);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
         assertEq(totalTrackedBefore, 20);
-        assertTrue(isScripifiedBefore);
-        assertEq(scripifiedUnitsBefore, 10);
+        assertEq(issuanceManager.getCertScripUnitVault(address(certPrinter)), 10);
 
         vm.prank(companyOwner);
         issuanceManager.forceScripBurn(address(certPrinter), investor, 8);
 
-        (uint256 totalTrackedAfter,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedAfter = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
-        (bool isScripifiedAfter, uint256 scripifiedUnitsAfter,) = issuanceManager
-            .getCertScripifiedStatus(address(certPrinter), certId);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 12);
         assertEq(totalTrackedAfter, 12);
-        assertTrue(isScripifiedAfter);
-        assertEq(scripifiedUnitsAfter, 6);
+        assertEq(issuanceManager.getCertScripUnitVault(address(certPrinter)), 6);
     }
 
     function test_PostUpgrade_MultiHolderTransferAndRecertificationPoolAccounting()
@@ -398,16 +398,16 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         MultiHolderFixture memory fixture = _setupMultiHolderFixture();
 
         _assertActiveUnitsZero(fixture);
-        _assertStoredUnits(fixture, 10, 20, 50);
+        _assertStoredUnits(fixture, 0, 0, 0);
         _assertBalances(fixture, 10, 20, 50, 0);
-        _assertPoolAmountsById(fixture, 10, 20, 50);
+        _assertPoolTotal(fixture, 80);
 
         _transferToNewInvestor(fixture);
 
         _assertBalances(fixture, 8, 16, 40, 16);
-        _assertPoolAmountsById(fixture, 10, 20, 50);
+        _assertPoolTotal(fixture, 80);
 
-        (uint256 totalTrackedBefore,) = fixture.issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedBefore = fixture.issuanceManager.getScripPoolTotals(
             address(fixture.certPrinter)
         );
         assertEq(totalTrackedBefore, 80);
@@ -423,23 +423,16 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
         _assertBalances(fixture, 8, 16, 40, 0);
 
-        (uint256 totalTrackedAfter,) = fixture.issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedAfter = fixture.issuanceManager.getScripPoolTotals(
             address(fixture.certPrinter)
         );
         assertEq(totalTrackedAfter, 64);
-        _assertPoolAmountsById(fixture, 8, 16, 40);
-        _assertStoredUnits(fixture, 8, 16, 40);
+        _assertPoolTotal(fixture, 64);
+        _assertStoredUnits(fixture, 0, 0, 0);
 
         uint256 newCertId = 3;
         assertEq(fixture.certPrinter.totalSupply(), 4);
         assertEq(fixture.certPrinter.ownerOf(newCertId), fixture.newInvestor);
-        assertEq(
-            fixture.issuanceManager.getScripPoolAmountById(
-                address(fixture.certPrinter),
-                newCertId
-            ),
-            0
-        );
         assertEq(
             fixture.certPrinter.getCertificateDetails(newCertId).unitsRepresented,
             16
@@ -916,32 +909,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         );
     }
 
-    function _assertPoolAmountsById(
-        MultiHolderFixture memory fixture,
-        uint256 certAmtA,
-        uint256 certAmtB,
-        uint256 certAmtC
-    ) internal view {
-        assertEq(
-            fixture.issuanceManager.getScripPoolAmountById(
-                address(fixture.certPrinter),
-                fixture.certIdA
-            ),
-            certAmtA
-        );
-        assertEq(
-            fixture.issuanceManager.getScripPoolAmountById(
-                address(fixture.certPrinter),
-                fixture.certIdB
-            ),
-            certAmtB
-        );
-        assertEq(
-            fixture.issuanceManager.getScripPoolAmountById(
-                address(fixture.certPrinter),
-                fixture.certIdC
-            ),
-            certAmtC
-        );
+    function _assertPoolTotal(MultiHolderFixture memory fixture, uint256 expected) internal view {
+        assertEq(fixture.issuanceManager.getCertScripUnitVault(address(fixture.certPrinter)), expected);
     }
 }
