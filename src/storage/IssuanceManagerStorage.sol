@@ -500,8 +500,7 @@ library IssuanceManagerStorage {
     function getCertScripUnitVault(address certAddress) internal view returns (uint256 unitsHeld) {
         address scrip = getScripifiedCert(certAddress);
         if (scrip == address(0)) return 0;
-        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
-        return Math.mulDiv(ICyberScrip(scrip).totalSupply(), denominator, numerator);
+        return _scripToUnits(certAddress, ICyberScrip(scrip).totalSupply());
     }
 
     /// @notice Deploys the LedgerEntryToken and CyberScrip beacons and wires up core storage.
@@ -894,9 +893,7 @@ library IssuanceManagerStorage {
             revert AmountExceedsAvailableUnits();
         }
 
-        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
-        uint256 scripAmount = amount * numerator;
-        scripAmount = scripAmount / denominator;
+        uint256 scripAmount = _unitsToScrip(certAddress, amount);
         // The ratio floors. An amount too small for the ratio mints no scrip, and the lot would give
         // up its units for nothing.
         if (scripAmount == 0) revert ZeroScripMinted();
@@ -927,9 +924,7 @@ library IssuanceManagerStorage {
         uint256 minimum = getScripToCertMinimum(certAddress);
         if (minimum > 0 && amount < minimum) revert ScripToCertMinimumNotMet();
 
-        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
-        uint256 units = amount * denominator;
-        units = units / numerator;
+        uint256 units = _scripToUnits(certAddress, amount);
         // Same floor in the other direction: an amount too small for the ratio would burn the scrip
         // and hand back no units.
         if (units == 0) revert ZeroUnitsConverted();
@@ -1110,7 +1105,8 @@ library IssuanceManagerStorage {
         bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(getCyberScripBeacon(), ""));
     }
 
-    function _getScripRatioOrDefault(address certAddress)
+    /// @notice The scrip ratio for a printer. An unset ratio is one to one.
+    function getScripRatioOrDefault(address certAddress)
         internal
         view
         returns (uint256 numerator, uint256 denominator)
@@ -1121,5 +1117,17 @@ library IssuanceManagerStorage {
         if (numerator == 0 || denominator == 0) {
             return (1, 1);
         }
+    }
+
+    /// @notice The scrip that the given units mint. The result is floored.
+    function _unitsToScrip(address certAddress, uint256 units) internal view returns (uint256) {
+        (uint256 numerator, uint256 denominator) = getScripRatioOrDefault(certAddress);
+        return Math.mulDiv(units, numerator, denominator);
+    }
+
+    /// @notice The units that the given scrip stand for. The result is floored.
+    function _scripToUnits(address certAddress, uint256 scripAmount) internal view returns (uint256) {
+        (uint256 numerator, uint256 denominator) = getScripRatioOrDefault(certAddress);
+        return Math.mulDiv(scripAmount, denominator, numerator);
     }
 }

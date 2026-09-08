@@ -489,12 +489,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     }
 
     function getScripRatio(address certAddress) external view returns (uint256 numerator, uint256 denominator) {
-        IssuanceManagerStorage.ScripRatio storage ratio = IssuanceManagerStorage.getScripRatio(certAddress);
-        numerator = ratio.numerator;
-        denominator = ratio.denominator;
-        if (numerator == 0 || denominator == 0) {
-            return (1, 1);
-        }
+        return IssuanceManagerStorage.getScripRatioOrDefault(certAddress);
     }
 
     /// @notice Sets the minimum scrip amount required to convert back into certs
