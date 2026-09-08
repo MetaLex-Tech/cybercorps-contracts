@@ -235,8 +235,14 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
 
         assertEq(ICyberScrip(scrip).balanceOf(investor), 10);
+        // The lot gave 10 units to the pool and kept 15
         assertEq(certPrinter.getActiveCertificateDetails(certId).unitsRepresented, 15);
-        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 25);
+        // getActiveCertificateDetails() is functionally equivalent to getCertificateDetails()
+        // and was only kept for backward-compatibility
+        assertEq(
+            certPrinter.getCertificateDetails(certId).unitsRepresented,
+            certPrinter.getActiveCertificateDetails(certId).unitsRepresented
+        );
     }
 
     function test_PostUpgrade_ConversionGatesAndConditions() public {

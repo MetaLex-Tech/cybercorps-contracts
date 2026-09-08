@@ -964,19 +964,20 @@ library LedgerEntryTokenStorage {
         return cyberCertStorage().certificateDetails[tokenId];
     }
 
-    function getActiveCertificateDetails(
+    /// @notice The lot's stored details. `unitsRepresented` is the units the lot holds.
+    /// @dev Units given up to scrip belong to the printer's pool, and the scrip is the claim on them,
+    /// so they are not counted here.
+    function getCertificateDetails(
         uint256 tokenId
     ) internal view returns (CertificateDetails memory details) {
         details = cyberCertStorage().certificateDetails[tokenId];
     }
 
-    /// @notice The lot's units. Units given up to scrip are not counted here.
-    /// @dev A lot that scripifies gives the units to the printer's pool and keeps no claim on them.
-    /// The scrip is the claim. So the register entry and the live balance are the same number again.
-    function getCertificateDetails(
+    /// @notice Alias of `getCertificateDetails`. Do not delete it. See the printer for why.
+    function getActiveCertificateDetails(
         uint256 tokenId
     ) internal view returns (CertificateDetails memory details) {
-        return getActiveCertificateDetails(tokenId);
+        return getCertificateDetails(tokenId);
     }
 
     function getEndorsements(uint256 tokenId) internal view returns (Endorsement[] storage) {

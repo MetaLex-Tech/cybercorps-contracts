@@ -79,8 +79,6 @@ library IssuanceManagerStorage {
     error NotAPrinter();
     error CertNotEmpty();
 
-    /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
-
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
