@@ -41,29 +41,24 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity ^0.8.28;
 
-import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorpConstants.sol";
-import "./interfaces/ICyberAgreementRegistry.sol";
+
 import "./interfaces/ICertificateImageBuilder.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/IIssuanceManager.sol";
-import {
-    ILedgerEntryToken,
-    RestrictionType,
-    RestrictiveLegend
-} from "./interfaces/ILedgerEntryToken.sol";
-import {
-    ICertificateExtension,
-    ICertificateExtensionV3
-} from "./storage/extensions/ICertificateExtension.sol";
+import {ILedgerEntryToken, RestrictionType, RestrictiveLegend} from "./interfaces/ILedgerEntryToken.sol";
+
+import {JsonLib} from "./libs/JsonLib.sol";
 import "./libs/auth.sol";
+import {ICertificateExtension, ICertificateExtensionV3} from "./storage/extensions/ICertificateExtension.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 interface ICertificateUnitsReserved {
     function unitsReserved(uint256 tokenId) external view returns (uint256);
 }
 
 contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
-
     /// @notice Address of the external image builder contract
     address public imageBuilder;
 
@@ -147,14 +142,18 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         string memory json = "[";
         for (uint256 i = 0; i < arr.length; i++) {
             if (i > 0) json = string.concat(json, ",");
-            json = string.concat(json, '{"id": ', uint256ToString(i + 1), ', "legend": "', arr[i], '"}');
+            json = string.concat(
+                json, '{"id": ', uint256ToString(i + 1), ', "legend": "', JsonLib.jsonEscape(arr[i]), '"}'
+            );
         }
         return string.concat(json, "]");
     }
 
-    function legacyLegendsToRestrictiveLegends(
-        string[] memory arr
-    ) public pure returns (RestrictiveLegend[] memory legends) {
+    function legacyLegendsToRestrictiveLegends(string[] memory arr)
+        public
+        pure
+        returns (RestrictiveLegend[] memory legends)
+    {
         legends = new RestrictiveLegend[](arr.length);
         for (uint256 i = 0; i < arr.length; i++) {
             legends[i] = RestrictiveLegend({
@@ -180,24 +179,31 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return string.concat(json, "]");
     }
 
-    function restrictiveLegendToJson(
-        uint256 id,
-        RestrictiveLegend memory legend
-    ) public pure returns (string memory) {
+    function restrictiveLegendToJson(uint256 id, RestrictiveLegend memory legend) public pure returns (string memory) {
         string memory part1 = string.concat(
-            '{"id": ', uint256ToString(id),
-            ', "restrictionType": "', restrictionTypeToString(legend.restrictionType),
-            '", "title": "', legend.title,
-            '", "text": "', legend.text,
-            '", "jurisdiction": "', legend.jurisdiction,
+            '{"id": ',
+            uint256ToString(id),
+            ', "restrictionType": "',
+            restrictionTypeToString(legend.restrictionType),
+            '", "title": "',
+            JsonLib.jsonEscape(legend.title),
+            '", "text": "',
+            JsonLib.jsonEscape(legend.text),
+            '", "jurisdiction": "',
+            JsonLib.jsonEscape(legend.jurisdiction),
             '"'
         );
         string memory part2 = string.concat(
-            ', "referenceId": "0x', bytes32ToString(legend.referenceId),
-            '", "effectiveTimestamp": "', uint256ToString(uint256(legend.effectiveTimestamp)),
-            '", "expirationTimestamp": "', uint256ToString(uint256(legend.expirationTimestamp)),
-            '", "active": "', boolToString(legend.active),
-            '", "data": "', bytesToHexString(legend.data),
+            ', "referenceId": "0x',
+            bytes32ToString(legend.referenceId),
+            '", "effectiveTimestamp": "',
+            uint256ToString(uint256(legend.effectiveTimestamp)),
+            '", "expirationTimestamp": "',
+            uint256ToString(uint256(legend.expirationTimestamp)),
+            '", "active": "',
+            boolToString(legend.active),
+            '", "data": "',
+            bytesToHexString(legend.data),
             '"}'
         );
         return string.concat(part1, part2);
@@ -225,8 +231,8 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
             bytes1 b = bytes1(uint8(uint160(_addr) >> (8 * (19 - i))));
             uint8 hi = uint8(b) >> 4;
             uint8 lo = uint8(b) & 0x0f;
-            s[2*i] = bytes1(hi + (hi < 10 ? 48 : 87));
-            s[2*i+1] = bytes1(lo + (lo < 10 ? 48 : 87));
+            s[2 * i] = bytes1(hi + (hi < 10 ? 48 : 87));
+            s[2 * i + 1] = bytes1(lo + (lo < 10 ? 48 : 87));
         }
         return string(abi.encodePacked("0x", s));
     }
@@ -245,7 +251,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         bytes memory bstr = new bytes(len);
         uint256 k = len;
         while (_i != 0) {
-            k = k-1;
+            k = k - 1;
             uint8 temp = uint8(48 + (_i % 10));
             bytes1 b1 = bytes1(temp);
             bstr[k] = b1;
@@ -262,9 +268,9 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         uint256 valueInCents = value / 1e16;
         uint256 wholePart = valueInCents / 100;
         uint256 centsPart = valueInCents % 100;
-        
+
         string memory wholeStr = uint256ToString(wholePart);
-        
+
         // Format cents with leading zero if needed
         string memory centsStr;
         if (centsPart < 10) {
@@ -272,7 +278,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         } else {
             centsStr = uint256ToString(centsPart);
         }
-        
+
         return string(abi.encodePacked(wholeStr, ".", centsStr));
     }
 
@@ -286,8 +292,8 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         bytes memory bytesArray = new bytes(64);
         for (uint256 i = 0; i < 32; i++) {
             uint8 b = uint8(uint8(bytes1(bytes32(_bytes32) >> (8 * (31 - i)))));
-            bytesArray[i*2] = bytes1(uint8(b/16 + (b/16 < 10 ? 48 : 87)));
-            bytesArray[i*2+1] = bytes1(uint8(b%16 + (b%16 < 10 ? 48 : 87)));
+            bytesArray[i * 2] = bytes1(uint8(b / 16 + (b / 16 < 10 ? 48 : 87)));
+            bytesArray[i * 2 + 1] = bytes1(uint8(b % 16 + (b % 16 < 10 ? 48 : 87)));
         }
         return string(bytesArray);
     }
@@ -298,12 +304,12 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         bytes memory hexString = new bytes(2 + data.length * 2);
         hexString[0] = "0";
         hexString[1] = "x";
-        
-        for(uint i = 0; i < data.length; i++) {
-            hexString[2 + i*2] = hexChars[uint8(data[i] >> 4)];
-            hexString[2 + i*2 + 1] = hexChars[uint8(data[i] & 0x0f)];
+
+        for (uint256 i = 0; i < data.length; i++) {
+            hexString[2 + i * 2] = hexChars[uint8(data[i] >> 4)];
+            hexString[2 + i * 2 + 1] = hexChars[uint8(data[i] & 0x0f)];
         }
-        
+
         return string(hexString);
     }
 
@@ -316,21 +322,21 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
             return "";
         }
         bytes memory result = new bytes(strBytes.length - 7);
-        for (uint i = 7; i < strBytes.length; i++) {
+        for (uint256 i = 7; i < strBytes.length; i++) {
             result[i - 7] = strBytes[i];
         }
         return string(result);
     }
 
-struct CertificateDetails {
-    string signingOfficerName;
-    string signingOfficerTitle;
-    uint256 investmentAmountUSD;
-    uint256 issuerUSDValuationAtTimeOfInvestment;
-    uint256 unitsRepresented;
-    string legalDetails;
-    bytes extensionData;
-}
+    struct CertificateDetails {
+        string signingOfficerName;
+        string signingOfficerTitle;
+        uint256 investmentAmountUSD;
+        uint256 issuerUSDValuationAtTimeOfInvestment;
+        uint256 unitsRepresented;
+        string legalDetails;
+        bytes extensionData;
+    }
 
     struct Endorsement {
         address endorser;
@@ -355,7 +361,7 @@ struct CertificateDetails {
         if (registry == address(0) || agreementId == bytes32(0)) {
             return block.timestamp;
         }
-        
+
         try ICyberAgreementRegistry(registry).getContractDetails(agreementId) returns (
             bytes32,
             string memory,
@@ -379,7 +385,7 @@ struct CertificateDetails {
         } catch {
             // If the call fails, fall through to return block.timestamp
         }
-        
+
         return block.timestamp;
     }
 
@@ -394,10 +400,14 @@ struct CertificateDetails {
         SecuritySeries securitySeries,
         string memory certificateUri
     ) internal pure returns (string memory) {
-        return string(abi.encodePacked(
-            _buildAttributesPart1(owner, details, cyberCORPName, cyberCORPType),
-            _buildAttributesPart2(cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri)
-        ));
+        return string(
+            abi.encodePacked(
+                _buildAttributesPart1(owner, details, cyberCORPName, cyberCORPType),
+                _buildAttributesPart2(
+                    cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri
+                )
+            )
+        );
     }
 
     function _buildAttributesPart1(
@@ -406,16 +416,25 @@ struct CertificateDetails {
         string memory cyberCORPName,
         string memory cyberCORPType
     ) internal pure returns (string memory) {
-        return string(abi.encodePacked(
-            '{"trait_type": "CurrentOwner", "value": "', addressToString(owner.ownerAddress),
-            '"}, {"trait_type": "CurrentOwnerName", "value": "', owner.name,
-            '"}, {"trait_type": "investmentAmount", "value": "', from18DecimalsToString(details.investmentAmountUSD),
-            '"}, {"trait_type": "unitsRepresented", "value": "', from18DecimalsToString(details.unitsRepresented),
-            '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '"}, {"trait_type": "cyberCORPName", "value": "', cyberCORPName,
-            '"}, {"trait_type": "cyberCORPType", "value": "', cyberCORPType,
-            '"}'
-        ));
+        return string(
+            abi.encodePacked(
+                '{"trait_type": "CurrentOwner", "value": "',
+                addressToString(owner.ownerAddress),
+                '"}, {"trait_type": "CurrentOwnerName", "value": "',
+                JsonLib.jsonEscape(owner.name),
+                '"}, {"trait_type": "investmentAmount", "value": "',
+                from18DecimalsToString(details.investmentAmountUSD),
+                '"}, {"trait_type": "unitsRepresented", "value": "',
+                from18DecimalsToString(details.unitsRepresented),
+                '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "',
+                from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
+                '"}, {"trait_type": "cyberCORPName", "value": "',
+                JsonLib.jsonEscape(cyberCORPName),
+                '"}, {"trait_type": "cyberCORPType", "value": "',
+                JsonLib.jsonEscape(cyberCORPType),
+                '"}'
+            )
+        );
     }
 
     function _buildAttributesPart2(
@@ -425,93 +444,179 @@ struct CertificateDetails {
         SecuritySeries securitySeries,
         string memory certificateUri
     ) internal pure returns (string memory) {
-        return string(abi.encodePacked(
-            ', {"trait_type": "cyberCORPJurisdiction", "value": "', cyberCORPJurisdiction,
-            '"}, {"trait_type": "cyberCORPContactDetails", "value": "', cyberCORPContactDetails,
-            '"}, {"trait_type": "securityType", "value": "', securityClassToString(securityType),
-            '"}, {"trait_type": "securitySeries", "value": "', securitySeriesToString(securitySeries),
-            '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/', stripIpfsPrefix(certificateUri),
-            '"}'
-        ));
+        return string(
+            abi.encodePacked(
+                ', {"trait_type": "cyberCORPJurisdiction", "value": "',
+                JsonLib.jsonEscape(cyberCORPJurisdiction),
+                '"}, {"trait_type": "cyberCORPContactDetails", "value": "',
+                JsonLib.jsonEscape(cyberCORPContactDetails),
+                '"}, {"trait_type": "securityType", "value": "',
+                securityClassToString(securityType),
+                '"}, {"trait_type": "securitySeries", "value": "',
+                securitySeriesToString(securitySeries),
+                '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/',
+                JsonLib.jsonEscape(stripIpfsPrefix(certificateUri)),
+                '"}'
+            )
+        );
     }
 
-    function buildEndorsementHistory(
-        Endorsement[] memory endorsements,
-        address registry,
-        bytes32 agreementId
-    ) internal view returns (string memory) {
-        string memory json = '[';
+    function buildEndorsementHistory(Endorsement[] memory endorsements, address registry, bytes32 agreementId)
+        internal
+        view
+        returns (string memory)
+    {
+        string memory json = "[";
         for (uint256 i = 0; i < endorsements.length; i++) {
-            if (i > 0) json = string.concat(json, ',');
-            json = string.concat(json, '{',
-                '"endorser": "', addressToString(endorsements[i].endorser),
-                '", "timestamp": "', uint256ToString(endorsements[i].timestamp),
-                '", "registry": "', addressToString(endorsements[i].registry),
-                '", "agreementId": "', bytes32ToString(endorsements[i].agreementId),
-                '", "investorName": "', endorsements[i].endorseeName,
-                '", "investorAddress": "', addressToString(endorsements[i].endorsee),
-                '"');
+            if (i > 0) json = string.concat(json, ",");
+            json = string.concat(
+                json,
+                "{",
+                '"endorser": "',
+                addressToString(endorsements[i].endorser),
+                '", "timestamp": "',
+                uint256ToString(endorsements[i].timestamp),
+                '", "registry": "',
+                addressToString(endorsements[i].registry),
+                '", "agreementId": "',
+                bytes32ToString(endorsements[i].agreementId),
+                '", "investorName": "',
+                JsonLib.jsonEscape(endorsements[i].endorseeName),
+                '", "investorAddress": "',
+                addressToString(endorsements[i].endorsee),
+                '"'
+            );
 
             // Add purchaseAgreementDetails for the first endorsement only
             if (i == 0 && registry != address(0) && agreementId != bytes32(0)) {
                 json = string.concat(json, ', "purchaseAgreementDetails": {');
-                
+
                 // Get agreement details from registry
                 (
-                    ,  // bytes32 templateId
-                    ,  // string memory legalContractUri
-                    string[] memory globalFields,  // string[] memory globalFields
+                    , // bytes32 templateId
+                    , // string memory legalContractUri
+                    string[] memory globalFields, // string[] memory globalFields
                     string[] memory partyFields,
-                    string[] memory globalValues,  // string[] memory globalValues
-                    ,  // address[] memory parties
-                    string[][] memory partyValues,  // string[][] memory partyValues
-                    ,  // uint256[] memory signedAt
-                    ,  // uint256 numSignatures
+                    string[] memory globalValues, // string[] memory globalValues
+                    , // address[] memory parties
+                    string[][] memory partyValues, // string[][] memory partyValues
+                    , // uint256[] memory signedAt
+                    , // uint256 numSignatures
                     ,
                     // bool isComplete
                 ) = ICyberAgreementRegistry(registry).getContractDetails(agreementId);
 
                 // Add global fields
                 for (uint256 j = 0; j < globalFields.length; j++) {
-                    if (j > 0) json = string.concat(json, ',');
-                    json = string.concat(json, '"', globalFields[j], '": "', 
-                        j < globalValues.length ? globalValues[j] : "", '"');
+                    if (j > 0) json = string.concat(json, ",");
+                    json = string.concat(
+                        json,
+                        '"',
+                        JsonLib.jsonEscape(globalFields[j]),
+                        '": "',
+                        JsonLib.jsonEscape(j < globalValues.length ? globalValues[j] : ""),
+                        '"'
+                    );
                 }
 
                 // Add company details if party values exist at index 0
                 if (partyValues.length > 0 && partyValues[0].length > 0) {
                     json = string.concat(json, ', "companyDetails": {');
                     for (uint256 j = 0; j < partyFields.length && j < partyValues[0].length; j++) {
-                        if (j > 0) json = string.concat(json, ',');
-                        json = string.concat(json, '"', partyFields[j], '": "', partyValues[0][j], '"');
+                        if (j > 0) json = string.concat(json, ",");
+                        json = string.concat(
+                            json,
+                            '"',
+                            JsonLib.jsonEscape(partyFields[j]),
+                            '": "',
+                            JsonLib.jsonEscape(partyValues[0][j]),
+                            '"'
+                        );
                     }
-                    json = string.concat(json, '}');
+                    json = string.concat(json, "}");
                 }
 
                 // Add investor details if party values exist at index 1
                 if (partyValues.length > 1 && partyValues[1].length > 0) {
                     json = string.concat(json, ', "investorDetails": {');
                     for (uint256 j = 0; j < partyFields.length && j < partyValues[1].length; j++) {
-                        if (j > 0) json = string.concat(json, ',');
-                        json = string.concat(json, '"', partyFields[j], '": "', partyValues[1][j], '"');
+                        if (j > 0) json = string.concat(json, ",");
+                        json = string.concat(
+                            json,
+                            '"',
+                            JsonLib.jsonEscape(partyFields[j]),
+                            '": "',
+                            JsonLib.jsonEscape(partyValues[1][j]),
+                            '"'
+                        );
                     }
-                    json = string.concat(json, '}');
+                    json = string.concat(json, "}");
                 }
 
                 // Add the digital signature from the first endorsement
                 if (endorsements[0].signatureHash.length > 0) {
-                    json = string.concat(json, 
-                        ', "digitalSignature": "', 
-                        bytesToHexString(endorsements[0].signatureHash),
-                        '"'
+                    json = string.concat(
+                        json, ', "digitalSignature": "', bytesToHexString(endorsements[0].signatureHash), '"'
                     );
                 }
-                json = string.concat(json, '}');
+                json = string.concat(json, "}");
             }
 
-            json = string.concat(json, '}');
+            json = string.concat(json, "}");
         }
-        return string.concat(json, ']');
+        return string.concat(json, "]");
+    }
+
+    function _appendCyberCorpMetadata(
+        string memory json,
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri
+    ) private pure returns (string memory) {
+        json = string.concat(json, '"cyberCORPName": "', JsonLib.jsonEscape(cyberCORPName), '"');
+        json = string.concat(json, ', "cyberCORPType": "', JsonLib.jsonEscape(cyberCORPType), '"');
+        json = string.concat(json, ', "cyberCORPJurisdiction": "', JsonLib.jsonEscape(cyberCORPJurisdiction), '"');
+        json = string.concat(json, ', "cyberCORPContactDetails": "', JsonLib.jsonEscape(cyberCORPContactDetails), '"');
+        json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
+        json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
+        return string.concat(json, ', "certificateUri": "', JsonLib.jsonEscape(certificateUri), '"');
+    }
+
+    function _appendCertificateMetadata(
+        string memory json,
+        CertificateDetails memory details,
+        address contractAddress,
+        uint256 tokenId
+    ) private view returns (string memory) {
+        json = string.concat(json, ', "signingOfficerName": "', JsonLib.jsonEscape(details.signingOfficerName), '"');
+        json = string.concat(json, ', "signingOfficerTitle": "', JsonLib.jsonEscape(details.signingOfficerTitle), '"');
+        json =
+            string.concat(json, ', "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD), '"');
+        json = string.concat(
+            json,
+            ', "issuerUSDValuationAtTimeOfInvestment": "',
+            from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '"'
+        );
+        json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
+        json = string.concat(json, ', "unitsReserved": "', unitsReservedToString(contractAddress, tokenId), '"');
+        return string.concat(json, ', "legalDetails": "', JsonLib.jsonEscape(details.legalDetails), '"');
+    }
+
+    function _appendCurrentOwner(string memory json, OwnerDetails memory owner) private pure returns (string memory) {
+        return string.concat(
+            json,
+            ', "currentOwner": {',
+            '"name": "',
+            JsonLib.jsonEscape(owner.name),
+            '", "ownerAddress": "',
+            addressToString(owner.ownerAddress),
+            '"}'
+        );
     }
 
     function buildCertificateUri(
@@ -572,7 +677,7 @@ struct CertificateDetails {
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
-        
+
         string memory json;
         {
             uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
@@ -590,35 +695,44 @@ struct CertificateDetails {
                 certificateUri: certificateUri
             });
             string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
-            string memory imageDataUri = string(
-                abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg)))
+            string memory imageDataUri =
+                string(abi.encodePacked("data:image/svg+xml;base64,", Base64.encode(bytes(svg))));
+            json = string(
+                abi.encodePacked(
+                    '{"title": "MetaLeX Tokenized Certificate",',
+                    '"type": "',
+                    securityClassToString(securityType),
+                    '", "image": "',
+                    imageDataUri,
+                    '",',
+                    '"attributes": [',
+                    buildAttributes(
+                        owner,
+                        details,
+                        cyberCORPName,
+                        cyberCORPType,
+                        cyberCORPJurisdiction,
+                        cyberCORPContactDetails,
+                        securityType,
+                        securitySeries,
+                        certificateUri
+                    ),
+                    "],"
+                )
             );
-            json = string(abi.encodePacked(
-                '{"title": "MetaLeX Tokenized Certificate",',
-                '"type": "', securityClassToString(securityType),
-                '", "image": "', imageDataUri, '",',
-                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
-                '],'
-            ));
         }
 
-        // Add all existing properties at root level
-        json = string.concat(json, '"cyberCORPName": "', cyberCORPName, '"');
-        json = string.concat(json, ', "cyberCORPType": "', cyberCORPType, '"');
-        json = string.concat(json, ', "cyberCORPJurisdiction": "', cyberCORPJurisdiction, '"');
-        json = string.concat(json, ', "cyberCORPContactDetails": "', cyberCORPContactDetails, '"');
-        json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
-        json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
-        json = string.concat(json, ', "certificateUri": "', certificateUri, '"');
-
-        // Add certificate details
-        json = string.concat(json, ', "signingOfficerName": "', details.signingOfficerName, '"');
-        json = string.concat(json, ', "signingOfficerTitle": "', details.signingOfficerTitle, '"');
-        json = string.concat(json, ', "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD), '"');
-        json = string.concat(json, ', "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment), '"');
-        json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
-        json = string.concat(json, ', "unitsReserved": "', unitsReservedToString(contractAddress, tokenId), '"');
-        json = string.concat(json, ', "legalDetails": "', details.legalDetails, '"');
+        json = _appendCyberCorpMetadata(
+            json,
+            cyberCORPName,
+            cyberCORPType,
+            cyberCORPJurisdiction,
+            cyberCORPContactDetails,
+            securityType,
+            securitySeries,
+            certificateUri
+        );
+        json = _appendCertificateMetadata(json, details, contractAddress, tokenId);
 
         json = _appendCyberCorpExtensionData(json, contractAddress);
 
@@ -629,44 +743,35 @@ struct CertificateDetails {
         json = _appendSeriesExtensionData(json, contractAddress);
 
         // Add endorsement history
-        json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));
-
-        // Add current owner details
-        json = string.concat(json, 
-            ', "currentOwner": {',
-            '"name": "', owner.name,
-            '", "ownerAddress": "', addressToString(owner.ownerAddress),
-            '"}'
+        json = string.concat(
+            json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId)
         );
+
+        json = _appendCurrentOwner(json, owner);
 
         // Add restrictive legends at the end
         json = string.concat(json, ', "restrictiveLegends": ', restrictiveLegendsToJson(certLegend));
 
         // Close the main JSON object
-        json = string.concat(json, '}');
+        json = string.concat(json, "}");
         json = Base64.encode(bytes(string(json)));
-        json = string(abi.encodePacked('data:application/json;base64,', json));
+        json = string(abi.encodePacked("data:application/json;base64,", json));
         return json;
     }
 
     /// @dev Adds issuer-level extension metadata when the printer and IssuanceManager expose it.
     /// Guards preserve URI availability for legacy printer or IssuanceManager implementations.
-    function _appendCyberCorpExtensionData(
-        string memory json,
-        address certificate
-    ) private view returns (string memory) {
-        try ILedgerEntryToken(certificate).issuanceManager() returns (
-            address issuanceManager
-        ) {
+    function _appendCyberCorpExtensionData(string memory json, address certificate)
+        private
+        view
+        returns (string memory)
+    {
+        try ILedgerEntryToken(certificate).issuanceManager() returns (address issuanceManager) {
             try IIssuanceManager(issuanceManager).CORP() returns (address corp) {
                 if (corp == address(0)) return json;
 
-                try ICyberCorp(corp).getExtensionURI() returns (
-                    string memory extensionJson
-                ) {
-                    return bytes(extensionJson).length == 0
-                        ? json
-                        : string.concat(json, extensionJson);
+                try ICyberCorp(corp).getExtensionURI() returns (string memory extensionJson) {
+                    return bytes(extensionJson).length == 0 ? json : string.concat(json, extensionJson);
                 } catch {
                     return json;
                 }
@@ -681,19 +786,11 @@ struct CertificateDetails {
     /// @dev Adds printer-level series metadata when its shared extension implements
     /// ICertificateExtensionV3. All calls are guarded so legacy printer implementations and V1/V2
     /// extensions continue returning their existing metadata unchanged.
-    function _appendSeriesExtensionData(
-        string memory json,
-        address certificate
-    ) private view returns (string memory) {
-        try ILedgerEntryToken(certificate).getSeriesInfo() returns (
-            address seriesExtension,
-            bytes memory seriesData
-        ) {
+    function _appendSeriesExtensionData(string memory json, address certificate) private view returns (string memory) {
+        try ILedgerEntryToken(certificate).getSeriesInfo() returns (address seriesExtension, bytes memory seriesData) {
             if (seriesExtension == address(0) || seriesData.length == 0) return json;
 
-            try ICertificateExtensionV3(seriesExtension).supportsSeriesExtensionData() returns (
-                bool supported
-            ) {
+            try ICertificateExtensionV3(seriesExtension).supportsSeriesExtensionData() returns (bool supported) {
                 if (!supported) return json;
             } catch {
                 return json;
@@ -787,35 +884,44 @@ struct CertificateDetails {
                 certificateUri: certificateUri
             });
             string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
-            string memory imageDataUri = string(
-                abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg)))
+            string memory imageDataUri =
+                string(abi.encodePacked("data:image/svg+xml;base64,", Base64.encode(bytes(svg))));
+            json = string(
+                abi.encodePacked(
+                    '{"title": "MetaLeX Tokenized Certificate",',
+                    '"type": "',
+                    securityClassToString(securityType),
+                    '", "image": "',
+                    imageDataUri,
+                    '",',
+                    '"attributes": [',
+                    buildAttributes(
+                        owner,
+                        details,
+                        cyberCORPName,
+                        cyberCORPType,
+                        cyberCORPJurisdiction,
+                        cyberCORPContactDetails,
+                        securityType,
+                        securitySeries,
+                        certificateUri
+                    ),
+                    "],"
+                )
             );
-            json = string(abi.encodePacked(
-                '{"title": "MetaLeX Tokenized Certificate",',
-                '"type": "', securityClassToString(securityType),
-                '", "image": "', imageDataUri, '",',
-                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
-                '],'
-            ));
         }
 
-        // Add all existing properties at root level
-        json = string.concat(json, '"cyberCORPName": "', cyberCORPName, '"');
-        json = string.concat(json, ', "cyberCORPType": "', cyberCORPType, '"');
-        json = string.concat(json, ', "cyberCORPJurisdiction": "', cyberCORPJurisdiction, '"');
-        json = string.concat(json, ', "cyberCORPContactDetails": "', cyberCORPContactDetails, '"');
-        json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
-        json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
-        json = string.concat(json, ', "certificateUri": "', certificateUri, '"');
-
-        // Add certificate details
-        json = string.concat(json, ', "signingOfficerName": "', details.signingOfficerName, '"');
-        json = string.concat(json, ', "signingOfficerTitle": "', details.signingOfficerTitle, '"');
-        json = string.concat(json, ', "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD), '"');
-        json = string.concat(json, ', "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment), '"');
-        json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
-        json = string.concat(json, ', "unitsReserved": "', unitsReservedToString(contractAddress, tokenId), '"');
-        json = string.concat(json, ', "legalDetails": "', details.legalDetails, '"');
+        json = _appendCyberCorpMetadata(
+            json,
+            cyberCORPName,
+            cyberCORPType,
+            cyberCORPJurisdiction,
+            cyberCORPContactDetails,
+            securityType,
+            securitySeries,
+            certificateUri
+        );
+        json = _appendCertificateMetadata(json, details, contractAddress, tokenId);
 
         json = _appendCyberCorpExtensionData(json, contractAddress);
 
@@ -826,31 +932,24 @@ struct CertificateDetails {
         json = _appendSeriesExtensionData(json, contractAddress);
 
         // Add endorsement history
-        json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));
-
-        // Add current owner details
-        json = string.concat(json, 
-            ', "currentOwner": {',
-            '"name": "', owner.name,
-            '", "ownerAddress": "', addressToString(owner.ownerAddress),
-            '"}'
+        json = string.concat(
+            json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId)
         );
+
+        json = _appendCurrentOwner(json, owner);
 
         // Add restrictive legends at the end
         json = string.concat(json, ', "restrictiveLegends": ', restrictiveLegendsToJson(certLegend));
 
         // Close the main JSON object
-        json = string.concat(json, '}');
+        json = string.concat(json, "}");
         //json = Base64.encode(bytes(string(json)));
         //json = string(abi.encodePacked('data:application/json;base64,', json));
         return json;
     }
 
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal virtual override onlyOwner {}
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }
-
 
 /// [MIT License]
 /// @title Base64
@@ -876,11 +975,7 @@ library Base64 {
             let tablePtr := add(table, 1)
             let resultPtr := add(result, 32)
 
-            for {
-                let i := 0
-            } lt(i, len) {
-
-            } {
+            for { let i := 0 } lt(i, len) {} {
                 i := add(i, 3)
                 let input := and(mload(add(data, i)), 0xffffff)
 
@@ -899,12 +994,8 @@ library Base64 {
             }
 
             switch mod(len, 3)
-            case 1 {
-                mstore(sub(resultPtr, 2), shl(240, 0x3d3d))
-            }
-            case 2 {
-                mstore(sub(resultPtr, 1), shl(248, 0x3d))
-            }
+            case 1 { mstore(sub(resultPtr, 2), shl(240, 0x3d3d)) }
+            case 2 { mstore(sub(resultPtr, 1), shl(248, 0x3d)) }
 
             mstore(result, encodedLen)
         }
