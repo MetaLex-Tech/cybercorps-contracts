@@ -753,8 +753,8 @@ library IssuanceManagerStorage {
 
     /// @notice Voids lots that represent nothing, so they stop counting in the printer's holder tally.
     /// @dev A fully scripified lot holds nothing. Its holder gave the units to the pool and holds scrip,
-    /// and the scrip redeems on its own, so the lot is not needed to get back in. Permissionless, because
-    /// a lot that still holds units cannot be voided here. Already-void lots are skipped, so one of them
+    /// and the scrip redeems on its own, so the lot is not needed to get back in. The caller is expected to be
+    /// admin-only. A lot that still holds units cannot be voided here. Already-void lots are skipped, so one of them
     /// does not fail the batch.
     function executeVoidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external {
         if (!isPrinter(certAddress)) revert NotAPrinter();

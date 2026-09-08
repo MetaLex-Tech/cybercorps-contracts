@@ -132,7 +132,7 @@ contract AuditScripVaultClaimGriefTest is Test {
         assertEq(_poolAssets(), 0, "pool not empty");
     }
 
-    /// @notice A lot that scripified everything holds nothing, so the permissionless sweep retires it.
+    /// @notice A lot that scripified everything holds nothing, so an admin sweep retires it.
     /// The units went to the pool, and the scrip is the claim on them.
     /// @dev After the sweep the holder needs a recertification approval to convert back, because they
     /// have no live lot to convert into. That is accepted.
@@ -141,7 +141,6 @@ contract AuditScripVaultClaimGriefTest is Test {
         ids[0] = victimCertId;
 
         assertEq(_units(victimCertId), 0, "lot still holds units");
-        vm.prank(makeAddr("passerby"));
         issuanceManager.voidEmptyCerts(address(printer), ids);
         assertTrue(printer.isVoided(victimCertId), "empty lot not swept");
 
@@ -155,8 +154,21 @@ contract AuditScripVaultClaimGriefTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = attackerCertId;
 
-        vm.prank(makeAddr("passerby"));
         vm.expectRevert(IssuanceManagerStorage.CertNotEmpty.selector);
+        issuanceManager.voidEmptyCerts(address(printer), ids);
+    }
+
+    /// @notice The sweep is admin only. A caller with no role cannot void an empty lot.
+    function test_SweepRefusesACallerWithNoRole() public {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = victimCertId;
+
+        address passerby = makeAddr("passerby");
+        bytes memory expected =
+            abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.ADMIN_ROLE(), passerby);
+
+        vm.prank(passerby);
+        vm.expectRevert(expected);
         issuanceManager.voidEmptyCerts(address(printer), ids);
     }
 
