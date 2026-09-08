@@ -35,11 +35,6 @@ import {RoundManagerUpgradeHelper} from "../src/helpers/RoundManagerUpgradeHelpe
 
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CyberCorpHelper, MockPaymentToken} from "./RoundManagerTest.t.sol";
-import {
-    ILegacyCyberCorpFactory,
-    LegacyCyberCertData
-} from "./libs/LegacyCyberCorpFactory.sol";
-
 using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
 
 contract RoundManagerForkTest is Test {
@@ -865,14 +860,15 @@ contract RoundManagerFCFSForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
 
-        LegacyCyberCertData[] memory certData = new LegacyCyberCertData[](1);
-        certData[0] = LegacyCyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
             name: "SEED SAFE",
             symbol: "SEEDSAFE",
             uri: "ipfs://base-sepolia-fcfs-safe",
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension: address(0),
+            seriesData: "",
             defaultLegend: defaultLegend
         });
 
@@ -907,7 +903,7 @@ contract RoundManagerFCFSForkTest is Test {
             ,
             address roundManagerAddr,
             bytes32 roundId
-        ) = ILegacyCyberCorpFactory(address(cyberCorpFactory)).deployCyberCorpAndCreateRound(
+        ) = cyberCorpFactory.deployCyberCorpAndCreateRound(
             salt,
             SecuritySeries.SeriesSeed,
             "Base Sepolia FCFS Corp",
