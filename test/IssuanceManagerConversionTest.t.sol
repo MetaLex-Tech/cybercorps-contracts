@@ -522,7 +522,7 @@ contract IssuanceManagerConversionTest is Test {
         issuanceManager.convertScripToCert(address(certPrinter), amount * 1e18);
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 recertifiedTopic = keccak256("ScripRecertified(address,address,uint256,uint256,uint256,uint256)");
+        bytes32 recertifiedTopic = keccak256("ScripRecertified(address,address,uint256,uint256,uint256)");
         bool sawRecertified;
         for (uint256 i = 0; i < logs.length; i++) {
             if (
@@ -531,8 +531,7 @@ contract IssuanceManagerConversionTest is Test {
                     && address(uint160(uint256(logs[i].topics[1]))) == address(certPrinter)
                     && address(uint160(uint256(logs[i].topics[2]))) == investor && uint256(logs[i].topics[3]) == 1
             ) {
-                (uint256 scripAmount, uint256 newUnitsRepresented,) =
-                    abi.decode(logs[i].data, (uint256, uint256, uint256));
+                (uint256 scripAmount, uint256 newUnitsRepresented) = abi.decode(logs[i].data, (uint256, uint256));
                 assertEq(scripAmount, amount * 1e18);
                 assertEq(newUnitsRepresented, amount * 1e18);
                 sawRecertified = true;
@@ -764,8 +763,8 @@ contract IssuanceManagerConversionTest is Test {
 
         // Nothing is left behind in the vault.
         assertEq(ICyberScrip(scrip).totalSupply(), 0);
-        uint256 totalAssetsWad = issuanceManager.getCertScripUnitVault(address(certPrinter));
-        assertEq(totalAssetsWad, 0);
+        uint256 unitsHeld = issuanceManager.getCertScripUnitVault(address(certPrinter));
+        assertEq(unitsHeld, 0);
     }
 
     // Lowering it would have made the vault insolvent: each scrip claiming more units than were
@@ -795,8 +794,8 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.getActiveCertificateDetails(investorCertId).unitsRepresented, 100 * 1e18);
         assertEq(certPrinter.getActiveCertificateDetails(otherInvestorCertId).unitsRepresented, 100 * 1e18);
         assertEq(ICyberScrip(scrip).totalSupply(), 0);
-        uint256 totalAssetsWad = issuanceManager.getCertScripUnitVault(address(certPrinter));
-        assertEq(totalAssetsWad, 0);
+        uint256 unitsHeld = issuanceManager.getCertScripUnitVault(address(certPrinter));
+        assertEq(unitsHeld, 0);
     }
 
     // The guard binds the role that sets the ratio, so an owner holding scrip cannot scripify at
@@ -1454,7 +1453,7 @@ contract IssuanceManagerConversionTest is Test {
         );
         vm.expectEmit(true, true, true, true);
         emit IssuanceManager.ScripRecertified(
-            address(certPrinter), otherInvestor, otherInvestorCertId, 150 * 1e18, 150 * 1e18, 50 * 1e18
+            address(certPrinter), otherInvestor, otherInvestorCertId, 150 * 1e18, 150 * 1e18
         );
         vm.prank(otherInvestor);
         issuanceManager.convertScripToCert(address(certPrinter), 150 * 1e18);

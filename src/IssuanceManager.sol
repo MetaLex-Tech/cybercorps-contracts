@@ -79,8 +79,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint256 indexed id,
         address indexed scripifiedCert,
         uint256 amount,
-        uint256 newUnitsRepresented,
-        uint256 newTotalAssetsWad
+        uint256 newUnitsRepresented
     );
 
     event CertPrinterCreated(
@@ -118,8 +117,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address indexed user,
         uint256 indexed certId,
         uint256 scripAmount,
-        uint256 newUnitsRepresented,
-        uint256 newTotalAssetsWad
+        uint256 newUnitsRepresented
     );
     event ScripAddedToExistingCert(
         address indexed certAddress,
@@ -611,9 +609,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getScripPoolTotals(certAddress);
     }
 
-    /// @notice Units (wad) held by the printer's scrip pool.
-    /// @dev Not equal to `scrip.totalSupply()` under the ratio: a floored conversion strands dust here.
-    function getCertScripUnitVault(address certAddress) external view returns (uint256 totalAssetsWad) {
+    /// @notice Units held by the printer's scrip pool, in the cert unit scale.
+    /// @dev Derived from `scrip.totalSupply()` and the scrip ratio. The two differ by that ratio.
+    function getCertScripUnitVault(address certAddress) external view returns (uint256 unitsHeld) {
         return IssuanceManagerStorage.getCertScripUnitVault(certAddress);
     }
 

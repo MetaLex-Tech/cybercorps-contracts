@@ -84,8 +84,7 @@ library IssuanceManagerStorage {
         uint256 indexed id,
         address indexed scripifiedCert,
         uint256 amount,
-        uint256 newUnitsRepresented,
-        uint256 newTotalAssetsWad
+        uint256 newUnitsRepresented
     );
     event CertPrinterCreated(
         address indexed certificate,
@@ -119,8 +118,7 @@ library IssuanceManagerStorage {
         address indexed user,
         uint256 indexed certId,
         uint256 scripAmount,
-        uint256 newUnitsRepresented,
-        uint256 newTotalAssetsWad
+        uint256 newUnitsRepresented
     );
     event ScripAddedToExistingCert(
         address indexed certAddress,
@@ -442,10 +440,6 @@ library IssuanceManagerStorage {
         issuanceManagerStorage().scripRatios[certAddress] = ScripRatio({numerator: numerator, denominator: denominator});
     }
 
-    function getCertScripState(address certAddress, uint256 id) internal view returns (CertScripState storage) {
-        return issuanceManagerStorage().certScripStates[certAddress][id];
-    }
-
     function getRecertificationApproval(address certAddress, address investor)
         internal
         view
@@ -500,10 +494,10 @@ library IssuanceManagerStorage {
         return scrip == address(0) ? 0 : ICyberScrip(scrip).totalSupply();
     }
 
-    /// @notice Units the printer's scrip pool holds, in 18-dec wad.
+    /// @notice Units the printer's scrip pool holds, in the cert unit scale.
     /// @dev Not stored. The outstanding scrip is the pool, so this reads the supply and applies the
     /// ratio. The ratio cannot move while any scrip is outstanding, so the answer is stable.
-    function getCertScripUnitVault(address certAddress) internal view returns (uint256 totalAssetsWad) {
+    function getCertScripUnitVault(address certAddress) internal view returns (uint256 unitsHeld) {
         address scrip = getScripifiedCert(certAddress);
         if (scrip == address(0)) return 0;
         (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(certAddress);
@@ -912,9 +906,7 @@ library IssuanceManagerStorage {
         details.unitsRepresented = details.unitsRepresented - amount;
         certificate.updateCertificateDetails(id, details);
         ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
-        emit ScripifiedCert(
-            certAddress, id, scripifiedCert, amount, details.unitsRepresented, getCertScripUnitVault(certAddress)
-        );
+        emit ScripifiedCert(certAddress, id, scripifiedCert, amount, details.unitsRepresented);
     }
 
     function executeConvertScripToCert(address certAddress, uint256 amount, address account, bytes4 convertSelector)
@@ -981,14 +973,7 @@ library IssuanceManagerStorage {
             emit ScripAddedToExistingCert(
                 certAddress, account, selection.activeTokenId, amount, activeDetails.unitsRepresented
             );
-            emit ScripRecertified(
-                certAddress,
-                account,
-                selection.activeTokenId,
-                amount,
-                activeDetails.unitsRepresented,
-                getCertScripUnitVault(certAddress)
-            );
+            emit ScripRecertified(certAddress, account, selection.activeTokenId, amount, activeDetails.unitsRepresented);
         } else {
             CertificateDetails memory details = approval.details;
             details.unitsRepresented = units;
@@ -1002,14 +987,7 @@ library IssuanceManagerStorage {
                     approval.endorsementTimestamp
                 );
             clearRecertificationApproval(certAddress, account);
-            emit ScripRecertified(
-                certAddress,
-                account,
-                createdTokenId,
-                amount,
-                details.unitsRepresented,
-                getCertScripUnitVault(certAddress)
-            );
+            emit ScripRecertified(certAddress, account, createdTokenId, amount, details.unitsRepresented);
         }
     }
 
