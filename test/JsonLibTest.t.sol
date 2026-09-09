@@ -129,6 +129,95 @@ contract JsonLibTest is Test {
         assertEq(vm.parseJsonString(json, ".v"), input);
     }
 
+    // --- UTF-8 validity: RFC 8259 requires JSON text to be valid UTF-8, but a Solidity string is
+    // any bytes. A byte that is not part of a valid sequence becomes U+FFFD (hex "efbfbd").
+
+    string internal constant REPLACEMENT = "\xef\xbf\xbd";
+
+    /// @dev Solidity refuses a string literal that is not valid UTF-8, which is what these tests need.
+    /// A bytes value carries the same bytes past that check.
+    function _raw(bytes memory value) private pure returns (string memory) {
+        return string(value);
+    }
+
+    function testJsonEscape_KeepsValidTwoByteSequence() public pure {
+        // U+00E9 LATIN SMALL LETTER E WITH ACUTE
+        assertEq(JsonLib.jsonEscape(string(hex"c3a9")), string(hex"c3a9"));
+    }
+
+    function testJsonEscape_KeepsValidThreeByteSequence() public pure {
+        // U+20AC EURO SIGN
+        assertEq(JsonLib.jsonEscape(string(hex"e282ac")), string(hex"e282ac"));
+    }
+
+    function testJsonEscape_KeepsValidFourByteSequence() public pure {
+        // U+1F600 GRINNING FACE
+        assertEq(JsonLib.jsonEscape(string(hex"f09f9880")), string(hex"f09f9880"));
+    }
+
+    function testJsonEscape_ReplacesLoneContinuationByte() public pure {
+        assertEq(JsonLib.jsonEscape(_raw(hex"80")), REPLACEMENT);
+    }
+
+    function testJsonEscape_ReplacesTruncatedSequence() public pure {
+        // A name cut to a fixed byte length can end in a lead byte with no continuation.
+        assertEq(JsonLib.jsonEscape(_raw(hex"41c3")), string.concat("A", REPLACEMENT));
+    }
+
+    function testJsonEscape_ReplacesOverlongForm() public pure {
+        // C0 80 is an overlong encoding of U+0000. Both bytes are bad, so both are replaced.
+        assertEq(JsonLib.jsonEscape(_raw(hex"c080")), string.concat(REPLACEMENT, REPLACEMENT));
+    }
+
+    function testJsonEscape_ReplacesSurrogate() public pure {
+        // ED A0 80 would decode to U+D800, which UTF-8 does not allow.
+        assertEq(
+            JsonLib.jsonEscape(_raw(hex"eda080")),
+            string.concat(REPLACEMENT, REPLACEMENT, REPLACEMENT)
+        );
+    }
+
+    function testJsonEscape_ReplacesAboveMaxCodePoint() public pure {
+        // F5 starts a value above U+10FFFF. The three continuation bytes are then stray.
+        assertEq(
+            JsonLib.jsonEscape(_raw(hex"f5808080")),
+            string.concat(REPLACEMENT, REPLACEMENT, REPLACEMENT, REPLACEMENT)
+        );
+    }
+
+    function testJsonEscape_MixesValidAndInvalidBytes() public pure {
+        assertEq(
+            JsonLib.jsonEscape(_raw(hex"41c3a9ff42")),
+            string.concat(string(hex"41c3a9"), REPLACEMENT, "B")
+        );
+    }
+
+    function testJsonEscape_RoundTripInvalidByte() public {
+        string memory json = string.concat('{"v":"', JsonLib.jsonEscape(_raw(hex"4180ff42")), '"}');
+        vm.parseJson(json);
+        assertEq(vm.parseJsonString(json, ".v"), string.concat("A", REPLACEMENT, REPLACEMENT, "B"));
+    }
+
+    function testJsonEscape_RoundTripValidMultiByte() public {
+        string memory input = string(hex"f09f9880");
+        string memory json = string.concat('{"v":"', JsonLib.jsonEscape(input), '"}');
+        vm.parseJson(json);
+        assertEq(vm.parseJsonString(json, ".v"), input);
+    }
+
+    // --- stringArrayToJson ---
+
+    function testStringArrayToJson_Empty() public pure {
+        assertEq(JsonLib.stringArrayToJson(new string[](0)), "[]");
+    }
+
+    function testStringArrayToJson_EscapesEachElement() public pure {
+        string[] memory values = new string[](2);
+        values[0] = 'a"b';
+        values[1] = "c";
+        assertEq(JsonLib.stringArrayToJson(values), '["a\\"b", "c"]');
+    }
+
     // --- boolToString ---
 
     function testBoolToString_True() public pure {
