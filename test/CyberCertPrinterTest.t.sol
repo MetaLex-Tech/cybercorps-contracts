@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {Base64, CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {SAFEExtension, SAFEData} from "../src/storage/extensions/SAFEExtension.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
@@ -1088,6 +1088,7 @@ contract CyberCertPrinterTest is Test {
         _mintCert(1, investor, 1_000 ether, bytes(""));
 
         string memory poison = '"ok", "unitsRepresented": "999999999';
+        address extension = address(new SAFEExtension());
         CertificateUriBuilder.CertificateDetails memory details = CertificateUriBuilder.CertificateDetails({
             signingOfficerName: "Officer",
             signingOfficerTitle: "CEO",
@@ -1114,9 +1115,34 @@ contract CyberCertPrinterTest is Test {
             bytes32(0),
             1,
             address(printer),
-            address(new SAFEExtension())
+            extension
         );
 
+        _assertCertificateJsonIsEscaped(json, poison);
+
+        // tokenURI uses the base64 variant. It must give the same document, only encoded.
+        string memory encoded = builder.buildCertificateUri(
+            "Corp",
+            "LLC",
+            "DE",
+            "contact",
+            SecurityClass.PreferredStock,
+            SecuritySeries.SeriesA,
+            "ipfs://certificate",
+            new RestrictiveLegend[](0),
+            details,
+            new CertificateUriBuilder.Endorsement[](0),
+            CertificateUriBuilder.OwnerDetails({name: poison, ownerAddress: investor}),
+            address(0),
+            bytes32(0),
+            1,
+            address(printer),
+            extension
+        );
+        assertEq(encoded, string.concat("data:application/json;base64,", Base64.encode(bytes(json))));
+    }
+
+    function _assertCertificateJsonIsEscaped(string memory json, string memory poison) private view {
         assertEq(vm.parseJsonString(json, ".unitsRepresented"), "1000.00");
         assertEq(vm.parseJsonString(json, ".legalDetails"), poison);
         assertEq(vm.parseJsonString(json, ".currentOwner.name"), poison);

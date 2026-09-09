@@ -115,7 +115,7 @@ contract CyberCorpComplianceExtension is
             abi.encodePacked(
                 ', "CyberCorpCompliance": {',
                 '"erisaAllowed": "',
-                boolToString(decoded.erisaAllowed),
+                JsonLib.boolToString(decoded.erisaAllowed),
                 '", "maxOwnershipBps": "',
                 uint256ToString(decoded.maxOwnershipBps),
                 '", "minNonZeroOwnershipBps": "',
@@ -123,9 +123,9 @@ contract CyberCorpComplianceExtension is
                 '", "maxHolderCount": "',
                 uint256ToString(decoded.maxHolderCount),
                 '", "cfiusApprovalRequired": "',
-                boolToString(decoded.cfiusApprovalRequired),
+                JsonLib.boolToString(decoded.cfiusApprovalRequired),
                 '", "holderRestrictions": ',
-                stringArrayToJson(decoded.holderRestrictions),
+                JsonLib.stringArrayToJson(decoded.holderRestrictions),
                 ', "feeDetails": ',
                 feeDetailsToJson(decoded.feeDetails),
                 "}"
@@ -162,25 +162,6 @@ contract CyberCorpComplianceExtension is
         }
 
         return string.concat(json, "]");
-    }
-
-    function stringArrayToJson(
-        string[] memory values
-    ) internal pure returns (string memory) {
-        string memory json = "[";
-
-        for (uint256 i = 0; i < values.length; i++) {
-            if (i > 0) {
-                json = string.concat(json, ", ");
-            }
-            json = string.concat(json, '"', JsonLib.jsonEscape(values[i]), '"');
-        }
-
-        return string.concat(json, "]");
-    }
-
-    function boolToString(bool value) internal pure returns (string memory) {
-        return value ? "true" : "false";
     }
 
     function uint256ToString(uint256 value) internal pure returns (string memory) {

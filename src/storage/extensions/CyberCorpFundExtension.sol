@@ -156,7 +156,7 @@ contract CyberCorpFundExtension is
                 ', "totalUnitsOutstanding": ',
                 uint256ToString(decoded.totalUnitsOutstanding),
                 ', "ratioStable": ',
-                boolToString(decoded.ratioStable),
+                JsonLib.boolToString(decoded.ratioStable),
                 ', "portfolioHoldings": ',
                 portfolioHoldingsToJson(decoded.portfolioHoldings)
             )
@@ -169,13 +169,13 @@ contract CyberCorpFundExtension is
         return string(
             abi.encodePacked(
                 ', "cfiusSensitive": ',
-                boolToString(decoded.cfiusSensitive),
+                JsonLib.boolToString(decoded.cfiusSensitive),
                 ', "provenanceAttestationHash": "',
                 _toHexString(abi.encodePacked(decoded.provenanceAttestationHash)),
                 '", "documentRegistryURI": "',
                 JsonLib.jsonEscape(decoded.documentRegistryURI),
                 '", "governingDocumentURIs": ',
-                stringArrayToJson(decoded.governingDocumentURIs),
+                JsonLib.stringArrayToJson(decoded.governingDocumentURIs),
                 ', "metadataURI": "',
                 JsonLib.jsonEscape(decoded.metadataURI),
                 '"'
@@ -207,10 +207,6 @@ contract CyberCorpFundExtension is
         return string.concat(json, "]");
     }
 
-    function boolToString(bool value) internal pure returns (string memory) {
-        return value ? "true" : "false";
-    }
-
     function uint256ToString(uint256 value) internal pure returns (string memory) {
         if (value == 0) {
             return "0";
@@ -228,21 +224,6 @@ contract CyberCorpFundExtension is
             value /= 10;
         }
         return string(buffer);
-    }
-
-    function stringArrayToJson(
-        string[] memory values
-    ) internal pure returns (string memory) {
-        string memory json = "[";
-
-        for (uint256 i = 0; i < values.length; i++) {
-            if (i > 0) {
-                json = string.concat(json, ", ");
-            }
-            json = string.concat(json, '"', JsonLib.jsonEscape(values[i]), '"');
-        }
-
-        return string.concat(json, "]");
     }
 
     function _toHexString(bytes memory data) internal pure returns (string memory) {

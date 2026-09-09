@@ -168,7 +168,7 @@ contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgA
                 ', "managementFeeRateBps": ', _uintToString(data.managementFeeRateBps),
                 ', "carriedInterestRateBps": ', _uintToString(data.carriedInterestRateBps),
                 ', "distributionWaterfallPosition": "', JsonLib.jsonEscape(data.distributionWaterfallPosition),
-                '", "governingDocumentURIs": ', _stringArrayToJson(data.governingDocumentURIs)
+                '", "governingDocumentURIs": ', JsonLib.stringArrayToJson(data.governingDocumentURIs)
             )
         );
     }
@@ -187,15 +187,6 @@ contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgA
                 '"}'
             )
         );
-    }
-
-    function _stringArrayToJson(string[] memory values) internal pure returns (string memory) {
-        string memory json = "[";
-        for (uint256 i = 0; i < values.length; i++) {
-            if (i > 0) json = string.concat(json, ", ");
-            json = string.concat(json, '"', JsonLib.jsonEscape(values[i]), '"');
-        }
-        return string.concat(json, "]");
     }
 
     function _uintToString(uint256 value) internal pure returns (string memory) {

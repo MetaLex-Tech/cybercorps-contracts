@@ -46,6 +46,15 @@ library JsonLib {
         return value ? "true" : "false";
     }
 
+    function stringArrayToJson(string[] memory values) internal pure returns (string memory) {
+        string memory json = "[";
+        for (uint256 i = 0; i < values.length; i++) {
+            if (i > 0) json = string.concat(json, ", ");
+            json = string.concat(json, '"', jsonEscape(values[i]), '"');
+        }
+        return string.concat(json, "]");
+    }
+
     function jsonEscape(string memory s) internal pure returns (string memory) {
         bytes memory b = bytes(s);
         uint256 extra = 0;

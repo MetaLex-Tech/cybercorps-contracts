@@ -143,16 +143,6 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return "Unknown";
     }
 
-    // Helper function to convert string array to JSON array string with numbered legends
-    function arrayToJsonString(string[] memory arr) public pure returns (string memory) {
-        string memory json = "[";
-        for (uint256 i = 0; i < arr.length; i++) {
-            if (i > 0) json = string.concat(json, ",");
-            json = string.concat(json, '{"id": ', uint256ToString(i + 1), ', "legend": "', JsonLib.jsonEscape(arr[i]), '"}');
-        }
-        return string.concat(json, "]");
-    }
-
     function legacyLegendsToRestrictiveLegends(
         string[] memory arr
     ) public pure returns (RestrictiveLegend[] memory legends) {
@@ -216,7 +206,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
     }
 
     function boolToString(bool value) public pure returns (string memory) {
-        return value ? "true" : "false";
+        return JsonLib.boolToString(value);
     }
 
     // Helper function to convert address to string
@@ -571,94 +561,33 @@ struct CertificateDetails {
         address contractAddress,
         address extension
     ) public view returns (string memory) {
-        // Start building the JSON string with ERC-721 metadata standard format
-        // Build on-chain SVG image using the image builder
-        
-        string memory json;
-        {
-            uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
-            CertificateSVGParams memory svgParams = CertificateSVGParams({
-                corpName: cyberCORPName,
-                securityType: securityType,
-                securitySeries: securitySeries,
-                officerName: details.signingOfficerName,
-                officerTitle: details.signingOfficerTitle,
-                units: details.unitsRepresented,
-                valuation: details.issuerUSDValuationAtTimeOfInvestment,
-                jurisdiction: cyberCORPJurisdiction,
-                ownerName: owner.name,
-                tokenId: tokenId,
-                certificateUri: certificateUri
-            });
-            string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
-            string memory imageDataUri = string(
-                abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg)))
-            );
-            json = string(abi.encodePacked(
-                '{"title": "MetaLeX Tokenized Certificate",',
-                '"type": "', securityClassToString(securityType),
-                '", "image": "', imageDataUri, '",',
-                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
-                '],'
-            ));
-        }
-
-        // Escape the strings for JSON. The image builder above must get the raw text.
-        cyberCORPName = JsonLib.jsonEscape(cyberCORPName);
-        cyberCORPType = JsonLib.jsonEscape(cyberCORPType);
-        cyberCORPJurisdiction = JsonLib.jsonEscape(cyberCORPJurisdiction);
-        cyberCORPContactDetails = JsonLib.jsonEscape(cyberCORPContactDetails);
-        certificateUri = JsonLib.jsonEscape(certificateUri);
-        details.signingOfficerName = JsonLib.jsonEscape(details.signingOfficerName);
-        details.signingOfficerTitle = JsonLib.jsonEscape(details.signingOfficerTitle);
-        details.legalDetails = JsonLib.jsonEscape(details.legalDetails);
-        owner.name = JsonLib.jsonEscape(owner.name);
-
-        // Add all existing properties at root level
-        json = string.concat(json, '"cyberCORPName": "', cyberCORPName, '"');
-        json = string.concat(json, ', "cyberCORPType": "', cyberCORPType, '"');
-        json = string.concat(json, ', "cyberCORPJurisdiction": "', cyberCORPJurisdiction, '"');
-        json = string.concat(json, ', "cyberCORPContactDetails": "', cyberCORPContactDetails, '"');
-        json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
-        json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
-        json = string.concat(json, ', "certificateUri": "', certificateUri, '"');
-
-        // Add certificate details
-        json = string.concat(json, ', "signingOfficerName": "', details.signingOfficerName, '"');
-        json = string.concat(json, ', "signingOfficerTitle": "', details.signingOfficerTitle, '"');
-        json = string.concat(json, ', "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD), '"');
-        json = string.concat(json, ', "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment), '"');
-        json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
-        json = string.concat(json, ', "unitsReserved": "', unitsReservedToString(contractAddress, tokenId), '"');
-        json = string.concat(json, ', "legalDetails": "', details.legalDetails, '"');
-
-        json = _appendCyberCorpExtensionData(json, contractAddress);
-
-        //add extensionData
-        if (extension != address(0) && details.extensionData.length > 0) {
-            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
-        }
-        json = _appendSeriesExtensionData(json, contractAddress);
-
-        // Add endorsement history
-        json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));
-
-        // Add current owner details
-        json = string.concat(json, 
-            ', "currentOwner": {',
-            '"name": "', owner.name,
-            '", "ownerAddress": "', addressToString(owner.ownerAddress),
-            '"}'
+        return string(
+            abi.encodePacked(
+                'data:application/json;base64,',
+                Base64.encode(
+                    bytes(
+                        buildCertificateUriNotEncoded(
+                            cyberCORPName,
+                            cyberCORPType,
+                            cyberCORPJurisdiction,
+                            cyberCORPContactDetails,
+                            securityType,
+                            securitySeries,
+                            certificateUri,
+                            certLegend,
+                            details,
+                            endorsements,
+                            owner,
+                            registry,
+                            agreementId,
+                            tokenId,
+                            contractAddress,
+                            extension
+                        )
+                    )
+                )
+            )
         );
-
-        // Add restrictive legends at the end
-        json = string.concat(json, ', "restrictiveLegends": ', restrictiveLegendsToJson(certLegend));
-
-        // Close the main JSON object
-        json = string.concat(json, '}');
-        json = Base64.encode(bytes(string(json)));
-        json = string(abi.encodePacked('data:application/json;base64,', json));
-        return json;
     }
 
     /// @dev Adds issuer-level extension metadata when the printer and IssuanceManager expose it.
@@ -812,6 +741,7 @@ struct CertificateDetails {
         }
 
         // Escape the strings for JSON. The image builder above must get the raw text.
+        // This writes to the caller's structs. Do not reuse `details` or `owner` after this point.
         cyberCORPName = JsonLib.jsonEscape(cyberCORPName);
         cyberCORPType = JsonLib.jsonEscape(cyberCORPType);
         cyberCORPJurisdiction = JsonLib.jsonEscape(cyberCORPJurisdiction);

@@ -64,19 +64,11 @@ contract SAFEExtensionV3 is SAFEExtension {
             ', "SAFESeriesDetails": {"seriesName": "',
             JsonLib.jsonEscape(decoded.seriesName),
             '", "governingDocumentURIs": ',
-            _stringArrayToJson(decoded.governingDocumentURIs),
+            JsonLib.stringArrayToJson(decoded.governingDocumentURIs),
             ', "customProvisions": "',
             JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         );
     }
 
-    function _stringArrayToJson(string[] memory values) private pure returns (string memory) {
-        string memory json = "[";
-        for (uint256 i = 0; i < values.length; i++) {
-            if (i > 0) json = string.concat(json, ", ");
-            json = string.concat(json, '"', JsonLib.jsonEscape(values[i]), '"');
-        }
-        return string.concat(json, "]");
-    }
 }
