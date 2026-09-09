@@ -13,6 +13,9 @@ import {CyberCertData as RM_CyberCertData} from "../storage/RoundManagerStorage.
 /// Each factory passes its own EIP-712 domain name, so a signature made for one factory does not
 /// verify on another.
 library CorpFactoryMetadataLib {
+    /// @dev EIP-712 domain version. Frozen: officer signatures already exist over this value.
+    string constant DOMAIN_VERSION = "1";
+
     bytes32 constant FACTORY_DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
@@ -115,7 +118,7 @@ library CorpFactoryMetadataLib {
         bytes32 domainSep = keccak256(abi.encode(
             FACTORY_DOMAIN_TYPEHASH,
             keccak256(bytes(domainName)),
-            keccak256(bytes("1")),
+            keccak256(bytes(DOMAIN_VERSION)),
             block.chainid,
             verifyingContract
         ));
@@ -139,6 +142,17 @@ library CorpFactoryMetadataLib {
             hashAddresses(data.conditionAddresses)
         ));
         return keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
+    }
+
+    /// @notice Recovers the signer of the deployment metadata.
+    /// @dev Reverts through ECDSA on a malformed signature. Use isValid to get a plain false.
+    function recoverSigner(
+        string memory domainName,
+        address verifyingContract,
+        RoundSupplementalData memory data,
+        bytes memory signature
+    ) internal view returns (address) {
+        return ECDSA.recover(digest(domainName, verifyingContract, data), signature);
     }
 
     /// @notice True when `signature` is the officer's signature over the deployment metadata.

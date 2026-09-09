@@ -9,7 +9,7 @@ import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
-import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
+import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
@@ -428,7 +428,7 @@ contract FactoryRoundAuthReplayPOCTest is Test {
     function _honestMetadataSignature() internal view returns (bytes memory) {
         bytes32 domainSep = keccak256(
             abi.encode(
-                PumpCorpFactoryLib.FACTORY_DOMAIN_TYPEHASH,
+                CorpFactoryMetadataLib.FACTORY_DOMAIN_TYPEHASH,
                 keccak256(bytes("PumpCorpFactory")),
                 keccak256(bytes("1")),
                 block.chainid,
@@ -438,7 +438,7 @@ contract FactoryRoundAuthReplayPOCTest is Test {
         CompanyOfficer memory off = _officer();
         bytes32 officerHash = keccak256(
             abi.encode(
-                PumpCorpFactoryLib.OFFICER_TYPEHASH,
+                CorpFactoryMetadataLib.OFFICER_TYPEHASH,
                 off.eoa,
                 keccak256(bytes(off.name)),
                 keccak256(bytes(off.contact)),
@@ -447,7 +447,7 @@ contract FactoryRoundAuthReplayPOCTest is Test {
         );
         bytes32 structHash = keccak256(
             abi.encode(
-                PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
+                CorpFactoryMetadataLib.ROUND_SUPPLEMENTAL_TYPEHASH,
                 keccak256(abi.encodePacked(SALT)),
                 honestPayable,
                 true,
@@ -459,11 +459,11 @@ contract FactoryRoundAuthReplayPOCTest is Test {
                 keccak256(bytes("DE")),
                 keccak256(bytes("contact@seedcorp.com")),
                 keccak256(bytes("Arbitration")),
-                PumpCorpFactoryLib.hashBytesArray(_extensionData()),
-                PumpCorpFactoryLib.hashStringArray(_roundPartyValues()),
-                PumpCorpFactoryLib.hashStringArray(_legalDetails()),
-                PumpCorpFactoryLib.hashCertDataArray(_honestCertData()),
-                PumpCorpFactoryLib.hashAddresses(_honestConditions())
+                CorpFactoryMetadataLib.hashBytesArray(_extensionData()),
+                CorpFactoryMetadataLib.hashStringArray(_roundPartyValues()),
+                CorpFactoryMetadataLib.hashStringArray(_legalDetails()),
+                CorpFactoryMetadataLib.hashCertDataArray(_honestCertData()),
+                CorpFactoryMetadataLib.hashAddresses(_honestConditions())
             )
         );
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
