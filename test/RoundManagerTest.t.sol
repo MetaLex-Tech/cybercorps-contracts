@@ -33,6 +33,7 @@ import {ILexChex} from "../src/interfaces/ILexChex.sol";
 import {RoundManagerUpgradeHelper} from "../src/helpers/RoundManagerUpgradeHelper.sol";
 
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
+import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 
 // Import necessary types
 using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
@@ -711,6 +712,17 @@ library CyberCorpHelper {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivKey, digest);
         sig = abi.encodePacked(r, s, v);
+    }
+
+    /// @notice Officer signature over the deployment metadata that CyberCorpFactory requires.
+    function computeMetadataSignature(
+        address factory,
+        CorpFactoryMetadataLib.RoundSupplementalData memory data,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory) {
+        bytes32 digest = CorpFactoryMetadataLib.digest("CyberCorpFactory", factory, data);
+        (uint8 v, bytes32 r, bytes32 sig) = vm.sign(signerPrivKey, digest);
+        return abi.encodePacked(r, sig, v);
     }
 
     function computeEOISignature(
@@ -3332,6 +3344,31 @@ contract CyberCorpFactoryPublicRoundTest is Test {
         roundPartyValues[0] = officer.name;
         roundPartyValues[1] = officer.title;
 
+        string[] memory legalDetails = new string[](certData.length);
+        bytes[] memory extensionData = new bytes[](certData.length);
+        bytes memory metaSig = CyberCorpHelper.computeMetadataSignature(
+     address(corpFactory),
+     CorpFactoryMetadataLib.RoundSupplementalData({
+         corpSalt: keccak256(abi.encodePacked(salt)),
+         companyPayable: me,
+         publicRound: true,
+         allowTimedOffers: true,
+         restrictEndTimeReduction: false,
+         officer: officer,
+         companyName: "Corp CF",
+         companyType: "corporation",
+         companyJurisdiction: "DE",
+         companyContactDetails: "contact",
+         defaultDisputeResolution: "arbitration",
+         extensionData: extensionData,
+         roundPartyValues: roundPartyValues,
+         legalDetails: legalDetails,
+         certData: certData,
+         conditionAddresses: new address[](0)
+     }),
+     officerPrivKey
+ );
+
         (
             address corp,
             ,
@@ -3349,8 +3386,8 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             "arbitration",
             me,
             officer,
-            new string[](certData.length),
-            new bytes[](certData.length),
+            legalDetails,
+            extensionData,
             certData,
             templateId,
             address(usdc),
@@ -3358,6 +3395,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             valuation,
             roundPartyValues,
             escSig,
+            metaSig,
             RoundType.FCFS,
             new address[](0),
             raiseCap,

@@ -22,6 +22,7 @@ import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStora
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
+import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 
 contract UpgradePublicRoundsForkTest is Test {
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
@@ -200,6 +201,29 @@ contract UpgradePublicRoundsForkTest is Test {
                 CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt)
             );
 
+            bytes memory metaSig = CyberCorpHelper.computeMetadataSignature(
+     cyberCorpFactoryProxyAddr,
+     CorpFactoryMetadataLib.RoundSupplementalData({
+         corpSalt: keccak256(abi.encodePacked(salt)),
+         companyPayable: address(companyOwner),
+         publicRound: true,
+         allowTimedOffers: true,
+         restrictEndTimeReduction: false,
+         officer: officer,
+         companyName: "CyberCorp",
+         companyType: "Limited Liability Company",
+         companyJurisdiction: "Juris",
+         companyContactDetails: "Contact Details",
+         defaultDisputeResolution: "Dispute Res",
+         extensionData: extensionData,
+         roundPartyValues: roundPartyValues,
+         legalDetails: legalDetails,
+         certData: certData,
+         conditionAddresses: new address[](0)
+     }),
+     companyOwnerPrivateKey
+ );
+
             //test deploy a new CyberCorp and start a public round using the factory
             (
                 ,
@@ -228,6 +252,7 @@ contract UpgradePublicRoundsForkTest is Test {
                 valuation,
                 roundPartyValues,
                 escrowedSig,
+                metaSig,
                 RoundType.FCFS,
                 new address[](0),
                 raiseCap,
@@ -262,6 +287,29 @@ contract UpgradePublicRoundsForkTest is Test {
                 CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt)
             );
 
+            bytes memory metaSig = CyberCorpHelper.computeMetadataSignature(
+     cyberCorpFactoryProxyAddr,
+     CorpFactoryMetadataLib.RoundSupplementalData({
+         corpSalt: keccak256(abi.encodePacked(salt)),
+         companyPayable: address(companyOwner),
+         publicRound: true,
+         allowTimedOffers: true,
+         restrictEndTimeReduction: false,
+         officer: officer,
+         companyName: "SafeCorp",
+         companyType: "Limited Liability Company",
+         companyJurisdiction: "Juris",
+         companyContactDetails: "Contact",
+         defaultDisputeResolution: "Dispute",
+         extensionData: extensionData,
+         roundPartyValues: roundPartyValues,
+         legalDetails: legalDetails,
+         certData: certData,
+         conditionAddresses: new address[](0)
+     }),
+     companyOwnerPrivateKey
+ );
+
             // Example public round using SAFE template id 1
             (
                 ,
@@ -290,6 +338,7 @@ contract UpgradePublicRoundsForkTest is Test {
                 valuation,
                 roundPartyValues,
                 escrowedSig,
+                metaSig,
                 RoundType.FCFS,
                 new address[](0),
                 raiseCap,
@@ -569,6 +618,29 @@ contract UpgradePublicRoundsForkTest is Test {
             CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt)
         );
 
+        bytes memory metaSig = CyberCorpHelper.computeMetadataSignature(
+     cyberCorpFactoryProxyAddr,
+     CorpFactoryMetadataLib.RoundSupplementalData({
+         corpSalt: keccak256(abi.encodePacked(salt)),
+         companyPayable: address(companyOwner),
+         publicRound: true,
+         allowTimedOffers: true,
+         restrictEndTimeReduction: false,
+         officer: officer,
+         companyName: "CyberCorp",
+         companyType: "Limited Liability Company",
+         companyJurisdiction: "Juris",
+         companyContactDetails: "Contact Details",
+         defaultDisputeResolution: "Dispute Res",
+         extensionData: extensionData,
+         roundPartyValues: roundPartyValues,
+         legalDetails: legalDetails,
+         certData: certData,
+         conditionAddresses: new address[](0)
+     }),
+     companyOwnerPrivateKey
+ );
+
         vm.startPrank(companyOwner);
         // test deploy a new CyberCorp and start a public round using the factory
         (
@@ -598,6 +670,7 @@ contract UpgradePublicRoundsForkTest is Test {
             valuation,
             roundPartyValues,
             escrowedSig,
+            metaSig,
             roundType,
             new address[](0),
             raiseCap,

@@ -5,7 +5,7 @@ import {Test, console2} from "forge-std/Test.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DeployPumpCorpFactoryScript} from "../script/deploy-pump-factory.s.sol";
-import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
+import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
@@ -29,6 +29,7 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {RoundManagerStorage, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 
 /// @dev Always-failing condition: any allocation attempt on its escrow is blocked.
 contract AlwaysFalseCondition {
@@ -249,21 +250,21 @@ contract PumpCorpFactoryForkTest is Test {
     ) internal view returns (bytes memory) {
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
         bytes32 domainSep = keccak256(abi.encode(
-            PumpCorpFactoryLib.FACTORY_DOMAIN_TYPEHASH,
+            CorpFactoryMetadataLib.FACTORY_DOMAIN_TYPEHASH,
             keccak256(bytes("PumpCorpFactory")),
             keccak256(bytes("1")),
             block.chainid,
             address(pumpFactory)
         ));
         bytes32 officerHash = keccak256(abi.encode(
-            PumpCorpFactoryLib.OFFICER_TYPEHASH,
+            CorpFactoryMetadataLib.OFFICER_TYPEHASH,
             off.eoa,
             keccak256(bytes(off.name)),
             keccak256(bytes(off.contact)),
             keccak256(bytes(off.title))
         ));
         bytes32 structHash = keccak256(abi.encode(
-            PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
+            CorpFactoryMetadataLib.ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
             publicRound,
@@ -275,11 +276,11 @@ contract PumpCorpFactoryForkTest is Test {
             keccak256(bytes(companyJurisdiction_)),
             keccak256(bytes(companyContactDetails_)),
             keccak256(bytes(defaultDisputeResolution_)),
-            PumpCorpFactoryLib.hashBytesArray(extensionData_),
-            PumpCorpFactoryLib.hashStringArray(roundPartyValues_),
-            PumpCorpFactoryLib.hashStringArray(legal),
-            PumpCorpFactoryLib.hashCertDataArray(certs),
-            PumpCorpFactoryLib.hashAddresses(conditions)
+            CorpFactoryMetadataLib.hashBytesArray(extensionData_),
+            CorpFactoryMetadataLib.hashStringArray(roundPartyValues_),
+            CorpFactoryMetadataLib.hashStringArray(legal),
+            CorpFactoryMetadataLib.hashCertDataArray(certs),
+            CorpFactoryMetadataLib.hashAddresses(conditions)
         ));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);

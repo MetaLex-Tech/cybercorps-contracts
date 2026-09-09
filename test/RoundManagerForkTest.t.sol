@@ -34,7 +34,8 @@ import {ILexChex} from "../src/interfaces/ILexChex.sol";
 import {RoundManagerUpgradeHelper} from "../src/helpers/RoundManagerUpgradeHelper.sol";
 
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
-import {CyberCorpHelper, MockPaymentToken} from "./RoundManagerTest.t.sol";
+import {CyberCorpHelper, MockPaymentToken, IUUPS} from "./RoundManagerTest.t.sol";
+import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
 
 contract RoundManagerForkTest is Test {
@@ -833,6 +834,12 @@ contract RoundManagerFCFSForkTest is Test {
         CyberAgreementRegistry registry = CyberAgreementRegistry(net.cyberAgreementRegistry);
         CyberAgreementUtils.upgradeRegistry(vm, address(registry), net.metalexSafe);
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(net.cyberCorpFactory);
+        // deployCyberCorpAndCreateRound now takes the officer's metadata signature, so the
+        // deployed implementation is behind this branch. Upgrade it on the fork first.
+        // Deploy the implementation before the prank, or the CREATE consumes it.
+        address newFactoryImpl = address(new CyberCorpFactory());
+        vm.prank(net.metalexSafe);
+        IUUPS(net.cyberCorpFactory).upgradeToAndCall(newFactoryImpl, "");
         CyberCorpSingleFactory cyberCorpSingleFactory = CyberCorpSingleFactory(cyberCorpFactory.cyberCorpSingleFactory());
         RoundManagerFactory roundManagerFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
 
@@ -896,6 +903,29 @@ contract RoundManagerFCFSForkTest is Test {
             predictedCorp
         );
 
+        bytes memory metaSig = CyberCorpHelper.computeMetadataSignature(
+     address(cyberCorpFactory),
+     CorpFactoryMetadataLib.RoundSupplementalData({
+         corpSalt: keccak256(abi.encodePacked(salt)),
+         companyPayable: founder,
+         publicRound: true,
+         allowTimedOffers: true,
+         restrictEndTimeReduction: false,
+         officer: companyOfficer,
+         companyName: "Base Sepolia FCFS Corp",
+         companyType: "Delaware C-Corp",
+         companyJurisdiction: "DE",
+         companyContactDetails: "founder@cybercorp.test",
+         defaultDisputeResolution: "Arbitration",
+         extensionData: extensionData,
+         roundPartyValues: roundPartyValues,
+         legalDetails: legalDetails,
+         certData: certData,
+         conditionAddresses: new address[](0)
+     }),
+     OFFICER_PK
+ );
+
         (
             address corp,
             ,
@@ -922,6 +952,7 @@ contract RoundManagerFCFSForkTest is Test {
             VALUATION,
             roundPartyValues,
             escrowedSig,
+            metaSig,
             RoundType.FCFS,
             new address[](0),
             RAISE_CAP,

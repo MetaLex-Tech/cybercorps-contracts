@@ -19,6 +19,7 @@ import {
 import {CyberCertData, RoundType} from "../src/interfaces/IRoundManager.sol";
 import {EOI} from "../src/storage/RoundManagerStorage.sol";
 import {Round} from "../src/libs/RoundLib.sol";
+import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 
 contract FactoryArbitraryErc20RoundPOCTest is Test {
     uint256 internal ownerPk = 0xA11CE;
@@ -124,6 +125,29 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
             predictedCorp
         );
 
+        bytes memory metaSig = CyberCorpHelper.computeMetadataSignature(
+     address(corpFactory),
+     CorpFactoryMetadataLib.RoundSupplementalData({
+         corpSalt: keccak256(abi.encodePacked(salt)),
+         companyPayable: owner,
+         publicRound: true,
+         allowTimedOffers: true,
+         restrictEndTimeReduction: false,
+         officer: companyOfficer,
+         companyName: "Seed Corp",
+         companyType: "C-Corp",
+         companyJurisdiction: "DE",
+         companyContactDetails: "contact@seedcorp.com",
+         defaultDisputeResolution: "Arbitration",
+         extensionData: extensionData,
+         roundPartyValues: roundPartyValues,
+         legalDetails: legalDetails,
+         certData: certData,
+         conditionAddresses: new address[](0)
+     }),
+     officerPk
+ );
+
         (
             address corp,
             ,
@@ -150,6 +174,7 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
             VALUATION,
             roundPartyValues,
             escrowedSig,
+            metaSig,
             RoundType.FCFS,
             new address[](0),
             raiseCap,
