@@ -57,6 +57,7 @@ import {
     ICertificateExtensionV3
 } from "./storage/extensions/ICertificateExtension.sol";
 import "./libs/auth.sol";
+import {JsonLib} from "./libs/JsonLib.sol";
 
 interface ICertificateUnitsReserved {
     function unitsReserved(uint256 tokenId) external view returns (uint256);
@@ -147,7 +148,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         string memory json = "[";
         for (uint256 i = 0; i < arr.length; i++) {
             if (i > 0) json = string.concat(json, ",");
-            json = string.concat(json, '{"id": ', uint256ToString(i + 1), ', "legend": "', arr[i], '"}');
+            json = string.concat(json, '{"id": ', uint256ToString(i + 1), ', "legend": "', JsonLib.jsonEscape(arr[i]), '"}');
         }
         return string.concat(json, "]");
     }
@@ -187,9 +188,9 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         string memory part1 = string.concat(
             '{"id": ', uint256ToString(id),
             ', "restrictionType": "', restrictionTypeToString(legend.restrictionType),
-            '", "title": "', legend.title,
-            '", "text": "', legend.text,
-            '", "jurisdiction": "', legend.jurisdiction,
+            '", "title": "', JsonLib.jsonEscape(legend.title),
+            '", "text": "', JsonLib.jsonEscape(legend.text),
+            '", "jurisdiction": "', JsonLib.jsonEscape(legend.jurisdiction),
             '"'
         );
         string memory part2 = string.concat(
@@ -408,12 +409,12 @@ struct CertificateDetails {
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(
             '{"trait_type": "CurrentOwner", "value": "', addressToString(owner.ownerAddress),
-            '"}, {"trait_type": "CurrentOwnerName", "value": "', owner.name,
+            '"}, {"trait_type": "CurrentOwnerName", "value": "', JsonLib.jsonEscape(owner.name),
             '"}, {"trait_type": "investmentAmount", "value": "', from18DecimalsToString(details.investmentAmountUSD),
             '"}, {"trait_type": "unitsRepresented", "value": "', from18DecimalsToString(details.unitsRepresented),
             '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '"}, {"trait_type": "cyberCORPName", "value": "', cyberCORPName,
-            '"}, {"trait_type": "cyberCORPType", "value": "', cyberCORPType,
+            '"}, {"trait_type": "cyberCORPName", "value": "', JsonLib.jsonEscape(cyberCORPName),
+            '"}, {"trait_type": "cyberCORPType", "value": "', JsonLib.jsonEscape(cyberCORPType),
             '"}'
         ));
     }
@@ -426,11 +427,11 @@ struct CertificateDetails {
         string memory certificateUri
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(
-            ', {"trait_type": "cyberCORPJurisdiction", "value": "', cyberCORPJurisdiction,
-            '"}, {"trait_type": "cyberCORPContactDetails", "value": "', cyberCORPContactDetails,
+            ', {"trait_type": "cyberCORPJurisdiction", "value": "', JsonLib.jsonEscape(cyberCORPJurisdiction),
+            '"}, {"trait_type": "cyberCORPContactDetails", "value": "', JsonLib.jsonEscape(cyberCORPContactDetails),
             '"}, {"trait_type": "securityType", "value": "', securityClassToString(securityType),
             '"}, {"trait_type": "securitySeries", "value": "', securitySeriesToString(securitySeries),
-            '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/', stripIpfsPrefix(certificateUri),
+            '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/', JsonLib.jsonEscape(stripIpfsPrefix(certificateUri)),
             '"}'
         ));
     }
@@ -448,7 +449,7 @@ struct CertificateDetails {
                 '", "timestamp": "', uint256ToString(endorsements[i].timestamp),
                 '", "registry": "', addressToString(endorsements[i].registry),
                 '", "agreementId": "', bytes32ToString(endorsements[i].agreementId),
-                '", "investorName": "', endorsements[i].endorseeName,
+                '", "investorName": "', JsonLib.jsonEscape(endorsements[i].endorseeName),
                 '", "investorAddress": "', addressToString(endorsements[i].endorsee),
                 '"');
 
@@ -474,8 +475,8 @@ struct CertificateDetails {
                 // Add global fields
                 for (uint256 j = 0; j < globalFields.length; j++) {
                     if (j > 0) json = string.concat(json, ',');
-                    json = string.concat(json, '"', globalFields[j], '": "', 
-                        j < globalValues.length ? globalValues[j] : "", '"');
+                    json = string.concat(json, '"', JsonLib.jsonEscape(globalFields[j]), '": "', 
+                        j < globalValues.length ? JsonLib.jsonEscape(globalValues[j]) : "", '"');
                 }
 
                 // Add company details if party values exist at index 0
@@ -483,7 +484,7 @@ struct CertificateDetails {
                     json = string.concat(json, ', "companyDetails": {');
                     for (uint256 j = 0; j < partyFields.length && j < partyValues[0].length; j++) {
                         if (j > 0) json = string.concat(json, ',');
-                        json = string.concat(json, '"', partyFields[j], '": "', partyValues[0][j], '"');
+                        json = string.concat(json, '"', JsonLib.jsonEscape(partyFields[j]), '": "', JsonLib.jsonEscape(partyValues[0][j]), '"');
                     }
                     json = string.concat(json, '}');
                 }
@@ -493,7 +494,7 @@ struct CertificateDetails {
                     json = string.concat(json, ', "investorDetails": {');
                     for (uint256 j = 0; j < partyFields.length && j < partyValues[1].length; j++) {
                         if (j > 0) json = string.concat(json, ',');
-                        json = string.concat(json, '"', partyFields[j], '": "', partyValues[1][j], '"');
+                        json = string.concat(json, '"', JsonLib.jsonEscape(partyFields[j]), '": "', JsonLib.jsonEscape(partyValues[1][j]), '"');
                     }
                     json = string.concat(json, '}');
                 }
@@ -601,6 +602,17 @@ struct CertificateDetails {
                 '],'
             ));
         }
+
+        // Escape the strings for JSON. The image builder above must get the raw text.
+        cyberCORPName = JsonLib.jsonEscape(cyberCORPName);
+        cyberCORPType = JsonLib.jsonEscape(cyberCORPType);
+        cyberCORPJurisdiction = JsonLib.jsonEscape(cyberCORPJurisdiction);
+        cyberCORPContactDetails = JsonLib.jsonEscape(cyberCORPContactDetails);
+        certificateUri = JsonLib.jsonEscape(certificateUri);
+        details.signingOfficerName = JsonLib.jsonEscape(details.signingOfficerName);
+        details.signingOfficerTitle = JsonLib.jsonEscape(details.signingOfficerTitle);
+        details.legalDetails = JsonLib.jsonEscape(details.legalDetails);
+        owner.name = JsonLib.jsonEscape(owner.name);
 
         // Add all existing properties at root level
         json = string.concat(json, '"cyberCORPName": "', cyberCORPName, '"');
@@ -798,6 +810,17 @@ struct CertificateDetails {
                 '],'
             ));
         }
+
+        // Escape the strings for JSON. The image builder above must get the raw text.
+        cyberCORPName = JsonLib.jsonEscape(cyberCORPName);
+        cyberCORPType = JsonLib.jsonEscape(cyberCORPType);
+        cyberCORPJurisdiction = JsonLib.jsonEscape(cyberCORPJurisdiction);
+        cyberCORPContactDetails = JsonLib.jsonEscape(cyberCORPContactDetails);
+        certificateUri = JsonLib.jsonEscape(certificateUri);
+        details.signingOfficerName = JsonLib.jsonEscape(details.signingOfficerName);
+        details.signingOfficerTitle = JsonLib.jsonEscape(details.signingOfficerTitle);
+        details.legalDetails = JsonLib.jsonEscape(details.legalDetails);
+        owner.name = JsonLib.jsonEscape(owner.name);
 
         // Add all existing properties at root level
         json = string.concat(json, '"cyberCORPName": "', cyberCORPName, '"');
