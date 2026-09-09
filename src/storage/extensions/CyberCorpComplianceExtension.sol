@@ -44,6 +44,7 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICyberCorpExtension.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 
 struct FeeDetail {
     string feeName;
@@ -145,7 +146,7 @@ contract CyberCorpComplianceExtension is
             json = string.concat(
                 json,
                 '{"feeName": "',
-                details[i].feeName,
+                JsonLib.jsonEscape(details[i].feeName),
                 '", "feeBps": "',
                 uint256ToString(details[i].feeBps),
                 '", "flatFee": "',
@@ -153,9 +154,9 @@ contract CyberCorpComplianceExtension is
                 '", "recipient": "',
                 addressToString(details[i].recipient),
                 '", "feeToken": "',
-                details[i].feeToken,
+                JsonLib.jsonEscape(details[i].feeToken),
                 '", "notes": "',
-                details[i].notes,
+                JsonLib.jsonEscape(details[i].notes),
                 '"}'
             );
         }
@@ -172,7 +173,7 @@ contract CyberCorpComplianceExtension is
             if (i > 0) {
                 json = string.concat(json, ", ");
             }
-            json = string.concat(json, '"', values[i], '"');
+            json = string.concat(json, '"', JsonLib.jsonEscape(values[i]), '"');
         }
 
         return string.concat(json, "]");

@@ -27,6 +27,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./ACESAFEExtension.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Series-wide ACE SAFE terms, encoded as the printer's seriesData.
 struct ACESAFESeriesData {
@@ -64,13 +65,13 @@ contract ACESAFEExtensionV3 is ACESAFEExtension {
         ACESAFESeriesData memory decoded = abi.decode(data, (ACESAFESeriesData));
         return string.concat(
             ', "ACESAFESeriesDetails": {"seriesName": "',
-            decoded.seriesName,
+            JsonLib.jsonEscape(decoded.seriesName),
             '", "denominationToken": "',
-            decoded.denominationToken,
+            JsonLib.jsonEscape(decoded.denominationToken),
             '", "governingDocumentURIs": ',
             _stringArrayToJson(decoded.governingDocumentURIs),
             ', "customProvisions": "',
-            decoded.customProvisions,
+            JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         );
     }
@@ -79,7 +80,7 @@ contract ACESAFEExtensionV3 is ACESAFEExtension {
         string memory json = "[";
         for (uint256 i = 0; i < values.length; i++) {
             if (i > 0) json = string.concat(json, ", ");
-            json = string.concat(json, '"', values[i], '"');
+            json = string.concat(json, '"', JsonLib.jsonEscape(values[i]), '"');
         }
         return string.concat(json, "]");
     }

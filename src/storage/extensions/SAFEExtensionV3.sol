@@ -27,6 +27,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./SAFEExtension.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Series-wide SAFE terms, encoded as the printer's seriesData.
 struct SAFESeriesData {
@@ -61,11 +62,11 @@ contract SAFEExtensionV3 is SAFEExtension {
         SAFESeriesData memory decoded = abi.decode(data, (SAFESeriesData));
         return string.concat(
             ', "SAFESeriesDetails": {"seriesName": "',
-            decoded.seriesName,
+            JsonLib.jsonEscape(decoded.seriesName),
             '", "governingDocumentURIs": ',
             _stringArrayToJson(decoded.governingDocumentURIs),
             ', "customProvisions": "',
-            decoded.customProvisions,
+            JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         );
     }
@@ -74,7 +75,7 @@ contract SAFEExtensionV3 is SAFEExtension {
         string memory json = "[";
         for (uint256 i = 0; i < values.length; i++) {
             if (i > 0) json = string.concat(json, ", ");
-            json = string.concat(json, '"', values[i], '"');
+            json = string.concat(json, '"', JsonLib.jsonEscape(values[i]), '"');
         }
         return string.concat(json, "]");
     }

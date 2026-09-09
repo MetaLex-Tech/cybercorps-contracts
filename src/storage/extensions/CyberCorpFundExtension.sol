@@ -44,6 +44,7 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICyberCorpExtension.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice One line of the SPV's portfolio: which portfolio company it holds, the kind of security, and
 /// how many underlying shares/units. The SPV-unit-to-underlying ratio is derived offchain as
@@ -136,9 +137,9 @@ contract CyberCorpFundExtension is
         return string(
             abi.encodePacked(
                 '"fundEntityType": "',
-                decoded.fundEntityType,
+                JsonLib.jsonEscape(decoded.fundEntityType),
                 '", "icaExceptionRelied": "',
-                decoded.icaExceptionRelied,
+                JsonLib.jsonEscape(decoded.icaExceptionRelied),
                 '", "regSIssuerCategory": ',
                 uint256ToString(decoded.regSIssuerCategory),
                 ', "holderCap": ',
@@ -172,11 +173,11 @@ contract CyberCorpFundExtension is
                 ', "provenanceAttestationHash": "',
                 _toHexString(abi.encodePacked(decoded.provenanceAttestationHash)),
                 '", "documentRegistryURI": "',
-                decoded.documentRegistryURI,
+                JsonLib.jsonEscape(decoded.documentRegistryURI),
                 '", "governingDocumentURIs": ',
                 stringArrayToJson(decoded.governingDocumentURIs),
                 ', "metadataURI": "',
-                decoded.metadataURI,
+                JsonLib.jsonEscape(decoded.metadataURI),
                 '"'
             )
         );
@@ -194,9 +195,9 @@ contract CyberCorpFundExtension is
             json = string.concat(
                 json,
                 '{"portfolioCompany": "',
-                holdings[i].portfolioCompany,
+                JsonLib.jsonEscape(holdings[i].portfolioCompany),
                 '", "securityKind": "',
-                holdings[i].securityKind,
+                JsonLib.jsonEscape(holdings[i].securityKind),
                 '", "underlyingShares": ',
                 uint256ToString(holdings[i].underlyingShares),
                 "}"
@@ -238,7 +239,7 @@ contract CyberCorpFundExtension is
             if (i > 0) {
                 json = string.concat(json, ", ");
             }
-            json = string.concat(json, '"', values[i], '"');
+            json = string.concat(json, '"', JsonLib.jsonEscape(values[i]), '"');
         }
 
         return string.concat(json, "]");

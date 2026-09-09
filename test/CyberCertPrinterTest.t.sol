@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
+import {SAFEExtension, SAFEData} from "../src/storage/extensions/SAFEExtension.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {LedgerEntryTokenStorage} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
@@ -1094,7 +1095,7 @@ contract CyberCertPrinterTest is Test {
             issuerUSDValuationAtTimeOfInvestment: 10_000 ether,
             unitsRepresented: 1_000 ether,
             legalDetails: poison,
-            extensionData: bytes("")
+            extensionData: abi.encode(SAFEData(poison))
         });
 
         string memory json = builder.buildCertificateUriNotEncoded(
@@ -1113,12 +1114,14 @@ contract CyberCertPrinterTest is Test {
             bytes32(0),
             1,
             address(printer),
-            address(0)
+            address(new SAFEExtension())
         );
 
         assertEq(vm.parseJsonString(json, ".unitsRepresented"), "1000.00");
         assertEq(vm.parseJsonString(json, ".legalDetails"), poison);
         assertEq(vm.parseJsonString(json, ".currentOwner.name"), poison);
+        // The extension fragment is joined into the same document, thus it must be escaped too.
+        assertEq(vm.parseJsonString(json, ".SAFEDetails.customProvisions"), poison);
     }
 
     function test_UpdateCertificateDetails_ReplacesStoredDetails() public {
