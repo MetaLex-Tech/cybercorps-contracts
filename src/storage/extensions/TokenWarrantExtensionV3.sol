@@ -27,6 +27,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./TokenWarrantExtensionV2.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Series-wide token-warrant terms, encoded as the printer's seriesData.
 struct TokenWarrantSeriesData {
@@ -60,9 +61,9 @@ contract TokenWarrantExtensionV3 is TokenWarrantExtensionV2 {
         if (data.length == 0) return "";
         TokenWarrantSeriesData memory decoded = abi.decode(data, (TokenWarrantSeriesData));
         return string.concat(
-            ', "TokenWarrantSeriesDetails": {"seriesName": "', decoded.seriesName,
-            '", "underlyingTokenDescription": "', decoded.underlyingTokenDescription,
-            '", "customProvisions": "', decoded.customProvisions, '"}'
+            ', "TokenWarrantSeriesDetails": {"seriesName": "', JsonLib.jsonEscape(decoded.seriesName),
+            '", "underlyingTokenDescription": "', JsonLib.jsonEscape(decoded.underlyingTokenDescription),
+            '", "customProvisions": "', JsonLib.jsonEscape(decoded.customProvisions), '"}'
         );
     }
 }

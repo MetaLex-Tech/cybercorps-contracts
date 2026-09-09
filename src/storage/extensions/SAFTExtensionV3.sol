@@ -27,6 +27,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./SAFTExtensionV2.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Series-wide SAFT terms, encoded as the printer's seriesData.
 struct SAFTSeriesData {
@@ -56,9 +57,9 @@ contract SAFTExtensionV3 is SAFTExtensionV2 {
         if (data.length == 0) return "";
         SAFTSeriesData memory decoded = abi.decode(data, (SAFTSeriesData));
         return string.concat(
-            ', "SAFTSeriesDetails": {"seriesName": "', decoded.seriesName,
+            ', "SAFTSeriesDetails": {"seriesName": "', JsonLib.jsonEscape(decoded.seriesName),
             '", "tokenGenerationEventDate": "', _uintToString(decoded.tokenGenerationEventDate),
-            '", "customProvisions": "', decoded.customProvisions, '"}'
+            '", "customProvisions": "', JsonLib.jsonEscape(decoded.customProvisions), '"}'
         );
     }
     function _uintToString(uint256 value) private pure returns (string memory) {

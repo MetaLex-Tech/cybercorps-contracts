@@ -45,6 +45,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./libs/JsonLib.sol";
 
 contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     using ECDSA for bytes32;
@@ -876,9 +877,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 '{"templateId": "',
                 _bytes32ToString(agreementData.templateId), // Corrected to use agreementData.templateId
                 '", "title": "',
-                template.title,
+                JsonLib.jsonEscape(template.title),
                 '", "legalContractUri": "',
-                template.legalContractUri,
+                JsonLib.jsonEscape(template.legalContractUri),
                 '", "ContractFields": {'
             )
         );
@@ -889,9 +890,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 json = string.concat(
                     json,
                     '"',
-                    template.globalFields[i],
+                    JsonLib.jsonEscape(template.globalFields[i]),
                     '": "',
-                    agreementData.globalValues[i],
+                    JsonLib.jsonEscape(agreementData.globalValues[i]),
                     '"'
                 );
                 if (i + 1 < template.globalFields.length) {
@@ -919,11 +920,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                         json = string.concat(
                             json,
                             '"',
-                            template.partyFields[j],
+                            JsonLib.jsonEscape(template.partyFields[j]),
                             '": "'
                         );
                         if (values.length > j) {
-                            json = string.concat(json, values[j]);
+                            json = string.concat(json, JsonLib.jsonEscape(values[j]));
                         }
                         json = string.concat(json, '"');
                         if (j + 1 < template.partyFields.length) {

@@ -48,8 +48,8 @@ hold different implementations, each chain gets its own row.
 | RoundManagerFactory       | core  | Base      | `0xc9d5…aeb9` | none       | None    |
 | RoundManagerFactory       | core  | ETH       | `0xc9d5…aeb9` | +692 B     | Upgrade |
 | RoundManagerFactory       | pump  | Base      | `0x0608…3432` | none       | None    |
-| CyberAgreementRegistry    | both  | Base, ETH | `0xa9E8…c134` | +30 B      | Upgrade |
-| LegalDocRegistry          | docs  | Base, ETH | `0x45e5…8738` | -263 B     | Upgrade |
+| CyberAgreementRegistry    | both  | Base, ETH | `0xa9E8…c134` | +1,620 B   | Upgrade |
+| LegalDocRegistry          | docs  | Base, ETH | `0x45e5…8738` | +1,327 B   | Upgrade |
 | CertificateUriBuilder     | core  | Base, ETH | `0x5500…70A3` | +4,219 B   | Upgrade |
 | CertificateUriBuilder     | pump  | Base      | `0x476C…05b8` | +4,219 B   | Upgrade |
 | PumpCorpFactory           | pump  | Base      | `0xd426…487f` | +443 B     | Upgrade |
@@ -78,6 +78,50 @@ Four contract families already run different code at different addresses:
   commit `c1692373`.
 
 The two chains drift in opposite directions. Upgrade both for parity, even without v5.
+
+## Certificate and corp extensions
+
+MetaLeX deploys these. Each one is a UUPS proxy behind an ERC1967 proxy at a CREATE2 address.
+They are not corp contracts. They carry no `DEPLOY_VERSION`.
+
+A corp points at an extension by address. The printer holds the certificate extension and the series
+extension. CyberCorp holds the corp extension. An upgrade keeps the proxy address, so no corp and no
+front-end has to change. Do not deploy a new proxy for these.
+
+### What changed
+
+15 extensions now escape their own strings before they write JSON. Each one returns a finished JSON
+fragment, and CertificateUriBuilder joins the fragments. At that point the builder cannot tell a
+structural quote from a data quote, so each extension must escape at the leaf.
+
+### Live proxies on Base
+
+Each row is identified by a call to `EXTENSION_TYPE()` on the proxy.
+
+| Contract                | `EXTENSION_TYPE`   | Proxy                        | Action  |
+|-------------------------|--------------------|------------------------------|---------|
+| SAFEExtension           | `SAFE`             | `0xB2E7…79C8`                | Upgrade |
+| ACESAFEExtension        | `ACE_SAFE`         | `0x6aDa…8EAC`                | Upgrade |
+| SAFTExtensionV2         | `SAFT_V2`          | `0x37c2…92c1`                | Upgrade |
+| SAFTEExtensionV2        | `SAFTE_V2`         | `0x4Acd…b41A`                | Upgrade |
+| TokenWarrantExtensionV2 | `TOKEN_WARRANT_V2` | `0xF5A9…BC8F`                | Upgrade |
+| SAFTExtension           | `SAFT`             | `0x109D…365B`                | None    |
+| SAFTEExtension          | `SAFTE`            | `0xE070…787C`, `0xC23f…e603` | None    |
+| TokenWarrantExtension   | `TOKEN_WARRANT`    | `0xbad0…7bb4`                | None    |
+
+The three V1 extensions render no string field. They need no change.
+ShareExtension already escaped every field, so it is not in the release either.
+
+### Proxies still to find
+
+These ten also changed. Their live addresses are not in this repository and not in the front-end
+config. Find each proxy, or record that it is not deployed yet.
+
+ACESAFEExtensionV3, SAFEExtensionV3, SAFTExtensionV3, SAFTEExtensionV3, TokenWarrantExtensionV3,
+CyberCorpExtension, CyberCorpExtensionV2, CyberCorpFundExtension, CyberCorpComplianceExtension,
+FundInterestExtension.
+
+TODO: complete this list before the deploy.
 
 ## Version mismatch between MetaLeX singletons and corps
 
