@@ -126,6 +126,11 @@ contract PumpCorpFactoryForkTest is Test {
         (attacker, attackerPk) = makeAddrAndKey("attacker");
         (investor, investorPk) = makeAddrAndKey("investor");
 
+        // The deployed registry predates the signer field in the signed payload. Upgrade it here,
+        // outside any prank, so the signatures these tests build verify against the implementation
+        // under test.
+        CyberAgreementUtils.upgradeRegistry(vm, REGISTRY, metalexSafe);
+
         // Deploy mock zkPassport condition
         zkpassportCondition = new MockZkPassportCondition();
 
@@ -364,10 +369,12 @@ contract PumpCorpFactoryForkTest is Test {
     }
 
     /// Compute the investor's EIP-712 EOI signature for TEMPLATE_ID.
+    /// @param finalizer_ The RoundManager. The registry binds the finalizer into the agreement id.
     function _eoiSig(
         uint256 eoiSalt_,
         string[] memory globalValues_,
-        string[] memory investorPv_
+        string[] memory investorPv_,
+        address finalizer_
     ) internal view returns (bytes memory) {
         CyberAgreementRegistry reg = CyberAgreementRegistry(REGISTRY);
         (
@@ -380,7 +387,7 @@ contract PumpCorpFactoryForkTest is Test {
         parties[0] = officer;
         parties[1] = investor;
         bytes32 contractId = keccak256(
-            abi.encode(TEMPLATE_ID, eoiSalt_, globalValues_, parties)
+            abi.encode(TEMPLATE_ID, eoiSalt_, globalValues_, parties, bytes32(0), finalizer_)
         );
         return CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -515,7 +522,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(eoiSalt, globalValues, investorPv),
+            _eoiSig(eoiSalt, globalValues, investorPv, rm),
             eoiSalt, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -575,7 +582,7 @@ contract PumpCorpFactoryForkTest is Test {
         RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(eoiSalt, globalValues, investorPv),
+            _eoiSig(eoiSalt, globalValues, investorPv, rm),
             eoiSalt, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -596,7 +603,7 @@ contract PumpCorpFactoryForkTest is Test {
         zkpassportCondition.setApproved(false); // simulate failing zkpassport condition
 
         // Pre-compute sig before vm.expectRevert — _eoiSig makes an external call
-        bytes memory eoiSig = _eoiSig(1, globalValues, investorPv);
+        bytes memory eoiSig = _eoiSig(1, globalValues, investorPv, rm);
 
         vm.startPrank(investor);
         payToken.approve(rm, investAmount);
@@ -651,7 +658,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(eoiSalt, globalValues, investorPv),
+            _eoiSig(eoiSalt, globalValues, investorPv, rm),
             eoiSalt, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -707,7 +714,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(eoiSalt, globalValues, investorPv),
+            _eoiSig(eoiSalt, globalValues, investorPv, rm),
             eoiSalt, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -1960,7 +1967,7 @@ contract PumpCorpFactoryForkTest is Test {
             lexchexDetails: _emptyLex()
         });
 
-        bytes memory eoiSig = _eoiSig(1, globalValues, investorPv);
+        bytes memory eoiSig = _eoiSig(1, globalValues, investorPv, rm);
         vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         RoundManager(rm).submitEOI(
             roundId, eoi,
@@ -2002,7 +2009,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(1, globalValues, investorPv),
+            _eoiSig(1, globalValues, investorPv, rm),
             1, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -2044,7 +2051,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(1, globalValues, investorPv),
+            _eoiSig(1, globalValues, investorPv, rm),
             1, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -2088,7 +2095,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(1, globalValues, investorPv),
+            _eoiSig(1, globalValues, investorPv, rm),
             1, new address[](0), bytes32(0)
         );
         vm.stopPrank();

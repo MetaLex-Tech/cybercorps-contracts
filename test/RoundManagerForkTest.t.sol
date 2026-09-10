@@ -832,7 +832,6 @@ contract RoundManagerFCFSForkTest is Test {
         address investor = vm.addr(INVESTOR_PK);
 
         CyberAgreementRegistry registry = CyberAgreementRegistry(net.cyberAgreementRegistry);
-        CyberAgreementUtils.upgradeRegistry(vm, address(registry), net.metalexSafe);
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(net.cyberCorpFactory);
         // deployCyberCorpAndCreateRound now takes the officer's metadata signature, so the
         // deployed implementation is behind this branch. Upgrade it on the fork first.

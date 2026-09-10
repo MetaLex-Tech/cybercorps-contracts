@@ -5365,6 +5365,7 @@ contract CyberCorpForkTest is Test {
             partyFields,
             globalValues,
             partyValues[1], // Principal's party values
+            principalAddr, // the delegate signs for the principal
             delegatePk // Delegate's private key
         );
         vm.stopPrank();
