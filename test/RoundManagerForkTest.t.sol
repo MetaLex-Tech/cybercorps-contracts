@@ -842,6 +842,11 @@ contract RoundManagerFCFSForkTest is Test {
         vm.prank(net.metalexSafe);
         IUUPS(net.cyberCorpFactory).upgradeToAndCall(newFactoryImpl, "");
         CyberCorpSingleFactory cyberCorpSingleFactory = CyberCorpSingleFactory(cyberCorpFactory.cyberCorpSingleFactory());
+        // The upgraded factory finalizes governance with activateBoardGovernance, which the
+        // CyberCorp reference implementation deployed on the fork predates. Roll the local one out too.
+        address newCorpImpl = address(new CyberCorp());
+        vm.prank(net.metalexSafe);
+        cyberCorpSingleFactory.setRefImplementation(newCorpImpl);
         RoundManagerFactory roundManagerFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
 
         bytes32 templateId = bytes32(uint256(5535));

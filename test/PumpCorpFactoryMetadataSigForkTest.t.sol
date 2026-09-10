@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
+import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 import {IUUPS} from "./RoundManagerTest.t.sol";
 
@@ -91,6 +93,15 @@ contract PumpCorpFactoryMetadataSigForkTest is Test {
         address newImpl = address(new PumpCorpFactory());
         vm.prank(metalexSafe);
         IUUPS(PUMP_FACTORY).upgradeToAndCall(newImpl, "");
+        // The refactored factory finalizes governance with activateBoardGovernance, which the
+        // CyberCorp reference implementation on the fork predates. Etch the local code over the
+        // reference address rather than setRefImplementation: the corp proxy's CREATE2 init code
+        // commits to the reference address, and the replayed signature was made over the corp
+        // address of the original deployment.
+        address refImpl = CyberCorpSingleFactory(
+            PumpCorpFactory(PUMP_FACTORY).cyberCorpSingleFactory()
+        ).getRefImplementation();
+        vm.etch(refImpl, address(new CyberCorp()).code);
     }
 
     /// @dev Overwrites the _companyPayable head word, leaving the rest of the calldata alone.
