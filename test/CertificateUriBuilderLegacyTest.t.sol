@@ -1,6 +1,7 @@
 pragma solidity ^0.8.28;
 
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 import {Test} from "forge-std/Test.sol";
 
 interface ILegacyMetadataPrinter {
@@ -41,7 +42,10 @@ contract CertificateUriBuilderLegacyTest is Test {
     function testSupportedZeroRemainsExplicit() public {
         vm.mockCall(PRINTER, abi.encodeWithSignature("unitsReserved(uint256)", 1), abi.encode(uint256(0)));
         assertEq(renderer.reservationJson(PRINTER, 1), ', "unitsReserved": "0.00"');
-        assertEq(renderer.reservationJson(address(0), 1), ', "unitsReserved": "0.00"');
+    }
+
+    function testNoPrinterOmitsField() public view {
+        assertEq(renderer.reservationJson(address(0), 1), "");
     }
 
     function testMissingGetterOmitsFieldRegardlessOfVersion() public {
@@ -67,28 +71,23 @@ contract CertificateUriBuilderLegacyTest is Test {
 
 contract CertificateUriBuilderLegacyForkTest is Test {
     address internal constant PRINTER = 0x2614b85a83bE8a5B4c007F29910E9Ec75f5498BC;
-    address internal constant BUILDER = 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3;
-    address internal constant SAFE = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
     function testRealV3CertificateAfterBuilderOnlyUpgrade() public {
-        string memory rpc = vm.envOr("FORK_RPC_URL", string(""));
-        if (bytes(rpc).length == 0) {
-            vm.skip(true);
-            return;
-        }
-        vm.createSelectFork(rpc, 46_649_711);
+        // Pinned. The test asserts the exact owner and corp name, which change with chain state.
+        vm.createSelectFork("base_sepolia", 46_649_711);
+        DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
         ILegacyMetadataPrinter printer = ILegacyMetadataPrinter(PRINTER);
         assertEq(printer.DEPLOY_VERSION(), "3");
         address ownerBefore = printer.ownerOf(1);
         vm.expectRevert();
         printer.tokenURI(1);
 
-        CertificateUriBuilder builder = CertificateUriBuilder(BUILDER);
+        CertificateUriBuilder builder = CertificateUriBuilder(core.uriBuilder);
         address imageBefore = builder.imageBuilder();
         address authBefore = address(builder.AUTH());
         CertificateUriBuilder implementation = new CertificateUriBuilder();
         // Local fork impersonation only. No transactions are broadcast.
-        vm.prank(SAFE);
+        vm.prank(core.metalexSafe);
         builder.upgradeToAndCall(address(implementation), "");
         assertEq(builder.imageBuilder(), imageBefore);
         assertEq(address(builder.AUTH()), authBefore);

@@ -268,11 +268,11 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
     }
 
     function unitsReservedToJson(address contractAddress, uint256 tokenId) internal view returns (string memory) {
-        if (contractAddress == address(0)) return ', "unitsReserved": "0.00"';
+        // Reservation metadata is optional. Keep the URI available when the printer cannot answer.
+        if (contractAddress == address(0)) return "";
         try ICertificateUnitsReserved(contractAddress).unitsReserved(tokenId) returns (uint256 reserved) {
             return string.concat(', "unitsReserved": "', from18DecimalsToString(reserved), '"');
         } catch {
-            // Reservation metadata is optional. Keep the URI available if the getter reverts.
             return "";
         }
     }
