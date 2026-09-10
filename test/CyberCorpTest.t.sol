@@ -3776,6 +3776,50 @@ contract CyberCorpForkTest is Test {
         vm.stopPrank();
     }
 
+    function testComponentSettersEmitOldAndNewAddress() public {
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorpAddr,
+            ,
+            address issuanceManagerAddr,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("ComponentSetterEvents"),
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer
+        );
+        CyberCorp cyberCorp = CyberCorp(cyberCorpAddr);
+
+        vm.expectEmit(true, true, true, true);
+        emit CyberCorp.IssuanceManagerUpdated(address(0xA1), issuanceManagerAddr);
+        cyberCorp.setIssuanceManager(address(0xA1));
+        assertEq(cyberCorp.issuanceManager(), address(0xA1));
+
+        vm.expectEmit(true, true, true, true);
+        emit CyberCorp.DealManagerUpdated(address(0xA2), dealManagerAddr);
+        cyberCorp.setDealManager(address(0xA2));
+        assertEq(cyberCorp.dealManager(), address(0xA2));
+
+        vm.expectEmit(true, true, true, true);
+        emit CyberCorp.RoundManagerUpdated(address(0xA3), roundManagerAddr);
+        cyberCorp.setRoundManager(address(0xA3));
+        assertEq(cyberCorp.roundManager(), address(0xA3));
+        vm.stopPrank();
+    }
+
     function testUpdateOfficerUpdatesAuthRole() public {
         address oldOfficer = address(0xBEEF);
         address newOfficer = address(0xCAFE);
@@ -5369,6 +5413,7 @@ contract CyberCorpForkTest is Test {
             partyFields,
             globalValues,
             partyValues[1], // Principal's party values
+            principalAddr, // the delegate signs for the principal
             delegatePk // Delegate's private key
         );
         vm.stopPrank();

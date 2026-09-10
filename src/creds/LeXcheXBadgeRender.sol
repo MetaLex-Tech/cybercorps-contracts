@@ -24,6 +24,7 @@ pragma solidity 0.8.28;
 import "openzeppelin-contracts/utils/Strings.sol";
 import "openzeppelin-contracts/utils/Base64.sol";
 import "./storage/lexchexBadgeStorage.sol";
+import "../libs/JsonLib.sol";
 
 /// @title  LeXcheXBadgeRender - on-chain SVG/metadata rendering for LeXcheXBadge
 /// @author MetaLeX Labs, Inc.
@@ -63,7 +64,7 @@ library LeXcheXBadgeRender {
                                 ? string(
                                     abi.encodePacked(
                                         '{"trait_type": "Name", "value": "',
-                                        jsonEscape(cred.investorName),
+                                        JsonLib.jsonEscape(cred.investorName),
                                         '"},'
                                     )
                                 )
@@ -72,13 +73,13 @@ library LeXcheXBadgeRender {
                             investorTypeLabel(cred.investorType),
                             '"},',
                             '{"trait_type": "Jurisdiction", "value": "',
-                            jsonEscape(cred.investorJurisdiction),
+                            JsonLib.jsonEscape(cred.investorJurisdiction),
                             '"},',
                             bytes(cred.lookThroughJurisdiction).length > 0
                                 ? string(
                                     abi.encodePacked(
                                         '{"trait_type": "Regulatory Jurisdiction", "value": "',
-                                        jsonEscape(cred.lookThroughJurisdiction),
+                                        JsonLib.jsonEscape(cred.lookThroughJurisdiction),
                                         '"},'
                                     )
                                 )
@@ -187,28 +188,7 @@ library LeXcheXBadgeRender {
     }
 
     /// @dev Names and jurisdictions are typed in by an operator, so they are the parts of a credential that
-    /// can contain characters JSON reserves. Unescaped, a quote ends the string early and the rest reads as
-    /// further fields.
-    function jsonEscape(string memory value) internal pure returns (string memory) {
-        bytes memory b = bytes(value);
-        bytes memory out = new bytes(b.length * 2);
-        uint256 n;
-        for (uint256 i = 0; i < b.length; i++) {
-            bytes1 ch = b[i];
-            if (ch == '"' || ch == "\\") {
-                out[n++] = "\\";
-                out[n++] = ch;
-            } else if (uint8(ch) < 0x20) {
-                out[n++] = " "; // control characters are illegal raw in JSON
-            } else {
-                out[n++] = ch;
-            }
-        }
-        assembly { mstore(out, n) }
-        return string(out);
-    }
-
-    /// @dev The same value in the SVG, where the reserved characters are XML's instead.
+    /// can contain reserved characters. This escapes them for the SVG. JsonLib.jsonEscape does the JSON side.
     function xmlEscape(string memory value) internal pure returns (string memory) {
         bytes memory b = bytes(value);
         bytes memory out = new bytes(b.length * 6);

@@ -27,6 +27,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./SAFTEExtensionV2.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Series-wide SAFTE terms, encoded as the printer's seriesData.
 struct SAFTESeriesData {
@@ -55,8 +56,8 @@ contract SAFTEExtensionV3 is SAFTEExtensionV2 {
         if (data.length == 0) return "";
         SAFTESeriesData memory decoded = abi.decode(data, (SAFTESeriesData));
         return string.concat(
-            ', "SAFTESeriesDetails": {"seriesName": "', decoded.seriesName,
-            '", "customProvisions": "', decoded.customProvisions, '"}'
+            ', "SAFTESeriesDetails": {"seriesName": "', JsonLib.jsonEscape(decoded.seriesName),
+            '", "customProvisions": "', JsonLib.jsonEscape(decoded.customProvisions), '"}'
         );
     }
 }

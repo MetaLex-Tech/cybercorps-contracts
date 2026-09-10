@@ -876,6 +876,7 @@ contract CyberAgreementRegistryTest is Test {
                 testPartyFields,
                 testGlobalValues,
                 testPartyValues[0],
+                alice, // bob signs for alice
                 bobPrivateKey
             ),
             false,
@@ -1159,6 +1160,7 @@ contract CyberAgreementRegistryTest is Test {
                 testPartyFields,
                 testGlobalValues,
                 testPartyValues[0],
+                alice, // bob signs for alice
                 bobPrivateKey // delegate's own private key
             )
         );
@@ -1395,5 +1397,62 @@ contract CyberAgreementRegistryTest is Test {
         );
         assertEq(agreementId, victimId, "victim gets the intended contractId");
         assertTrue(registry.isFinalized(agreementId), "victim's agreement auto-finalizes");
+    }
+
+    /// @notice A delegate signature made for one party must not count as consent from another party
+    /// that shares the same delegate. The relayer picks the party values of an open agreement, so it
+    /// can copy one party's values into the other slot to make the signed payload match. A template
+    /// with no party fields makes the payloads match with no help from the relayer.
+    function test_RevertIf_delegateSignatureReplayedForAnotherParty() public {
+        uint256 salt = uint256(keccak256("test_RevertIf_delegateSignatureReplayedForAnotherParty"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = chad;
+
+        vm.prank(deployer);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            parties,
+            new string[][](0), // open agreement, so the relayer picks the party values
+            "", // secretHash
+            address(0), // no finalizer, so any relayer may submit
+            block.timestamp + 100
+        );
+
+        // Alice and Chad both use Bob as their signing wallet.
+        vm.prank(alice);
+        registry.setDelegation(bob, 0);
+        vm.prank(chad);
+        registry.setDelegation(bob, 0);
+
+        // Bob signs one time, for Alice.
+        bytes memory bobSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            testGlobalValues,
+            testPartyValues[0],
+            alice, // bob signs for alice only
+            bobPrivateKey
+        );
+
+        vm.prank(deployer); // relayer
+        registry.signContractFor(alice, agreementId, testPartyValues[0], bobSignature, false, "");
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed");
+
+        // The same signature must not sign for Chad.
+        vm.prank(deployer);
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        registry.signContractFor(chad, agreementId, testPartyValues[0], bobSignature, false, "");
+
+        assertFalse(registry.hasSigned(agreementId, chad), "chad must not be signed");
+        assertFalse(registry.isFinalized(agreementId), "agreement must not finalize without chad");
     }
 }

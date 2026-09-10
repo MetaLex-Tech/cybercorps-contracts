@@ -60,6 +60,7 @@ import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.s
 import "./interfaces/IRoundManagerFactory.sol";
 import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
+import {CorpFactoryMetadataLib} from "./libs/CorpFactoryMetadataLib.sol";
 
 interface IRoundManagerInit {
     function initialize(
@@ -80,6 +81,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error RoundManagerAlreadyExists();
+    error InvalidMetadataSignature();
+
+    /// @dev EIP-712 domain name for the deployment metadata signature. A signature made for
+    /// another factory does not verify here.
+    string constant METADATA_DOMAIN_NAME = "CyberCorpFactory";
 
     address public registryAddress;
     address public __cyberCertPrinterImplementation; // deprecated: kept to maintain slot consistency
@@ -458,6 +464,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 valuation,
         string[] memory roundPartyValues,
         bytes memory escrowedSignature,
+        bytes memory metadataSignature,
         RoundType roundType,
         address[] memory conditions,
         uint256 raiseCap,
@@ -480,6 +487,34 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         )
     {
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+
+        // The escrowed signature covers the round economics only. Make the officer authorize the
+        // deployment metadata too, so the caller cannot substitute it.
+        if (
+            !CorpFactoryMetadataLib.isValid(
+                METADATA_DOMAIN_NAME,
+                address(this),
+                CorpFactoryMetadataLib.RoundSupplementalData({
+                    corpSalt: corpSalt,
+                    companyPayable: _companyPayable,
+                    publicRound: publicRound,
+                    allowTimedOffers: allowTimedOffers,
+                    restrictEndTimeReduction: restrictEndTimeReduction,
+                    officer: _officer,
+                    companyName: companyName,
+                    companyType: companyType,
+                    companyJurisdiction: companyJurisdiction,
+                    companyContactDetails: companyContactDetails,
+                    defaultDisputeResolution: defaultDisputeResolution,
+                    extensionData: extensionData,
+                    roundPartyValues: roundPartyValues,
+                    legalDetails: legalDetails,
+                    certData: certData,
+                    conditionAddresses: conditions
+                }),
+                metadataSignature
+            )
+        ) revert InvalidMetadataSignature();
 
         (
             cyberCorpAddress,

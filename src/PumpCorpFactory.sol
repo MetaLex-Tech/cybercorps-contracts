@@ -45,7 +45,6 @@ import "./interfaces/IIssuanceManagerFactory.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ICyberCorp.sol";
@@ -59,6 +58,7 @@ import "./CyberCorpConstants.sol";
 import "./storage/LedgerEntryTokenStorage.sol";
 import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.sol";
 import {Round, RoundType, RoundLib} from "./libs/RoundLib.sol";
+import {CorpFactoryMetadataLib} from "./libs/CorpFactoryMetadataLib.sol";
 
 interface IRoundManagerInit {
     function initialize(
@@ -74,68 +74,6 @@ interface ICyberCorpLocal {
     function issuanceManager() external view returns (address);
 }
 
-library PumpCorpFactoryLib {
-    bytes32 constant FACTORY_DOMAIN_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-    );
-    bytes32 constant OFFICER_TYPEHASH = keccak256(
-        "CompanyOfficer(address eoa,string name,string contact,string title)"
-    );
-    bytes32 constant CERT_DATA_TYPEHASH = keccak256(
-        "CyberCertData(string name,string symbol,string uri,uint8 securityClass,uint8 securitySeries,address extension,bytes seriesData,string[] defaultLegend)"
-    );
-    bytes32 constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,bool publicRound,bool allowTimedOffers,bool restrictEndTimeReduction,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes[] extensionData,string[] roundPartyValues,string[] legalDetails,CyberCertData[] certData,address[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)CyberCertData(string name,string symbol,string uri,uint8 securityClass,uint8 securitySeries,address extension,bytes seriesData,string[] defaultLegend)"
-    );
-
-    /// @notice EIP-712 helper for encoding an array of addresses
-    /// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md#definition-of-encodedata
-    function hashAddresses(address[] memory addrs) internal pure returns (bytes32) {
-        bytes32[] memory padded = new bytes32[](addrs.length);
-        for (uint256 i = 0; i < addrs.length; i++) {
-            padded[i] = bytes32(uint256(uint160(addrs[i])));
-        }
-        return keccak256(abi.encodePacked(padded));
-    }
-
-    function hashStringArray(string[] memory data) internal pure returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](data.length);
-        for (uint256 i = 0; i < data.length; i++) {
-            hashes[i] = keccak256(bytes(data[i]));
-        }
-        return keccak256(abi.encodePacked(hashes));
-    }
-
-    function hashBytesArray(bytes[] memory data) internal pure returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](data.length);
-        for (uint256 i = 0; i < data.length; i++) {
-            hashes[i] = keccak256(data[i]);
-        }
-        return keccak256(abi.encodePacked(hashes));
-    }
-
-    function hashCertData(RM_CyberCertData memory cd) internal pure returns (bytes32) {
-        return keccak256(abi.encode(
-            CERT_DATA_TYPEHASH,
-            keccak256(bytes(cd.name)),
-            keccak256(bytes(cd.symbol)),
-            keccak256(bytes(cd.uri)),
-            cd.securityClass,
-            cd.securitySeries,
-            cd.extension,
-            keccak256(cd.seriesData),
-            hashStringArray(cd.defaultLegend)
-        ));
-    }
-
-    function hashCertDataArray(RM_CyberCertData[] memory data) internal pure returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](data.length);
-        for (uint256 i = 0; i < data.length; i++) {
-            hashes[i] = hashCertData(data[i]);
-        }
-        return keccak256(abi.encodePacked(hashes));
-    }
-}
 
 contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
     using Strings for string;
@@ -396,6 +334,10 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         );
     }
 
+    /// @dev EIP-712 domain name for the deployment metadata signature. Frozen: existing officer
+    /// signatures are made over this name.
+    string constant METADATA_DOMAIN_NAME = "PumpCorpFactory";
+
     function _verifySupplementalSignature(
         bytes32 corpSalt,
         address companyPayable,
@@ -415,41 +357,30 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address[] memory conditionAddresses,
         bytes memory signature
     ) internal view {
-        bytes32 domainSep = keccak256(abi.encode(
-            PumpCorpFactoryLib.FACTORY_DOMAIN_TYPEHASH,
-            keccak256(bytes("PumpCorpFactory")),
-            keccak256(bytes("1")),
-            block.chainid,
-            address(this)
-        ));
-        bytes32 officerHash = keccak256(abi.encode(
-            PumpCorpFactoryLib.OFFICER_TYPEHASH,
-            officer.eoa,
-            keccak256(bytes(officer.name)),
-            keccak256(bytes(officer.contact)),
-            keccak256(bytes(officer.title))
-        ));
-        bytes32 structHash = keccak256(abi.encode(
-            PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
-            corpSalt,
-            companyPayable,
-            publicRound,
-            allowTimedOffers,
-            restrictEndTimeReduction,
-            officerHash,
-            keccak256(bytes(companyName)),
-            keccak256(bytes(companyType)),
-            keccak256(bytes(companyJurisdiction)),
-            keccak256(bytes(companyContactDetails)),
-            keccak256(bytes(defaultDisputeResolution)),
-            PumpCorpFactoryLib.hashBytesArray(extensionData),
-            PumpCorpFactoryLib.hashStringArray(roundPartyValues),
-            PumpCorpFactoryLib.hashStringArray(legalDetails),
-            PumpCorpFactoryLib.hashCertDataArray(certData),
-            PumpCorpFactoryLib.hashAddresses(conditionAddresses)
-        ));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
-        if (ECDSA.recover(digest, signature) != officer.eoa) revert InvalidMetadataSignature();
+        address recovered = CorpFactoryMetadataLib.recoverSigner(
+            METADATA_DOMAIN_NAME,
+            address(this),
+            CorpFactoryMetadataLib.RoundSupplementalData({
+                corpSalt: corpSalt,
+                companyPayable: companyPayable,
+                publicRound: publicRound,
+                allowTimedOffers: allowTimedOffers,
+                restrictEndTimeReduction: restrictEndTimeReduction,
+                officer: officer,
+                companyName: companyName,
+                companyType: companyType,
+                companyJurisdiction: companyJurisdiction,
+                companyContactDetails: companyContactDetails,
+                defaultDisputeResolution: defaultDisputeResolution,
+                extensionData: extensionData,
+                roundPartyValues: roundPartyValues,
+                legalDetails: legalDetails,
+                certData: certData,
+                conditionAddresses: conditionAddresses
+            }),
+            signature
+        );
+        if (recovered != officer.eoa) revert InvalidMetadataSignature();
     }
 
     // TODO WIP: currently not in use. Will need metasig support

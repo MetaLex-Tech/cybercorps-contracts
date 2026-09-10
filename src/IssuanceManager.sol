@@ -102,6 +102,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details
     );
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
+    event UriBuilderUpdated(address indexed uriBuilder, address indexed oldUriBuilder);
     event CertPrinterBeaconImplementationUpgraded(address implementation);
     event ScripBeaconImplementationUpgraded(address implementation);
     event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
@@ -562,7 +563,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @dev Only callable by owner
     /// @param _uriBuilder New URI builder contract address
     function setUriBuilder(address _uriBuilder) external onlyOwner {
+        address oldUriBuilder = IssuanceManagerStorage.getUriBuilder();
         IssuanceManagerStorage.setUriBuilder(_uriBuilder);
+        emit UriBuilderUpdated(_uriBuilder, oldUriBuilder);
     }
 
     function setScripRatio(address certAddress, uint256 numerator, uint256 denominator) external onlyOwner {

@@ -45,6 +45,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 
 struct TokenWarrantDataV2 {
     ExercisePriceMethod exercisePriceMethod;  // perToken or perWarrant
@@ -108,7 +109,7 @@ contract TokenWarrantExtensionV2 is UUPSUpgradeable, ICertificateExtension, Borg
             '", "tokenCalculationMethod": "', conversionTypeToString(decoded.tokenCalculationMethod),
             '", "minCompanyReserve": "', uint256ToString(decoded.minCompanyReserve),
             '", "tokenPremiumMultiplier": "', uint256ToString(decoded.tokenPremiumMultiplier),
-            '", "customProvisions": "', decoded.customProvisions,
+            '", "customProvisions": "', JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         ));
         

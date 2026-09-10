@@ -1199,6 +1199,38 @@ contract DealManagerTest is Test {
         DealManagerFactory(dmFactory).setRefImplementation(newImplementation);
     }
 
+    function test_ComponentSettersEmitOldAndNewAddress() public {
+        address newDealRegistry = makeAddr("newDealRegistry");
+        address newCorp = makeAddr("newCorp");
+        address newIssuanceManager = makeAddr("newIssuanceManager");
+        address integrator = makeAddr("integrator");
+
+        vm.prank(owner);
+        dmFactory.setIntegrator(integrator, true, 0);
+
+        vm.startPrank(owner);
+
+        vm.expectEmit(true, true, true, true, address(dm));
+        emit DealManager.DealRegistrySet(newDealRegistry, address(registry), owner);
+        dm.setDealRegistry(newDealRegistry);
+
+        vm.expectEmit(true, true, true, true, address(dm));
+        emit DealManager.CorpSet(newCorp, address(corp), owner);
+        dm.setCorp(newCorp);
+
+        vm.expectEmit(true, true, true, true, address(dm));
+        emit DealManager.IssuanceManagerSet(newIssuanceManager, address(im), owner);
+        dm.setIssuanceManager(newIssuanceManager);
+        assertEq(address(dm.issuanceManager()), newIssuanceManager, "issuance manager updated");
+
+        vm.expectEmit(true, true, true, true, address(dm));
+        emit DealManager.DefaultIntegratorSet(integrator, address(0), owner);
+        dm.setDefaultIntegrator(integrator);
+        assertEq(dm.getDefaultIntegrator(), integrator, "default integrator updated");
+
+        vm.stopPrank();
+    }
+
     function test_RevertIf_UpgradeExistingDealManagerNotRefImplementation() public {
         BorgAuth corpAuth = new BorgAuth{salt: keccak256("testUpgradeExistingDealManager")}(companyOwner);
         address placeHolderAddr = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF;

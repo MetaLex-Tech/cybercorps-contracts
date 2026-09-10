@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {Vm} from "forge-std/Test.sol";
-import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
+import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";

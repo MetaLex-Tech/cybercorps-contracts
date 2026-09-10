@@ -134,6 +134,7 @@ contract RoundManager is
     event RoundEndTimeUpdated(bytes32 indexed roundId, uint256 oldEndTime, uint256 newEndTime);
     event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
     event EOIRecalled(bytes32 agreementId, address indexed investor, bytes32 indexed roundId);
+    event LexChexUpdated(address indexed lexChex, address indexed oldLexChex);
 
     /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers
     modifier onlyOwnerOrSelf() {
@@ -184,7 +185,9 @@ contract RoundManager is
     /// @notice Sets the LeXcheX AUTH address
     function setLexChex(address _lexchex) external onlyOwner {
         if (_lexchex == address(0)) revert ZeroAddress();
+        address oldLexChex = RoundManagerStorage.getLexChex();
         RoundManagerStorage.setLexChex(_lexchex);
+        emit LexChexUpdated(_lexchex, oldLexChex);
     }
 
     /// @notice Gets the LeXcheX AUTH address

@@ -44,6 +44,7 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICyberCorpExtension.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 
 struct FeeDetail {
     string feeName;
@@ -114,7 +115,7 @@ contract CyberCorpComplianceExtension is
             abi.encodePacked(
                 ', "CyberCorpCompliance": {',
                 '"erisaAllowed": "',
-                boolToString(decoded.erisaAllowed),
+                JsonLib.boolToString(decoded.erisaAllowed),
                 '", "maxOwnershipBps": "',
                 uint256ToString(decoded.maxOwnershipBps),
                 '", "minNonZeroOwnershipBps": "',
@@ -122,9 +123,9 @@ contract CyberCorpComplianceExtension is
                 '", "maxHolderCount": "',
                 uint256ToString(decoded.maxHolderCount),
                 '", "cfiusApprovalRequired": "',
-                boolToString(decoded.cfiusApprovalRequired),
+                JsonLib.boolToString(decoded.cfiusApprovalRequired),
                 '", "holderRestrictions": ',
-                stringArrayToJson(decoded.holderRestrictions),
+                JsonLib.stringArrayToJson(decoded.holderRestrictions),
                 ', "feeDetails": ',
                 feeDetailsToJson(decoded.feeDetails),
                 "}"
@@ -145,7 +146,7 @@ contract CyberCorpComplianceExtension is
             json = string.concat(
                 json,
                 '{"feeName": "',
-                details[i].feeName,
+                JsonLib.jsonEscape(details[i].feeName),
                 '", "feeBps": "',
                 uint256ToString(details[i].feeBps),
                 '", "flatFee": "',
@@ -153,33 +154,14 @@ contract CyberCorpComplianceExtension is
                 '", "recipient": "',
                 addressToString(details[i].recipient),
                 '", "feeToken": "',
-                details[i].feeToken,
+                JsonLib.jsonEscape(details[i].feeToken),
                 '", "notes": "',
-                details[i].notes,
+                JsonLib.jsonEscape(details[i].notes),
                 '"}'
             );
         }
 
         return string.concat(json, "]");
-    }
-
-    function stringArrayToJson(
-        string[] memory values
-    ) internal pure returns (string memory) {
-        string memory json = "[";
-
-        for (uint256 i = 0; i < values.length; i++) {
-            if (i > 0) {
-                json = string.concat(json, ", ");
-            }
-            json = string.concat(json, '"', values[i], '"');
-        }
-
-        return string.concat(json, "]");
-    }
-
-    function boolToString(bool value) internal pure returns (string memory) {
-        return value ? "true" : "false";
     }
 
     function uint256ToString(uint256 value) internal pure returns (string memory) {

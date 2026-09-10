@@ -5,7 +5,7 @@ import {Test, console2} from "forge-std/Test.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DeployPumpCorpFactoryScript} from "../script/deploy-pump-factory.s.sol";
-import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
+import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
@@ -30,6 +30,7 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {RoundManagerStorage, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 
 /// @dev Always-failing condition: any allocation attempt on its escrow is blocked.
 contract AlwaysFalseCondition {
@@ -125,6 +126,11 @@ contract PumpCorpFactoryForkTest is Test {
         (officer, officerPk) = makeAddrAndKey("officer");
         (attacker, attackerPk) = makeAddrAndKey("attacker");
         (investor, investorPk) = makeAddrAndKey("investor");
+
+        // The deployed registry predates the signer field in the signed payload. Upgrade it here,
+        // outside any prank, so the signatures these tests build verify against the implementation
+        // under test.
+        CyberAgreementUtils.upgradeRegistry(vm, REGISTRY, metalexSafe);
 
         // Model the production forward-path rollout: the shared factory must
         // point at CyberCorp v5 before a P1-aware top-level factory is used.
@@ -257,21 +263,21 @@ contract PumpCorpFactoryForkTest is Test {
     ) internal view returns (bytes memory) {
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
         bytes32 domainSep = keccak256(abi.encode(
-            PumpCorpFactoryLib.FACTORY_DOMAIN_TYPEHASH,
+            CorpFactoryMetadataLib.FACTORY_DOMAIN_TYPEHASH,
             keccak256(bytes("PumpCorpFactory")),
             keccak256(bytes("1")),
             block.chainid,
             address(pumpFactory)
         ));
         bytes32 officerHash = keccak256(abi.encode(
-            PumpCorpFactoryLib.OFFICER_TYPEHASH,
+            CorpFactoryMetadataLib.OFFICER_TYPEHASH,
             off.eoa,
             keccak256(bytes(off.name)),
             keccak256(bytes(off.contact)),
             keccak256(bytes(off.title))
         ));
         bytes32 structHash = keccak256(abi.encode(
-            PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
+            CorpFactoryMetadataLib.ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
             publicRound,
@@ -283,11 +289,11 @@ contract PumpCorpFactoryForkTest is Test {
             keccak256(bytes(companyJurisdiction_)),
             keccak256(bytes(companyContactDetails_)),
             keccak256(bytes(defaultDisputeResolution_)),
-            PumpCorpFactoryLib.hashBytesArray(extensionData_),
-            PumpCorpFactoryLib.hashStringArray(roundPartyValues_),
-            PumpCorpFactoryLib.hashStringArray(legal),
-            PumpCorpFactoryLib.hashCertDataArray(certs),
-            PumpCorpFactoryLib.hashAddresses(conditions)
+            CorpFactoryMetadataLib.hashBytesArray(extensionData_),
+            CorpFactoryMetadataLib.hashStringArray(roundPartyValues_),
+            CorpFactoryMetadataLib.hashStringArray(legal),
+            CorpFactoryMetadataLib.hashCertDataArray(certs),
+            CorpFactoryMetadataLib.hashAddresses(conditions)
         ));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
@@ -371,10 +377,12 @@ contract PumpCorpFactoryForkTest is Test {
     }
 
     /// Compute the investor's EIP-712 EOI signature for TEMPLATE_ID.
+    /// @param finalizer_ The RoundManager. The registry binds the finalizer into the agreement id.
     function _eoiSig(
         uint256 eoiSalt_,
         string[] memory globalValues_,
-        string[] memory investorPv_
+        string[] memory investorPv_,
+        address finalizer_
     ) internal view returns (bytes memory) {
         CyberAgreementRegistry reg = CyberAgreementRegistry(REGISTRY);
         (
@@ -387,7 +395,7 @@ contract PumpCorpFactoryForkTest is Test {
         parties[0] = officer;
         parties[1] = investor;
         bytes32 contractId = keccak256(
-            abi.encode(TEMPLATE_ID, eoiSalt_, globalValues_, parties)
+            abi.encode(TEMPLATE_ID, eoiSalt_, globalValues_, parties, bytes32(0), finalizer_)
         );
         return CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -533,7 +541,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(eoiSalt, globalValues, investorPv),
+            _eoiSig(eoiSalt, globalValues, investorPv, rm),
             eoiSalt, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -593,7 +601,7 @@ contract PumpCorpFactoryForkTest is Test {
         RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(eoiSalt, globalValues, investorPv),
+            _eoiSig(eoiSalt, globalValues, investorPv, rm),
             eoiSalt, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -614,7 +622,7 @@ contract PumpCorpFactoryForkTest is Test {
         zkpassportCondition.setApproved(false); // simulate failing zkpassport condition
 
         // Pre-compute sig before vm.expectRevert — _eoiSig makes an external call
-        bytes memory eoiSig = _eoiSig(1, globalValues, investorPv);
+        bytes memory eoiSig = _eoiSig(1, globalValues, investorPv, rm);
 
         vm.startPrank(investor);
         payToken.approve(rm, investAmount);
@@ -669,7 +677,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(eoiSalt, globalValues, investorPv),
+            _eoiSig(eoiSalt, globalValues, investorPv, rm),
             eoiSalt, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -725,7 +733,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(eoiSalt, globalValues, investorPv),
+            _eoiSig(eoiSalt, globalValues, investorPv, rm),
             eoiSalt, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -1978,7 +1986,7 @@ contract PumpCorpFactoryForkTest is Test {
             lexchexDetails: _emptyLex()
         });
 
-        bytes memory eoiSig = _eoiSig(1, globalValues, investorPv);
+        bytes memory eoiSig = _eoiSig(1, globalValues, investorPv, rm);
         vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         RoundManager(rm).submitEOI(
             roundId, eoi,
@@ -2020,7 +2028,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(1, globalValues, investorPv),
+            _eoiSig(1, globalValues, investorPv, rm),
             1, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -2062,7 +2070,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(1, globalValues, investorPv),
+            _eoiSig(1, globalValues, investorPv, rm),
             1, new address[](0), bytes32(0)
         );
         vm.stopPrank();
@@ -2106,7 +2114,7 @@ contract PumpCorpFactoryForkTest is Test {
         (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
-            _eoiSig(1, globalValues, investorPv),
+            _eoiSig(1, globalValues, investorPv, rm),
             1, new address[](0), bytes32(0)
         );
         vm.stopPrank();

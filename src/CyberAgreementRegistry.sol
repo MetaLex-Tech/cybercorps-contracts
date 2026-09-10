@@ -45,6 +45,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./libs/JsonLib.sol";
 
 contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     using ECDSA for bytes32;
@@ -52,9 +53,16 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     string public constant name = "CyberAgreementRegistry";
     string public version;
     bytes32 public DOMAIN_SEPARATOR;
-    // Type hash for AgreementData
-    bytes32 public SIGNATUREDATA_TYPEHASH;
+    // The live proxy wrote the signature type hash here. Keep the slot so the layout does not
+    // move. The type hash is a constant now.
+    bytes32 private __deprecatedSignatureTypehash;
     bytes32 public VOIDSIGNATUREDATA_TYPEHASH;
+
+    // Type hash for AgreementData. It binds the signer, so a delegate signature counts for one
+    // party only.
+    bytes32 public constant SIGNATUREDATA_TYPEHASH = keccak256(
+        "SignatureData(bytes32 contractId,address signer,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
+    );
 
     struct Template {
         string legalContractUri; // Off-chain legal contract URI
@@ -81,6 +89,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     // This data is what is signed by each party
     struct SignatureData {
         bytes32 contractId;
+        // The party the signature consents for. A delegate can sign for more than one party, so
+        // the payload must say which one, or the same signature counts for all of them.
+        address signer;
         string legalContractUri;
         string[] globalFields;
         string[] partyFields;
@@ -177,6 +188,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error MismatchedPartyValuesLength();
     error FinalizerNotDefined();
     error LegalContractUriEmpty();
+    error DelegateZeroAddress();
+    error DelegateIsSelf();
+    error ExpiryNotInFuture();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -198,10 +212,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 block.chainid,
                 address(this)
             )
-        );
-
-        SIGNATUREDATA_TYPEHASH = keccak256(
-            "SignatureData(bytes32 contractId,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
         );
 
         VOIDSIGNATUREDATA_TYPEHASH = keccak256(
@@ -468,9 +478,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     }
 
     function setDelegation(address delegate, uint256 expiry) external {
-        if (delegate == address(0)) revert("Cannot delegate to zero address");
-        if (delegate == msg.sender) revert("Cannot delegate to self");
-        if (expiry != 0 && expiry <= block.timestamp) revert("Expiry must be in the future");
+        if (delegate == address(0)) revert DelegateZeroAddress();
+        if (delegate == msg.sender) revert DelegateIsSelf();
+        if (expiry != 0 && expiry <= block.timestamp) revert ExpiryNotInFuture();
         
         delegations[msg.sender] = Delegation({delegate: delegate, expiry: expiry});
         emit DelegationSet(msg.sender, delegate, expiry);
@@ -569,6 +579,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 signer,
                 SignatureData({
                     contractId: contractId,
+                    signer: signer,
                     legalContractUri: template.legalContractUri,
                     globalFields: template.globalFields,
                     partyFields: template.partyFields,
@@ -917,9 +928,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 '{"templateId": "',
                 _bytes32ToString(agreementData.templateId), // Corrected to use agreementData.templateId
                 '", "title": "',
-                template.title,
+                JsonLib.jsonEscape(template.title),
                 '", "legalContractUri": "',
-                template.legalContractUri,
+                JsonLib.jsonEscape(template.legalContractUri),
                 '", "ContractFields": {'
             )
         );
@@ -930,9 +941,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 json = string.concat(
                     json,
                     '"',
-                    template.globalFields[i],
+                    JsonLib.jsonEscape(template.globalFields[i]),
                     '": "',
-                    agreementData.globalValues[i],
+                    JsonLib.jsonEscape(agreementData.globalValues[i]),
                     '"'
                 );
                 if (i + 1 < template.globalFields.length) {
@@ -960,11 +971,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                         json = string.concat(
                             json,
                             '"',
-                            template.partyFields[j],
+                            JsonLib.jsonEscape(template.partyFields[j]),
                             '": "'
                         );
                         if (values.length > j) {
-                            json = string.concat(json, values[j]);
+                            json = string.concat(json, JsonLib.jsonEscape(values[j]));
                         }
                         json = string.concat(json, '"');
                         if (j + 1 < template.partyFields.length) {
@@ -1106,6 +1117,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                         abi.encode(
                             SIGNATUREDATA_TYPEHASH,
                             data.contractId,
+                            data.signer,
                             keccak256(bytes(data.legalContractUri)),
                             _hashStringArray(data.globalFields),
                             _hashStringArray(data.partyFields),
