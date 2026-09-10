@@ -277,17 +277,27 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     ///      including one squatted at exactly this content address with DIFFERENT content — and
     ///      any entry point that skipped this check would let its caller sign an attacker's
     ///      legal template.
+    /// @dev One shared encoder for the content address and the adoption check keeps the two
+    ///      derivations byte-identical and the contract under the EIP-170 size limit.
+    function _templateContentHash(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) private pure returns (bytes32) {
+        return keccak256(abi.encode(title, legalContractUri, globalFields, partyFields));
+    }
+
     function _adoptOrCreateContentAddressedTemplate(
         string memory title,
         string memory legalContractUri,
         string[] memory globalFields,
         string[] memory partyFields
     ) internal returns (bytes32 templateId) {
-        templateId = keccak256(
-            abi.encode(title, legalContractUri, globalFields, partyFields)
-        );
+        templateId = _templateContentHash(title, legalContractUri, globalFields, partyFields);
 
-        if (bytes(templates[templateId].legalContractUri).length == 0) {
+        Template storage existing = templates[templateId];
+        if (bytes(existing.legalContractUri).length == 0) {
             _createTemplate(
                 templateId,
                 title,
@@ -295,17 +305,12 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 globalFields,
                 partyFields
             );
-        } else {
-            Template storage existing = templates[templateId];
-            if (
-                keccak256(
-                    abi.encode(
-                        existing.title, existing.legalContractUri, existing.globalFields, existing.partyFields
-                    )
-                ) != templateId
-            ) {
-                revert TemplateContentMismatch();
-            }
+        } else if (
+            _templateContentHash(
+                existing.title, existing.legalContractUri, existing.globalFields, existing.partyFields
+            ) != templateId
+        ) {
+            revert TemplateContentMismatch();
         }
     }
 
@@ -919,9 +924,196 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     function getContractJson(
         bytes32 contractId
     ) external view returns (string memory) {
-        AgreementData storage agreementData = agreements[contractId];
-        Template storage template = templates[agreementData.templateId];
+        // Rendering lives in the linked CyberAgreementRenderLib: the escaping machinery it
+        // inlines pushed this contract past the EIP-170 runtime limit at the v5 develop merge.
+        return CyberAgreementRenderLib.renderContractJson(
+            agreements[contractId], templates[agreements[contractId].templateId]
+        );
+    }
 
+    function _createTemplate(
+        bytes32 templateId,
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) internal {
+        if (bytes(templates[templateId].legalContractUri).length > 0) {
+            revert TemplateAlreadyExists();
+        }
+
+        if (bytes(title).length == 0) {
+            revert TitleEmpty();
+        }
+        if (bytes(legalContractUri).length == 0) {
+            revert LegalContractUriEmpty();
+        }
+
+        templates[templateId] = Template({
+            legalContractUri: legalContractUri,
+            title: title,
+            globalFields: globalFields,
+            partyFields: partyFields
+        });
+
+        emit TemplateCreated(
+            templateId,
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields
+        );
+    }
+
+    function _verifySignature(
+        address signer,
+        SignatureData memory data,
+        bytes memory signature
+    ) internal view returns (bool) {
+        // Hash the data (AgreementData) according to EIP-712
+        bytes32 digest = _hashTypedDataV4(data);
+
+        // Recover the signer address
+        address recoveredSigner = digest.recover(signature);
+        
+        // Check direct signature
+        if (recoveredSigner == signer) {
+            return true;
+        }
+        
+        // Check delegation signature
+        Delegation storage delegation = delegations[signer];
+        if (delegation.delegate == recoveredSigner && 
+            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    // Helper function to hash the typed data (SignatureData) according to EIP-712
+    function _hashTypedDataV4(
+        SignatureData memory data
+    ) internal view returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    "\x19\x01",
+                    DOMAIN_SEPARATOR,
+                    keccak256(
+                        abi.encode(
+                            SIGNATUREDATA_TYPEHASH,
+                            data.contractId,
+                            data.signer,
+                            keccak256(bytes(data.legalContractUri)),
+                            _hashStringArray(data.globalFields),
+                            _hashStringArray(data.partyFields),
+                            _hashStringArray(data.globalValues),
+                            _hashStringArray(data.partyValues)
+                        )
+                    )
+                )
+            );
+    }
+
+    // Helper function to hash string arrays
+    function _hashStringArray(
+        string[] memory array
+    ) internal pure returns (bytes32) {
+        bytes32[] memory hashes = new bytes32[](array.length);
+        for (uint256 i = 0; i < array.length; i++) {
+            hashes[i] = keccak256(bytes(array[i]));
+        }
+        return keccak256(abi.encodePacked(hashes));
+    }
+
+// Helper function to convert bytes32 to string
+function _bytes32ToString(bytes32 _bytes32) public pure returns (string memory) {
+    bytes memory bytesArray = new bytes(66); // 0x prefix + 64 hex chars
+    bytesArray[0] = "0";
+    bytesArray[1] = "x";
+
+    for (uint256 i = 0; i < 32; i++) {
+        uint8 byteValue = uint8(_bytes32[i]);
+        // High nibble (first hex char)
+        uint8 highNibble = (byteValue >> 4) & 0x0F;
+        bytesArray[2 + i * 2] = bytes1(highNibble < 10 ? 48 + highNibble : 87 + highNibble);
+        // Low nibble (second hex char)
+        uint8 lowNibble = byteValue & 0x0F;
+        bytesArray[3 + i * 2] = bytes1(lowNibble < 10 ? 48 + lowNibble : 87 + lowNibble);
+    }
+    return string(bytesArray);
+}
+
+
+    function isFinalized(bytes32 contractId) external view returns (bool) {
+        return agreements[contractId].finalized;
+    }
+
+    function isVoided(bytes32 contractId) public view returns (bool) {
+        return agreements[contractId].voided;
+    }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
+
+    function _verifyVoidSignature(
+        address signer,
+        VoidSignatureData memory data,
+        bytes memory signature
+    ) internal view returns (bool) {
+        // Hash the data (VoidSignatureData) according to EIP-712
+        bytes32 digest = _hashVoidTypedDataV4(data);
+
+        // Recover the signer address
+        address recoveredSigner = digest.recover(signature);
+        
+        // Check direct signature
+        if (recoveredSigner == signer) {
+            return true;
+        }
+        
+        // Check delegation signature
+        Delegation storage delegation = delegations[signer];
+        if (delegation.delegate == recoveredSigner && 
+            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    // Helper function to hash the typed data (VoidSignatureData) according to EIP-712
+    function _hashVoidTypedDataV4(
+        VoidSignatureData memory data
+    ) internal view returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    "\x19\x01",
+                    DOMAIN_SEPARATOR,
+                    keccak256(
+                        abi.encode(
+                            VOIDSIGNATUREDATA_TYPEHASH,
+                            data.contractId,
+                            data.party
+                        )
+                    )
+                )
+            );
+    }
+}
+
+/// @notice External linked library carrying CyberAgreementRegistry's JSON rendering.
+/// @dev Split out for EIP-170 headroom: JsonLib's escaping machinery is inlined wherever used,
+/// and keeping it inside the registry left no room after the v5 audit additions. Delegatecalled
+/// with storage references, so behavior is unchanged.
+library CyberAgreementRenderLib {
+    function renderContractJson(
+        CyberAgreementRegistry.AgreementData storage agreementData,
+        CyberAgreementRegistry.Template storage template
+    ) external view returns (string memory) {
         // Start with basic fields
         string memory json = string(
             abi.encodePacked(
@@ -1043,121 +1235,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         json = string.concat(json, "}");
         return json;
     }
-
-    function _createTemplate(
-        bytes32 templateId,
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields
-    ) internal {
-        if (bytes(templates[templateId].legalContractUri).length > 0) {
-            revert TemplateAlreadyExists();
-        }
-
-        if (bytes(title).length == 0) {
-            revert TitleEmpty();
-        }
-        if (bytes(legalContractUri).length == 0) {
-            revert LegalContractUriEmpty();
-        }
-
-        templates[templateId] = Template({
-            legalContractUri: legalContractUri,
-            title: title,
-            globalFields: globalFields,
-            partyFields: partyFields
-        });
-
-        emit TemplateCreated(
-            templateId,
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        );
-    }
-
-    function _verifySignature(
-        address signer,
-        SignatureData memory data,
-        bytes memory signature
-    ) internal view returns (bool) {
-        // Hash the data (AgreementData) according to EIP-712
-        bytes32 digest = _hashTypedDataV4(data);
-
-        // Recover the signer address
-        address recoveredSigner = digest.recover(signature);
-        
-        // Check direct signature
-        if (recoveredSigner == signer) {
-            return true;
-        }
-        
-        // Check delegation signature
-        Delegation storage delegation = delegations[signer];
-        if (delegation.delegate == recoveredSigner && 
-            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    // Helper function to hash the typed data (SignatureData) according to EIP-712
-    function _hashTypedDataV4(
-        SignatureData memory data
-    ) internal view returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(
-                    "\x19\x01",
-                    DOMAIN_SEPARATOR,
-                    keccak256(
-                        abi.encode(
-                            SIGNATUREDATA_TYPEHASH,
-                            data.contractId,
-                            data.signer,
-                            keccak256(bytes(data.legalContractUri)),
-                            _hashStringArray(data.globalFields),
-                            _hashStringArray(data.partyFields),
-                            _hashStringArray(data.globalValues),
-                            _hashStringArray(data.partyValues)
-                        )
-                    )
-                )
-            );
-    }
-
-    // Helper function to hash string arrays
-    function _hashStringArray(
-        string[] memory array
-    ) internal pure returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](array.length);
-        for (uint256 i = 0; i < array.length; i++) {
-            hashes[i] = keccak256(bytes(array[i]));
-        }
-        return keccak256(abi.encodePacked(hashes));
-    }
-
-// Helper function to convert bytes32 to string
-function _bytes32ToString(bytes32 _bytes32) public pure returns (string memory) {
-    bytes memory bytesArray = new bytes(66); // 0x prefix + 64 hex chars
-    bytesArray[0] = "0";
-    bytesArray[1] = "x";
-
-    for (uint256 i = 0; i < 32; i++) {
-        uint8 byteValue = uint8(_bytes32[i]);
-        // High nibble (first hex char)
-        uint8 highNibble = (byteValue >> 4) & 0x0F;
-        bytesArray[2 + i * 2] = bytes1(highNibble < 10 ? 48 + highNibble : 87 + highNibble);
-        // Low nibble (second hex char)
-        uint8 lowNibble = byteValue & 0x0F;
-        bytesArray[3 + i * 2] = bytes1(lowNibble < 10 ? 48 + lowNibble : 87 + lowNibble);
-    }
-    return string(bytesArray);
-}
-
     // Helper function to convert address to string
     function _addressToString(
         address _addr
@@ -1198,61 +1275,19 @@ function _bytes32ToString(bytes32 _bytes32) public pure returns (string memory) 
         return string(bstr);
     }
 
-    function isFinalized(bytes32 contractId) external view returns (bool) {
-        return agreements[contractId].finalized;
-    }
-
-    function isVoided(bytes32 contractId) public view returns (bool) {
-        return agreements[contractId].voided;
-    }
-
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal virtual override onlyOwner {}
-
-    function _verifyVoidSignature(
-        address signer,
-        VoidSignatureData memory data,
-        bytes memory signature
-    ) internal view returns (bool) {
-        // Hash the data (VoidSignatureData) according to EIP-712
-        bytes32 digest = _hashVoidTypedDataV4(data);
-
-        // Recover the signer address
-        address recoveredSigner = digest.recover(signature);
-        
-        // Check direct signature
-        if (recoveredSigner == signer) {
-            return true;
+    // Library-internal copy: the contract keeps its public _bytes32ToString for ABI
+    // compatibility, and a library cannot call a contract member by bare name.
+    function _bytes32ToString(bytes32 _bytes32) internal pure returns (string memory) {
+        bytes memory bytesArray = new bytes(66);
+        bytesArray[0] = "0";
+        bytesArray[1] = "x";
+        for (uint256 i = 0; i < 32; i++) {
+            uint8 byteValue = uint8(_bytes32[i]);
+            uint8 highNibble = (byteValue >> 4) & 0x0F;
+            bytesArray[2 + i * 2] = bytes1(highNibble < 10 ? 48 + highNibble : 87 + highNibble);
+            uint8 lowNibble = byteValue & 0x0F;
+            bytesArray[3 + i * 2] = bytes1(lowNibble < 10 ? 48 + lowNibble : 87 + lowNibble);
         }
-        
-        // Check delegation signature
-        Delegation storage delegation = delegations[signer];
-        if (delegation.delegate == recoveredSigner && 
-            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    // Helper function to hash the typed data (VoidSignatureData) according to EIP-712
-    function _hashVoidTypedDataV4(
-        VoidSignatureData memory data
-    ) internal view returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(
-                    "\x19\x01",
-                    DOMAIN_SEPARATOR,
-                    keccak256(
-                        abi.encode(
-                            VOIDSIGNATUREDATA_TYPEHASH,
-                            data.contractId,
-                            data.party
-                        )
-                    )
-                )
-            );
+        return string(bytesArray);
     }
 }
