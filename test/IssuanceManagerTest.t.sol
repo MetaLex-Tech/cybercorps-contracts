@@ -331,6 +331,21 @@ contract IssuanceManagerTest is Test {
         );
     }
 
+    function test_setUriBuilder_EmitsOldAndNewAddress() public {
+        address firstBuilder = address(new MockUriBuilderForIM());
+        address secondBuilder = address(new MockUriBuilderForIM());
+
+        vm.startPrank(owner);
+        issuanceManager.setUriBuilder(firstBuilder);
+
+        vm.expectEmit(true, true, false, true, address(issuanceManager));
+        emit IssuanceManager.UriBuilderUpdated(secondBuilder, firstBuilder);
+        issuanceManager.setUriBuilder(secondBuilder);
+        vm.stopPrank();
+
+        assertEq(issuanceManager.uriBuilder(), secondBuilder, "uri builder updated");
+    }
+
     function _deployPrinter(
         string memory name,
         string memory symbol

@@ -90,6 +90,10 @@ contract DealManager is
     error NotRefImplementation();
     event MinTradeThresholdSet(uint256 minUnits, uint256 minConsideration, address setter);
     event SettlementWindowSet(uint256 window, address setter);
+    event DealRegistrySet(address indexed dealRegistry, address indexed oldDealRegistry, address setter);
+    event CorpSet(address indexed corp, address indexed oldCorp, address setter);
+    event IssuanceManagerSet(address indexed issuanceManager, address indexed oldIssuanceManager, address setter);
+    event DefaultIntegratorSet(address indexed integrator, address indexed oldIntegrator, address setter);
 
     /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
     mapping(bytes32 => string[]) public counterPartyValues;
@@ -341,21 +345,27 @@ contract DealManager is
     /// @dev Can only be called by owner
     /// @param _dealRegistry New deal registry address
     function setDealRegistry(address _dealRegistry) public onlyOwner {
+        address oldDealRegistry = LexScrowStorage.getDealRegistry();
         LexScrowStorage.setDealRegistry(_dealRegistry);
+        emit DealRegistrySet(_dealRegistry, oldDealRegistry, msg.sender);
     }
 
     /// @notice Sets the corporation address
     /// @dev Can only be called by owner
     /// @param _corp New corporation address
     function setCorp(address _corp) public onlyOwner {
+        address oldCorp = LexScrowStorage.getCorp();
         LexScrowStorage.setCorp(_corp);
+        emit CorpSet(_corp, oldCorp, msg.sender);
     }
 
     /// @notice Sets the issuance manager address
     /// @dev Can only be called by owner
     /// @param _issuanceManager New issuance manager address
     function setIssuanceManager(address _issuanceManager) public onlyOwner {
+        address oldIssuanceManager = address(DealManagerStorage.getIssuanceManager());
         DealManagerStorage.setIssuanceManager(_issuanceManager);
+        emit IssuanceManagerSet(_issuanceManager, oldIssuanceManager, msg.sender);
     }
 
     /// @notice Gets the current issuance manager
@@ -512,7 +522,10 @@ contract DealManager is
             if (!IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).isIntegratorWhitelisted(integrator))
                 revert IntegratorNotWhitelisted();
         }
-        SecondaryTradeStorage.secondaryTradeStorage().defaultIntegrator = integrator;
+        SecondaryTradeStorage.SecondaryTradeData storage ds = SecondaryTradeStorage.secondaryTradeStorage();
+        address oldIntegrator = ds.defaultIntegrator;
+        ds.defaultIntegrator = integrator;
+        emit DefaultIntegratorSet(integrator, oldIntegrator, msg.sender);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

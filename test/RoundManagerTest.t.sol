@@ -917,6 +917,20 @@ contract RoundManagerTest is Test {
         paymentToken.approve(address(roundManager), type(uint256).max);
     }
 
+    function test_setLexChex_EmitsOldAndNewAddress() public {
+        RoundManager rm = RoundManager(payable(roundManager));
+        address oldLexChex = rm.getLexChex();
+        address newLexChex = makeAddr("newLexChex");
+
+        vm.startPrank(corpOwner);
+        vm.expectEmit(true, true, false, true, roundManager);
+        emit RoundManager.LexChexUpdated(newLexChex, oldLexChex);
+        rm.setLexChex(newLexChex);
+        vm.stopPrank();
+
+        assertEq(rm.getLexChex(), newLexChex, "lexChex updated");
+    }
+
     function test_RevertIf_CreateRound_InvalidSignature() public {
         CyberCertData[] memory certData = new CyberCertData[](1);
         string[] memory defaultLegend = new string[](1);

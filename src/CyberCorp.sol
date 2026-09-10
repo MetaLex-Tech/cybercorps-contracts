@@ -93,6 +93,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     event OfficerRemoved(address indexed officer, uint256 index);
     event OfficerUpdated(address indexed officer, uint256 index);
     event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
+    event IssuanceManagerUpdated(address indexed issuanceManager, address indexed oldIssuanceManager);
+    event DealManagerUpdated(address indexed dealManager, address indexed oldDealManager);
+    event RoundManagerUpdated(address indexed roundManager, address indexed oldRoundManager);
     event EscrowedOfficerSignatureAdded(uint256 indexed index, address indexed officer);
     event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
     event CyberCORPExtensionSet(address indexed extension, bytes32 indexed extensionType);
@@ -176,21 +179,27 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @dev Only callable by owner
     /// @param _issuanceManager New issuance manager contract address
     function setIssuanceManager(address _issuanceManager) external onlyOwner() {
+        address oldIssuanceManager = issuanceManager;
         issuanceManager = _issuanceManager;
+        emit IssuanceManagerUpdated(issuanceManager, oldIssuanceManager);
     }
 
     /// @notice Updates the deal manager address
     /// @dev Only callable by owner
     /// @param _dealManager New deal manager contract address
     function setDealManager(address _dealManager) external onlyOwner() {
+        address oldDealManager = dealManager;
         dealManager = _dealManager;
+        emit DealManagerUpdated(dealManager, oldDealManager);
     }
 
     /// @notice Updates the round manager address
     /// @dev Only callable by owner
     /// @param _roundManager New round manager contract address
     function setRoundManager(address _roundManager) external onlyOwner() {
+        address oldRoundManager = roundManager;
         roundManager = _roundManager;
+        emit RoundManagerUpdated(roundManager, oldRoundManager);
     }
 
     /// @notice Checks if an address belongs to a company officer
