@@ -163,7 +163,34 @@ library DealManagerStorage {
         bytes32 secretHash,
         uint256 expiry
     ) public returns (bytes32 agreementId, uint256[] memory certIds) {
-        agreementId = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).createContract(_templateId, _salt, _globalValues, _parties, _partyValues, secretHash, address(this), expiry);
+        return proposeDealWithAgreementUri(
+            _certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt,
+            _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry, ""
+        );
+    }
+
+    /// @dev Empty URI is reserved for the legacy wrapper. The new external entrypoints reject it.
+    function proposeDealWithAgreementUri(
+        address[] memory _certPrinterAddress,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
+        uint256 _salt,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        CertificateDetails[] memory _certDetails,
+        string[][] memory _partyValues,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        string memory agreementUri
+    ) public returns (bytes32 agreementId, uint256[] memory certIds) {
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry());
+        if (bytes(agreementUri).length == 0) {
+            agreementId = registry.createContract(_templateId, _salt, _globalValues, _parties, _partyValues, secretHash, address(this), expiry);
+        } else {
+            agreementId = registry.createContractWithAgreementUri(_templateId, _salt, _globalValues, _parties, _partyValues, secretHash, address(this), expiry, agreementUri);
+        }
 
         Token[] memory corpAssets = new Token[](_certDetails.length);
         certIds = new uint256[](_certDetails.length);

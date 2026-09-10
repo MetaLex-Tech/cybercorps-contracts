@@ -112,8 +112,15 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     mapping(address => Delegation) public delegations;
 
-    // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40)
-    uint256[40] private __gap;
+    // Set only at creation for opt-in purchase agreements. Legacy agreements use their template URI.
+    mapping(bytes32 => string) private agreementLegalContractUris;
+
+    // Consume one reserved slot without moving any existing state.
+    uint256[39] private __gap;
+
+    event ContractDocumentBound(bytes32 indexed contractId, string legalContractUri);
+
+    error LegalContractUriEmpty();
 
     event TemplateCreated(
         bytes32 indexed templateId,
@@ -267,6 +274,42 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         contractId = keccak256(
             abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
+        _createContract(contractId, templateId, globalValues, parties, partyValues, secretHash, finalizer, expiry);
+    }
+
+    /// @notice Create an agreement with its own document and an existing template's field schema.
+    /// @dev Does not publish or modify a template. The URI is immutable and bound into the new ID.
+    /// Legacy createContract IDs and the EIP-712 SignatureData schema remain unchanged.
+    function createContractWithAgreementUri(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer,
+        uint256 expiry,
+        string memory legalContractUri
+    ) external returns (bytes32 contractId) {
+        if (bytes(legalContractUri).length == 0) revert LegalContractUriEmpty();
+        contractId = keccak256(abi.encode(
+            templateId, salt, globalValues, parties, secretHash, finalizer, legalContractUri
+        ));
+        _createContract(contractId, templateId, globalValues, parties, partyValues, secretHash, finalizer, expiry);
+        agreementLegalContractUris[contractId] = legalContractUri;
+        emit ContractDocumentBound(contractId, legalContractUri);
+    }
+
+    function _createContract(
+        bytes32 contractId,
+        bytes32 templateId,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer,
+        uint256 expiry
+    ) internal {
         if (agreements[contractId].parties.length > 0) {
             revert ContractAlreadyExists();
         }
@@ -528,7 +571,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 signer,
                 SignatureData({
                     contractId: contractId,
-                    legalContractUri: template.legalContractUri,
+                    legalContractUri: _getAgreementUri(contractId),
                     globalFields: template.globalFields,
                     partyFields: template.partyFields,
                     globalValues: agreementData.globalValues,
@@ -774,7 +817,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         return (
             agreementData.templateId,
-            template.legalContractUri,
+            _getAgreementUri(contractId),
             template.globalFields,
             template.partyFields,
             agreementData.globalValues,
@@ -784,6 +827,17 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             agreementData.numSignatures,
             agreementData.numSignatures == agreementData.parties.length
         );
+    }
+
+    /// @notice Return the document actually signed, not necessarily the schema template's document.
+    function getAgreementUri(bytes32 contractId) external view returns (string memory) {
+        if (agreements[contractId].parties.length == 0) revert ContractDoesNotExist();
+        return _getAgreementUri(contractId);
+    }
+
+    function _getAgreementUri(bytes32 contractId) internal view returns (string memory) {
+        string memory uri = agreementLegalContractUris[contractId];
+        return bytes(uri).length == 0 ? templates[agreements[contractId].templateId].legalContractUri : uri;
     }
 
     function getTemplateDetails(
@@ -878,7 +932,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 '", "title": "',
                 template.title,
                 '", "legalContractUri": "',
-                template.legalContractUri,
+                _getAgreementUri(contractId),
                 '", "ContractFields": {'
             )
         );

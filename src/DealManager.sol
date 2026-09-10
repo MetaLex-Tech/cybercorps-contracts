@@ -84,6 +84,7 @@ contract DealManager is
 
     // The errors/event below are owned and used directly by DealManager. (Shared
     error ZeroAddress();
+    error LegalContractUriEmpty();
     error PartyValuesLengthMismatch();
     error ConditionAlreadyExists();
     error ConditionDoesNotExist();
@@ -158,6 +159,29 @@ contract DealManager is
         );
     }
 
+    /// @notice Propose using an immutable purchase-agreement URI and the existing template schema.
+    function proposeDealWithAgreementUri(
+        address[] memory _certPrinterAddress,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
+        uint256 _salt,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        CertificateDetails[] memory _certDetails,
+        string[][] memory _partyValues,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        string memory agreementUri
+    ) public onlyOwner returns (bytes32 agreementId, uint256[] memory certIds) {
+        if (bytes(agreementUri).length == 0) revert LegalContractUriEmpty();
+        return DealManagerStorage.proposeDealWithAgreementUri(
+            _certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt,
+            _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry, agreementUri
+        );
+    }
+
     /// @notice Proposes and signs a deal in one transaction
     /// @dev Combines deal proposal and initial signature
     /// @param _certPrinterAddress Array of certificate printer addresses
@@ -192,15 +216,66 @@ contract DealManager is
         bytes32 secretHash,
         uint256 expiry
     ) public onlyOwner returns (bytes32 agreementId, uint256[] memory certIds) {
+        return _proposeAndSignDeal(
+            _certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt,
+            _globalValues, _parties, _certDetails, proposer, signature,
+            _partyValues, conditions, secretHash, expiry, ""
+        );
+    }
+
+    /// @notice Use an instance-specific purchase agreement without publishing a template.
+    /// @dev The source template still defines fields. Certificate document URIs are unchanged.
+    function proposeAndSignDealWithAgreementUri(
+        address[] memory _certPrinterAddress,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
+        uint256 _salt,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        CertificateDetails[] memory _certDetails,
+        address proposer,
+        bytes memory signature,
+        string[][] memory _partyValues,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        string memory agreementUri
+    ) public onlyOwner returns (bytes32 agreementId, uint256[] memory certIds) {
+        if (bytes(agreementUri).length == 0) revert LegalContractUriEmpty();
+        return _proposeAndSignDeal(
+            _certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt,
+            _globalValues, _parties, _certDetails, proposer, signature,
+            _partyValues, conditions, secretHash, expiry, agreementUri
+        );
+    }
+
+    function _proposeAndSignDeal(
+        address[] memory _certPrinterAddress,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
+        uint256 _salt,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        CertificateDetails[] memory _certDetails,
+        address proposer,
+        bytes memory signature,
+        string[][] memory _partyValues,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        string memory agreementUri
+    ) internal returns (bytes32 agreementId, uint256[] memory certIds) {
         // Implemented here (not in DealManagerStorage) on purpose: keeping proposeAndSignDeal out of that
         // library stops the via-ir Yul optimizer from inlining proposeDeal into it (which overflows the
         // stack). proposeDeal is reached via a cross-contract delegatecall, so its heavy body stays in the
         // linked library and is never inlined here.
         if(_partyValues.length > _parties.length) revert PartyValuesLengthMismatch();
 
-        (agreementId, certIds) = DealManagerStorage.proposeDeal(
+        (agreementId, certIds) = DealManagerStorage.proposeDealWithAgreementUri(
             _certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt,
-            _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry
+            _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry, agreementUri
         );
         // NOTE: proposer is expected to be listed as a party in the parties array.
 
@@ -409,6 +484,61 @@ contract DealManager is
         bytes32 id,
         uint256[] memory certIds
     )  {
+        return _proposeAndSignNewCertsDeal(
+            salt, _certData, _templateId, _globalValues, _parties, _paymentAmount,
+            _partyValues, signature, _details, conditions, secretHash, expiry, stableAddress, ""
+        );
+    }
+
+    /// @notice Use an instance-specific purchase agreement without publishing a template.
+    /// @dev The source template still defines fields. Certificate document URIs are unchanged.
+    function proposeAndSignNewCertsDealWithAgreementUri(
+        uint256 salt,
+        DealManagerStorage.CyberCertData[] memory _certData,
+        bytes32 _templateId,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        uint256 _paymentAmount,
+        string[][] memory _partyValues,
+        bytes memory signature,
+        CertificateDetails[] memory _details,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        address stableAddress,
+        string memory agreementUri
+    ) external onlyOwner returns (
+        address[] memory certPrinterAddress,
+        bytes32 id,
+        uint256[] memory certIds
+    )  {
+        if (bytes(agreementUri).length == 0) revert LegalContractUriEmpty();
+        return _proposeAndSignNewCertsDeal(
+            salt, _certData, _templateId, _globalValues, _parties, _paymentAmount,
+            _partyValues, signature, _details, conditions, secretHash, expiry, stableAddress, agreementUri
+        );
+    }
+
+    function _proposeAndSignNewCertsDeal(
+        uint256 salt,
+        DealManagerStorage.CyberCertData[] memory _certData,
+        bytes32 _templateId,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        uint256 _paymentAmount,
+        string[][] memory _partyValues,
+        bytes memory signature,
+        CertificateDetails[] memory _details,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        address stableAddress,
+        string memory agreementUri
+    ) internal returns (
+        address[] memory certPrinterAddress,
+        bytes32 id,
+        uint256[] memory certIds
+    )  {
         // Lives here alongside proposeAndSignDeal (its only internal caller) so that function can stay out of
         // DealManagerStorage — see the note on proposeAndSignDeal.
         certPrinterAddress = new address[](_certData.length);
@@ -433,7 +563,7 @@ contract DealManager is
 
         // Create and sign deal
         certIds = new uint256[](certPrinterAddress.length);
-        (id, certIds) = proposeAndSignDeal(
+        (id, certIds) = _proposeAndSignDeal(
             certPrinterAddress,
             stableAddress,
             _paymentAmount,
@@ -447,7 +577,8 @@ contract DealManager is
             _partyValues,
             conditions,
             secretHash,
-            expiry
+            expiry,
+            agreementUri
         );
     }
 

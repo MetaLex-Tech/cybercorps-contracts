@@ -87,6 +87,20 @@ interface ICyberAgreementRegistry {
         string[] memory partyFields
     ) external;
 
+    function createContractWithAgreementUri(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer,
+        uint256 expiry,
+        string memory legalContractUri
+    ) external returns (bytes32 contractId);
+
+    function getAgreementUri(bytes32 contractId) external view returns (string memory);
+
     function createContract(
         bytes32 templateId,
         uint256 salt,

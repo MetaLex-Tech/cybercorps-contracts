@@ -43,8 +43,64 @@ pragma solidity 0.8.28;
 
 import "./IIssuanceManager.sol";
 import "./ISecondaryTradeStorage.sol";
+import "../storage/DealManagerStorage.sol";
 
 interface IDealManager {
+    function proposeDealWithAgreementUri(
+        address[] memory _certPrinterAddress,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
+        uint256 _salt,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        CertificateDetails[] memory _certDetails,
+        string[][] memory _partyValues,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        string memory agreementUri
+    ) external returns (bytes32 agreementId, uint256[] memory certIds);
+
+    function proposeAndSignDealWithAgreementUri(
+        address[] memory _certPrinterAddress,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
+        uint256 _salt,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        CertificateDetails[] memory _certDetails,
+        address proposer,
+        bytes memory signature,
+        string[][] memory _partyValues,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        string memory agreementUri
+    ) external returns (bytes32 agreementId, uint256[] memory certIds);
+
+    function proposeAndSignNewCertsDealWithAgreementUri(
+        uint256 salt,
+        DealManagerStorage.CyberCertData[] memory _certData,
+        bytes32 _templateId,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        uint256 _paymentAmount,
+        string[][] memory _partyValues,
+        bytes memory signature,
+        CertificateDetails[] memory _details,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        address stableAddress,
+        string memory agreementUri
+    ) external returns (
+        address[] memory certPrinterAddress,
+        bytes32 id,
+        uint256[] memory certIds
+    );
+
     function proposeDeal(
         address[] memory _certPrinterAddress,
         address _paymentToken,
