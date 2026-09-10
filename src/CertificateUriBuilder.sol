@@ -267,9 +267,14 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return string(abi.encodePacked(wholeStr, ".", centsStr));
     }
 
-    function unitsReservedToString(address contractAddress, uint256 tokenId) internal view returns (string memory) {
-        if (contractAddress == address(0)) return "0.00";
-        return from18DecimalsToString(ICertificateUnitsReserved(contractAddress).unitsReserved(tokenId));
+    function unitsReservedToJson(address contractAddress, uint256 tokenId) internal view returns (string memory) {
+        // Reservation metadata is optional. Keep the URI available when the printer cannot answer.
+        if (contractAddress == address(0)) return "";
+        try ICertificateUnitsReserved(contractAddress).unitsReserved(tokenId) returns (uint256 reserved) {
+            return string.concat(', "unitsReserved": "', from18DecimalsToString(reserved), '"');
+        } catch {
+            return "";
+        }
     }
 
     // Helper function to convert bytes32 to string
@@ -708,6 +713,8 @@ struct CertificateDetails {
         address contractAddress,
         address extension
     ) public view returns (string memory) {
+        // Release the endorsement arguments early to keep this renderer within the solc 0.8.28 stack limit.
+        string memory endorsementsJson = buildEndorsementHistory(endorsements, registry, agreementId);
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
 
@@ -767,7 +774,7 @@ struct CertificateDetails {
         json = string.concat(json, ', "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD), '"');
         json = string.concat(json, ', "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment), '"');
         json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
-        json = string.concat(json, ', "unitsReserved": "', unitsReservedToString(contractAddress, tokenId), '"');
+        json = string.concat(json, unitsReservedToJson(contractAddress, tokenId));
         json = string.concat(json, ', "legalDetails": "', details.legalDetails, '"');
 
         json = _appendCyberCorpExtensionData(json, contractAddress);
@@ -779,7 +786,7 @@ struct CertificateDetails {
         json = _appendSeriesExtensionData(json, contractAddress);
 
         // Add endorsement history
-        json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));
+        json = string.concat(json, ', "endorsementHistory": ', endorsementsJson);
 
         // Add current owner details
         json = string.concat(json, 
