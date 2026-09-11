@@ -96,6 +96,12 @@ interface ILedgerEntryToken is IERC721 {
     // with identical selectors.
     error NotIssuanceManager();
     error TokenNotTransferable();
+    /// @notice The lot is void. A void lot keeps its owner and its units, so the ownership and unit checks
+    /// alone do not stop one. It must not be registered to a new holder.
+    error VoidCertificate();
+    /// @notice The holder of record may not change: the printer's stop-transfer on the books is on.
+    /// Separate from TokenNotTransferable, which governs possession.
+    error LegalOwnerNotTransferable();
     error TokenDoesNotExist();
     error InvalidTokenId();
     error URIQueryForNonexistentToken();
@@ -137,6 +143,8 @@ interface ILedgerEntryToken is IERC721 {
     event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
     event GlobalRestrictionHookSet(address indexed hookAddress);
     event GlobalTransferableSet(bool indexed transferable);
+    event GlobalLegalTransferableSet(bool indexed legalTransferable);
+    event TokenLegalTransferableSet(uint256 indexed tokenId, bool legalTransferable);
     event LookThroughBadgeSet(address indexed badge);
     event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
     event IssueTimestampSet(uint256 indexed tokenId, uint64 issueTimestamp);
@@ -175,6 +183,9 @@ interface ILedgerEntryToken is IERC721 {
         CertificateDetails memory details
     ) external returns (uint256);
     function setGlobalTransferable(bool _transferable) external;
+    function setGlobalLegalTransferable(bool value) external;
+    function legalTransferable() external view returns (bool);
+    function isTokenLegalTransferable(uint256 tokenId) external view returns (bool);
     function safeMintAndAssign(
         address to,
         uint256 tokenId,
@@ -188,11 +199,20 @@ interface ILedgerEntryToken is IERC721 {
         CertificateDetails memory details,
         string memory ownerName
     ) external returns (uint256);
+    function safeMintFromAndAssign(
+        uint256 sourceTokenId,
+        address to,
+        address owner,
+        uint256 tokenId,
+        CertificateDetails memory details,
+        string memory ownerName
+    ) external returns (uint256);
     function assignCert(
         address from,
         uint256 tokenId,
         address to,
-        CertificateDetails memory details
+        CertificateDetails memory details,
+        string memory name
     ) external returns (uint256);
     function addIssuerSignature(
         uint256 tokenId,
@@ -291,6 +311,7 @@ interface ILedgerEntryToken is IERC721 {
     function backfillLookThroughTally(uint256 startIndex, uint256 count) external;
 
     function setTokenTransferable(uint256 tokenId, bool value) external;
+    function setTokenLegalTransferable(uint256 tokenId, bool value) external;
     function increaseUnitsReserved(uint256 tokenId, uint256 amount) external;
     function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external;
     function unitsReserved(uint256 tokenId) external view returns (uint256);

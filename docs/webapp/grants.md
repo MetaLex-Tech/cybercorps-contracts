@@ -15,7 +15,9 @@ A grant is not a cyberCERT. It is a cap-table position on an underlying
 stock class (Common or Preferred) whose scrip sits in a vesting escrow.
 When the recipient eventually settles — de-scripifying vested shares
 back into a registered holding — *that* is when they join the register
-of record.
+of record. The award type must be declared: a position on an ordinary
+class with no award type recorded is a direct holding, and the grant
+and MetaVesT actions refuse it rather than assuming an RSU.
 
 Grants are currently enabled on **Base and Ethereum**.
 
@@ -106,10 +108,13 @@ counting toward anything (issue drafts later from
 
 **Tokenize** on a grant proposes the onchain deal and produces a
 cyberSign signing link for the recipient. The dialog runs a **pre-flight
-checklist** first — template registered, recipient wallet linked,
-matching-class scrip exists, company wallet holds enough of it, plan
-reserve tokenized, clawback mode consistent with the scrip's force-ops —
-with a fix-it link for anything that fails.
+checklist** first — connected as the corp owner, template registered,
+recipient wallet linked, matching-class scrip exists, company wallet
+holds enough of it, plan reserve tokenized, clawback mode consistent
+with the scrip's force-ops, no recorded termination or expired option
+term, and an advisory when a transfer-restriction hook will need the
+escrow (and later the grantee) allowlisted — with a fix-it link for
+anything that fails.
 
 Then the transaction ladder:
 
@@ -133,11 +138,12 @@ withdrawn.
 ## Running grants day to day
 
 The grants hub lists every award in two groups — **escrowed onchain**
-(the chain enforces the schedule) and **ledger only** (tokenize to
-escrow) — with the recipient, class, award type, units, vested
-percentage, and a stage track from `GRANTED` through `SIGNING` and
-`VESTING` to `VESTED`. Each row carries one stage-appropriate primary
-action plus a menu:
+(the chain enforces the schedule) and **awaiting tokenization**
+(recorded offchain; tokenize to escrow) — with the recipient, class,
+award type, units, vested percentage, and a stage track from `GRANTED`
+through `SIGNING` and `VESTING` to `VESTED`, plus per-group subtotal
+rows and an all-grants total. Each row carries one stage-appropriate
+primary action plus a menu:
 
 * **Check status** — after the recipient signs, confirms the escrow
   finalized and stamps it on the ledger.

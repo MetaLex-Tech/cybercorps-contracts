@@ -45,6 +45,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 
 struct SAFTEDataV2 {
     UnlockStartTimeType unlockStartTimeType;    
@@ -104,7 +105,7 @@ contract SAFTEExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL
             '", "tokenCalculationMethod": "', conversionTypeToString(decoded.tokenCalculationMethod),
             '", "minCompanyReserve": "', uint256ToString(decoded.minCompanyReserve),
             '", "tokenPremiumMultiplier": "', uint256ToString(decoded.tokenPremiumMultiplier),
-            '", "customProvisions": "', decoded.customProvisions,
+            '", "customProvisions": "', JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         ));
         

@@ -114,7 +114,7 @@ paths:
   transaction.
 * Otherwise, **Request de-scripification** sends the issuer an offchain
   request (a free SIWE-authenticated form, no gas). The founder reviews
-  it from the Mainframe; once approved, your button flips to
+  it from the Tokenization Hub; once approved, your button flips to
   De-scripify.
 
 ### Transfer scrip

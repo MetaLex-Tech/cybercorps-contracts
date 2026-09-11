@@ -28,6 +28,7 @@ pragma solidity 0.8.28;
 
 import {ScopedDataLayerLib} from "./ScopedDataLayerLib.sol";
 import "./ACESAFEExtension.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Series-wide ACE SAFE terms, encoded as the printer's seriesData.
 struct ACESAFESeriesData {
@@ -91,23 +92,15 @@ contract ACESAFEExtensionV3 is ACESAFEExtension {
         ACESAFESeriesData memory decoded = abi.decode(data, (ACESAFESeriesData));
         return string.concat(
             ', "ACESAFESeriesDetails": {"seriesName": "',
-            decoded.seriesName,
+            JsonLib.jsonEscape(decoded.seriesName),
             '", "denominationToken": "',
-            decoded.denominationToken,
+            JsonLib.jsonEscape(decoded.denominationToken),
             '", "governingDocumentURIs": ',
-            _stringArrayToJson(decoded.governingDocumentURIs),
+            JsonLib.stringArrayToJson(decoded.governingDocumentURIs),
             ', "customProvisions": "',
-            decoded.customProvisions,
+            JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         );
     }
 
-    function _stringArrayToJson(string[] memory values) private pure returns (string memory) {
-        string memory json = "[";
-        for (uint256 i = 0; i < values.length; i++) {
-            if (i > 0) json = string.concat(json, ", ");
-            json = string.concat(json, '"', values[i], '"');
-        }
-        return string.concat(json, "]");
-    }
 }

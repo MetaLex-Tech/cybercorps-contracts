@@ -29,5 +29,5 @@ protocol makes.
 * [Regulatory context](regulatory-context.md) — SEC statements, statutory
   grounding, UI-provider safe harbour.
 * [The cyberCORPs application stack](application-stack.md) — cyberRAISE,
-  cyberTRADE, ACE, LiquiLeX, cyberSign, Mainframe, and how the illustrative
-  apps in `metalex-webapp` realise them.
+  cyberTRADE, ACE, LiquiLeX, cyberSign, the cyberCORPs app, and how the
+  illustrative apps in `metalex-webapp` realise them.

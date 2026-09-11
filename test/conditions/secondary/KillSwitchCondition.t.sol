@@ -38,6 +38,9 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | 19 | settlement other admin confirms the lower             | flag drops, checkCondition true |
 // | 20 | settlement confirm with no pending proposal           | revert NoLowerProposal       |
 // | 21 | settlement propose lower while not killed             | revert NotKilled             |
+// | 22 | global proposer rotates its own slot, then confirms   | revert ProposerNotAdmin      |
+// | 23 | settlement proposer rotates its slot, then confirms   | revert ProposerNotAdmin      |
+// | 24 | rotated slot re-proposes, other admin confirms        | flag drops, checkCondition true |
 // ─────────────────────────────────────────────────────────────────────────────
 
 contract KillSwitchConditionTest is SecondaryConditionIntegrationBase {
@@ -234,5 +237,57 @@ contract KillSwitchConditionTest is SecondaryConditionIntegrationBase {
         vm.prank(metalex);
         vm.expectRevert(KillSwitchCondition.NotKilled.selector);
         kill.proposeSettlementLower(AGREEMENT_ID);
+    }
+
+    // 22 — one admin must not lower alone by rotating to a second key it owns
+    function test_ProposeThenRotateThenConfirm_Reverts() public {
+        address newMetalex = makeAddr("newMetalex");
+
+        vm.prank(metalex);
+        kill.raiseKill();
+        vm.prank(metalex);
+        kill.proposeLower();
+        vm.prank(metalex);
+        kill.rotateAdmin(newMetalex);
+
+        vm.prank(newMetalex);
+        vm.expectRevert(KillSwitchCondition.ProposerNotAdmin.selector);
+        kill.confirmLower();
+        assertFalse(_check());
+    }
+
+    // 23
+    function test_SettlementProposeThenRotateThenConfirm_Reverts() public {
+        address newMetalex = makeAddr("newMetalex");
+
+        vm.prank(metalex);
+        kill.raiseSettlementKill(AGREEMENT_ID);
+        vm.prank(metalex);
+        kill.proposeSettlementLower(AGREEMENT_ID);
+        vm.prank(metalex);
+        kill.rotateAdmin(newMetalex);
+
+        vm.prank(newMetalex);
+        vm.expectRevert(KillSwitchCondition.ProposerNotAdmin.selector);
+        kill.confirmSettlementLower(AGREEMENT_ID);
+        assertFalse(_check(AGREEMENT_ID));
+    }
+
+    // 24 — a rotation does not brick the switch; two current admins still lower it
+    function test_LowerAfterRotation_Works() public {
+        address newMetalex = makeAddr("newMetalex");
+
+        vm.prank(metalex);
+        kill.raiseKill();
+        vm.prank(metalex);
+        kill.proposeLower();
+        vm.prank(metalex);
+        kill.rotateAdmin(newMetalex);
+
+        vm.prank(newMetalex);
+        kill.proposeLower();
+        vm.prank(legion);
+        kill.confirmLower();
+        assertTrue(_check());
     }
 }

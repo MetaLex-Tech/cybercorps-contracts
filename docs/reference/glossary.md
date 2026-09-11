@@ -62,10 +62,6 @@ standalone contract).
 **LiquiLeX** — AMM-native secondary liquidity for cyberSCRIPs, using
 Uniswap v4 pools and the `MetalexIssuerFeeHook`.
 
-**Mainframe** — The issuer-facing application surface in the cyberCORPs app.
-Reference UI at
-[`apps/cybercorps-web`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web).
-
 **MetaDAO** — A futarchy-governed Cayman SPC structure deployed via
 `MetaDAOFactory`.
 
@@ -82,6 +78,12 @@ the US Securities Act of 1933. Reg D is the US-investor framework
 **Scripification** — Minting cyberSCRIP from a cyberCERT.
 
 **SegCo** — Segregated Portfolio Company portfolio (Cayman SPC structure).
+
+**Tokenization Hub** — The securities console of the cyberCORPs app
+(formerly called the *Mainframe*): configure, issue, and manage tokenized
+securities. The cyberCORPs app's dashboard is separately named
+**mainFrame**. Reference UI at
+[`apps/cybercorps-web`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web).
 Used by MetaDAO.
 
 **zkPassport** — Privacy-preserving passport credential used by

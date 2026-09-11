@@ -1,6 +1,6 @@
 # The cyberCORPs application stack
 
-CyberCORPs is the **protocol**; the cyberCORPs **Mainframe** is the
+CyberCORPs is the **protocol**; the **cyberCORPs app** is the
 issuer-facing app surface. Several products run on top of the same contract
 suite. Each is independently usable. Each has a reference implementation
 in the [`metalex-webapp`](https://github.com/MetaLex-Tech/metalex-webapp)
@@ -88,13 +88,15 @@ legal instrument.
 **Contracts:**
 [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md).
 
-## Mainframe
+## The cyberCORPs app
 
-Issuer-facing hub. Cap table / holder register by class, fundraising round
-configuration, deal management, agreement signing, scripification controls,
-transfer hook configuration, BorgAuth role management, holder-of-record
-reporting, and 12(g) (or jurisdictional analogue) threshold monitoring
-across cyberCERT and cyberSCRIP holder bases.
+Issuer-facing hub (its securities console is the **Tokenization Hub**,
+formerly called the Mainframe). Cap table / holder register by class,
+fundraising round configuration, deal management, agreement signing,
+scripification controls, transfer hook configuration, BorgAuth role
+management, holder-of-record reporting, and 12(g) (or jurisdictional
+analogue) threshold monitoring across cyberCERT and cyberSCRIP holder
+bases.
 
 **Reference UI:** the `/cybercorps` route in
 [`apps/cybercorps-web/src/app/(frame-layout)/cybercorps`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web/src/app/%28frame-layout%29/cybercorps).

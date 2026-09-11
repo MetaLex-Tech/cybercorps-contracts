@@ -78,7 +78,9 @@ and **Set up a Ticket**:
 
 If you don't see the button, check that the round actually carries the
 non-U.S. condition and that the wallet you have connected is the one
-that owns the company — the button is hidden otherwise.
+that owns the company — the button is hidden otherwise. It is also
+hidden on the oldest ACE rounds, whose legacy non-U.S. condition
+contract predates overrides and can never be granted one.
 
 On the overrides page, enter the **investor wallet** and **Add
 override** (an onchain transaction; removing one is too). The page
@@ -113,9 +115,12 @@ of them.
    founder-approval round your funds sit in escrow until the founder
    decides.
 4. **Bridge if needed.** Solana-token ACE rounds are funded in a
-   Base-wrapped version of the token. If your Base balance is short, an
-   in-page bridge card walks you through connecting a **Solana wallet**
-   and bridging. See [the Solana bridge](#the-solana-bridge) below.
+   Base-wrapped version of the token. On these rounds, clicking connect
+   first shows a short preface: you connect a wallet on the round's
+   EVM chain to continue, and your **Solana wallet** is connected
+   separately inside the investment form. If your Base balance is
+   short, an in-page bridge card walks you through bridging. See
+   [the Solana bridge](#the-solana-bridge) below.
 5. **Track your holdings.** Your ACE SAFEs appear in the cyberRAISE
    **Portfolio** alongside any other investments.
 

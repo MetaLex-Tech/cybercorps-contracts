@@ -90,6 +90,7 @@ struct PoolAccountingFixture {
 contract CyberScripUpgradeForkTest is Test {
     using ERC1967ProxyLib for address;
     using RoundLib for Round;
+    uint256 internal constant PRE_UPGRADE_BLOCK = 46_300_000;
     address internal constant METALEX_SAFE =
         0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     address internal constant LEXCHEX_OWNER =
@@ -114,7 +115,8 @@ contract CyberScripUpgradeForkTest is Test {
     address internal otherInvestor;
 
     function setUp() public {
-        vm.createSelectFork("base_sepolia");
+        // These scenarios create a legacy stack before upgrading it in-place.
+        vm.createSelectFork("base_sepolia", PRE_UPGRADE_BLOCK);
 
         deployment = DeploymentConstants.coreV2(block.chainid);
 
@@ -543,6 +545,8 @@ contract CyberScripUpgradeForkTest is Test {
 
         vm.prank(companyOwner);
         certPrinter.setGlobalTransferable(true);
+        vm.prank(companyOwner);
+        certPrinter.setGlobalLegalTransferable(true); // legalTransferable is deny-by-default and governs the register; transferable governs delivery.
 
         vm.prank(companyOwner);
         address scrip = issuanceManager.deployCyberScrip(
@@ -1558,6 +1562,8 @@ contract CyberScripUpgradeForkTest is Test {
         certPrinter.addEndorsement(tokenId, selfEndorsement);
         vm.prank(companyOwner);
         certPrinter.setTokenTransferable(tokenId, true);
+        vm.prank(companyOwner);
+        certPrinter.setTokenLegalTransferable(tokenId, true);
         vm.prank(to);
         certPrinter.safeTransferFrom(to, to, tokenId);
         vm.prank(companyOwner);

@@ -28,6 +28,7 @@ pragma solidity 0.8.28;
 
 import {ScopedDataLayerLib} from "./ScopedDataLayerLib.sol";
 import "./SAFTExtensionV2.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Series-wide SAFT terms, encoded as the printer's seriesData.
 struct SAFTSeriesData {
@@ -88,9 +89,9 @@ contract SAFTExtensionV3 is SAFTExtensionV2 {
         if (data.length == 0) return "";
         SAFTSeriesData memory decoded = abi.decode(data, (SAFTSeriesData));
         return string.concat(
-            ', "SAFTSeriesDetails": {"seriesName": "', decoded.seriesName,
+            ', "SAFTSeriesDetails": {"seriesName": "', JsonLib.jsonEscape(decoded.seriesName),
             '", "tokenGenerationEventDate": "', _uintToString(decoded.tokenGenerationEventDate),
-            '", "customProvisions": "', decoded.customProvisions, '"}'
+            '", "customProvisions": "', JsonLib.jsonEscape(decoded.customProvisions), '"}'
         );
     }
 

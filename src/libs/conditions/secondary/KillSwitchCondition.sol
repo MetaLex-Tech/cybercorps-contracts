@@ -20,6 +20,7 @@ contract KillSwitchCondition is SecondaryTradingConditionBase {
     error NotKilled();
     error NoLowerProposal();
     error ProposerCannotConfirm();
+    error ProposerNotAdmin();
 
     event KillRaised(address indexed admin);
     event KillLowerProposed(address indexed admin);
@@ -75,8 +76,7 @@ contract KillSwitchCondition is SecondaryTradingConditionBase {
     function confirmLower() external onlyKillAdmin {
         if (!killed) revert NotKilled();
         address proposer = lowerProposer;
-        if (proposer == address(0)) revert NoLowerProposal();
-        if (msg.sender == proposer) revert ProposerCannotConfirm();
+        _checkProposal(proposer);
         killed = false;
         lowerProposer = address(0);
         emit KillLowerConfirmed(proposer, msg.sender);
@@ -101,14 +101,14 @@ contract KillSwitchCondition is SecondaryTradingConditionBase {
     function confirmSettlementLower(bytes32 agreementId) external onlyKillAdmin {
         if (!settlementKilled[agreementId]) revert NotKilled();
         address proposer = settlementLowerProposer[agreementId];
-        if (proposer == address(0)) revert NoLowerProposal();
-        if (msg.sender == proposer) revert ProposerCannotConfirm();
+        _checkProposal(proposer);
         settlementKilled[agreementId] = false;
         settlementLowerProposer[agreementId] = address(0);
         emit SettlementKillLowerConfirmed(agreementId, proposer, msg.sender);
     }
 
-    /// @notice Each admin can rotate their own slot's key
+    /// @notice Each admin can rotate their own slot's key. A rotation makes a pending lower proposal
+    /// from the old key unusable.
     function rotateAdmin(address newAdmin) external onlyKillAdmin {
         if (newAdmin == address(0)) revert InvalidAdmin();
         if (newAdmin == metalexAdmin || newAdmin == legionAdmin) revert InvalidAdmin();
@@ -118,6 +118,15 @@ contract KillSwitchCondition is SecondaryTradingConditionBase {
             legionAdmin = newAdmin;
         }
         emit AdminRotated(msg.sender, newAdmin);
+    }
+
+    /// @dev Checks a pending lower proposal before a confirm. The proposer must still hold an admin
+    /// slot. The confirmer must be the other key. A rotation does not clear a pending proposal. Without
+    /// the admin check, one admin can propose, rotate its own slot, then confirm with the new key.
+    function _checkProposal(address proposer) private view {
+        if (proposer == address(0)) revert NoLowerProposal();
+        if (proposer != metalexAdmin && proposer != legionAdmin) revert ProposerNotAdmin();
+        if (msg.sender == proposer) revert ProposerCannotConfirm();
     }
 
     /// @notice Blocks finalization while the platform-wide or this settlement's brake is raised.

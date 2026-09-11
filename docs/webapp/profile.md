@@ -4,19 +4,19 @@ description: Your identity, wallets, visibility settings, and notifications
 
 # Your profile
 
-Your **profile** (`profile.metalex.tech`) is your MetaLeX identity. It is
-tied to your wallet and is shared across all the apps — when a founder
-reviews your Expression of Interest, or your name appears on a certificate,
-it comes from here.
+Your **profile** (`profile.metalex.tech`) is your MetaLeX identity. It
+belongs to your MetaLeX account — which can hold **several linked
+wallets** — and stays with you when you switch between them, shared
+across all the apps: when a founder reviews your Expression of Interest,
+or your name appears on a certificate, it comes from here.
 
 A profile is **optional but recommended**. You can also stay anonymous.
 
 ## Creating your profile (onboarding)
 
-1. Connect your wallet.
-2. Choose **Setup profile**. This runs a one-time sign-in (a free
-   Sign-In With Ethereum signature) which creates your profile record.
-3. Pick a profile picture and enter a name — or **connect your X/Twitter**
+1. Connect a wallet and **Sign in** — a one-time, free signature that
+   creates your account and its profile record.
+2. Pick a profile picture and enter a name — or **connect your X/Twitter**
    to auto-fill both.
 
 Prefer not to? **Stay Anon for now** skips the whole step.
@@ -31,8 +31,8 @@ only to companies you hold with, until you choose to make it public.
 
 Your profile page (*Account Profile*) is a public-facing card showing your
 picture, name, bio, social links, your **LeXcheX accreditation status**,
-and — under Address / Multisigs tabs — your wallet address and any
-multisigs. If you are a founder, your founder title (e.g. “Founder of …”)
+and your **MetaLeX account addresses** — every wallet linked to the
+account, plus any multisigs. If you are a founder, your founder title (e.g. “Founder of …”)
 is derived from your cyberCORPs onchain and shown automatically. Your own
 profile also shows a public **platform activity** card — your cyberCORPs
 and how long you've been cybernetic if you're a founder, your closed
@@ -56,6 +56,16 @@ To edit it, sign in (**auth to edit profile**), then open the edit form:
   are always public.)
 
 Saving your profile is a plain save — no transaction, no gas.
+
+## Wallet settings
+
+**Wallet Settings** (in the account dropdown) manages the wallets behind
+your account: the **linked wallets** that carry your profile, the
+**unlinked wallets** connected in this browser (with a one-click
+**Link**), which wallet is currently **active** for transactions, and a
+**Connect another wallet** action. A wallet can be unlinked again — with
+one exception: an *embedded* wallet created by MetaLeX as part of your
+profile can't be unlinked.
 
 ## Notifications
 
@@ -95,8 +105,12 @@ behalf until the delegation expires.
 
 ## Good to know
 
-* Your profile follows your wallet. If you act from a different wallet, that
-  wallet has its own (or no) profile.
+* Your profile follows your **account**, not a single wallet: act from
+  any of your linked wallets and it's still you. A wallet that isn't
+  linked to your account has its own (or no) profile — link it in
+  Wallet Settings. (One exception is wallet-bound by design: the LeXcheX
+  credential itself lives in the wallet that holds it — see
+  [LeXcheX](lexchex.md).)
 * Verifying socials and accreditation builds trust with founders reviewing
   your investments — worthwhile if you intend to invest in founder-approval
   rounds. Founder profiles without any verified social carry a “no verified

@@ -17,13 +17,16 @@ This page has two halves: issuers first, then investors.
 
 ## For issuers: running a raise
 
-Starting a raise (desktop-only) begins with one choice: **how would you
-like to structure your raise?**
+Starting a raise begins with one choice: **how would you like to
+structure your raise?**
 
 If you don't have a cyberCORP yet, the flow first walks you through
 creating one (the same Network → Legal Identity → Public Profile wizard as
 the cyberCORPs app) and then straight into the raise — company and round
-are deployed together at the end.
+are deployed together at the end. You need a legally formed company to
+launch a raise; if you don't have one yet, the cyberCORPs app can
+[form an LLC or C-Corp for you](mainframe.md#forming-a-new-company-llc-or-c-corp)
+first.
 
 ### Ticket-by-Ticket vs. Structured Round
 
@@ -89,7 +92,8 @@ resolution — and **Confirm & Submit** deploys the round onchain.
 
 Filling the forms is free. MetaLeX applies a **0.3% fee to funds claimed by
 the issuer**; investors pay nothing, and no fees are charged on rejected
-bids.
+bids. (Forming a new legal entity is a separate, flat-fee product of the
+cyberCORPs app — see [the costs overview](README.md#before-you-start-what-you-need).)
 
 > **Under the hood.** A round is created on your cyberCORP's
 > [`RoundManager`](../reference/contracts/RoundManager.md). The contract-
@@ -177,10 +181,10 @@ non-U.S. passport scan via zkPassport.
 ### Express interest
 
 The *Express Interest* screen (titled *Invest in …* on first-come rounds)
-has the form on one side and the legal agreement on the other. On first
-visit it opens with a plain-language notice that this is a legally binding
-investment, issued as a tokenized security and countersigned by the
-company.
+has the form and the legal agreement side by side on desktop; on a phone
+you swipe between the two panels. On first visit it opens with a
+plain-language notice that this is a legally binding investment, issued
+as a tokenized security and countersigned by the company.
 
 ![The invest screen, with the deal notice and the agreement alongside](../.gitbook/assets/webapp/express-interest.png)
 
@@ -227,8 +231,9 @@ you hold (**Owned Securities**), and any scrip (**Owned Scrips**) —
 checkboxes reveal voided, expired, and rejected entries. If an EOI
 expires unanswered, **Recall** returns your escrowed funds. From the
 portfolio you can also scripify a certificate, transfer certificates and
-scrip, and request re-certification — those actions are walked through in
-[For holders: your securities](holders.md).
+scrip, request re-certification — those actions are walked through in
+[For holders: your securities](holders.md) — and bridge ACE-round tokens
+to Solana (see [ACE](ace.md#the-solana-bridge)).
 
 ## The MetaLeX console (staff)
 

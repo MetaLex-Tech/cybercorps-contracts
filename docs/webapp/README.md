@@ -22,7 +22,7 @@ once and they appear everywhere.
 
 | App | Address | What you do there |
 |---|---|---|
-| [**cyberCORPs app**](mainframe.md) | `cybercorps.metalex.tech` | Create your company; run its cap table, board, grants, and register of holders; issue and manage its securities and scrip. Home of the **Mainframe**. |
+| [**cyberCORPs app**](mainframe.md) | `cybercorps.metalex.tech` | Form a new LLC or C-Corp, or bring your existing company onchain; run its cap table, board, grants, and register of holders; issue and manage its securities and scrip. Home of the **Tokenization Hub**. |
 | [**cyberRAISE**](cyberraise.md) | `cyberraise.metalex.tech` | Run fundraising rounds, and invest in them. **Rounds are created and configured here.** |
 | [**ACE**](ace.md) | inside cyberRAISE | Token-community fundraising — raises denominated in a community token. (Old `ace.metalex.tech` links redirect to cyberRAISE.) |
 | [**LeXcheX**](lexchex.md) | `lexchex.metalex.tech` | Prove accredited-investor status. |
@@ -32,14 +32,14 @@ The cyberCORPs app is big enough that its largest areas get their own
 guides:
 
 * [**The cap table**](captable.md) — the unified ledger of tokenized and
-  un-tokenized positions, importing (including the AI-assisted import),
+  untokenized positions, importing (including the AI-assisted import),
   and tokenizing.
 * [**Cap-table records, modeling and compliance**](captable-tools.md) —
   §219 stockholder lists, 409A / Rule 701 / 3921 / 83(b) records, round
   modeling, and the exit waterfall.
 * [**Token grants and onchain vesting**](grants.md) — options, RSUs, and
   restricted stock escrowed onchain via MetaVesT.
-* [**The boardRoom and incorporation records**](boardroom.md) — officers,
+* [**The boardRoom and company records**](boardroom.md) — officers,
   directors, board consents, and the formation record.
 * [**For holders: your securities**](holders.md) — the stakeholder and
   investor side: My holdings, certificates, transfers, scrip.
@@ -52,7 +52,8 @@ Two more surfaces are covered separately:
   `app.metalex.tech`.
 
 > **Which app do I need?**
-> Setting up or running a company → the **cyberCORPs app**.
+> Forming a new company, or setting up or running one → the **cyberCORPs
+> app**.
 > Managing who owns what → [the cap table](captable.md).
 > Vesting stock to your team → [grants](grants.md).
 > Raising money, or investing in a raise → **cyberRAISE**.
@@ -69,15 +70,20 @@ Two more surfaces are covered separately:
 2. **A little ETH for gas** — actions that change onchain state are
    transactions and cost a small network fee. cyberCORPs run on **Ethereum,
    Arbitrum, and Base**; you need gas on whichever network the entity uses.
-3. **A desktop browser** for company setup — creating a cyberCORP and a
-   round are desktop-only flows.
+   (A company formed through the in-app formation flow gets its onchain
+   record on the payment chain — Ethereum mainnet.)
+3. **A desktop browser is recommended** for company setup and other
+   heavier flows, though the apps work on mobile.
 4. **Nothing else** — there is no separate account. Your wallet is your
    identity.
 
-On cost: forming a cyberCORP, signing with cyberSign, and manual securities
-issuance on the Mainframe are free (gas aside). MetaLeX charges a **0.3%
-fee on funds an issuer claims from a cyberRAISE round** — investors pay
-nothing.
+On cost: signing with cyberSign, setting up an **existing** company on
+MetaLeX, and manual securities issuance and management in the Tokenization
+Hub are free (gas aside). **Forming a new company** through the app is a
+flat **\$1,000 fee, paid in USDC** — state filing, formation documents,
+initial tax filings, and a lawyer consultation included. MetaLeX charges a
+**0.3% fee on funds an issuer claims from a cyberRAISE round** — investors
+pay nothing.
 
 ## Signing in
 

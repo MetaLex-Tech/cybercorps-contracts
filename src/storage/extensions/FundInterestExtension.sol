@@ -22,6 +22,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ScopedDataLayerLib} from "./ScopedDataLayerLib.sol";
 import "./ICertificateExtension.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Security identification fields (spec §4.2.2). Names reference FIX tags for interoperability;
 /// the protocol does not emit FIX messages.
@@ -181,9 +182,9 @@ contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgA
     ) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
-                '"interestClass": "', data.interestClass,
-                '", "fundEntityType": "', data.fundEntityType,
-                '", "icaExceptionRelied": "', data.icaExceptionRelied,
+                '"interestClass": "', JsonLib.jsonEscape(data.interestClass),
+                '", "fundEntityType": "', JsonLib.jsonEscape(data.fundEntityType),
+                '", "icaExceptionRelied": "', JsonLib.jsonEscape(data.icaExceptionRelied),
                 '"'
             )
         );
@@ -196,8 +197,8 @@ contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgA
             abi.encodePacked(
                 ', "managementFeeRateBps": ', _uintToString(data.managementFeeRateBps),
                 ', "carriedInterestRateBps": ', _uintToString(data.carriedInterestRateBps),
-                ', "distributionWaterfallPosition": "', data.distributionWaterfallPosition,
-                '", "governingDocumentURIs": ', _stringArrayToJson(data.governingDocumentURIs)
+                ', "distributionWaterfallPosition": "', JsonLib.jsonEscape(data.distributionWaterfallPosition),
+                '", "governingDocumentURIs": ', JsonLib.stringArrayToJson(data.governingDocumentURIs)
             )
         );
     }
@@ -208,23 +209,14 @@ contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgA
         return string(
             abi.encodePacked(
                 ', "securityIdentification": {',
-                '"securityID": "', data.securityID,
-                '", "securityIDSource": "', data.securityIDSource,
-                '", "securityType": "', data.securityType,
-                '", "securityDesc": "', data.securityDesc,
-                '", "issuer": "', data.issuer,
+                '"securityID": "', JsonLib.jsonEscape(data.securityID),
+                '", "securityIDSource": "', JsonLib.jsonEscape(data.securityIDSource),
+                '", "securityType": "', JsonLib.jsonEscape(data.securityType),
+                '", "securityDesc": "', JsonLib.jsonEscape(data.securityDesc),
+                '", "issuer": "', JsonLib.jsonEscape(data.issuer),
                 '"}'
             )
         );
-    }
-
-    function _stringArrayToJson(string[] memory values) internal pure returns (string memory) {
-        string memory json = "[";
-        for (uint256 i = 0; i < values.length; i++) {
-            if (i > 0) json = string.concat(json, ", ");
-            json = string.concat(json, '"', values[i], '"');
-        }
-        return string.concat(json, "]");
     }
 
     function _uintToString(uint256 value) internal pure returns (string memory) {

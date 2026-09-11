@@ -112,8 +112,11 @@ terms behind them. **Class terms** is where you enter an offchain
 class's charter economics from the certificate of incorporation:
 authorized units, conversion ratio, liquidation preference multiple,
 participation and its cap, seniority rank, and dividend rate with its
-accrual basis. Onchain classes keep their chain-defined terms; only
-offchain classes are editable here.
+accrual basis — plus the class's **legal name** as the charter spells
+it (display labels derive from class/series, so renaming is safe; it's
+also the remedy when creating a class is refused as a duplicate).
+Onchain classes keep their chain-defined terms; only offchain classes
+are editable here.
 
 ## Token cap table
 

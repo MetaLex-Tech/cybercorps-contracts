@@ -310,6 +310,9 @@ contract DealManagerSecondaryTradeTest is Test {
             )
         );
         sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails(UNITS));
+        // Open the register: legalTransferable is deny-by-default, so a change of holder of record needs the
+        // SPV to enable it. Delivery is governed separately by `transferable`, which stays off here.
+        certPrinter.setGlobalLegalTransferable(true);
         vm.stopPrank();
 
         // Fund buyer
@@ -353,6 +356,12 @@ contract DealManagerSecondaryTradeTest is Test {
     /// Not valid for buy offers (which reserve per-lot, not UNITS); those assert live `unitsReserved` directly.
     function _released(uint256 tokenId) internal view returns (uint256) {
         return UNITS - _consumed(tokenId) - certPrinter.unitsReserved(tokenId);
+    }
+
+    /// @dev The issuer voids the seller's cert. The IssuanceManager is an authorized caller on the printer.
+    function _voidSellerCert() internal {
+        vm.prank(address(im));
+        certPrinter.voidCert(sellerTokenId);
     }
 
     function _defaultSellOfferParams() internal view returns (PostOfferParams memory p) {
@@ -814,6 +823,82 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(p);
     }
 
+    // Administered hosting mints the buyer's new lot to the admin multisig. A zero multisig makes that mint
+    // revert, so a settlement built on it could never finalize; the seller's units and the buyer's payment
+    // would sit locked until expiry. A buy offer carries the buyer's own custody choice, so postOffer rejects it.
+    function test_RevertIf_PostOffer_Buy_AdministeredWithZeroMultisig() public {
+        PostOfferParams memory p = _defaultBuyOfferParams();
+        p.buyerHostingMode = HostingMode.ADMINISTERED;
+        p.adminMultisig = address(0);
+
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.MissingAdminMultisig.selector);
+        dm.postOffer(p);
+    }
+
+    // The buy-side gate is scoped to buy offers. A sell offer's buyer fields are normalized to
+    // Direct / zero at post, so stray custody values must not block the post.
+    function test_PostOffer_Sell_IgnoresStrayAdministeredFields() public {
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.buyerHostingMode = HostingMode.ADMINISTERED;
+        p.adminMultisig = address(0);
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        Offer memory posted = dm.getOffer(offerId);
+        assertEq(uint8(posted.buyerHostingMode), uint8(HostingMode.DIRECT), "sell offer hosting mode normalized");
+        assertEq(posted.adminMultisig, address(0), "sell offer admin multisig normalized");
+    }
+
+    // A sell offer's buyer supplies custody at acceptance, so the same gate runs there.
+    function test_RevertIf_AcceptOffer_Sell_AdministeredWithZeroMultisig() public {
+        bytes32 offerId = _postSellOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.ADMINISTERED,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.MissingAdminMultisig.selector);
+        dm.acceptOffer(p);
+    }
+
+    // A buy-offer acceptance ignores the acceptor's custody fields (the offeror is the buyer), so a stray
+    // zero-multisig Administered pair on the seller's acceptance must not block the trade.
+    function test_AcceptOffer_Buy_IgnoresStrayAdministeredFields() public {
+        bytes32 offerId = _postBuyOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            exemptionPathway: ExemptionPathway.NONE,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.ADMINISTERED,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, seller, sellerKey),
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
+        });
+
+        vm.prank(seller);
+        bytes32 settlementId = dm.acceptOffer(p);
+
+        SecondaryEscrow memory se = dm.getSecondaryEscrow(settlementId);
+        assertEq(uint8(se.buyerHostingMode), uint8(HostingMode.DIRECT), "buy offer hosting mode governs");
+        assertEq(se.adminMultisig, address(0), "buy offer admin multisig governs");
+    }
+
     // A non-owner cannot list someone else's Ledger Entry Token for sale: without the ownership guard the
     // attacker would be paid at finalize while the real owner's cert is decremented (buyer does not own
     // sellerTokenId, which belongs to `seller`).
@@ -847,6 +932,102 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.acceptOffer(p);
     }
 
+    // A void cert keeps its registered owner and its units, so it passes the ownership and unit checks.
+    // A void cert is not valid, so every step of the secondary path must reject it.
+    function test_RevertIf_PostOffer_Sell_CertVoided() public {
+        _voidSellerCert();
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        vm.prank(seller);
+        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        dm.postOffer(p);
+    }
+
+    // BUY counterpart: the acceptor supplies the seller cert, so acceptance is the first look at it.
+    function test_RevertIf_AcceptBuyOffer_CertVoided() public {
+        bytes32 offerId = _postBuyOffer();
+        _voidSellerCert();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            exemptionPathway: ExemptionPathway.NONE,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, seller, sellerKey),
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
+        });
+        vm.prank(seller);
+        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        dm.acceptOffer(p);
+    }
+
+    // The issuer can void the cert after the sell offer is posted, so acceptance must look again.
+    function test_RevertIf_AcceptSellOffer_CertVoidedAfterPosting() public {
+        bytes32 offerId = _postSellOffer();
+        _voidSellerCert();
+
+        AcceptOfferParams memory p = _sellAcceptParams(offerId);
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        dm.acceptOffer(p);
+    }
+
+    // Last check: a void between acceptance and settlement stops the payment and the transfer. The buyer's
+    // money stays in custody, and the lot then unwinds in full through the void path.
+    function test_RevertIf_FinalizeSecondaryTrade_CertVoidedAfterAcceptance() public {
+        bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        _voidSellerCert();
+
+        uint256 sellerBefore = paymentToken.balanceOf(seller);
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+        // The printer's register gate is what stops it now: the reissue names the seller's lot, and a void
+        // lot cannot pass title. DealManager no longer repeats the check at finalize.
+        vm.prank(keeper);
+        vm.expectRevert(ILedgerEntryToken.VoidCertificate.selector);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        assertEq(paymentToken.balanceOf(seller), sellerBefore, "seller not paid for a void cert");
+        assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "buyer's payment stays in custody");
+        assertEq(certPrinter.balanceOf(buyer), 0, "no buyer cert minted");
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "lot still ACCEPTED, unwinds via void"
+        );
+
+        // The lot is not stuck. Both parties request the void, the buyer gets the full payment back, and
+        // the offer returns to LIVE with the seller's reservation still held.
+        _voidSettlementBothParties(settlementId);
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.VOIDED),
+            "lot VOIDED"
+        );
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore + CONSIDERATION, "buyer refunded in full");
+        assertEq(paymentToken.balanceOf(address(dm)), 0, "custody drained");
+        assertEq(paymentToken.balanceOf(seller), sellerBefore, "seller still not paid");
+        _assertOfferState(offerId, baseline, OfferStatus.LIVE, 0, 0, 0, 1);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), UNITS, "reservation held: offer is LIVE, not cancelled");
+
+        // The offer is LIVE again but a void cert backs it, so nobody can fill it. The seller cancels to
+        // release the units.
+        AcceptOfferParams memory p = _sellAcceptParams(offerId);
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.CertificateVoided.selector);
+        dm.acceptOffer(p);
+
+        vm.prank(seller);
+        dm.cancelOffer(offerId);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 0, "cancel releases the seller's reservation");
+    }
+
     // Posting a SELL offer reserves (escrows) the seller's units, freezing legal ownership: an attempt to
     // re-register the cert to a new legal owner while the offer is live reverts at the source.
     function test_RevertIf_AssignReservedCert_AfterPostSellOffer() public {
@@ -855,7 +1036,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(owner);
         vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
-        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
+        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS), "New Owner");
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
         // the cert's reserve rule works as expected
@@ -2561,7 +2742,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(owner);
         vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
-        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
+        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS), "New Owner");
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
         // the cert's reserve rule works as expected
@@ -2581,7 +2762,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(owner);
         vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
-        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
+        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS), "New Owner");
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
         // the cert's reserve rule works as expected
@@ -4408,5 +4589,32 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes memory replay = _voidAuthSig(settlementId, buyer, "", 4, buyerKey);
         vm.expectRevert(ISecondaryTradeStorage.SecondaryAuthReplayed.selector);
         dm.voidSecondaryTradeAgreement(settlementId, buyer, "", 4, replay);
+    }
+
+    /// @dev Many small fills must not accumulate round-down errors and significantly skew the price of the
+    /// final lot.
+    function test_AcceptOffer_RepeatedPartialFills_ChargeCumulativeProRata() public {
+        // 11 units for 21 base units
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.units = 11;
+        p.consideration = 21;
+        p.salt = uint256(keccak256("cumulativeProRataSellOffer"));
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        uint256 escrowed;
+        for (uint256 i = 0; i < 10; i++) {
+            bytes32 sid = _acceptSellOfferPartial(offerId, 1);
+            escrowed += dm.getSecondaryEscrow(sid).paymentAmount;
+            assertEq(escrowed, (uint256(21) * (i + 1)) / 11, "running total stays at the floored pro-rata");
+        }
+        assertEq(escrowed, 19, "ten units cost their pro-rata price, rounded down but not too far away");
+        assertEq(dm.getOffer(offerId).paymentAccepted, 19, "offer records the cumulative amount");
+
+        // The final lot pays its own share, so the seller collects the posted price exactly.
+        bytes32 last = _acceptSellOfferPartial(offerId, 1);
+        assertEq(dm.getSecondaryEscrow(last).paymentAmount, 2, "final lot pays the remainder"); // more due to previous round-down, but again, not too far away
+        assertEq(dm.getOffer(offerId).paymentAccepted, 21, "full offer collects the posted consideration");
     }
 }

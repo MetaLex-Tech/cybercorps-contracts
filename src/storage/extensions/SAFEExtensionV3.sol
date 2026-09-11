@@ -28,6 +28,7 @@ pragma solidity 0.8.28;
 
 import {ScopedDataLayerLib} from "./ScopedDataLayerLib.sol";
 import "./SAFEExtension.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Series-wide SAFE terms, encoded as the printer's seriesData.
 struct SAFESeriesData {
@@ -88,21 +89,13 @@ contract SAFEExtensionV3 is SAFEExtension {
         SAFESeriesData memory decoded = abi.decode(data, (SAFESeriesData));
         return string.concat(
             ', "SAFESeriesDetails": {"seriesName": "',
-            decoded.seriesName,
+            JsonLib.jsonEscape(decoded.seriesName),
             '", "governingDocumentURIs": ',
-            _stringArrayToJson(decoded.governingDocumentURIs),
+            JsonLib.stringArrayToJson(decoded.governingDocumentURIs),
             ', "customProvisions": "',
-            decoded.customProvisions,
+            JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         );
     }
 
-    function _stringArrayToJson(string[] memory values) private pure returns (string memory) {
-        string memory json = "[";
-        for (uint256 i = 0; i < values.length; i++) {
-            if (i > 0) json = string.concat(json, ", ");
-            json = string.concat(json, '"', values[i], '"');
-        }
-        return string.concat(json, "]");
-    }
 }

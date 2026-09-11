@@ -72,7 +72,11 @@ accounting, and per-issuer whitelist and syndicate entitlements. Badge
 credentials are immutable once minted — facts change by minting a newer
 credential and revocation is void-only, so every credential remains onchain
 for audit — and every read returns the credential's expiry alongside its
-value. The secondary-trading conditions read this registry.
+value. One deployment can host several credentialing operators: the
+registry's admins delegate issuing authority per fact-key
+(`setIssuerKeys`), each credential records which issuer minted it, and a
+reader can filter on the issuers whose word it accepts. The
+secondary-trading conditions read this registry.
 
 For onchain wealth-based accreditation ("my $5M ETH portfolio makes me
 qualified"), see the reference UI at
@@ -106,8 +110,8 @@ Investment Company Act §3(c)(1) / §3(c)(7)-style limits, counting
 credentialed beneficial owners look-through rather than wallets — an
 unattested acquirer conservatively counts as US. The cert register's
 holder-count views also support 12(g) threshold monitoring (US) and its
-analogues, and the Mainframe UI surfaces these alongside the holder lists
-for proactive management.
+analogues, and the cyberCORPs app's Tokenization Hub surfaces these
+alongside the holder lists for proactive management.
 
 ## See also
 

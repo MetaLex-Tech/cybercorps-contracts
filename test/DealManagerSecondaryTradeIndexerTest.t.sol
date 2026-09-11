@@ -327,6 +327,8 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
                 bytes("")
             )
         );
+        // Open the register: legalTransferable is deny-by-default.
+        certPrinter.setGlobalLegalTransferable(true);
         sellerTokenId =
             im.createCertAndAssignWithName(address(certPrinter), seller, _sellerCertDetails(UNITS), "Alice", "", block.timestamp);
         vm.stopPrank();
