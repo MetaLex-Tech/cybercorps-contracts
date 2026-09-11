@@ -345,7 +345,7 @@ struct CertificateDetails {
     }
 
     function _optionalString(address target, bytes memory input) internal view returns (string memory) {
-        try this.readOptionalString{gas: 2500000}(target, input) returns (string memory value) {
+        try this.readOptionalString(target, input) returns (string memory value) {
             return value;
         } catch { return ""; }
     }
@@ -459,7 +459,7 @@ struct CertificateDetails {
                 '"');
 
             if (i == 0 && registry != address(0) && agreementId != bytes32(0)) {
-                try this.readAgreementDetails{gas: 3000000}(registry, agreementId, endorsements[0].signatureHash) returns (string memory fragment) {
+                try this.readAgreementDetails(registry, agreementId, endorsements[0].signatureHash) returns (string memory fragment) {
                     json = string.concat(json, fragment);
                 } catch { /* Keep the known endorsement even when registry enrichment is unavailable. */ }
             }
@@ -585,7 +585,7 @@ struct CertificateDetails {
         );
     }
 
-    /// @dev The call is optional. An issuer that does not expose this metadata keeps its URI.
+    /// @dev Optional calls preserve V1/V2 certificate and V3 series compatibility.
     function _appendCyberCorpExtensionData(string memory json, address certificate) private view returns (string memory) {
         return string.concat(json, _optionalString(_issuer(certificate), abi.encodeCall(ICyberCorp.getExtensionURI, ())));
     }

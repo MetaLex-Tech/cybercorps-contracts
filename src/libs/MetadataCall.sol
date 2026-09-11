@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-/// @dev Bounds optional calls before copying returndata. Dynamic ABI decoding must occur in an
-/// external frame caught by the renderer: Solidity try/catch does not catch caller-side decoding.
+/// @dev Bounds returndata before it is copied. Dynamic ABI decoding must occur in an external frame
+/// caught by the renderer: Solidity try/catch does not catch caller-side decoding.
 library MetadataCall {
     error UnavailableMetadata();
 
@@ -21,10 +21,11 @@ library MetadataCall {
 
     function probe(address target, bytes memory input) private view returns (bool ok, bytes memory output) {
         if (target.code.length == 0) return (false, new bytes(0));
-        // Enough for the SVG path and typical extensions, without allowing an optional dependency
-        // to consume an unlimited call budget or force an unbounded returndata allocation.
+        // The call gets all the gas it is given. A metadata read is a view call, so the reader's own
+        // eth_call limit is the budget, and the renderer does not cut it down further. Returndata stays
+        // bounded, so an optional dependency cannot force an unbounded memory allocation.
         assembly ("memory-safe") {
-            ok := staticcall(2000000, target, add(input, 32), mload(input), 0, 0)
+            ok := staticcall(gas(), target, add(input, 32), mload(input), 0, 0)
             let size := returndatasize()
             if gt(size, 131072) { ok := 0 }
             output := mload(0x40)
