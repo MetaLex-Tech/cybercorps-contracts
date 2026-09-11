@@ -1,6 +1,7 @@
 pragma solidity ^0.8.28;
 
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -62,10 +63,15 @@ contract CertificateUriBuilderLegacyTest is Test {
         assertEq(renderer.reservationJson(PRINTER, 1), "");
     }
 
-    function testMalformedGetterResponseStillReverts() public {
+    function testMalformedGetterResponseOmitsField() public {
         vm.mockCall(PRINTER, abi.encodeWithSignature("unitsReserved(uint256)", 1), hex"01");
-        vm.expectRevert();
-        renderer.reservationJson(PRINTER, 1);
+        assertEq(renderer.reservationJson(PRINTER, 1), "");
+    }
+
+    function testNoCodeAndEmptyReturnOmitField() public {
+        assertEq(renderer.reservationJson(address(0x5678), 1), "");
+        vm.mockCall(PRINTER, abi.encodeWithSignature("unitsReserved(uint256)", 1), hex"");
+        assertEq(renderer.reservationJson(PRINTER, 1), "");
     }
 }
 
@@ -73,6 +79,14 @@ contract CertificateUriBuilderLegacyForkTest is Test {
     address internal constant PRINTER = 0x2614b85a83bE8a5B4c007F29910E9Ec75f5498BC;
 
     function testRealV3CertificateAfterBuilderOnlyUpgrade() public {
+        _checkUpgrade(false);
+    }
+
+    function testRealV3CertificateAfterAtomicRenderingUpgrade() public {
+        _checkUpgrade(true);
+    }
+
+    function _checkUpgrade(bool replaceImage) internal {
         // Pinned. The test asserts the exact owner and corp name, which change with chain state.
         vm.createSelectFork("base_sepolia", 46_649_711);
         DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
@@ -86,10 +100,11 @@ contract CertificateUriBuilderLegacyForkTest is Test {
         address imageBefore = builder.imageBuilder();
         address authBefore = address(builder.AUTH());
         CertificateUriBuilder implementation = new CertificateUriBuilder();
+        address nextImage = replaceImage ? address(new CertificateImageBuilderContract()) : imageBefore;
         // Local fork impersonation only. No transactions are broadcast.
         vm.prank(core.metalexSafe);
-        builder.upgradeToAndCall(address(implementation), "");
-        assertEq(builder.imageBuilder(), imageBefore);
+        builder.upgradeToAndCall(address(implementation), abi.encodeCall(CertificateUriBuilder.setImageBuilder, (nextImage)));
+        assertEq(builder.imageBuilder(), nextImage);
         assertEq(address(builder.AUTH()), authBefore);
         assertEq(printer.ownerOf(1), ownerBefore);
 
@@ -99,7 +114,9 @@ contract CertificateUriBuilderLegacyForkTest is Test {
         assertFalse(vm.keyExistsJson(json, ".unitsReserved"));
         assertEq(vm.parseJsonAddress(json, ".currentOwner.ownerAddress"), ownerBefore);
         assertGt(bytes(vm.parseJsonString(json, ".cyberCORPName")).length, 0);
-        assertGt(bytes(vm.parseJsonString(json, ".image")).length, 0);
+        // The old image renderer cannot represent an unknown date. URI-only upgrades degrade to
+        // a blank image rather than display 1970; the atomic upgrade always produces the new SVG.
+        if (replaceImage) assertGt(bytes(vm.parseJsonString(json, ".image")).length, 0);
         assertEq(vm.parseJsonString(json, ".type"), "SAFE");
         assertEq(vm.parseJsonString(json, ".cyberCORPName"), "Bokkerijders NV");
     }
