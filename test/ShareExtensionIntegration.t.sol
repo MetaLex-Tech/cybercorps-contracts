@@ -134,6 +134,65 @@ contract ShareExtensionIntegrationTest is Test {
         );
     }
 
+    /// @notice A reader gets the same struct from either storage shape. A legacy printer keeps the whole
+    ///         `ShareCertData` on its cert. This printer keeps the five series sections on itself and
+    ///         `certificateData` on the cert. Both are built from the same source data, and both are read
+    ///         back off the chain, so this compares two storage round-trips and not two memory values.
+    function test_resolvedCertEqualsTheLegacyCert() public {
+        (ShareExtension legacyExt, LedgerEntryToken legacyPrinter, uint256 legacyTokenId) = _deployLegacyPrinter();
+
+        bytes memory storedLegacy = legacyPrinter.getActiveCertificateDetails(legacyTokenId).extensionData;
+        bytes memory storedLayer = printer.getActiveCertificateDetails(tokenId).extensionData;
+        assertEq(storedLegacy.length, 13_984, "the legacy cert stores the whole payload");
+        assertEq(storedLayer.length, 928, "the layered cert stores one section");
+
+        bytes32 fromLegacy = keccak256(abi.encode(legacyExt.decodeExtensionData(storedLegacy)));
+        bytes32 fromLayers = keccak256(abi.encode(ext.resolveCert(address(printer), tokenId)));
+        assertEq(fromLayers, fromLegacy, "the layered read equals the legacy read");
+    }
+
+    /// @notice The two storage shapes render the same JSON. The legacy printer renders its cert payload,
+    ///         which holds every section. This printer renders the resolved read, which merges its series
+    ///         payload back in.
+    /// @dev Both calls go to the extension itself, not through `CertificateUriBuilder`, so neither passes
+    ///      the renderer's optional-call gas cap. This compares what the extension produces, which is the
+    ///      same in both cases whatever budget a caller gives it.
+    function test_resolvedRenderEqualsTheLegacyRender() public {
+        (ShareExtension legacyExt, LedgerEntryToken legacyPrinter, uint256 legacyTokenId) = _deployLegacyPrinter();
+
+        bytes memory storedLegacy = legacyPrinter.getActiveCertificateDetails(legacyTokenId).extensionData;
+        string memory legacyJson = legacyExt.getExtensionURI(storedLegacy);
+        string memory layeredJson = ext.getResolvedExtensionURI(address(printer), tokenId);
+
+        assertGt(bytes(legacyJson).length, 0, "the legacy render is not blank");
+        assertEq(layeredJson, legacyJson, "the layered render matches the legacy render");
+    }
+
+    /// @dev A second printer on the same IssuanceManager, in the legacy shape: no series payload, and the
+    ///      whole `ShareCertData` on the cert.
+    function _deployLegacyPrinter()
+        private
+        returns (ShareExtension legacyExt, LedgerEntryToken legacyPrinter, uint256 legacyTokenId)
+    {
+        bytes memory init = abi.encodeWithSelector(ShareExtension.initialize.selector, address(auth));
+        legacyExt = ShareExtension(address(new ERC1967Proxy(address(new ShareExtension()), init)));
+        legacyPrinter = LedgerEntryToken(
+            im.createCertPrinter(
+                RealWorldShareCert.legends(),
+                "Seed Preferred Stock - legacy shape",
+                "MLI-SEED-LEGACY",
+                REAL_WORLD_IPFS_URI,
+                SecurityClass.PreferredStock,
+                SecuritySeries.SeriesSeed,
+                address(legacyExt),
+                bytes("")
+            )
+        );
+        CertificateDetails memory details = _certDetails();
+        details.extensionData = RealWorldShareCert.encodedShareCertData();
+        legacyTokenId = im.createCertAndAssign(address(legacyPrinter), holder, details);
+    }
+
     // --- Series scope ---
 
     function test_updateSeriesName_WritesToThePrinter() public {
