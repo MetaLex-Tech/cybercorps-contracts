@@ -4,10 +4,9 @@ pragma solidity 0.8.28;
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
-import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
+import {CertificateDetails, ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ShareExtension} from "../src/storage/extensions/ShareExtension.sol";
-import {ShareExtensionLogic} from "../src/storage/extensions/ShareExtensionLogic.sol";
 import {ShareCertDataLayerLib} from "../src/storage/extensions/ShareCertDataLayerLib.sol";
 import {ShareExtensionV3} from "../src/storage/extensions/ShareExtensionV3.sol";
 import {ExemptionPathway} from "../src/storage/SecondaryTradeStorage.sol";
@@ -32,17 +31,17 @@ import {SecondaryTradeGasBase} from "./libs/SecondaryTradeGasBase.sol";
 /// Measured baseline. Per-lot data: 13,984-byte payload, 6 legends totalling 3,321 bytes.
 /// | pathway           | postOffer | acceptOffer | finalize   | finalize % of limit |
 /// |-------------------|-----------|-------------|------------|---------------------|
-/// | Rule 144          | 1,362,186 | 2,913,663   | 13,866,092 | 82.6%               |
-/// | Section 4(a)(7)   | 1,362,186 | 1,935,090   | 14,666,519 | 87.4%               |
-/// | Section 4(a)(1/2) | 1,362,186 | 1,895,299   | 14,647,728 | 87.3%               |
-/// | Regulation S      | 1,362,186 | 1,993,343   | 14,813,716 | 88.3%               |
+/// | Rule 144          | 1,367,360 | 2,917,260   | 13,871,313 | 82.7%               |
+/// | Section 4(a)(7)   | 1,367,360 | 1,938,423   | 14,673,476 | 87.5%               |
+/// | Section 4(a)(1/2) | 1,367,360 | 1,898,632   | 14,654,685 | 87.3%               |
+/// | Regulation S      | 1,367,360 | 1,996,741   | 14,823,302 | 88.4%               |
 ///
-/// Posting pinned to Rule 144 costs 2,505,043, because `HoldingPeriodCondition` reads the whole payload
+/// Posting pinned to Rule 144 costs 2,510,512, because `HoldingPeriodCondition` reads the whole payload
 /// into memory before it tests the extension type. An equity printer is not a fund printer, so the
 /// condition then discards the payload. That load also warms the slots the mint later writes, which is
 /// why the Rule 144 finalize is the cheapest of the four.
 ///
-/// Finalize has roughly 285,000 gas of margin under the assertion. A new condition, or a larger payload,
+/// Finalize has roughly 276,000 gas of margin under the assertion. A new condition, or a larger payload,
 /// can exceed the limit. That risk applies to these legacy printers only.
 /// `SecondaryTradeEquityLayeredGasLimitTest` below is the same trade with the same data, split into
 /// layers, and it is the shape a new issuance must use.
@@ -81,8 +80,8 @@ contract SecondaryTradeEquityGasLimitTest is SecondaryTradeGasBase {
             )
         );
         LedgerEntryToken(address(printer)).setLookThroughBadge(address(badge));
-        sellerTokenId =
-            im.createCertAndAssign(address(printer), seller, _baseCertDetails(POSITION_UNITS, _certExtensionData()));
+        CertificateDetails memory sellerCert = _baseCertDetails(POSITION_UNITS, _certExtensionData());
+        sellerTokenId = im.createCertAndAssign(address(printer), seller, sellerCert);
     }
 
     /// @dev The legacy shape: no series payload, the whole `ShareCertData` on every cert.
@@ -103,7 +102,7 @@ contract SecondaryTradeEquityGasLimitTest is SecondaryTradeGasBase {
 ///
 /// The five series-wide sections of `ShareCertData` move to the printer's `seriesData`, where one copy
 /// serves every cert of the series. Only `certificateData` stays on the cert. Nothing is lost: a reader
-/// merges the layers back with `ShareExtensionLogic.resolve`, and the token URI renders the series sections
+/// merges the layers back with `ShareCertDataLayerLib.resolve`, and the token URI renders the series sections
 /// through `getResolvedExtensionURI`.
 ///
 /// Settlement copies the seller's per-cert payload into a fresh Ledger Entry Token for the buyer, so the
@@ -112,13 +111,13 @@ contract SecondaryTradeEquityGasLimitTest is SecondaryTradeGasBase {
 /// Measured. Per-lot data: 928-byte payload against 13,984 legacy, the same 6 legends of 3,321 bytes.
 /// | pathway           | postOffer | acceptOffer | finalize  | finalize % of limit | finalize vs legacy |
 /// |-------------------|-----------|-------------|-----------|---------------------|--------------------|
-/// | Rule 144          | 1,362,187 | 2,005,370   | 4,808,164 | 28.7%               | -65.3%             |
-/// | Section 4(a)(7)   | 1,362,187 | 1,935,091   | 4,884,885 | 29.1%               | -66.7%             |
-/// | Section 4(a)(1/2) | 1,362,187 | 1,895,300   | 4,866,094 | 29.0%               | -66.8%             |
-/// | Regulation S      | 1,362,187 | 1,993,344   | 5,032,061 | 30.0%               | -66.0%             |
+/// | Rule 144          | 1,367,363 | 2,008,968   | 4,813,376 | 28.7%               | -65.3%             |
+/// | Section 4(a)(7)   | 1,367,363 | 1,938,425   | 4,891,833 | 29.2%               | -66.7%             |
+/// | Section 4(a)(1/2) | 1,367,363 | 1,898,634   | 4,873,042 | 29.0%               | -66.7%             |
+/// | Regulation S      | 1,367,363 | 1,996,742   | 5,041,638 | 30.1%               | -66.0%             |
 ///
 /// Unpinned posting does not read the payload, so postOffer is unchanged. Posting pinned to Rule 144
-/// does read it, and costs 1,596,880 against 2,505,043.
+/// does read it, and costs 1,602,352 against 2,510,512.
 contract SecondaryTradeEquityLayeredGasLimitTest is SecondaryTradeEquityGasLimitTest {
     function _extensionImplementation() internal override returns (address) {
         return address(new ShareExtensionV3());
@@ -168,17 +167,15 @@ contract SecondaryTradeEquityLayeredGasLimitTest is SecondaryTradeEquityGasLimit
     function test_layeredLot_resolvesToTheWholeSecurity() public {
         _lifecycle("Rule 144 resale", ExemptionPathway.RULE_144, buyer, buyerKey);
 
-        ShareExtensionLogic shareLogic = new ShareExtensionLogic();
         uint256 buyerTokenId = printer.tokenOfLegalOwnerByIndex(buyer, 0);
         assertEq(
             printer.getActiveCertificateDetails(buyerTokenId).extensionData.length,
             RealWorldShareCert.encodedCertLayer().length,
             "the minted lot carries the lean payload"
         );
-        assertEq(
-            keccak256(abi.encode(ShareCertDataLayerLib.resolveCert(address(printer), buyerTokenId))),
-            keccak256(abi.encode(RealWorldShareCert.shareCertData())),
-            "the layers merge back to the whole ShareCertData"
-        );
+        // One `ShareCertData` per statement. Two in one statement exceed the solc 0.8.28 stack limit.
+        bytes32 resolved = keccak256(abi.encode(ShareCertDataLayerLib.resolveCert(address(printer), buyerTokenId)));
+        bytes32 whole = keccak256(abi.encode(RealWorldShareCert.shareCertData()));
+        assertEq(resolved, whole, "the layers merge back to the whole ShareCertData");
     }
 }

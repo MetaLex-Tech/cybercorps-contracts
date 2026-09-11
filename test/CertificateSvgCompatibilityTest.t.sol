@@ -165,18 +165,32 @@ contract CertificateSvgCompatibilityTest is Test {
         vm.mockCall(MANAGER, abi.encodeWithSignature("CORP()"), abi.encode(CORP));
         vm.mockCall(CORP, abi.encodeWithSignature("getExtensionURI()"), abi.encode(', "issuerExtra": "yes"'));
         vm.mockCall(EXTENSION, abi.encodeWithSignature("getExtensionURI(bytes)", hex"1234"), abi.encode(', "certificateExtra": "yes"'));
-        vm.mockCall(TOKEN, abi.encodeWithSignature("getSeriesInfo()"), abi.encode(EXTENSION, hex"5678"));
-        vm.mockCall(EXTENSION, abi.encodeWithSignature("supportsSeriesExtensionData()"), abi.encode(true));
-        vm.mockCall(EXTENSION, abi.encodeWithSignature("getSeriesExtensionURI(bytes)", hex"5678"), abi.encode(', "seriesExtra": "yes"'));
+        // A V1 or V2 extension does not answer the resolved probe, so the cert payload renders alone.
         string memory json = _json(false, false);
         assertEq(vm.parseJsonString(json, ".unitsReserved"), "0.00");
         assertEq(vm.parseJsonString(json, ".issuerExtra"), "yes");
         assertEq(vm.parseJsonString(json, ".certificateExtra"), "yes");
-        assertEq(vm.parseJsonString(json, ".seriesExtra"), "yes");
-        vm.mockCall(EXTENSION, abi.encodeWithSignature("getSeriesExtensionURI(bytes)", hex"5678"), hex"01");
+
+        // A V3 extension reads every scope itself and returns one section, which replaces the per-scope render.
+        vm.mockCall(EXTENSION, abi.encodeWithSignature("supportsResolvedExtensionData()"), abi.encode(true));
+        vm.mockCall(
+            EXTENSION,
+            abi.encodeWithSignature("getResolvedExtensionURI(address,uint256)", TOKEN, uint256(1)),
+            abi.encode(', "resolvedExtra": "yes"')
+        );
         json = _json(false, false);
-        assertFalse(vm.keyExistsJson(json, ".seriesExtra"));
-        assertEq(vm.parseJsonString(json, ".certificateExtra"), "yes");
+        assertEq(vm.parseJsonString(json, ".resolvedExtra"), "yes");
+        assertFalse(vm.keyExistsJson(json, ".certificateExtra"));
+        assertEq(vm.parseJsonString(json, ".issuerExtra"), "yes");
+
+        // A malformed resolved return omits that section and keeps every other field.
+        vm.mockCall(
+            EXTENSION, abi.encodeWithSignature("getResolvedExtensionURI(address,uint256)", TOKEN, uint256(1)), hex"01"
+        );
+        json = _json(false, false);
+        assertFalse(vm.keyExistsJson(json, ".resolvedExtra"));
+        assertEq(vm.parseJsonString(json, ".unitsReserved"), "0.00");
+        assertEq(vm.parseJsonString(json, ".issuerExtra"), "yes");
     }
 
     function testRegistryEmptyGlobalFieldsWithPartyFieldsRemainsValidJson() public {

@@ -100,15 +100,15 @@ library RealWorldShareCert {
     }
 
     /// @notice The same payload as one whole struct, before it is split into layers.
-    function shareCertData() internal pure returns (ShareCertData memory) {
-        return ShareCertData({
-            terms: seriesTerms(),
-            certificateData: certificateData(),
-            mandatoryConversionTriggers: conversionTriggers(),
-            specialVotingRights: votingRights(),
-            transferRestrictions: transferRestrictions(),
-            splitHistory: splitHistory()
-        });
+    /// @dev Sections are set one at a time, like the two layer encoders below. A struct literal keeps
+    ///      all six live at once, which exceeds the solc 0.8.28 stack limit.
+    function shareCertData() internal pure returns (ShareCertData memory share) {
+        share.terms = seriesTerms();
+        share.certificateData = certificateData();
+        share.mandatoryConversionTriggers = conversionTriggers();
+        share.specialVotingRights = votingRights();
+        share.transferRestrictions = transferRestrictions();
+        share.splitHistory = splitHistory();
     }
 
     /// @notice The five series-wide sections of the payload, as the printer's `seriesData`.

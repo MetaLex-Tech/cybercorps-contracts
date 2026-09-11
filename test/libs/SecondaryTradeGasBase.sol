@@ -169,6 +169,9 @@ abstract contract SecondaryTradeGasBase is SecondaryConditionIntegrationBase {
 
         _issueCredentials();
         _deployPrinter();
+        // Open the register: legalTransferable is deny-by-default, so a change of holder of record needs
+        // the issuer to enable it. Delivery is governed separately by `transferable`, which stays off here.
+        LedgerEntryToken(address(printer)).setGlobalLegalTransferable(true);
         _seedIncumbents();
         _deployConditions();
         _wireConditionLayers();
