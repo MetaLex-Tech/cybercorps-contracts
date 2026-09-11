@@ -16,6 +16,19 @@ contract SvgUriHarness is CertificateUriBuilder {
     constructor(address image) { imageBuilder = image; }
 }
 
+/// @notice An extension whose render is valid but expensive. It stands in for a real certificate with a
+/// large payload, which costs far more to render than a small one.
+contract CostlyExtension {
+    function getExtensionURI(bytes memory) external pure returns (string memory) {
+        bytes32 h = keccak256("costly");
+        for (uint256 i; i < 40_000; ++i) {
+            h = keccak256(abi.encodePacked(h));
+        }
+        require(h != bytes32(0), "keeps the loop, never true");
+        return ', "costlyExtra": "yes"';
+    }
+}
+
 contract CertificateSvgCompatibilityTest is Test {
     SvgUriHarness internal builder;
     CertificateImageBuilderContract internal image;
@@ -179,6 +192,25 @@ contract CertificateSvgCompatibilityTest is Test {
         assertEq(vm.parseJsonString(json, ".certificateExtra"), "yes");
     }
 
+    /// @notice A section that costs more than the renderer used to allow still reaches the document. The
+    ///         renderer forwards the gas it holds, so cost alone no longer drops a valid section.
+    /// @dev This is the regression a per-call gas cap causes. A real share certificate needs about
+    ///      9,000,000 gas to render, so a 2,000,000 cap dropped it and left the rest of the document
+    ///      intact, with nothing to show that a section was missing.
+    function testExpensiveExtensionSectionReachesTheDocument() public {
+        vm.etch(EXTENSION, address(new CostlyExtension()).code);
+
+        // The fixture must cost more than a cap would allow, or this test proves nothing.
+        uint256 before = gasleft();
+        CostlyExtension(EXTENSION).getExtensionURI(hex"1234");
+        uint256 renderCost = before - gasleft();
+        assertGt(renderCost, 2_000_000, "the fixture must cost more than a capped call allows");
+
+        string memory json = _json(false, false);
+        assertEq(vm.parseJsonString(json, ".costlyExtra"), "yes", "the expensive section reaches the document");
+        assertEq(vm.parseJsonString(json, ".unitsRepresented"), "2.50", "the rest of the document is intact");
+    }
+
     function testRegistryEmptyGlobalFieldsWithPartyFieldsRemainsValidJson() public {
         string[] memory empty = new string[](0);
         string[] memory fields = new string[](2); fields[0] = "name"; fields[1] = 'quote"';
@@ -210,17 +242,34 @@ contract CertificateSvgCompatibilityTest is Test {
         assertEq(vm.parseJsonString(json, ".currentOwner.name"), "Holder");
     }
 
-    function testOversizedAndGasExhaustingOptionalReturnIsOmitted() public {
+    function testOversizedAndMalformedOptionalReturnIsOmitted() public {
         string memory expected = _json(false, false);
         // Return 128 KiB + 1 bytes. The call must be rejected before copying returndata.
         vm.etch(EXTENSION, hex"620200016000f3");
         assertEq(_json(false, false), expected);
-        // Consume the entire optional-call gas allowance.
-        vm.etch(EXTENSION, hex"5b600056");
-        assertEq(_json(false, false), expected);
         vm.etch(EXTENSION, hex"00");
         vm.mockCall(EXTENSION, abi.encodeWithSignature("getExtensionURI(bytes)", hex"1234"), abi.encode(uint256(0xffff)));
         assertEq(_json(false, false), expected);
+    }
+
+    /// @dev External entry point, so a test can give the render a bounded amount of gas.
+    function render() external view returns (string memory) {
+        return _json(false, false);
+    }
+
+    /// @notice The renderer forwards all its gas to an optional call, so an extension that never returns
+    ///         takes the gas of the whole render. The reader's own limit is what stops it. Under a small
+    ///         limit the render does not complete, and the reader gets no metadata rather than one missing
+    ///         field.
+    function testRunawayExtensionIsNoLongerContained() public {
+        vm.etch(EXTENSION, hex"5b600056");
+        (bool ok,) = address(this).staticcall{gas: 10_000_000}(abi.encodeCall(this.render, ()));
+        assertFalse(ok, "a runaway extension consumes the render");
+
+        // The same bound renders fine once the extension answers.
+        vm.etch(EXTENSION, hex"00");
+        (ok,) = address(this).staticcall{gas: 10_000_000}(abi.encodeCall(this.render, ()));
+        assertTrue(ok, "the same bound is enough for a working extension");
     }
 
     function testLegacyImageSelectorAndFallbackRemainCallable() public {

@@ -345,7 +345,7 @@ struct CertificateDetails {
     }
 
     function _optionalString(address target, bytes memory input) internal view returns (string memory) {
-        try this.readOptionalString{gas: 2500000}(target, input) returns (string memory value) {
+        try this.readOptionalString(target, input) returns (string memory value) {
             return value;
         } catch { return ""; }
     }
@@ -459,7 +459,7 @@ struct CertificateDetails {
                 '"');
 
             if (i == 0 && registry != address(0) && agreementId != bytes32(0)) {
-                try this.readAgreementDetails{gas: 3000000}(registry, agreementId, endorsements[0].signatureHash) returns (string memory fragment) {
+                try this.readAgreementDetails(registry, agreementId, endorsements[0].signatureHash) returns (string memory fragment) {
                     json = string.concat(json, fragment);
                 } catch { /* Keep the known endorsement even when registry enrichment is unavailable. */ }
             }
@@ -591,7 +591,7 @@ struct CertificateDetails {
     }
 
     function _appendSeriesExtensionData(string memory json, address certificate) private view returns (string memory) {
-        try this.readSeriesExtension{gas: 3000000}(certificate) returns (string memory fragment) {
+        try this.readSeriesExtension(certificate) returns (string memory fragment) {
             return string.concat(json, fragment);
         } catch { return json; }
     }
