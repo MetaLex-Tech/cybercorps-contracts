@@ -230,6 +230,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
+                // TODO should have real extension and seriesData
                 address(0),
                 bytes("")
             )

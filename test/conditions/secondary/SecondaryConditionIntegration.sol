@@ -66,6 +66,7 @@ abstract contract SecondaryConditionIntegrationBase is Test {
     CyberAgreementRegistry internal registry;
     SpvFixture internal corp;
     DealManager internal dm;
+    DealManagerFactory internal dmFactory;
     LeXcheXBadge internal badge;
     MockERC20 internal paymentToken;
 
@@ -82,11 +83,12 @@ abstract contract SecondaryConditionIntegrationBase is Test {
     uint256 internal constant UNITS = 100;
     uint256 internal constant CONSIDERATION = 10 ether;
 
-    // ── Agreement-template shape (override to opt into party fields) ───────────
-    // The default settlement template has no party fields, so cyberAgreement stays field-less for every
+    // ── Agreement-template shape (override to opt into template fields) ───────
+    // The default settlement template has no fields, so cyberAgreement stays field-less for every
     // condition. A condition that needs a per-party value on the settlement (e.g. Section4a7's disclosure
-    // acknowledgment) overrides `_partyFields` (and its own template id/uri); the base then registers that
-    // template and every party-value array / acceptor signature is sized and hashed to match automatically.
+    // acknowledgment) overrides `_partyFields` (and its own template id/uri); a test that wants real deal
+    // terms on the settlement overrides `_globalFields` + `_globalValues`. The base then registers that
+    // template and every value array / acceptor signature is sized and hashed to match automatically.
     function _offerTemplateId() internal view virtual returns (bytes32) {
         return TEMPLATE_ID;
     }
@@ -97,6 +99,16 @@ abstract contract SecondaryConditionIntegrationBase is Test {
 
     function _partyFields() internal view virtual returns (string[] memory) {
         return new string[](0);
+    }
+
+    function _globalFields() internal view virtual returns (string[] memory) {
+        return new string[](0);
+    }
+
+    /// @dev The values every offer carries for `_globalFields`; they are stored on the settlement agreement
+    /// and hashed into both the settlement id and each acceptor signature, so one source keeps all three in step.
+    function _globalValues() internal view virtual returns (string[] memory) {
+        return new string[](_globalFields().length);
     }
 
     /// @dev An all-empty party-values array sized to the current template's party fields.
@@ -137,10 +149,10 @@ abstract contract SecondaryConditionIntegrationBase is Test {
                 )
             )
         );
-        // Register the settlement template with whatever party fields the (possibly overridden) shape declares.
-        registry.createTemplate(_offerTemplateId(), "Secondary", _offerTemplateUri(), new string[](0), _partyFields());
+        // Register the settlement template with whatever fields the (possibly overridden) shape declares.
+        registry.createTemplate(_offerTemplateId(), "Secondary", _offerTemplateUri(), _globalFields(), _partyFields());
 
-        DealManagerFactory dmFactory = DealManagerFactory(
+        dmFactory = DealManagerFactory(
             address(
                 new ERC1967Proxy(
                     address(new DealManagerFactory()),
@@ -222,7 +234,7 @@ abstract contract SecondaryConditionIntegrationBase is Test {
             integrator: address(0),
             templateId: _offerTemplateId(),
             salt: uint256(keccak256("secondaryConditionSellOffer")),
-            globalValues: new string[](0),
+            globalValues: _globalValues(),
             offerorPartyValues: _emptyPartyValues(),
             offerorAgreementSig: "",
             openEndorsementSig: "sellerEndorsement",
@@ -275,7 +287,7 @@ abstract contract SecondaryConditionIntegrationBase is Test {
             keccak256(abi.encode(o.templateId, uint256(settlementSalt), o.globalValues, parties, bytes32(0), address(dm)));
         return CyberAgreementUtils.signAgreementTypedData(
             vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
-            settlementId, _offerTemplateUri(), new string[](0), _partyFields(), new string[](0), partyValues, key
+            settlementId, _offerTemplateUri(), _globalFields(), _partyFields(), o.globalValues, partyValues, key
         );
     }
 

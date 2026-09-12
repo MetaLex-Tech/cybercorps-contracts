@@ -2,6 +2,8 @@
 pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
+import {CertificateDetails, ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
+import {ICertificateExtensionV3} from "../src/storage/extensions/ICertificateExtension.sol";
 import {ACESAFEExtension, ACESAFEData} from "../src/storage/extensions/ACESAFEExtension.sol";
 import {ACESAFEExtensionV3, ACESAFESeriesData} from "../src/storage/extensions/ACESAFEExtensionV3.sol";
 import {
@@ -40,6 +42,26 @@ import {
 /// value comes back unchanged.
 contract ExtensionJsonEscapeTest is Test {
     string internal constant POISON = "\"a\\b\x07c\", \"injected\": \"1";
+    address internal constant PRINTER = address(0xBADCAB);
+    uint256 internal constant TOKEN_ID = 1;
+
+    function setUp() public {
+        // The extension reads its scopes off the printer, so the address must hold code.
+        vm.etch(PRINTER, hex"00");
+    }
+
+    /// @dev A V3 extension reads its series payload off the printer. Give it one, and no cert payload,
+    /// so the fragment holds the series section alone.
+    function _seriesFragment(address extension, bytes memory seriesData) private returns (string memory) {
+        CertificateDetails memory noCertPayload;
+        vm.mockCall(
+            PRINTER,
+            abi.encodeCall(ILedgerEntryToken.getActiveCertificateDetails, (TOKEN_ID)),
+            abi.encode(noCertPayload)
+        );
+        vm.mockCall(PRINTER, abi.encodeCall(ILedgerEntryToken.getSeriesInfo, ()), abi.encode(extension, seriesData));
+        return ICertificateExtensionV3(extension).getResolvedExtensionURI(PRINTER, TOKEN_ID);
+    }
 
     /// @dev Fragments start with a comma. Put one field in front to make a parsable object.
     function _wrap(string memory fragment) private pure returns (string memory) {
@@ -76,7 +98,7 @@ contract ExtensionJsonEscapeTest is Test {
         data.governingDocumentURIs = _poisonedUris();
         data.customProvisions = POISON;
 
-        string memory json = new ACESAFEExtensionV3().getSeriesExtensionURI(abi.encode(data));
+        string memory json = _seriesFragment(address(new ACESAFEExtensionV3()), abi.encode(data));
         _assertField(json, ".ACESAFESeriesDetails.seriesName");
         _assertField(json, ".ACESAFESeriesDetails.denominationToken");
         _assertFirstOfArray(json, ".ACESAFESeriesDetails.governingDocumentURIs");
@@ -154,7 +176,7 @@ contract ExtensionJsonEscapeTest is Test {
         data.governingDocumentURIs = _poisonedUris();
         data.securityIdentification = SecurityIdentification(POISON, POISON, POISON, POISON, POISON);
 
-        string memory json = new FundInterestExtension().getSeriesExtensionURI(abi.encode(data));
+        string memory json = _seriesFragment(address(new FundInterestExtension()), abi.encode(data));
         _assertField(json, ".FundInterestSeriesDetails.interestClass");
         _assertField(json, ".FundInterestSeriesDetails.fundEntityType");
         _assertField(json, ".FundInterestSeriesDetails.icaExceptionRelied");
@@ -180,7 +202,7 @@ contract ExtensionJsonEscapeTest is Test {
         data.governingDocumentURIs = _poisonedUris();
         data.customProvisions = POISON;
 
-        string memory json = new SAFEExtensionV3().getSeriesExtensionURI(abi.encode(data));
+        string memory json = _seriesFragment(address(new SAFEExtensionV3()), abi.encode(data));
         _assertField(json, ".SAFESeriesDetails.seriesName");
         _assertFirstOfArray(json, ".SAFESeriesDetails.governingDocumentURIs");
         _assertField(json, ".SAFESeriesDetails.customProvisions");
@@ -199,7 +221,7 @@ contract ExtensionJsonEscapeTest is Test {
         data.seriesName = POISON;
         data.customProvisions = POISON;
 
-        string memory json = new SAFTEExtensionV3().getSeriesExtensionURI(abi.encode(data));
+        string memory json = _seriesFragment(address(new SAFTEExtensionV3()), abi.encode(data));
         _assertField(json, ".SAFTESeriesDetails.seriesName");
         _assertField(json, ".SAFTESeriesDetails.customProvisions");
     }
@@ -217,7 +239,7 @@ contract ExtensionJsonEscapeTest is Test {
         data.seriesName = POISON;
         data.customProvisions = POISON;
 
-        string memory json = new SAFTExtensionV3().getSeriesExtensionURI(abi.encode(data));
+        string memory json = _seriesFragment(address(new SAFTExtensionV3()), abi.encode(data));
         _assertField(json, ".SAFTSeriesDetails.seriesName");
         _assertField(json, ".SAFTSeriesDetails.customProvisions");
     }
@@ -236,7 +258,7 @@ contract ExtensionJsonEscapeTest is Test {
         data.underlyingTokenDescription = POISON;
         data.customProvisions = POISON;
 
-        string memory json = new TokenWarrantExtensionV3().getSeriesExtensionURI(abi.encode(data));
+        string memory json = _seriesFragment(address(new TokenWarrantExtensionV3()), abi.encode(data));
         _assertField(json, ".TokenWarrantSeriesDetails.seriesName");
         _assertField(json, ".TokenWarrantSeriesDetails.underlyingTokenDescription");
         _assertField(json, ".TokenWarrantSeriesDetails.customProvisions");

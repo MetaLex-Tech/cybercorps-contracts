@@ -27,14 +27,60 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./ShareExtension.sol";
+import {ShareCertDataLayerLib} from "./ShareCertDataLayerLib.sol";
 
-/// @title ShareExtensionV3 - share certificate extension with series-scope data
-/// @notice The series-scope payload is the existing SeriesTerms struct: terms that are identical for
-/// every certificate of a series (the printer) can be set once in the printer's `seriesData` instead of
-/// being duplicated inside each cert's ShareCertData. The per-cert surface (ShareCertData, which still
-/// embeds SeriesTerms) is inherited from ShareExtension unchanged for backwards compatibility. Supports
-/// both the legacy "SHARE" type key and "SHARE_V3".
-/// @author MetaLeX Labs, Inc.
+/// @notice One layer of a `ShareCertData`, with the same six sections. This is the shape a payload is
+/// stored in. `ShareCertDataLayerLib.resolve` merges the layers and gives back a whole `ShareCertData`,
+/// so a reader keeps one flat shape and never sees an unset section.
+///
+/// The same struct is stored at three scopes, and each stored copy is one layer: the class payload on
+/// the IssuanceManager, the series payload on the printer, and the per-cert payload. The class is the
+/// least granular scope. The cert is the most granular. A payload is a plain `abi.encode` of this
+/// struct. There is no tag, because a printer binds to one extension at creation.
+///
+/// A set section resolves by its shape:
+///
+/// - Single-value sections (`certificateData`, `terms`) overwrite. The most granular layer that sets
+///   one wins: cert, then series, then class.
+/// - List sections append, from the class to the series to the cert. A layer adds to what its parents
+///   give and removes nothing, so a cert payload cannot drop a class restriction.
+/// - An overwrite flag makes the list of the layer that sets it replace the lists above it. A flag
+///   applies upward only. On the series it drops the class and keeps the cert. On the class it does
+///   nothing.
+/// - A flag on an unset section does nothing, which keeps a stray flag safe. To clear a section, set
+///   an empty list and set the flag.
+///
+/// The scope of each section is a best guess. Put a section at the scope where it is the same for every
+/// cert below it. Override it lower down when one cert is different.
+
+/// @dev Each section is an array because each section is optional. This is `Option<T>` in Solidity: the
+/// array holds one element, or it is empty. The struct is equivalent to:
+///
+/// struct ShareCertDataLayer {
+///     Option<CertificateData> certificateData;
+///     Option<SeriesTerms> terms;
+///     Option<MandatoryConversionTrigger[]> conversionTriggers;
+///     Option<SpecialVotingRight[]> votingRights;
+///     Option<TransferRestriction[]> transferRestrictions;
+///     Option<SplitRecord[]> splitHistory;
+///     bool overwriteConversionTriggers;
+///     bool overwriteVotingRights;
+///     bool overwriteTransferRestrictions;
+///     bool overwriteSplitHistory;
+/// }
+struct ShareCertDataLayer {
+    CertificateData[] certificateData;
+    SeriesTerms[] terms;
+    MandatoryConversionTrigger[][] conversionTriggers;
+    SpecialVotingRight[][] votingRights;
+    TransferRestriction[][] transferRestrictions;
+    SplitRecord[][] splitHistory;
+    bool overwriteConversionTriggers;
+    bool overwriteVotingRights;
+    bool overwriteTransferRestrictions;
+    bool overwriteSplitHistory;
+}
+
 contract ShareExtensionV3 is ShareExtension {
     bytes32 public constant EXTENSION_TYPE_V3 = keccak256("SHARE_V3");
 
@@ -42,30 +88,27 @@ contract ShareExtensionV3 is ShareExtension {
         return extensionType == EXTENSION_TYPE_V3 || extensionType == EXTENSION_TYPE;
     }
 
-    function supportsSeriesExtensionData() external pure returns (bool) {
+    function getExtensionURI(bytes memory data) public pure override returns (string memory) {
+        return super.getExtensionURI(ShareCertDataLayerLib.resolveEncoded("", "", data));
+    }
+
+    function decodeExtensionData(bytes memory data) external pure override returns (ShareCertData memory) {
+        return ShareCertDataLayerLib.resolve("", "", data);
+    }
+
+    function encodeExtensionData(ShareCertData memory data) external pure override returns (bytes memory) {
+        return ShareCertDataLayerLib.encodeAsLayer(data);
+    }
+
+    function resolveCert(address printer, uint256 tokenId) external view returns (ShareCertData memory) {
+        return ShareCertDataLayerLib.resolveCert(printer, tokenId);
+    }
+
+    function supportsResolvedExtensionData() external pure returns (bool) {
         return true;
     }
 
-    function decodeSeriesExtensionData(bytes memory data) external pure returns (SeriesTerms memory) {
-        return abi.decode(data, (SeriesTerms));
-    }
-
-    function encodeSeriesExtensionData(SeriesTerms memory data) external pure returns (bytes memory) {
-        return abi.encode(data);
-    }
-
-    function getSeriesExtensionURI(bytes memory seriesData) external pure returns (string memory) {
-        if (seriesData.length == 0) return "";
-        SeriesTerms memory terms = abi.decode(seriesData, (SeriesTerms));
-
-        // _buildSeriesJson renders '"terms": {...}, ' (trailing separator), so close with a derived field.
-        return string(
-            abi.encodePacked(
-                ', "seriesDetails": {',
-                _buildSeriesJson(terms),
-                '"conversionRatio": "', from18DecimalsToString(_getConversionRatio(terms)),
-                '"}'
-            )
-        );
+    function getResolvedExtensionURI(address printer, uint256 tokenId) external view returns (string memory) {
+        return super.getExtensionURI(ShareCertDataLayerLib.resolveEncoded(printer, tokenId));
     }
 }

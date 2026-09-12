@@ -590,19 +590,23 @@ struct CertificateDetails {
         return string.concat(json, _optionalString(_issuer(certificate), abi.encodeCall(ICyberCorp.getExtensionURI, ())));
     }
 
-    function _appendSeriesExtensionData(string memory json, address certificate) private view returns (string memory) {
-        try this.readSeriesExtension(certificate) returns (string memory fragment) {
-            return string.concat(json, fragment);
-        } catch { return json; }
-    }
-
-    function readSeriesExtension(address certificate) external view returns (string memory) {
-        (address extension, bytes memory data) = abi.decode(
-            MetadataCall.read(certificate, abi.encodeCall(ILedgerEntryToken.getSeriesInfo, ())), (address, bytes));
-        if (extension == address(0) || data.length == 0) return "";
-        (bool ok, uint256 supported) = MetadataCall.word(extension, abi.encodeCall(ICertificateExtensionV3.supportsSeriesExtensionData, ()));
-        if (!ok || supported != 1) return "";
-        return abi.decode(MetadataCall.read(extension, abi.encodeCall(ICertificateExtensionV3.getSeriesExtensionURI, (data))), (string));
+    /// @dev A V3 extension reads the cert, series and class scopes itself and returns one section. The
+    /// renderer does not need to know which scope holds a section. A V1 or V2 extension does not answer
+    /// the probe, so it renders the cert payload alone. Every call is optional and cannot fail the URI.
+    function _appendExtensionData(
+        string memory json,
+        address certificate,
+        uint256 tokenId,
+        address extension,
+        bytes memory certData
+    ) private view returns (string memory) {
+        if (extension == address(0)) return json;
+        (bool ok, uint256 resolves) = MetadataCall.word(extension, abi.encodeCall(ICertificateExtensionV3.supportsResolvedExtensionData, ()));
+        if (ok && resolves == 1) {
+            return string.concat(json, _optionalString(extension, abi.encodeCall(ICertificateExtensionV3.getResolvedExtensionURI, (certificate, tokenId))));
+        }
+        if (certData.length == 0) return json;
+        return string.concat(json, _optionalString(extension, abi.encodeCall(ICertificateExtension.getExtensionURI, (certData))));
     }
 
     function buildCertificateUriNotEncoded(
@@ -724,10 +728,7 @@ struct CertificateDetails {
         json = _appendCyberCorpExtensionData(json, contractAddress);
 
         //add extensionData
-        if (extension != address(0) && details.extensionData.length > 0) {
-            json = string.concat(json, _optionalString(extension, abi.encodeCall(ICertificateExtension.getExtensionURI, (details.extensionData))));
-        }
-        json = _appendSeriesExtensionData(json, contractAddress);
+        json = _appendExtensionData(json, contractAddress, tokenId, extension, details.extensionData);
 
         // Add endorsement history
         json = string.concat(json, ', "endorsementHistory": ', endorsementsJson);
