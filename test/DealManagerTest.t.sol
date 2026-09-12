@@ -796,12 +796,11 @@ contract DealManagerTest is Test {
         _assertCertVoided(certIds[0]);
     }
 
-    // TODO(#142): revokeDeal should run signToVoid's teardown when its own request voids the
-    // agreement. It does not, so this test pins the stranding instead of the fixed behavior.
-    // Pending fix: fix/revoke-deal-teardown lands.
-    function test_RevokeDeal_VoidingRevokeStrandsEscrowAndCert() public {
-        // A revoke that tips the agreement into voided skips the teardown signToVoid would have done.
-        // The registry moves on, the escrow does not, and nothing can catch it up afterwards.
+    function test_RevokeDeal_VoidingRevokeVoidsEscrowAndCert() public {
+        // A revoke that tips the agreement into voided (e.g. the sole-signer proposer revokes) must
+        // run the same teardown as signToVoid. voidContractFor rejects repeat requesters, so if this
+        // path skipped teardown, no later signToVoid could clean up: the escrow would be stranded
+        // PENDING with its certs live.
 
         (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDeal();
 
@@ -810,22 +809,14 @@ contract DealManagerTest is Test {
         dm.revokeDeal(agreementId, companyOwner, GOOD_SIGNATURE);
 
         assertTrue(registry.isVoided(agreementId), "Agreement should be voided");
-        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PENDING), "Escrow is left pending");
-        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Cert is left escrowed and live");
-
-        // No way back. The requester is already recorded, so no one can void through DealManager again,
-        vm.prank(companyOwner);
-        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
-        dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
-
-        // and the catch-up path only handles a PAID escrow.
-        vm.expectRevert(LexScrowStorage.EscrowNotPaid.selector);
-        dm.refundVoidedDeal(agreementId);
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow should be voided");
+        _assertCertVoided(certIds[0]);
     }
 
     function test_RevokeDeal_NonVoidingRevokeLeavesEscrowPending() public {
         // A revoke that only records a void request (other parties still have to consent) must not
-        // touch the escrow: the agreement simply isn't voided yet.
+        // touch the escrow: the deal can still be voided later, or the request outvoted by nothing —
+        // the agreement simply isn't voided yet.
 
         (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDeal();
 
@@ -908,43 +899,32 @@ contract DealManagerTest is Test {
         dm.refundVoidedDeal(agreementId);
     }
 
-    // TODO(#142): refundVoidedDeal should sync a PENDING escrow too — void the certs, mark the escrow
-    // VOIDED, nothing to refund. It only handles PAID today, so this test pins that refusal.
-    // Pending fix: fix/revoke-deal-teardown lands.
-    function test_RevertIf_RefundVoidedDeal_PendingDeal() public {
+    function test_RefundVoidedDeal_PendingDealVoidsEscrowAndCert() public {
         // Parties can void the agreement directly in the registry before anyone pays. The escrow is
-        // then out of sync with no signToVoid available, and the catch-up path refuses to run.
+        // then out of sync with no signToVoid available (every requester is rejected as a repeat),
+        // so refundVoidedDeal must handle the PENDING case: void the certs and the escrow, nothing
+        // to refund.
 
         (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDeal();
 
         registry.mockIsVoided(agreementId, true);
-
-        vm.expectRevert(LexScrowStorage.EscrowNotPaid.selector);
         dm.refundVoidedDeal(agreementId);
 
-        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PENDING), "Escrow is left pending");
-        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Cert is left escrowed and live");
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow should be voided");
+        _assertCertVoided(certIds[0]);
     }
 
     function test_RevertIf_RefundVoidedDeal_AlreadySynced() public {
-        // A second sync has nothing to do — the escrow is already VOIDED — and must not silently succeed.
+        // A second sync has nothing to do — the escrow is already VOIDED — and must revert rather
+        // than silently succeed.
 
-        (bytes32 agreementId, ) = _proposeSignedDealAndPay(
-            alice,
-            GOOD_SIGNATURE,
-            alice
-        );
+        (bytes32 agreementId, ) = _proposeSignedDeal();
 
         registry.mockIsVoided(agreementId, true);
         dm.refundVoidedDeal(agreementId);
 
-        uint256 aliceBalanceAfterRefund = paymentToken.balanceOf(alice);
-
-        vm.expectRevert();
+        vm.expectRevert(LexScrowStorage.DealVoided.selector);
         dm.refundVoidedDeal(agreementId);
-
-        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow should stay voided");
-        assertEq(paymentToken.balanceOf(alice), aliceBalanceAfterRefund, "Refund must not pay out twice");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
