@@ -102,16 +102,9 @@ library ShareCertDataLayerLib {
     }
 
     /// @notice Reads the layers of a cert off the chain and merges them.
-    /// @dev The series read is guarded, so a printer that predates that scope still resolves and its
-    ///      missing payload contributes nothing.
     function resolveCert(address printer, uint256 tokenId) public view returns (ShareCertData memory) {
         bytes memory certData = ILedgerEntryToken(printer).getActiveCertificateDetails(tokenId).extensionData;
-
-        bytes memory seriesData;
-        try ILedgerEntryToken(printer).getSeriesInfo() returns (address, bytes memory data) {
-            seriesData = data;
-        } catch {}
-
+        (, bytes memory seriesData) = ILedgerEntryToken(printer).getSeriesInfo();
         return resolve(classDataOf(printer), seriesData, certData);
     }
 

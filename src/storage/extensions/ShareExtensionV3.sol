@@ -52,6 +52,15 @@ import {ShareCertDataLayerLib} from "./ShareCertDataLayerLib.sol";
 ///
 /// The scope of each section is a best guess. Put a section at the scope where it is the same for every
 /// cert below it. Override it lower down when one cert is different.
+///
+/// Three sections are not free to move. `recordStockSplit` rescales `terms`, rescales the thresholds in
+/// `conversionTriggers`, and appends to `splitHistory`, so it needs all three on the layer it is given.
+/// Put them at the same scope, or a split can never be recorded.
+///
+/// A printer's stored payloads and its bound extension must be the same generation. A payload is a plain
+/// `abi.encode` with no tag, so nothing can tell a whole `ShareCertData` from a `ShareCertDataLayer` at
+/// runtime. Bind this extension when the printer is created. Do not point a printer that already holds
+/// whole payloads at it, and do not upgrade a `ShareExtension` proxy into it.
 
 /// @dev Each section is an array because each section is optional. This is `Option<T>` in Solidity: the
 /// array holds one element, or it is empty. The struct is equivalent to:
