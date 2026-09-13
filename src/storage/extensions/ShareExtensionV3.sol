@@ -50,12 +50,13 @@ import {ShareCertDataLayerLib} from "./ShareCertDataLayerLib.sol";
 /// - A flag on an unset section does nothing, which keeps a stray flag safe. To clear a section, set
 ///   an empty list and set the flag.
 ///
-/// The scope of each section is a best guess. Put a section at the scope where it is the same for every
-/// cert below it. Override it lower down when one cert is different.
+/// No section has a fixed scope. Put a section at the scope where it is the same for every cert below
+/// it. Override it lower down when one cert is different.
 ///
-/// Three sections are not free to move. `recordStockSplit` rescales `terms`, rescales the thresholds in
-/// `conversionTriggers`, and appends to `splitHistory`, so it needs all three on the layer it is given.
-/// Put them at the same scope, or a split can never be recorded.
+/// `terms`, `conversionTriggers` and `splitHistory` must be on one layer. `recordStockSplit` rescales
+/// `terms`, rescales the thresholds in `conversionTriggers`, and appends to `splitHistory`, so it needs
+/// all three on the layer it is given. Any scope works. We recommend the series, because a stock split
+/// applies to every cert of the series.
 ///
 /// A printer's stored payloads and its bound extension must be the same generation. A payload is a plain
 /// `abi.encode` with no tag, so nothing can tell a whole `ShareCertData` from a `ShareCertDataLayer` at

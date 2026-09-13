@@ -585,7 +585,7 @@ struct CertificateDetails {
         );
     }
 
-    /// @dev Optional calls preserve V1/V2 certificate and V3 series compatibility.
+    /// @dev Appends nothing if the issuer does not have getExtensionURI.
     function _appendCyberCorpExtensionData(string memory json, address certificate) private view returns (string memory) {
         return string.concat(json, _optionalString(_issuer(certificate), abi.encodeCall(ICyberCorp.getExtensionURI, ())));
     }
