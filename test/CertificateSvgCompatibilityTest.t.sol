@@ -16,6 +16,13 @@ contract SvgUriHarness is CertificateUriBuilder {
     constructor(address image) { imageBuilder = image; }
 }
 
+/// @notice A V1 or V2 extension that renders no section.
+contract EmptyExtension {
+    function getExtensionURI(bytes memory) external pure returns (string memory) {
+        return "";
+    }
+}
+
 /// @notice An extension whose render is valid but expensive. It stands in for a real certificate with a
 /// large payload, which costs far more to render than a small one.
 contract CostlyExtension {
@@ -42,8 +49,10 @@ contract CertificateSvgCompatibilityTest is Test {
         image = new CertificateImageBuilderContract();
         builder = new SvgUriHarness(address(image));
         // STOP behaves like old fallbacks: successful call with no return data.
-        vm.etch(TOKEN, hex"00"); vm.etch(REGISTRY, hex"00"); vm.etch(EXTENSION, hex"00");
+        vm.etch(TOKEN, hex"00"); vm.etch(REGISTRY, hex"00");
         vm.etch(MANAGER, hex"00"); vm.etch(CORP, hex"00");
+        // The extension render is not optional, so the extension must answer it.
+        vm.etch(EXTENSION, address(new EmptyExtension()).code);
     }
 
     function _params() internal pure returns (CertificateSVGParamsV2 memory p) {
@@ -162,14 +171,39 @@ contract CertificateSvgCompatibilityTest is Test {
         vm.mockCall(TOKEN, abi.encodeWithSignature("isVoided(uint256)", 1), abi.encode(uint256(2)));
         vm.mockCall(TOKEN, abi.encodeWithSignature("getSeriesInfo()"), hex"01");
         vm.mockCall(REGISTRY, abi.encodeWithSignature("getContractDetails(bytes32)", bytes32(uint256(1))), hex"01");
-        vm.mockCall(EXTENSION, abi.encodeWithSignature("getExtensionURI(bytes)", hex"1234"), hex"01");
         string memory json = _json(false, false);
         vm.parseJson(json); assertGt(bytes(_svg(json)).length, 0);
         assertEq(vm.parseJsonString(json, ".unitsRepresented"), "2.50");
         vm.mockCallRevert(TOKEN, abi.encodeWithSignature("getSeriesInfo()"), hex"1234");
         vm.mockCallRevert(REGISTRY, abi.encodeWithSignature("getContractDetails(bytes32)", bytes32(uint256(1))), hex"1234");
-        vm.mockCallRevert(EXTENSION, abi.encodeWithSignature("getExtensionURI(bytes)", hex"1234"), hex"1234");
         assertEq(json, _json(false, false));
+    }
+
+    /// @notice An extension render must succeed. A failure reverts the URI with the extension's error, and
+    ///         a V3 failure does not fall back to the cert payload alone.
+    function testExtensionRenderFailureReverts() public {
+        bytes memory reason = abi.encodeWithSignature("Error(string)", "render failure");
+
+        vm.mockCallRevert(EXTENSION, abi.encodeWithSignature("getExtensionURI(bytes)", hex"1234"), reason);
+        vm.expectRevert(reason);
+        this.render();
+
+        vm.mockCall(EXTENSION, abi.encodeWithSignature("getExtensionURI(bytes)", hex"1234"), hex"01");
+        vm.expectRevert();
+        this.render();
+
+        // The cert payload renders fine, so a revert below can only come from the resolved render.
+        vm.mockCall(EXTENSION, abi.encodeWithSignature("getExtensionURI(bytes)", hex"1234"), abi.encode(', "certificateExtra": "yes"'));
+        vm.mockCall(EXTENSION, abi.encodeWithSignature("supportsResolvedExtensionData()"), abi.encode(true));
+        bytes memory resolved = abi.encodeWithSignature("getResolvedExtensionURI(address,uint256)", TOKEN, uint256(1));
+
+        vm.mockCallRevert(EXTENSION, resolved, reason);
+        vm.expectRevert(reason);
+        this.render();
+
+        vm.mockCall(EXTENSION, resolved, hex"01");
+        vm.expectRevert();
+        this.render();
     }
 
     function testSupportedOptionalMetadataAndZeroReservationsPreserved() public {
@@ -194,15 +228,6 @@ contract CertificateSvgCompatibilityTest is Test {
         json = _json(false, false);
         assertEq(vm.parseJsonString(json, ".resolvedExtra"), "yes");
         assertFalse(vm.keyExistsJson(json, ".certificateExtra"));
-        assertEq(vm.parseJsonString(json, ".issuerExtra"), "yes");
-
-        // A malformed resolved return omits that section and keeps every other field.
-        vm.mockCall(
-            EXTENSION, abi.encodeWithSignature("getResolvedExtensionURI(address,uint256)", TOKEN, uint256(1)), hex"01"
-        );
-        json = _json(false, false);
-        assertFalse(vm.keyExistsJson(json, ".resolvedExtra"));
-        assertEq(vm.parseJsonString(json, ".unitsReserved"), "0.00");
         assertEq(vm.parseJsonString(json, ".issuerExtra"), "yes");
     }
 
@@ -257,12 +282,14 @@ contract CertificateSvgCompatibilityTest is Test {
     }
 
     function testOversizedAndMalformedOptionalReturnIsOmitted() public {
+        vm.mockCall(TOKEN, abi.encodeWithSignature("issuanceManager()"), abi.encode(MANAGER));
+        vm.mockCall(MANAGER, abi.encodeWithSignature("CORP()"), abi.encode(CORP));
         string memory expected = _json(false, false);
         // Return 128 KiB + 1 bytes. The call must be rejected before copying returndata.
-        vm.etch(EXTENSION, hex"620200016000f3");
+        vm.etch(CORP, hex"620200016000f3");
         assertEq(_json(false, false), expected);
-        vm.etch(EXTENSION, hex"00");
-        vm.mockCall(EXTENSION, abi.encodeWithSignature("getExtensionURI(bytes)", hex"1234"), abi.encode(uint256(0xffff)));
+        vm.etch(CORP, hex"00");
+        vm.mockCall(CORP, abi.encodeWithSignature("getExtensionURI()"), abi.encode(uint256(0xffff)));
         assertEq(_json(false, false), expected);
     }
 
@@ -271,7 +298,7 @@ contract CertificateSvgCompatibilityTest is Test {
         return _json(false, false);
     }
 
-    /// @notice The renderer forwards all its gas to an optional call, so an extension that never returns
+    /// @notice The renderer forwards all its gas to the extension, so an extension that never returns
     ///         takes the gas of the whole render. The reader's own limit is what stops it. Under a small
     ///         limit the render does not complete, and the reader gets no metadata rather than one missing
     ///         field.
@@ -281,7 +308,7 @@ contract CertificateSvgCompatibilityTest is Test {
         assertFalse(ok, "a runaway extension consumes the render");
 
         // The same bound renders fine once the extension answers.
-        vm.etch(EXTENSION, hex"00");
+        vm.etch(EXTENSION, address(new EmptyExtension()).code);
         (ok,) = address(this).staticcall{gas: 10_000_000}(abi.encodeCall(this.render, ()));
         assertTrue(ok, "the same bound is enough for a working extension");
     }

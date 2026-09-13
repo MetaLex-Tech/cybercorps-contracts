@@ -95,6 +95,23 @@ contract FundInterestExtensionTest is Test {
         assertEq(resolved.series.interestClass, "Class A", "typed series half");
     }
 
+    /// @notice A failed scope read reverts with the printer's error. The render does not drop that scope.
+    function test_getResolvedExtensionURI_ScopeReadFailureReverts() public {
+        address printer = address(new BothScopesPrinterStub(abi.encode(FundInterestData(1, 0, false, "")), ""));
+        bytes memory reason = abi.encodeWithSignature("Error(string)", "scope read failure");
+
+        vm.mockCallRevert(printer, abi.encodeWithSignature("getSeriesInfo()"), reason);
+        vm.expectRevert(reason);
+        extension.getResolvedExtensionURI(printer, 1);
+        vm.expectRevert(reason);
+        extension.resolveCert(printer, 1);
+
+        vm.clearMockedCalls();
+        vm.mockCallRevert(printer, abi.encodeWithSignature("getActiveCertificateDetails(uint256)", 1), reason);
+        vm.expectRevert(reason);
+        extension.getResolvedExtensionURI(printer, 1);
+    }
+
     /// @dev The render is a fragment that starts with ", " so it can be appended to a larger object.
     function _stripSeparator(string memory fragment) internal pure returns (string memory) {
         bytes memory b = bytes(fragment);

@@ -592,7 +592,7 @@ struct CertificateDetails {
 
     /// @dev A V3 extension reads the cert, series and class scopes itself and returns one section. The
     /// renderer does not need to know which scope holds a section. A V1 or V2 extension does not answer
-    /// the probe, so it renders the cert payload alone. Every call is optional and cannot fail the URI.
+    /// the probe, so it renders the cert payload alone.
     function _appendExtensionData(
         string memory json,
         address certificate,
@@ -603,10 +603,10 @@ struct CertificateDetails {
         if (extension == address(0)) return json;
         (bool ok, uint256 resolves) = MetadataCall.word(extension, abi.encodeCall(ICertificateExtensionV3.supportsResolvedExtensionData, ()));
         if (ok && resolves == 1) {
-            return string.concat(json, _optionalString(extension, abi.encodeCall(ICertificateExtensionV3.getResolvedExtensionURI, (certificate, tokenId))));
+            return string.concat(json, ICertificateExtensionV3(extension).getResolvedExtensionURI(certificate, tokenId));
         }
         if (certData.length == 0) return json;
-        return string.concat(json, _optionalString(extension, abi.encodeCall(ICertificateExtension.getExtensionURI, (certData))));
+        return string.concat(json, ICertificateExtension(extension).getExtensionURI(certData));
     }
 
     function buildCertificateUriNotEncoded(

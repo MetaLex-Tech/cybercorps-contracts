@@ -42,25 +42,19 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import {CertificateDetails, ILedgerEntryToken} from "../../interfaces/ILedgerEntryToken.sol";
+import {ILedgerEntryToken} from "../../interfaces/ILedgerEntryToken.sol";
 
 /// @title  ScopedDataLayerLib - reads the scoped payloads a certificate is assembled from
 /// @author MetaLeX Labs, Inc.
 /// @notice The scope reads that every multi-scope extension needs. They are `internal` and inline.
 library ScopedDataLayerLib {
     /// @notice Reads the cert payload and its printer's series payload.
-    /// @dev Both reads are guarded. A printer without a scope gives nothing and does not revert.
     function getScopedPayloads(address printer, uint256 tokenId)
         internal
         view
         returns (bytes memory certData, bytes memory seriesData)
     {
-        try ILedgerEntryToken(printer).getActiveCertificateDetails(tokenId) returns (CertificateDetails memory details) {
-            certData = details.extensionData;
-        } catch {}
-
-        try ILedgerEntryToken(printer).getSeriesInfo() returns (address, bytes memory data) {
-            seriesData = data;
-        } catch {}
+        certData = ILedgerEntryToken(printer).getActiveCertificateDetails(tokenId).extensionData;
+        (, seriesData) = ILedgerEntryToken(printer).getSeriesInfo();
     }
 }
