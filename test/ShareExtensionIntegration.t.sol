@@ -168,6 +168,56 @@ contract ShareExtensionIntegrationTest is Test {
         assertEq(layeredJson, legacyJson, "the layered render matches the legacy render");
     }
 
+    /// @notice The resolved payload also reaches `tokenURI`. The renderer holds the cert payload only,
+    ///         which carries `certificateData` and nothing else. It reads the series sections through the
+    ///         extension, so the rendered document describes the whole security.
+    /// @dev A render is a view call. Its budget is the reader's `eth_call` limit, not a block gas limit,
+    ///      so this test reports the cost and does not bound it.
+    function test_tokenUri_CarriesTheSeriesSectionsTheCertLayerOmits() public view {
+        uint256 before = gasleft();
+        string memory uri = printer.tokenURI(tokenId);
+        console2.log("tokenURI gas:", before - gasleft());
+
+        string memory json = _decodeJsonUri(uri);
+        assertEq(
+            vm.parseJsonString(json, ".shareDetails.terms.seriesName"),
+            "Series Seed 2",
+            "the series terms reach the token URI"
+        );
+        assertEq(
+            vm.parseJsonString(json, ".shareDetails.transferRestrictions[0].restrictionType"),
+            "BoardConsentRequired",
+            "a series-scope list section reaches the token URI"
+        );
+    }
+
+    /// @dev `tokenURI` returns a base64 data URI. Decode it so the test can parse the JSON.
+    function _decodeJsonUri(string memory uri) private pure returns (string memory) {
+        bytes memory input = bytes(uri);
+        uint256 prefix = 29; // "data:application/json;base64,"
+        require(input.length > prefix, "nonblank token URI required");
+        bytes memory decoded = new bytes((input.length - prefix) / 4 * 3);
+        uint256 accumulator;
+        uint256 bits;
+        uint256 cursor;
+        for (uint256 i = prefix; i < input.length && input[i] != "="; ++i) {
+            uint256 c = uint8(input[i]);
+            uint256 value = c >= 65 && c <= 90
+                ? c - 65
+                : c >= 97 && c <= 122 ? c - 71 : c >= 48 && c <= 57 ? c + 4 : c == 43 ? 62 : 63;
+            accumulator = (accumulator << 6) | value;
+            bits += 6;
+            if (bits >= 8) {
+                bits -= 8;
+                decoded[cursor++] = bytes1(uint8(accumulator >> bits));
+            }
+        }
+        assembly ("memory-safe") {
+            mstore(decoded, cursor)
+        }
+        return string(decoded);
+    }
+
     /// @dev A second printer on the same IssuanceManager, in the legacy shape: no series payload, and the
     ///      whole `ShareCertData` on the cert.
     function _deployLegacyPrinter()
