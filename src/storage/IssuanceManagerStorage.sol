@@ -1280,6 +1280,9 @@ library IssuanceManagerStorage {
         } else {
             CertificateDetails memory details = approval.details;
             details.unitsRepresented = units;
+            // Consume the approval before minting can invoke an untrusted receiver.
+            // The approval is already copied to memory; a failed mint rolls this back.
+            clearRecertificationApproval(certAddress, account);
             uint256 createdTokenId = IIssuanceManager(address(this))
                 .createCertAndAssignWithName(
                     certAddress,
@@ -1289,7 +1292,6 @@ library IssuanceManagerStorage {
                     approval.officerSignature,
                     approval.endorsementTimestamp
                 );
-            clearRecertificationApproval(certAddress, account);
             _setCertMaxFromCurrent(
                 certAddress,
                 createdTokenId,

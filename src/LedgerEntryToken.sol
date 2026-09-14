@@ -162,8 +162,8 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         CertificateDetails memory details,
         string memory investorName
     ) external onlyIssuanceManager returns (uint256) {
-        _safeMint(to, tokenId);
         LedgerEntryTokenStorage.recordMintAndAssign(tokenId, to, details, investorName);
+        _safeMint(to, tokenId);
         return tokenId;
     }
 
@@ -176,8 +176,8 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         CertificateDetails memory details,
         string memory ownerName
     ) external onlyIssuanceManager returns (uint256) {
-        _safeMint(to, tokenId);
         LedgerEntryTokenStorage.recordMintAndAssign(tokenId, owner, details, ownerName);
+        _safeMint(to, tokenId);
         return tokenId;
     }
 

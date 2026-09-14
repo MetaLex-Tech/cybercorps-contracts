@@ -311,7 +311,7 @@ library LedgerEntryTokenStorage {
         emit ILedgerEntryToken.CyberCertPrinter_CertificateCreated(tokenId);
     }
 
-    /// @dev Post-mint bookkeeping for LedgerEntryToken.safeMintAndAssign.
+    /// @dev Record details and legal ownership before safeMintAndAssign invokes the receiver callback.
     function recordMintAndAssign(
         uint256 tokenId,
         address to,
