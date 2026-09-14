@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.28;
 
-import {IssuanceManagerConversionTest} from "./IssuanceManagerConversionTest.t.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
-import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
-import {ICyberScrip} from "../src/interfaces/ICyberScrip.sol";
+
 import {ICondition} from "../src/interfaces/ICondition.sol";
+import {ICyberScrip} from "../src/interfaces/ICyberScrip.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
+
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
+import {IssuanceManagerConversionTest} from "./IssuanceManagerConversionTest.t.sol";
 import {IERC721Receiver} from "openzeppelin-contracts/token/ERC721/IERC721Receiver.sol";
 
 contract RecertCallbackReceiver is IERC721Receiver {
@@ -27,9 +29,7 @@ contract RecertCallbackReceiver is IERC721Receiver {
         manager.convertScripToCert(address(printer), 100 ether);
     }
 
-    function onERC721Received(address, address, uint256 tokenId, bytes calldata)
-        external returns (bytes4)
-    {
+    function onERC721Received(address, address, uint256 tokenId, bytes calldata) external returns (bytes4) {
         require(msg.sender == address(printer), "Unexpected printer");
         (bool approved,,,,) = manager.getRecertificationApproval(address(printer), address(this));
         require(!approved, "Approval still active during callback");
@@ -45,14 +45,27 @@ contract RecertCallbackReceiver is IERC721Receiver {
 
 contract IssuanceManagerRecertCallbackTest is IssuanceManagerConversionTest {
     function _prepareReceiver(bool rejectMint)
-        internal returns (ILedgerEntryToken printer, ICyberScrip scrip, RecertCallbackReceiver receiver)
+        internal
+        returns (ILedgerEntryToken printer, ICyberScrip scrip, RecertCallbackReceiver receiver)
     {
         printer = _deployPrinter("Callback Cert", "CALL");
         uint256 sourceId = _mintCert(printer, investor, 200);
-        scrip = ICyberScrip(issuanceManager.deployCyberScrip(
-            address(printer), new ITransferRestrictionHook[](0), new ICondition[](0),
-            new ICondition[](0), 0, 1, 1, new uint256[](0), false, true, true, true
-        ));
+        scrip = ICyberScrip(
+            issuanceManager.deployCyberScrip(
+                address(printer),
+                new ITransferRestrictionHook[](0),
+                new ICondition[](0),
+                new ICondition[](0),
+                0,
+                1,
+                1,
+                new uint256[](0),
+                false,
+                true,
+                true,
+                true
+            )
+        );
         receiver = new RecertCallbackReceiver(issuanceManager, printer, rejectMint);
         vm.prank(investor);
         issuanceManager.scripifyCert(address(printer), sourceId, 200 ether, address(receiver));

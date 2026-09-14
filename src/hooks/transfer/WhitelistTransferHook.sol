@@ -87,11 +87,11 @@ contract WhitelistTransferHook is BaseTransferHook {
         uint256 tokenId,
         bytes memory data
     ) internal view override returns (bool allowed, string memory reason) {
-        // Allow transfers from whitelisted addresses to whitelisted addresses
-        if (whitelisted[from] && whitelisted[to]) {
+        // Allow mints or transfers from whitelisted senders to whitelisted recipients
+        if ((from == address(0) || whitelisted[from]) && whitelisted[to]) {
             return (true, "");
         }
         
         return (false, "Address not whitelisted");
     }
-} 
+}
