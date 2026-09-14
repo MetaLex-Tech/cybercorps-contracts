@@ -244,11 +244,11 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         __BorgAuthACL_init(_auth);
     }
 
-    function decodeExtensionData(bytes memory data) external pure returns (ShareCertData memory) {
+    function decodeExtensionData(bytes memory data) external pure virtual returns (ShareCertData memory) {
         return abi.decode(data, (ShareCertData));
     }
 
-    function encodeExtensionData(ShareCertData memory data) external pure returns (bytes memory) {
+    function encodeExtensionData(ShareCertData memory data) external pure virtual returns (bytes memory) {
         return abi.encode(data);
     }
 
@@ -256,7 +256,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return extensionType == EXTENSION_TYPE;
     }
 
-    function getExtensionURI(bytes memory data) external pure override returns (string memory) {
+    function getExtensionURI(bytes memory data) public pure virtual override returns (string memory) {
         if (data.length == 0) return "";
 
         ShareCertData memory share = abi.decode(data, (ShareCertData));

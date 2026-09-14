@@ -26,7 +26,9 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+import {ScopedDataLayerLib} from "./ScopedDataLayerLib.sol";
 import "./ACESAFEExtension.sol";
+import "../../libs/JsonLib.sol";
 
 /// @notice Series-wide ACE SAFE terms, encoded as the printer's seriesData.
 struct ACESAFESeriesData {
@@ -36,6 +38,13 @@ struct ACESAFESeriesData {
     string customProvisions;
 }
 
+/// @notice The whole certificate: the series terms and the cert terms, side by side. The two scopes
+/// hold different fields, so this is a pairing and not a merge.
+struct ACESAFEResolvedData {
+    ACESAFESeriesData series;
+    ACESAFEData certificate;
+}
+
 /// @title ACESAFEExtensionV3 - ACE SAFE certificate extension with typed series-scope data
 /// @author MetaLeX Labs, Inc.
 contract ACESAFEExtensionV3 is ACESAFEExtension {
@@ -43,10 +52,6 @@ contract ACESAFEExtensionV3 is ACESAFEExtension {
 
     function supportsExtensionType(bytes32 extensionType) external pure override returns (bool) {
         return extensionType == EXTENSION_TYPE_V3 || extensionType == EXTENSION_TYPE;
-    }
-
-    function supportsSeriesExtensionData() external pure returns (bool) {
-        return true;
     }
 
     function decodeSeriesExtensionData(bytes memory data) external pure returns (ACESAFESeriesData memory) {
@@ -59,28 +64,43 @@ contract ACESAFEExtensionV3 is ACESAFEExtension {
         return abi.encode(data);
     }
 
-    function getSeriesExtensionURI(bytes memory data) external pure returns (string memory) {
+    /// @notice Announces the resolved-render path to `CertificateUriBuilder`.
+    function supportsResolvedExtensionData() external pure returns (bool) {
+        return true;
+    }
+
+    /// @notice The typed whole certificate. A scope with no payload reads back as a blank struct.
+    function resolveCert(address printer, uint256 tokenId) public view returns (ACESAFEResolvedData memory resolved) {
+        (bytes memory certData, bytes memory seriesData) = ScopedDataLayerLib.getScopedPayloads(printer, tokenId);
+        if (certData.length != 0) resolved.certificate = abi.decode(certData, (ACESAFEData));
+        if (seriesData.length != 0) resolved.series = abi.decode(seriesData, (ACESAFESeriesData));
+    }
+
+    /// @notice Renders the whole certificate: the cert scope and the series scope in one section.
+    /// @dev The cert payload alone is not the whole certificate, so this replaces the per-scope calls.
+    ///      A scope with no payload is left out rather than rendered blank.
+    function getResolvedExtensionURI(address printer, uint256 tokenId) external view returns (string memory) {
+        (bytes memory certData, bytes memory seriesData) = ScopedDataLayerLib.getScopedPayloads(printer, tokenId);
+        return string.concat(
+            certData.length == 0 ? "" : getExtensionURI(certData),
+            _buildSeriesJson(seriesData)
+        );
+    }
+
+    function _buildSeriesJson(bytes memory data) internal pure returns (string memory) {
         if (data.length == 0) return "";
         ACESAFESeriesData memory decoded = abi.decode(data, (ACESAFESeriesData));
         return string.concat(
             ', "ACESAFESeriesDetails": {"seriesName": "',
-            decoded.seriesName,
+            JsonLib.jsonEscape(decoded.seriesName),
             '", "denominationToken": "',
-            decoded.denominationToken,
+            JsonLib.jsonEscape(decoded.denominationToken),
             '", "governingDocumentURIs": ',
-            _stringArrayToJson(decoded.governingDocumentURIs),
+            JsonLib.stringArrayToJson(decoded.governingDocumentURIs),
             ', "customProvisions": "',
-            decoded.customProvisions,
+            JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         );
     }
 
-    function _stringArrayToJson(string[] memory values) private pure returns (string memory) {
-        string memory json = "[";
-        for (uint256 i = 0; i < values.length; i++) {
-            if (i > 0) json = string.concat(json, ", ");
-            json = string.concat(json, '"', values[i], '"');
-        }
-        return string.concat(json, "]");
-    }
 }

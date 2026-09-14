@@ -45,6 +45,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 
 struct SAFTDataV2 {
     UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be agreementExecutionTime, tgeTime, or setTime
@@ -85,7 +86,7 @@ contract SAFTExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL 
         return extensionType == EXTENSION_TYPE;
     }
 
-    function getExtensionURI(bytes memory data) external view override returns (string memory) {
+    function getExtensionURI(bytes memory data) public view virtual override returns (string memory) {
         SAFTDataV2 memory decoded = abi.decode(data, (SAFTDataV2));
         
         string memory json = string(abi.encodePacked(
@@ -96,7 +97,7 @@ contract SAFTExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL 
             '", "unlockingCliffPeriod": "', uint256ToString(decoded.unlockingCliffPeriod),
             '", "unlockingCliffPercentage": "', uint256ToString(decoded.unlockingCliffPercentage),
             '", "unlockingIntervalType": "', UnlockingIntervalTypeToString(decoded.unlockingIntervalType),
-            '", "customProvisions": "', decoded.customProvisions,
+            '", "customProvisions": "', JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         ));
         

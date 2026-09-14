@@ -24,6 +24,7 @@ import {RoundType} from "../src/libs/RoundLib.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 
 contract PublicRoundTestDeploy is Script {
     // EIP-712 constants for RoundManager escrow signature
@@ -260,6 +261,34 @@ contract PublicRoundTestDeploy is Script {
         bytes[] memory extensionData = new bytes[](1);
         extensionData[0] = "";
 
+        bytes memory metadataSig;
+        {
+            bytes32 metaDigest = CorpFactoryMetadataLib.digest(
+                "CyberCorpFactory",
+                address(corpFactory),
+                CorpFactoryMetadataLib.RoundSupplementalData({
+                    corpSalt: corpSalt,
+                    companyPayable: deployer,
+                    publicRound: true,
+                    allowTimedOffers: true,
+                    restrictEndTimeReduction: false,
+                    officer: officer,
+                    companyName: "SafeCorp",
+                    companyType: "Limited Liability Company",
+                    companyJurisdiction: "DE",
+                    companyContactDetails: "contact@corp.example",
+                    defaultDisputeResolution: "arbitration",
+                    extensionData: extensionData,
+                    roundPartyValues: safePartyValues,
+                    legalDetails: legalDetails,
+                    certData: certData,
+                    conditionAddresses: new address[](0)
+                })
+            );
+            (uint8 mv, bytes32 mr, bytes32 ms) = vm.sign(deployerPrivateKey, metaDigest);
+            metadataSig = abi.encodePacked(mr, ms, mv);
+        }
+
         // Deploy another CyberCorp and create a public round using SAFE template id 1
         (
             address corp2,
@@ -287,6 +316,7 @@ contract PublicRoundTestDeploy is Script {
                 1000000000000000,
                 safePartyValues,
                 escrowedSig,
+                metadataSig,
                 RoundType.FCFS,
                 new address[](0),
                 100000000000,

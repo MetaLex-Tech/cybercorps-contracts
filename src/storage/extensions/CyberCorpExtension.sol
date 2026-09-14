@@ -44,6 +44,7 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICyberCorpExtension.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 
 struct CyberCorpData {
     string website;
@@ -94,13 +95,13 @@ contract CyberCorpExtension is UUPSUpgradeable, ICyberCorpExtension, BorgAuthACL
             abi.encodePacked(
                 ', "CyberCorpDetails": {',
                 '"website": "',
-                decoded.website,
+                JsonLib.jsonEscape(decoded.website),
                 '", "primaryBusinessLine": "',
-                decoded.primaryBusinessLine,
+                JsonLib.jsonEscape(decoded.primaryBusinessLine),
                 '", "entityId": "',
-                decoded.entityId,
+                JsonLib.jsonEscape(decoded.entityId),
                 '", "metadataURI": "',
-                decoded.metadataURI,
+                JsonLib.jsonEscape(decoded.metadataURI),
                 '"}'
             )
         );

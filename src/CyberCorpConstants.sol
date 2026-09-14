@@ -133,6 +133,18 @@ struct CertificateSVGParams {
     string certificateUri;
 }
 
+/// @dev Separate tuple preserves the legacy image-builder selector.
+struct CertificateSVGParamsV2 {
+    CertificateSVGParams certificate;
+    address issuerAddress;
+    address ownerAddress;
+    uint256 consideration;
+    bool considerationKnown;
+    string[] transferRestrictions;
+    bool isVoided;
+    bool statusKnown;
+}
+
 
 
 

@@ -5,7 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {Vm} from "forge-std/Test.sol";
 import {DeployPumpCorpFactoryScript} from "./deploy-pump-factory.s.sol";
-import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
+import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -23,6 +23,7 @@ import {CompanyOfficer, SecuritySeries, SecurityClass} from "../src/CyberCorpCon
 import {RoundType} from "../src/libs/RoundLib.sol";
 import {RoundManagerStorage, CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {MockERC20} from "../test/mock/MockERC20.sol";
+import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 
 contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
 
@@ -382,21 +383,21 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
     ) internal view returns (bytes memory sig) {
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
         bytes32 domainSep = keccak256(abi.encode(
-            PumpCorpFactoryLib.FACTORY_DOMAIN_TYPEHASH,
+            CorpFactoryMetadataLib.FACTORY_DOMAIN_TYPEHASH,
             keccak256(bytes("PumpCorpFactory")),
             keccak256(bytes("1")),
             block.chainid,
             factory
         ));
         bytes32 officerHash = keccak256(abi.encode(
-            PumpCorpFactoryLib.OFFICER_TYPEHASH,
+            CorpFactoryMetadataLib.OFFICER_TYPEHASH,
             officer.eoa,
             keccak256(bytes(officer.name)),
             keccak256(bytes(officer.contact)),
             keccak256(bytes(officer.title))
         ));
         bytes32 structHash = keccak256(abi.encode(
-            PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
+            CorpFactoryMetadataLib.ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
             publicRound,
@@ -408,11 +409,11 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
             keccak256(bytes(companyJurisdiction)),
             keccak256(bytes(companyContactDetails)),
             keccak256(bytes(defaultDisputeResolution)),
-            PumpCorpFactoryLib.hashBytesArray(extensionData),
-            PumpCorpFactoryLib.hashStringArray(roundPartyValues),
-            PumpCorpFactoryLib.hashStringArray(legalDetails),
-            PumpCorpFactoryLib.hashCertDataArray(certData),
-            PumpCorpFactoryLib.hashAddresses(conditions)
+            CorpFactoryMetadataLib.hashBytesArray(extensionData),
+            CorpFactoryMetadataLib.hashStringArray(roundPartyValues),
+            CorpFactoryMetadataLib.hashStringArray(legalDetails),
+            CorpFactoryMetadataLib.hashCertDataArray(certData),
+            CorpFactoryMetadataLib.hashAddresses(conditions)
         ));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivKey, digest);

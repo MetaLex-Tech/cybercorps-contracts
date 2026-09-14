@@ -45,6 +45,7 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICertificateExtension.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 
 struct SAFEData {
     string customProvisions;
@@ -78,12 +79,12 @@ contract SAFEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return extensionType == EXTENSION_TYPE;
     }
 
-    function getExtensionURI(bytes memory data) external view override returns (string memory) {
+    function getExtensionURI(bytes memory data) public view virtual override returns (string memory) {
         SAFEData memory decoded = abi.decode(data, (SAFEData));
         
         string memory json = string(abi.encodePacked(
             ', "SAFEDetails": {',
-            '"customProvisions": "', decoded.customProvisions,
+            '"customProvisions": "', JsonLib.jsonEscape(decoded.customProvisions),
             '"}'
         ));
         

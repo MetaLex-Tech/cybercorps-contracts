@@ -45,6 +45,8 @@ import {
     VotingScope,
     ShareRepresentationType
 } from "../src/storage/extensions/ShareExtension.sol";
+import {ShareCertDataLayer, ShareExtensionV3} from "../src/storage/extensions/ShareExtensionV3.sol";
+import {ShareCertDataLayerLib} from "../src/storage/extensions/ShareCertDataLayerLib.sol";
 import {ShareExtensionLogic} from "../src/storage/extensions/ShareExtensionLogic.sol";
 import {ILexChex} from "../src/interfaces/ILexChex.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
@@ -82,7 +84,7 @@ contract ShareExtensionForkTest is Test {
     IIssuanceManager internal issuanceManager;
     LedgerEntryToken internal certPrinter;
     CertificateUriBuilder internal uriBuilder;
-    ShareExtension internal shareExtension;
+    ShareExtensionV3 internal shareExtension;
     ShareExtensionLogic internal shareLogic;
     MockPaymentToken internal paymentToken;
 
@@ -147,25 +149,25 @@ contract ShareExtensionForkTest is Test {
     function testLogic_DecodeAndValidateLiveSharePayload() public {
         bytes memory storedData = certPrinter.getExtensionData(tokenId);
 
-        ShareCertData memory formatterDecoded = shareExtension.decodeExtensionData(storedData);
-        ShareCertData memory logicDecoded = shareLogic.decodeExtensionData(storedData);
+        ShareCertDataLayer memory formatterDecoded = ShareCertDataLayerLib.decodeLayer(storedData);
+        ShareCertDataLayer memory logicDecoded = shareLogic.decodeExtensionData(storedData);
         (bool valid, string memory error) = shareLogic.validateShareData(storedData);
 
         assertTrue(valid);
         assertEq(error, "");
-        assertEq(formatterDecoded.terms.seriesName, "Series A Preferred");
-        assertEq(logicDecoded.transferRestrictions.length, 1);
-        assertEq(logicDecoded.specialVotingRights.length, 1);
-        assertEq(logicDecoded.mandatoryConversionTriggers.length, 1);
+        assertEq(formatterDecoded.terms[0].seriesName, "Series A Preferred");
+        assertEq(logicDecoded.transferRestrictions[0].length, 1);
+        assertEq(logicDecoded.votingRights[0].length, 1);
+        assertEq(logicDecoded.conversionTriggers[0].length, 1);
     }
 
     function testLogic_UpdateConversionPriceAndRatio() public {
         bytes memory updatedData = shareLogic.updateConversionPrice(certPrinter.getExtensionData(tokenId), 8e18);
-        ShareCertData memory decoded = shareLogic.decodeExtensionData(updatedData);
+        ShareCertDataLayer memory decoded = shareLogic.decodeExtensionData(updatedData);
         uint256 ratio = shareLogic.getConversionRatio(updatedData);
 
-        assertEq(decoded.terms.conversionPrice, 8e18);
-        assertEq(ratio, (decoded.terms.originalIssuePrice * 1e18) / 8e18);
+        assertEq(decoded.terms[0].conversionPrice, 8e18);
+        assertEq(ratio, (decoded.terms[0].originalIssuePrice * 1e18) / 8e18);
 
         string memory json = _toJson(shareExtension.getExtensionURI(updatedData));
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.conversionPrice"), "8.00");
@@ -175,17 +177,17 @@ contract ShareExtensionForkTest is Test {
         bytes memory updatedData =
             shareLogic.recordStockSplit(certPrinter.getExtensionData(tokenId), 2, 1, "ipfs://split-board-consent", block.timestamp);
 
-        ShareCertData memory decoded = shareLogic.decodeExtensionData(updatedData);
+        ShareCertDataLayer memory decoded = shareLogic.decodeExtensionData(updatedData);
 
-        assertEq(decoded.terms.authorizedShares, 20_000_000e18);
-        assertEq(decoded.terms.originalIssuePrice, 5e18);
-        assertEq(decoded.terms.parValue, 5e15);
-        assertEq(decoded.terms.conversionPrice, 5e18);
-        assertEq(decoded.terms.redemptionPrice, 6e18);
-        assertEq(decoded.mandatoryConversionTriggers[0].primaryThreshold, 6e18);
-        assertEq(decoded.splitHistory.length, 1);
-        assertEq(decoded.splitHistory[0].numerator, 2);
-        assertEq(decoded.splitHistory[0].denominator, 1);
+        assertEq(decoded.terms[0].authorizedShares, 20_000_000e18);
+        assertEq(decoded.terms[0].originalIssuePrice, 5e18);
+        assertEq(decoded.terms[0].parValue, 5e15);
+        assertEq(decoded.terms[0].conversionPrice, 5e18);
+        assertEq(decoded.terms[0].redemptionPrice, 6e18);
+        assertEq(decoded.conversionTriggers[0][0].primaryThreshold, 6e18);
+        assertEq(decoded.splitHistory[0].length, 1);
+        assertEq(decoded.splitHistory[0][0].numerator, 2);
+        assertEq(decoded.splitHistory[0][0].denominator, 1);
     }
 
     function testLogic_ManagesDynamicArrayPayloadSections() public {
@@ -226,19 +228,19 @@ contract ShareExtensionForkTest is Test {
         });
         workingData = shareLogic.addTransferRestriction(workingData, restriction);
 
-        ShareCertData memory expanded = shareLogic.decodeExtensionData(workingData);
-        assertEq(expanded.mandatoryConversionTriggers.length, 2);
-        assertEq(expanded.specialVotingRights.length, 2);
-        assertEq(expanded.transferRestrictions.length, 2);
+        ShareCertDataLayer memory expanded = shareLogic.decodeExtensionData(workingData);
+        assertEq(expanded.conversionTriggers[0].length, 2);
+        assertEq(expanded.votingRights[0].length, 2);
+        assertEq(expanded.transferRestrictions[0].length, 2);
 
         workingData = shareLogic.removeConversionTrigger(workingData, 1);
         workingData = shareLogic.removeSpecialVotingRight(workingData, 1);
         workingData = shareLogic.removeTransferRestriction(workingData, 1);
 
-        ShareCertData memory collapsed = shareLogic.decodeExtensionData(workingData);
-        assertEq(collapsed.mandatoryConversionTriggers.length, 1);
-        assertEq(collapsed.specialVotingRights.length, 1);
-        assertEq(collapsed.transferRestrictions.length, 1);
+        ShareCertDataLayer memory collapsed = shareLogic.decodeExtensionData(workingData);
+        assertEq(collapsed.conversionTriggers[0].length, 1);
+        assertEq(collapsed.votingRights[0].length, 1);
+        assertEq(collapsed.transferRestrictions[0].length, 1);
     }
 
     function testJson_GetExtensionURIIsValidAndParseable() public {
@@ -295,19 +297,19 @@ contract ShareExtensionForkTest is Test {
     }
 
     function testLogic_RejectsInvalidSeriesTerms() public {
-        ShareCertData memory shareData = shareLogic.decodeExtensionData(certPrinter.getExtensionData(tokenId));
-        shareData.terms.isConvertible = false;
-        shareData.terms.conversionPrice = 1e18;
-        shareData.terms.targetConversionSeriesId = "";
-        shareData.terms.hasMandatoryConversion = false;
+        ShareCertDataLayer memory layer = shareLogic.decodeExtensionData(certPrinter.getExtensionData(tokenId));
+        layer.terms[0].isConvertible = false;
+        layer.terms[0].conversionPrice = 1e18;
+        layer.terms[0].targetConversionSeriesId = "";
+        layer.terms[0].hasMandatoryConversion = false;
 
-        (bool valid, string memory error) = shareLogic.validateSeriesTerms(shareData.terms);
+        (bool valid, string memory error) = shareLogic.validateSeriesTerms(layer.terms[0]);
         assertFalse(valid);
         assertEq(error, "ShareExtensionLogic: conversionPrice must be 0 when not convertible");
 
         bytes memory existingData = certPrinter.getExtensionData(tokenId);
         vm.expectRevert(bytes("ShareExtensionLogic: conversionPrice must be 0 when not convertible"));
-        shareLogic.updateSeriesTerms(existingData, shareData.terms);
+        shareLogic.updateSeriesTerms(existingData, layer.terms[0]);
     }
 
     function _deployFactories() internal {
@@ -399,8 +401,8 @@ contract ShareExtensionForkTest is Test {
 
     function _deployShareContracts() internal {
         extensionAuth = new BorgAuth(address(this));
-        shareExtension = ShareExtension(address(new ERC1967Proxy(
-            address(new ShareExtension()),
+        shareExtension = ShareExtensionV3(address(new ERC1967Proxy(
+            address(new ShareExtensionV3()),
             abi.encodeWithSelector(ShareExtension.initialize.selector, address(extensionAuth))
         )));
         shareLogic = new ShareExtensionLogic();
@@ -630,7 +632,20 @@ contract ShareExtensionForkTest is Test {
             splitHistory: splitHistory
         });
 
-        return shareExtension.encodeExtensionData(shareData);
+        ShareCertDataLayer memory layer;
+        layer.certificateData = new CertificateData[](1);
+        layer.certificateData[0] = shareData.certificateData;
+        layer.terms = new SeriesTerms[](1);
+        layer.terms[0] = shareData.terms;
+        layer.conversionTriggers = new MandatoryConversionTrigger[][](1);
+        layer.conversionTriggers[0] = shareData.mandatoryConversionTriggers;
+        layer.votingRights = new SpecialVotingRight[][](1);
+        layer.votingRights[0] = shareData.specialVotingRights;
+        layer.transferRestrictions = new TransferRestriction[][](1);
+        layer.transferRestrictions[0] = shareData.transferRestrictions;
+        layer.splitHistory = new SplitRecord[][](1);
+        layer.splitHistory[0] = shareData.splitHistory;
+        return abi.encode(layer);
     }
 
     function _buildEoi() internal view returns (EOI memory) {

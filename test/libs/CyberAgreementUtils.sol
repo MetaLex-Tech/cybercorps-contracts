@@ -60,6 +60,7 @@ library CyberAgreementUtils {
         IRegistryUUPS(registry).upgradeToAndCall(newImpl, "");
     }
 
+    /// @dev Signs for the key owner. Use the overload below when a delegate signs for another party.
     function signAgreementTypedData(
         Vm vm,
         bytes32 _domainSeparator,
@@ -70,6 +71,36 @@ library CyberAgreementUtils {
         string[] memory partyFields,
         string[] memory globalValues,
         string[] memory partyValues,
+        uint256 privKey
+    ) internal pure returns (bytes memory signature) {
+        return signAgreementTypedData(
+            vm,
+            _domainSeparator,
+            _typeHash,
+            contractId,
+            contractUri,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues,
+            vm.addr(privKey),
+            privKey
+        );
+    }
+
+    /// @notice `signer` is the party the signature consents for. It differs from the key owner when
+    /// a delegate signs.
+    function signAgreementTypedData(
+        Vm vm,
+        bytes32 _domainSeparator,
+        bytes32 _typeHash,
+        bytes32 contractId,
+        string memory contractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        address signer,
         uint256 privKey
     ) internal pure returns (bytes memory signature) {
         // Hash string arrays the same way as the contract
@@ -84,6 +115,7 @@ library CyberAgreementUtils {
             abi.encode(
                 _typeHash,
                 contractId,
+                signer,
                 contractUriHash,
                 globalFieldsHash,
                 partyFieldsHash,
