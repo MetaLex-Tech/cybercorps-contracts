@@ -39,15 +39,17 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
+// Frozen user-supplied deployed SAFTE V2 source (September 2026).
+// Only contract/struct names and relative import paths differ from the attachment.
+// Keep behavior frozen: importing the development extension would miss regressions.
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "./ICertificateExtension.sol";
-import "../../CyberCorpConstants.sol";
-import "../../libs/auth.sol";
-import "../../libs/JsonLib.sol";
+import "../../src/storage/extensions/ICertificateExtension.sol";
+import "../../src/CyberCorpConstants.sol";
+import "../../src/libs/auth.sol";
 
-struct SAFTEDataV2 {
+struct DeployedSAFTEDataV2 {
     UnlockStartTimeType unlockStartTimeType;    
     uint256 unlockStartTime;                
     uint256 unlockingPeriod; 
@@ -61,37 +63,32 @@ struct SAFTEDataV2 {
     string customProvisions;
     }
 
-contract SAFTEExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract DeployedSAFTEExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SAFTE_V2");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
 
     //ofset to leave for future upgrades
     uint256[30] private __gap;
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
     function initialize(address _auth) external initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
     }
 
-    function decodeExtensionData(bytes memory data) external view returns (SAFTEDataV2 memory) {
-        return abi.decode(data, (SAFTEDataV2));
+    function decodeExtensionData(bytes memory data) external view returns (DeployedSAFTEDataV2 memory) {
+        return abi.decode(data, (DeployedSAFTEDataV2));
     }
 
-    function encodeExtensionData(SAFTEDataV2 memory data) external pure returns (bytes memory) {
+    function encodeExtensionData(DeployedSAFTEDataV2 memory data) external pure returns (bytes memory) {
         return abi.encode(data);
     }
 
-    function supportsExtensionType(bytes32 extensionType) external pure virtual override returns (bool) {
+    function supportsExtensionType(bytes32 extensionType) external pure override returns (bool) {
         return extensionType == EXTENSION_TYPE;
     }
 
-    function getExtensionURI(bytes memory data) public view virtual override returns (string memory) {
-        SAFTEDataV2 memory decoded = abi.decode(data, (SAFTEDataV2));
+    function getExtensionURI(bytes memory data) external view override returns (string memory) {
+        DeployedSAFTEDataV2 memory decoded = abi.decode(data, (DeployedSAFTEDataV2));
         
         string memory json = string(abi.encodePacked(
             ', "SAFTEDetails": {',
@@ -105,7 +102,7 @@ contract SAFTEExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL
             '", "tokenCalculationMethod": "', conversionTypeToString(decoded.tokenCalculationMethod),
             '", "minCompanyReserve": "', uint256ToString(decoded.minCompanyReserve),
             '", "tokenPremiumMultiplier": "', uint256ToString(decoded.tokenPremiumMultiplier),
-            '", "customProvisions": "', JsonLib.jsonEscape(decoded.customProvisions),
+            '", "customProvisions": "', decoded.customProvisions,
             '"}'
         ));
         
@@ -162,3 +159,4 @@ contract SAFTEExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL
         address newImplementation
     ) internal virtual override onlyOwner {}
 }
+
