@@ -28,6 +28,26 @@ library DeploymentConstants {
         address zkpassportCondition;
     }
 
+    struct ExtensionDeployment {
+        address safeExtension;
+        address safeExtensionV3;
+        address aceSafeExtension;
+        address aceSafeExtensionV3;
+        address saftExtension;
+        address saftExtensionV2;
+        address saftExtensionV3;
+        address safteExtension;
+        address ethosSafteExtension;
+        address safteExtensionV2;
+        address safteExtensionV3;
+        address tokenWarrantExtension;
+        address tokenWarrantExtensionV2;
+        address tokenWarrantExtensionV3;
+        address shareExtension;
+        address shareExtensionV3;
+        address fundInterestExtension;
+    }
+
     struct UmiaDeployment {
         address parentCoFactory;
         bytes32 segCoTemplateId;
@@ -102,6 +122,57 @@ library DeploymentConstants {
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xe71fE689bFAA4939A760EDF7e07f44372a43932A
                 });
+        }
+    }
+
+    /// @notice Certificate extension proxies.
+    function extensions(uint256 chainId)
+        internal
+        pure
+        returns (ExtensionDeployment memory deployment)
+    {
+        if (chainId == BASE) {
+            return ExtensionDeployment({
+                safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
+                safeExtensionV3: address(0), // TODO: not yet deployed on any chain
+                aceSafeExtension: 0x6aDaef2B79FD1cbA130c5807B31DE435FEa58EAC,
+                aceSafeExtensionV3: address(0), // TODO: not yet deployed on any chain
+                saftExtension: 0x109D2A13932bE393011835B308F81ce1992E365B,
+                saftExtensionV2: 0x37c2A0e801e569e01f0972186aF4DB01409e92c1,
+                saftExtensionV3: address(0), // TODO: not yet deployed on any chain
+                safteExtension: 0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C,
+                ethosSafteExtension: 0xC23fFF0B06aE5EBea862611F489b1329108ce603, // older SAFTEExtension code, used by the Ethos SAFTE template
+                safteExtensionV2: 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A,
+                safteExtensionV3: address(0), // TODO: not yet deployed on any chain
+                tokenWarrantExtension: 0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4,
+                tokenWarrantExtensionV2: 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F,
+                tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on any chain
+                shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
+                shareExtensionV3: address(0), // TODO: not yet deployed on any chain
+                fundInterestExtension: address(0) // TODO: not yet deployed on any chain
+            });
+        } else if (chainId == ETH || chainId == ETH_SEPOLIA || chainId == BASE_SEPOLIA) {
+            return ExtensionDeployment({
+                safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
+                safeExtensionV3: address(0), // TODO: not yet deployed on any chain
+                aceSafeExtension: address(0), // deployed on Base only
+                aceSafeExtensionV3: address(0), // TODO: not yet deployed on any chain
+                saftExtension: 0x109D2A13932bE393011835B308F81ce1992E365B,
+                saftExtensionV2: 0x37c2A0e801e569e01f0972186aF4DB01409e92c1,
+                saftExtensionV3: address(0), // TODO: not yet deployed on any chain
+                safteExtension: 0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C,
+                ethosSafteExtension: 0xC23fFF0B06aE5EBea862611F489b1329108ce603, // older SAFTEExtension code, used by the Ethos SAFTE template
+                safteExtensionV2: 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A,
+                safteExtensionV3: address(0), // TODO: not yet deployed on any chain
+                tokenWarrantExtension: 0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4,
+                tokenWarrantExtensionV2: 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F,
+                tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on any chain
+                shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
+                shareExtensionV3: address(0), // TODO: not yet deployed on any chain
+                fundInterestExtension: address(0) // TODO: not yet deployed on any chain
+            });
+        } else {
+            revert UnsupportedChain(chainId);
         }
     }
 

@@ -50,8 +50,8 @@ hold different implementations, each chain gets its own row.
 | RoundManagerFactory       | pump  | Base      | `0x0608…3432` | none       | None    |
 | CyberAgreementRegistry    | both  | Base, ETH | `0xa9E8…c134` | +1,620 B   | Upgrade |
 | LegalDocRegistry          | docs  | Base, ETH | `0x45e5…8738` | +1,327 B   | Upgrade |
-| CertificateUriBuilder     | core  | Base, ETH | `0x5500…70A3` | +4,219 B   | Upgrade |
-| CertificateUriBuilder     | pump  | Base      | `0x476C…05b8` | +4,219 B   | Upgrade |
+| CertificateUriBuilder     | core  | Base, ETH | `0x5500…70A3` | +5,987 B   | Upgrade |
+| CertificateUriBuilder     | pump  | Base      | `0x476C…05b8` | +5,987 B   | Upgrade |
 | PumpCorpFactory           | pump  | Base      | `0xd426…487f` | +443 B     | Upgrade |
 | ParentCoFactory           | umia  | Base      | `0x5051…1df1` | +578 B     | Upgrade |
 | ParentCoFactory           | umia  | ETH       | `0x5c6D…D47F` | none       | None    |
@@ -85,14 +85,28 @@ MetaLeX deploys these. Each one is a UUPS proxy behind an ERC1967 proxy at a CRE
 They are not corp contracts. They carry no `DEPLOY_VERSION`.
 
 A corp points at an extension by address. The printer holds the certificate extension and the series
-extension. CyberCorp holds the corp extension. An upgrade keeps the proxy address, so no corp and no
-front-end has to change. Do not deploy a new proxy for these.
+extension. CyberCorp holds the corp extension. For a live proxy, an upgrade keeps the address, so no
+corp and no front-end has to change. Do not deploy a new proxy for a live extension. The resolved-render
+extensions are the exception. They get new proxies. See below.
 
 ### What changed
 
 15 extensions now escape their own strings before they write JSON. Each one returns a finished JSON
 fragment, and CertificateUriBuilder joins the fragments. At that point the builder cannot tell a
 structural quote from a data quote, so each extension must escape at the leaf.
+
+CyberCorpExtension, CyberCorpExtensionV2, CyberCorpFundExtension and CyberCorpComplianceExtension
+changed only to use JsonLib, so we will skip their release.
+
+The six V3 extensions and FundInterestExtension now render the whole certificate. CertificateUriBuilder
+calls `supportsResolvedExtensionData()` on the extension. If the extension answers `true`, the builder
+calls `getResolvedExtensionURI(printer, tokenId)`. The extension then reads the cert payload and the
+series payload from the printer. A V1 or V2 extension does not answer, so the builder renders the cert
+payload only, as before.
+
+ShareExtensionV3 has a new payload shape, `ShareCertDataLayer`. It keeps one layer at each of three
+scopes: the class on the IssuanceManager, the series on the printer, and the cert. The linked library
+ShareCertDataLayerLib merges the layers.
 
 ### Live proxies on Base
 
@@ -112,16 +126,27 @@ Each row is identified by a call to `EXTENSION_TYPE()` on the proxy.
 The three V1 extensions render no string field. They need no change.
 ShareExtension already escaped every field, so it is not in the release either.
 
-### Proxies still to find
+### New proxies for the resolved-render extensions
 
-These ten also changed. Their live addresses are not in this repository and not in the front-end
-config. Find each proxy, or record that it is not deployed yet.
+Deploy a new proxy for each of these seven. Do not upgrade an existing proxy to one of them.
 
 ACESAFEExtensionV3, SAFEExtensionV3, SAFTExtensionV3, SAFTEExtensionV3, TokenWarrantExtensionV3,
-CyberCorpExtension, CyberCorpExtensionV2, CyberCorpFundExtension, CyberCorpComplianceExtension,
-FundInterestExtension.
+ShareExtensionV3, FundInterestExtension.
 
-TODO: complete this list before the deploy.
+- A V1 or V2 proxy serves every printer that points at it, and some of those printers are on v4 corps.
+  After an upgrade to V3 code, `tokenURI` reverts for each of those printers. See the version mismatch
+  section below.
+- The `ShareCertData` payloads of a ShareExtension proxy do not decode as `ShareCertDataLayer`.
+- FundInterestExtension has no earlier proxy.
+
+No known extension proxy on Base or on Base Sepolia runs V3 code. Each one fails
+`EXTENSION_TYPE_V3()`, `supportsSeriesExtensionData()` and `supportsResolvedExtensionData()`.
+
+A printer gets its extension when it is created. A v5 corp points its new printers at the new proxies.
+Existing printers stay on their V1 or V2 proxy. Add the new addresses to the front-end config.
+
+`script/deploy-extensions-v3.s.sol` deploys the seven implementations and proxies with CREATE2. Forge
+deploys ShareCertDataLayerLib with CREATE2 and links it to ShareExtensionV3.
 
 ## Version mismatch between MetaLeX singletons and corps
 
@@ -158,6 +183,16 @@ there is no callback risk. Three behavior changes apply:
 - `isParty` no longer accepts a delegate. A delegate can no longer sign, escrow-sign, or request a
   void. `setDelegation` still exists and still emits, so the feature looks available.
 - A zero `expiry` no longer voids an agreement. Unanimity now counts only the allocated party slots.
+
+### A resolved-render extension needs a v5 corp
+
+The V3 extensions and FundInterestExtension call `getSeriesInfo` on the printer. A v4 printer does not
+have it. ShareExtensionV3 also calls `getPrinterClassId` and `getSecurityClass` on the IssuanceManager.
+A v4 IssuanceManager does not have them. CertificateUriBuilder does not catch this revert, so `tokenURI`
+reverts.
+
+A v4 corp can still create a printer with any extension address. Do not bind a v4 printer to one of
+these extensions.
 
 ## Effect of the CyberCertData field change
 
@@ -331,6 +366,22 @@ The caller must be an admin. The printer accepts an admin directly now.
 `CyberCertPrinter` is now `LedgerEntryToken`. Its interface `ICyberCertPrinter` is now `ILedgerEntryToken`.
 Section 2 needs that interface artifact. The address, the storage and the beacon do not change.
 Only the artifact name and the ABI file name change.
+
+### 7. Read the whole certificate from the extension
+
+For the V3 extensions and FundInterestExtension, the cert payload is not the whole certificate. Some of
+the data can be on the series. For ShareExtensionV3, some can also be on the class.
+
+- These extensions are at new proxy addresses. Offer them for new printers on a v5 corp only.
+- Call `resolveCert(printer, tokenId)` on the extension to read the whole certificate. ShareExtensionV3
+  returns one merged `ShareCertData`. The other extensions return the series struct and the cert struct
+  as a pair.
+- `ICertificateExtensionV3` now declares `supportsResolvedExtensionData` and `getResolvedExtensionURI`.
+  It no longer declares `supportsSeriesExtensionData` and `getSeriesExtensionURI`. No extension keeps
+  those two functions.
+- ShareExtensionV3 no longer has `decodeSeriesExtensionData` and `encodeSeriesExtensionData`. Write each
+  of its payloads as a `ShareCertDataLayer`. `encodeExtensionData(ShareCertData)` gives one cert layer
+  that sets every section.
 
 ### What does not change
 
