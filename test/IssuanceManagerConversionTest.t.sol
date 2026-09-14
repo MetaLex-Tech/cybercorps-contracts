@@ -920,8 +920,7 @@ contract IssuanceManagerConversionTest is Test {
         vm.expectRevert(IssuanceManagerStorage.ScripOutstanding.selector);
         issuanceManager.setScripRatio(address(certPrinter), 1, 1);
 
-        // Redeeming returns exactly the deposit in active units. The remaining backing is
-        // attributed equally to both certificates under proportional redemption.
+        // Redeeming consumes the insider's own attribution and preserves the investor's backing.
         vm.prank(insider);
         issuanceManager.convertScripToCert(address(certPrinter), 200 * 1e18);
         assertEq(
@@ -930,7 +929,7 @@ contract IssuanceManagerConversionTest is Test {
         );
         assertEq(
             issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
-            50 * 1e18
+            100 * 1e18
         );
     }
 
@@ -999,6 +998,69 @@ contract IssuanceManagerConversionTest is Test {
             true,
             true
         );
+    }
+
+    function test_MemberRedemptionAtTenToOnePreservesEffectiveCertificateUnits() public {
+        (ILedgerEntryToken cert, ICyberScrip scrip, uint256 a, uint256 b) = _tenToOnePool();
+        vm.prank(otherInvestor);
+        issuanceManager.convertScripToCert(address(cert), 500e18);
+        assertEq(cert.getActiveCertificateDetails(b).unitsRepresented, 50e18);
+        assertEq(cert.getCertificateDetails(a).unitsRepresented, 10e18);
+        assertEq(cert.getCertificateDetails(b).unitsRepresented, 90e18);
+        assertEq(issuanceManager.getScripPoolSharesById(address(cert), b), 40e18);
+        assertEq(scrip.balanceOf(otherInvestor), 400e18);
+
+        vm.prank(otherInvestor);
+        issuanceManager.convertScripToCert(address(cert), 400e18);
+        assertEq(cert.getActiveCertificateDetails(b).unitsRepresented, 90e18);
+        assertEq(cert.getCertificateDetails(b).unitsRepresented, 90e18);
+        assertEq(cert.getCertificateDetails(a).unitsRepresented, 10e18);
+        assertEq(scrip.balanceOf(otherInvestor), 0);
+
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(cert), 100e18);
+        assertEq(cert.getActiveCertificateDetails(a).unitsRepresented, 10e18);
+        (uint256 assets,) = issuanceManager.getCertScripUnitVault(address(cert));
+        assertEq(assets, 0);
+        assertEq(scrip.totalSupply(), 0);
+    }
+
+    function test_NewHolderAtTenToOneReducesOriginalCertificatesProportionally() public {
+        (ILedgerEntryToken cert, ICyberScrip scrip, uint256 a, uint256 b) = _tenToOnePool();
+        address buyer = makeAddr("tenToOneBuyer");
+        vm.prank(otherInvestor);
+        scrip.transfer(buyer, 500e18);
+        assertEq(cert.getCertificateDetails(a).unitsRepresented, 10e18);
+        assertEq(cert.getCertificateDetails(b).unitsRepresented, 90e18);
+
+        vm.expectRevert(IssuanceManagerStorage.RecertificationApprovalRequired.selector);
+        vm.prank(buyer);
+        issuanceManager.convertScripToCert(address(cert), 500e18);
+        _stageRecertificationApproval(cert, buyer, "Buyer", 50, "", bytes(""));
+        vm.prank(buyer);
+        issuanceManager.convertScripToCert(address(cert), 500e18);
+
+        assertEq(cert.getCertificateDetails(a).unitsRepresented, 5e18);
+        assertEq(cert.getCertificateDetails(b).unitsRepresented, 45e18);
+        uint256 buyerId = cert.tokenOfLegalOwnerByIndex(buyer, 0);
+        assertEq(cert.getActiveCertificateDetails(buyerId).unitsRepresented, 50e18);
+        assertEq(scrip.balanceOf(buyer), 0);
+        assertEq(scrip.totalSupply(), 500e18);
+        (uint256 assets,) = issuanceManager.getCertScripUnitVault(address(cert));
+        assertEq(assets, 50e18);
+    }
+
+    function _tenToOnePool() internal returns (ILedgerEntryToken cert, ICyberScrip scrip, uint256 a, uint256 b) {
+        cert = _deployPrinter("Ten To One", "TEN");
+        a = _mintCert(cert, investor, 10);
+        b = _mintCert(cert, otherInvestor, 90);
+        scrip = ICyberScrip(_deployScripAtRatio(cert, 10, 1));
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(cert), a, 10e18, address(0));
+        vm.prank(otherInvestor);
+        issuanceManager.scripifyCert(address(cert), b, 90e18, address(0));
+        assertEq(scrip.balanceOf(investor), 100e18);
+        assertEq(scrip.balanceOf(otherInvestor), 900e18);
     }
 
     function test_ScripifyWhitelist_EnabledBlocksNonWhitelisted() public {
@@ -1626,8 +1688,8 @@ contract IssuanceManagerConversionTest is Test {
             otherInvestor,
             otherInvestorCertId,
             150 * 1e18,
-            175 * 1e18,
-            25 * 1e18
+            150 * 1e18,
+            0
         );
         vm.expectEmit(true, true, true, true);
         emit IssuanceManager.ScripRecertified(
@@ -1635,8 +1697,8 @@ contract IssuanceManagerConversionTest is Test {
             otherInvestor,
             otherInvestorCertId,
             150 * 1e18,
-            175 * 1e18,
-            25 * 1e18,
+            150 * 1e18,
+            0,
             50 * 1e18,
             50 * 1e18
         );
@@ -1661,28 +1723,28 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(investorActiveFinal.unitsRepresented, 0);
         assertEq(otherActiveFinal.unitsRepresented, 150 * 1e18);
         assertTrue(investorIsScripified);
-        assertEq(investorScripified, 25 * 1e18);
-        assertTrue(otherIsScripified);
-        assertEq(otherScripified, 25 * 1e18);
-        assertEq(investorFinal.unitsRepresented, 25 * 1e18);
-        assertEq(otherFinal.unitsRepresented, 175 * 1e18);
+        assertEq(investorScripified, 50 * 1e18);
+        assertFalse(otherIsScripified);
+        assertEq(otherScripified, 0);
+        assertEq(investorFinal.unitsRepresented, 50 * 1e18);
+        assertEq(otherFinal.unitsRepresented, 150 * 1e18);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 50 * 1e18);
         assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 0);
         assertEq(
             issuanceManager.getScripPoolAmountById(address(certPrinter), investorCertId),
-            25 * 1e18
+            50 * 1e18
         );
         assertEq(
             issuanceManager.getScripPoolAmountById(address(certPrinter), otherInvestorCertId),
-            25 * 1e18
+            0
         );
         assertEq(
             issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
-            25 * 1e18
+            50 * 1e18
         );
         assertEq(
             issuanceManager.getScripPoolSharesById(address(certPrinter), otherInvestorCertId),
-            25 * 1e18
+            0
         );
     }
 
@@ -1905,14 +1967,15 @@ contract IssuanceManagerConversionTest is Test {
             .getCertScripifiedStatus(address(certPrinter), 5);
 
         assertTrue(isScripifiedA);
-        assertTrue(isScripifiedB);
+        assertFalse(isScripifiedB);
         assertTrue(isScripifiedC);
         assertTrue(isScripifiedD);
-        // Four equal source positions share the 160-unit residual equally, independent of recipients.
-        assertApproxEqAbs(scripifiedA, 40e18, 1);
-        assertApproxEqAbs(scripifiedB, 40e18, 1);
-        assertApproxEqAbs(scripifiedC, 40e18, 1);
-        assertApproxEqAbs(scripifiedD, 40e18, 1);
+        // B consumes its 100, then socializes 20 across A/C/D (280/3 each).
+        // C consumes 50 of its own. New investors then scale the 230-unit pool to 160.
+        assertApproxEqAbs(scripifiedA, uint256(280e18) * 160 / 690, 3);
+        assertEq(scripifiedB, 0);
+        assertApproxEqAbs(scripifiedC, uint256(130e18) * 160 / 690, 3);
+        assertApproxEqAbs(scripifiedD, uint256(280e18) * 160 / 690, 3);
         assertFalse(isScripifiedNewOne);
         assertFalse(isScripifiedNewTwo);
 
@@ -2152,26 +2215,27 @@ contract IssuanceManagerConversionTest is Test {
             .getCertScripifiedStatus(address(certPrinter), 6);
 
         assertTrue(isScripifiedA);
-        assertApproxEqAbs(scripifiedA, 24e18, 1);
-        assertTrue(isScripifiedB);
-        assertApproxEqAbs(scripifiedB, 24e18, 1);
+        assertApproxEqAbs(scripifiedA, 54e18, 2);
+        assertFalse(isScripifiedB);
+        assertEq(scripifiedB, 0);
         assertTrue(isScripifiedC);
-        // All five source positions retain one fifth of the 120-unit residual, to within one wei.
+        // B's excess leaves A/C/D/E at 90 each. C and D each consume 80 directly.
+        // New investors reduce the remaining [90, 0, 10, 10, 90] pool by 40%.
         assertApproxEqAbs(
             scripifiedC,
-            24e18,
-            1,
+            6e18,
+            2,
             "holder C scripified wad (rounding)"
         );
         assertTrue(isScripifiedD);
         assertApproxEqAbs(
             scripifiedD,
-            24e18,
-            1,
+            6e18,
+            2,
             "holder D scripified wad (rounding)"
         );
         assertTrue(isScripifiedE);
-        assertApproxEqAbs(scripifiedE, 24e18, 1);
+        assertApproxEqAbs(scripifiedE, 54e18, 2);
         assertFalse(isScripifiedNewOne);
         assertEq(scripifiedNewOne, 0);
         assertFalse(isScripifiedNewTwo);

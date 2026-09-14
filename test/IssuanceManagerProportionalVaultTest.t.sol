@@ -19,6 +19,10 @@ contract ProportionalVaultHarness {
         IssuanceManagerStorage._withdrawVaultAssets(PRINTER, amount);
     }
 
+    function withdrawFor(uint256 id, uint256 amount) external {
+        IssuanceManagerStorage._withdrawCertScripUnits(PRINTER, id, amount);
+    }
+
     function claim(uint256 id) external view returns (uint256) {
         return IssuanceManagerStorage._assetsOfVaultPosition(PRINTER, id);
     }
@@ -159,6 +163,64 @@ contract IssuanceManagerProportionalVaultTest is Test {
         assertApproxEqAbs(large, small, 1000, "no per-position term in withdrawal cost");
     }
 
+    function test_DirectWithdrawalAfterIndexChangeCheckpointsOnlyRedeemer() public {
+        vault.deposit(0, 100e18);
+        vault.deposit(1, 900e18);
+        vault.withdraw(500e18);
+        uint256 otherBefore = vault.claim(1);
+        vault.withdrawFor(0, 25e18);
+        assertEq(vault.claim(0), 25e18);
+        assertEq(vault.claim(1), otherBefore);
+        _assertTotals(475e18);
+        vault.deposit(0, 25e18);
+        assertEq(vault.claim(0), 50e18);
+        assertEq(vault.claim(1), otherBefore);
+    }
+
+    function test_DirectWithdrawalResetsEpochAndStalePositionCanRedeem() public {
+        vault.deposit(0, 100);
+        vault.withdrawFor(0, 100);
+        _assertTotals(0);
+        vault.deposit(1, 100);
+        assertEq(vault.claim(0), 0);
+        vault.withdrawFor(0, 50);
+        assertEq(vault.claim(0), 0);
+        assertEq(vault.claim(1), 50);
+        vault.withdrawFor(1, 50);
+        _assertTotals(0);
+    }
+
+    function test_DirectWithdrawalRejectsOverdrawAndLeavesZeroWithdrawalUnchanged() public {
+        vm.expectRevert(IssuanceManagerStorage.EmptyVault.selector);
+        vault.withdrawFor(0, 1);
+        vault.deposit(0, 100);
+        vm.expectRevert(IssuanceManagerStorage.VaultWithdrawalExceedsAssets.selector);
+        vault.withdrawFor(0, 101);
+        vault.withdrawFor(0, 0);
+        assertEq(vault.claim(0), 100);
+        _assertTotals(100);
+    }
+
+    function testFuzz_DirectWithdrawalConsumesOwnClaimBeforeProportionalExcess(uint128 a, uint128 b, uint256 out)
+        public
+    {
+        uint256 first = uint256(a) + 1;
+        uint256 second = uint256(b) + 1;
+        vault.deposit(0, first);
+        vault.deposit(1, second);
+        out = bound(out, 0, first + second);
+        vault.withdrawFor(0, out);
+        _assertTotals(first + second - out);
+        assertEq(vault.claim(0), out < first ? first - out : 0);
+        uint256 expectedOther = out <= first ? second : first + second - out;
+        if (out <= first) {
+            assertEq(vault.claim(1), expectedOther, "direct redemption cannot dilute another position");
+        } else {
+            assertLe(vault.claim(1), expectedOther);
+            assertApproxEqAbs(vault.claim(1), expectedOther, 1);
+        }
+    }
+
     function _withdrawalGas(uint256 count) internal returns (uint256 used) {
         ProportionalVaultHarness instance = new ProportionalVaultHarness();
         for (uint256 i; i < count; ++i) {
@@ -202,10 +264,23 @@ contract IssuanceManagerProportionalVaultTest is Test {
             } else {
                 uint256 amount = uint256(seed) % expectedAssets + 1;
                 uint256 remaining = expectedAssets - amount;
-                for (uint256 j; j < 4; ++j) {
-                    upperClaims[j] = Math.mulDiv(upperClaims[j], remaining, expectedAssets, Math.Rounding.Ceil);
+                bool direct = uint256(seed) & 8 != 0;
+                uint256 proportionalBase = expectedAssets;
+                if (direct) {
+                    uint256 own = Math.min(upperClaims[id], amount);
+                    upperClaims[id] -= own;
+                    proportionalBase -= own;
                 }
-                vault.withdraw(amount);
+                for (uint256 j; j < 4; ++j) {
+                    upperClaims[j] = remaining == 0
+                        ? 0
+                        : Math.mulDiv(upperClaims[j], remaining, proportionalBase, Math.Rounding.Ceil);
+                }
+                if (direct) {
+                    vault.withdrawFor(id, amount);
+                } else {
+                    vault.withdraw(amount);
+                }
                 expectedAssets = remaining;
             }
             _assertTotals(expectedAssets);
@@ -274,21 +349,23 @@ contract ProportionalVaultMathTest is Test {
 }
 
 contract IssuanceManagerProportionalConversionTest is VaultEpochHarness {
-    function test_ExistingCertificateConversionSocializesItsOwnClaimToo() public {
+    function test_ExistingCertificateConversionConsumesItsOwnClaimFirst() public {
         (ILedgerEntryToken cert,) = _setUpVaultWithSupply(2);
         uint256 otherId = issuanceManager.createCertAndAssign(address(cert), otherHolder, _details(100));
         vm.prank(otherHolder);
         issuanceManager.scripifyCert(address(cert), otherId, 100, address(0));
         vm.prank(holder);
         issuanceManager.convertScripToCert(address(cert), 50);
-        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 75);
-        assertEq(issuanceManager.getScripPoolAmountById(address(cert), otherId), 75);
+        assertEq(issuanceManager.getScripPoolAmountById(address(cert), 0), 50);
+        assertEq(issuanceManager.getScripPoolAmountById(address(cert), otherId), 100);
         assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 50);
+        assertEq(cert.getCertificateDetails(0).unitsRepresented, 100);
+        assertEq(cert.getCertificateDetails(otherId).unitsRepresented, 100);
         assertEq(scrip.balanceOf(holder), 50);
         assertEq(scrip.balanceOf(otherHolder), 100);
     }
 
-    function test_SingleCertificateCyclesStayLiveThroughManyNormalizations() public {
+    function test_SingleCertificateCyclesPreserveOtherPositions() public {
         (ILedgerEntryToken cert,) = _setUpVaultWithSupply(1);
         uint256 otherId = issuanceManager.createCertAndAssign(address(cert), otherHolder, _details(900));
         for (uint256 i; i < 100; ++i) {
@@ -301,7 +378,8 @@ contract IssuanceManagerProportionalConversionTest is VaultEpochHarness {
             assertEq(shares, 100);
             assertEq(scrip.totalSupply(), 100);
             assertEq(cert.getActiveCertificateDetails(otherId).unitsRepresented, 900);
-            cert.getCertificateDetails(otherId); // Previously overflowing claim/detail path stays live.
+            assertEq(cert.getCertificateDetails(otherId).unitsRepresented, 900);
+            assertEq(cert.getCertificateDetails(0).unitsRepresented, 100);
         }
     }
 

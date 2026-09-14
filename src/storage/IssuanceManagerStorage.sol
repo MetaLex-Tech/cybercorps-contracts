@@ -520,7 +520,7 @@ library IssuanceManagerStorage {
         );
     }
 
-    /// @dev Materialize only the depositing position. Discard sub-wei fractions toward the pool.
+    /// @dev Materialize only the position being updated. Discard sub-wei fractions toward the pool.
     function _vaultPositionForWrite(address certAddress, uint256 tokenId)
         internal returns (CertScripState storage position)
     {
@@ -1219,9 +1219,13 @@ library IssuanceManagerStorage {
             approval.endorsementTimestamp = endorsementTimestamp;
         }
 
-        // Every conversion retires backing and normalized shares proportionally, regardless of
-        // which certificate receives the active units. ERC20 ownership authorizes redemption.
-        _withdrawVaultAssets(certAddress, units);
+        // Consume the legal holder's non-void certificate positions before reducing anyone else's
+        // attribution. The first active certificate still receives all restored active units.
+        if (selection.foundActive) {
+            _withdrawOwnedScripUnits(certAddress, account, units);
+        } else {
+            _withdrawVaultAssets(certAddress, units);
+        }
         ICyberScrip(scripifiedCert).burnFrom(account, amount);
 
         if (selection.foundActive) {
@@ -1497,6 +1501,51 @@ library IssuanceManagerStorage {
         position.vaultNominalShares += assetsWad;
         pool.totalAssetsWad += assetsWad;
         pool.totalNominalShares = pool.totalAssetsWad;
+    }
+
+    /// @notice Consume the caller's eligible pool positions in legal-owner enumeration order.
+    /// @dev Stops as soon as the redemption is covered. Only an amount beyond the holder's combined
+    /// attribution is socialized. ERC-721 custody does not determine whose positions can be consumed.
+    function _withdrawOwnedScripUnits(address certAddress, address account, uint256 assetsOutWad) internal {
+        uint256 poolAssets = issuanceManagerStorage().certScripUnitPools[certAddress].totalAssetsWad;
+        if (poolAssets == 0) revert EmptyVault();
+        if (assetsOutWad > poolAssets) revert VaultWithdrawalExceedsAssets();
+
+        ILedgerEntryToken cert = ILedgerEntryToken(certAddress);
+        uint256 ownedBalance = cert.balanceOfLegalOwner(account);
+        uint256 remaining = assetsOutWad;
+        for (uint256 i; i < ownedBalance && remaining != 0; ++i) {
+            uint256 tokenId = cert.tokenOfLegalOwnerByIndex(account, i);
+            if (cert.isVoided(tokenId)) continue;
+            uint256 ownAssets = Math.min(_assetsOfVaultPosition(certAddress, tokenId), remaining);
+            if (ownAssets == 0) continue;
+            _withdrawCertScripUnits(certAddress, tokenId, ownAssets);
+            remaining -= ownAssets;
+        }
+        if (remaining != 0) _withdrawVaultAssets(certAddress, remaining);
+    }
+
+    /// @notice Consume the receiving certificate's attribution first, socializing only any excess.
+    /// @dev Direct withdrawals leave the loss index unchanged, so other certificate positions do not
+    /// lose backing. The position is checkpointed before subtracting its effective, floored claim.
+    function _withdrawCertScripUnits(address certAddress, uint256 tokenId, uint256 assetsOutWad) internal {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
+        if (pool.totalAssetsWad == 0) revert EmptyVault();
+        if (assetsOutWad > pool.totalAssetsWad) revert VaultWithdrawalExceedsAssets();
+
+        uint256 ownAssets = Math.min(_assetsOfVaultPosition(certAddress, tokenId), assetsOutWad);
+        if (ownAssets != 0) {
+            CertScripState storage position = _vaultPositionForWrite(certAddress, tokenId);
+            position.vaultNominalShares -= ownAssets;
+            pool.totalAssetsWad -= ownAssets;
+            pool.totalNominalShares = pool.totalAssetsWad;
+        }
+
+        if (pool.totalAssetsWad == 0) {
+            _resetVaultPositions(certAddress);
+        } else if (assetsOutWad > ownAssets) {
+            _withdrawVaultAssets(certAddress, assetsOutWad - ownAssets);
+        }
     }
 
     /// @notice Socialize a withdrawal across all positions in O(1), reducing both assets and shares.
