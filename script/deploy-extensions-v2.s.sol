@@ -1,54 +1,79 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {Script} from "forge-std/Script.sol";
-import {console} from "forge-std/console.sol";
-import {BorgAuth} from "../src/libs/auth.sol";
-import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ACESAFEExtension} from "../src/storage/extensions/ACESAFEExtension.sol";
 import {SAFEExtension} from "../src/storage/extensions/SAFEExtension.sol";
 import {SAFTEExtensionV2} from "../src/storage/extensions/SAFTEExtensionV2.sol";
 import {SAFTExtensionV2} from "../src/storage/extensions/SAFTExtensionV2.sol";
 import {TokenWarrantExtensionV2} from "../src/storage/extensions/TokenWarrantExtensionV2.sol";
+import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
+import {Script, console2} from "forge-std/Script.sol";
 
-contract BaseScript is Script {
+/// @notice Upgrades the live V1 and V2 certificate extension proxies to new implementations.
+/// @dev The proxies keep their addresses. The new code escapes string fields in the JSON it renders.
+contract DeployExtensionsV2Script is Script {
     function run() public {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
+        runWithArgs(
+//            // Production
+//            DeploymentConstants.BASE,
+//            "CyberCorpV5-ExtensionsV2.0.1",
+//            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
+
+            // Staging
+            DeploymentConstants.BASE_SEPOLIA,
+            "CyberCorpV5-ExtensionsV2.0.1",
+            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
+        );
+    }
+
+    function runWithArgs(
+        uint256 chainId,
+        string memory saltStr,
+        uint256 deployerPrivateKey
+    ) public {
+        address deployerAddress = vm.addr(deployerPrivateKey);
+
+        bytes32 salt = keccak256(bytes(saltStr));
+
+        DeploymentConstants.ExtensionDeployment memory extensions = DeploymentConstants.extensions(chainId);
+
+        console2.log("==== Configs ====");
+        console2.log("chainId: %d", chainId);
+        console2.log("salt string: %s", saltStr);
+        console2.log("deployer: %s", deployerAddress);
+        console2.log("");
+
         vm.startBroadcast(deployerPrivateKey);
+        address safeImplementation = address(new SAFEExtension{salt: salt}());
+        SAFEExtension(extensions.safeExtension).upgradeToAndCall(safeImplementation, "");
 
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2-Extensions"));
-        BorgAuth auth = BorgAuth(0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01);
+        address saftV2Implementation = address(new SAFTExtensionV2{salt: salt}());
+        SAFTExtensionV2(extensions.saftExtensionV2).upgradeToAndCall(saftV2Implementation, "");
 
-        address safeExtension = address(
-            new ERC1967Proxy{salt: salt}(
-                address(new SAFEExtension{salt: salt}()),
-                abi.encodeWithSelector(SAFEExtension.initialize.selector, address(auth))
-            )
+        address safteV2Implementation = address(new SAFTEExtensionV2{salt: salt}());
+        SAFTEExtensionV2(extensions.safteExtensionV2).upgradeToAndCall(safteV2Implementation, "");
+
+        address tokenWarrantV2Implementation = address(new TokenWarrantExtensionV2{salt: salt}());
+        TokenWarrantExtensionV2(extensions.tokenWarrantExtensionV2).upgradeToAndCall(tokenWarrantV2Implementation, "");
+
+        // ACESAFEExtension exists on Base mainnet only.
+        address aceSafeImplementation;
+        if (chainId == DeploymentConstants.BASE) {
+            aceSafeImplementation = address(new ACESAFEExtension{salt: salt}());
+            ACESAFEExtension(extensions.aceSafeExtension).upgradeToAndCall(aceSafeImplementation, "");
+        }
+        vm.stopBroadcast();
+
+        console2.log("==== Upgraded ====");
+        console2.log("SAFEExtension: %s -> %s", extensions.safeExtension, safeImplementation);
+        console2.log("SAFTExtensionV2: %s -> %s", extensions.saftExtensionV2, saftV2Implementation);
+        console2.log("SAFTEExtensionV2: %s -> %s", extensions.safteExtensionV2, safteV2Implementation);
+        console2.log(
+            "TokenWarrantExtensionV2: %s -> %s", extensions.tokenWarrantExtensionV2, tokenWarrantV2Implementation
         );
-
-        address safteExtensionV2 = address(
-            new ERC1967Proxy{salt: salt}(
-                address(new SAFTExtensionV2{salt: salt}()),
-                abi.encodeWithSelector(SAFTExtensionV2.initialize.selector, address(auth))
-            )
-        );
-
-        address safteExtensionV2Long = address(
-            new ERC1967Proxy{salt: salt}(
-                address(new SAFTEExtensionV2{salt: salt}()),
-                abi.encodeWithSelector(SAFTEExtensionV2.initialize.selector, address(auth))
-            )
-        );
-
-        address tokenWarrantExtensionV2 = address(
-            new ERC1967Proxy{salt: salt}(
-                address(new TokenWarrantExtensionV2{salt: salt}()),
-                abi.encodeWithSelector(TokenWarrantExtensionV2.initialize.selector, address(auth))
-            )
-        );
-
-        console.log("SAFEExtension: ", safeExtension);
-        console.log("SAFTExtensionV2: ", safteExtensionV2);
-        console.log("SAFTEExtensionV2: ", safteExtensionV2Long);
-        console.log("TokenWarrantExtensionV2: ", tokenWarrantExtensionV2);
+        if (chainId == DeploymentConstants.BASE) {
+            console2.log("ACESAFEExtension: %s -> %s", extensions.aceSafeExtension, aceSafeImplementation);
+        }
+        console2.log("");
     }
 }

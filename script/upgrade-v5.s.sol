@@ -21,6 +21,8 @@ import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
+import {DeployExtensionsV2Script} from "./deploy-extensions-v2.s.sol";
+import {DeployExtensionsV3Script} from "./deploy-extensions-v3.s.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
 import {SafeUtils} from "./libs/SafeUtils.sol";
@@ -32,6 +34,7 @@ interface IUUPS {
 }
 
 /// @notice Deploys v5 implementations and upgrades MetaLeX-owned singleton proxies.
+///         It also upgrades the live V1 and V2 certificate extensions and deploys the V3 extensions.
 /// @dev Run this once per production chain, or on Base Sepolia as a rehearsal.
 ///      Corp upgrades intentionally are not broadcast here:
 ///      `corpUpgradeCalls` returns the six calls that a corp owner must execute in one Safe batch.
@@ -40,6 +43,8 @@ contract UpgradeV5Script is Script {
     uint256 private constant BASE = 8453;
     uint256 private constant BASE_SEPOLIA = 84532;
     bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    string private constant EXTENSIONS_V2_SALT = "CyberCorpV5-ExtensionsV2.0.1";
+    string private constant EXTENSIONS_V3_SALT = "CyberCorpV5-ExtensionsV3";
 
     struct Implementations {
         address cyberCorpFactory;
@@ -124,6 +129,10 @@ contract UpgradeV5Script is Script {
         _upgradeProxy(targets.cyberCorpFactory, impls.cyberCorpFactory, "CyberCorpFactory");
 
         vm.stopBroadcast();
+
+        // Each called script starts its own broadcast.
+        (new DeployExtensionsV2Script()).runWithArgs(block.chainid, EXTENSIONS_V2_SALT, privateKey);
+        (new DeployExtensionsV3Script()).runWithArgs(block.chainid, EXTENSIONS_V3_SALT, privateKey);
     }
 
     /// @notice Returns the atomic Safe batch for a single corp after singleton deployment.

@@ -148,6 +148,9 @@ Existing printers stay on their V1 or V2 proxy. Add the new addresses to the fro
 `script/deploy-extensions-v3.s.sol` deploys the seven implementations and proxies with CREATE2. Forge
 deploys ShareCertDataLayerLib with CREATE2 and links it to ShareExtensionV3.
 
+`script/deploy-extensions-v2.s.sol` upgrades the live proxies in the table above. After the singleton
+upgrades, `script/upgrade-v5.s.sol` calls the V2 script and then the V3 script.
+
 ## Version mismatch between MetaLeX singletons and corps
 
 Each corp is expected to upgrade all of its own contracts and beacons together. The corp owner co-approves.
