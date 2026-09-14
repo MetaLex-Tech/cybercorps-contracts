@@ -98,7 +98,7 @@ structural quote from a data quote, so each extension must escape at the leaf.
 CyberCorpExtension, CyberCorpExtensionV2, CyberCorpFundExtension and CyberCorpComplianceExtension
 changed only to use JsonLib, so we will skip their release.
 
-The six V3 extensions and FundInterestExtension now render the whole certificate. CertificateUriBuilder
+The seven V3 extensions now render the whole certificate. CertificateUriBuilder
 calls `supportsResolvedExtensionData()` on the extension. If the extension answers `true`, the builder
 calls `getResolvedExtensionURI(printer, tokenId)`. The extension then reads the cert payload and the
 series payload from the printer. A V1 or V2 extension does not answer, so the builder renders the cert
@@ -131,13 +131,13 @@ ShareExtension already escaped every field, so it is not in the release either.
 Deploy a new proxy for each of these seven. Do not upgrade an existing proxy to one of them.
 
 ACESAFEExtensionV3, SAFEExtensionV3, SAFTExtensionV3, SAFTEExtensionV3, TokenWarrantExtensionV3,
-ShareExtensionV3, FundInterestExtension.
+ShareExtensionV3, FundInterestExtensionV3.
 
 - A V1 or V2 proxy serves every printer that points at it, and some of those printers are on v4 corps.
   After an upgrade to V3 code, `tokenURI` reverts for each of those printers. See the version mismatch
   section below.
 - The `ShareCertData` payloads of a ShareExtension proxy do not decode as `ShareCertDataLayer`.
-- FundInterestExtension has no earlier proxy.
+- FundInterestExtensionV3 has no earlier proxy.
 
 No known extension proxy on Base or on Base Sepolia runs V3 code. Each one fails
 `EXTENSION_TYPE_V3()`, `supportsSeriesExtensionData()` and `supportsResolvedExtensionData()`.
@@ -186,7 +186,7 @@ there is no callback risk. Three behavior changes apply:
 
 ### A resolved-render extension needs a v5 corp
 
-The V3 extensions and FundInterestExtension call `getSeriesInfo` on the printer. A v4 printer does not
+The V3 extensions call `getSeriesInfo` on the printer. A v4 printer does not
 have it. ShareExtensionV3 also calls `getPrinterClassId` and `getSecurityClass` on the IssuanceManager.
 A v4 IssuanceManager does not have them. CertificateUriBuilder does not catch this revert, so `tokenURI`
 reverts.
@@ -369,7 +369,7 @@ Only the artifact name and the ABI file name change.
 
 ### 7. Read the whole certificate from the extension
 
-For the V3 extensions and FundInterestExtension, the cert payload is not the whole certificate. Some of
+For the V3 extensions, the cert payload is not the whole certificate. Some of
 the data can be on the series. For ShareExtensionV3, some can also be on the class.
 
 - These extensions are at new proxy addresses. Offer them for new printers on a v5 corp only.

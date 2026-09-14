@@ -27,7 +27,7 @@ import {
     InvestorType
 } from "../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
-import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
+import {FundInterestData} from "../src/storage/extensions/FundInterestExtensionV3.sol";
 import {
     AcceptOfferParams,
     ExemptionPathway,

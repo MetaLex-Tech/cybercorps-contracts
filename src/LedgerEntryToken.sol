@@ -671,7 +671,7 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         LedgerEntryTokenStorage.backfillLegalOwnerEnumeration(startIndex, count);
     }
 
-    /// @notice Backfill the base acquisitionTimestamp from FundInterestExtension data. Permissionless and
+    /// @notice Backfill the base acquisitionTimestamp from FundInterestExtensionV3 data. Permissionless and
     /// idempotent; batch over the supply. See LedgerEntryTokenStorage.backfillAcquisitionTimestamp.
     function backfillAcquisitionTimestamps(uint256 startIndex, uint256 count) external {
         LedgerEntryTokenStorage.backfillAcquisitionTimestamp(startIndex, count);

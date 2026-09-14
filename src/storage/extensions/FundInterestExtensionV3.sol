@@ -65,10 +65,10 @@ struct FundInterestResolvedData {
     FundInterestData certificate;
 }
 
-/// @title FundInterestExtension - split LET and series data for fund interests
+/// @title FundInterestExtensionV3 - split LET and series data for fund interests
 /// @notice The printer's `seriesData` encodes FundInterestSeriesData; each certificate's
 /// `CertificateDetails.extensionData` encodes FundInterestData.
-contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgAuthACL {
+contract FundInterestExtensionV3 is UUPSUpgradeable, IFundInterestExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = FUND_INTEREST_EXTENSION_TYPE;
 
     uint256[30] private __gap;

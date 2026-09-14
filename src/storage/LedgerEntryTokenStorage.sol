@@ -58,7 +58,7 @@ import {LookThroughPolicy} from "../libs/policies/LookThroughPolicy.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
-import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
+import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtensionV3.sol";
 
 /// @title  LedgerEntryTokenStorage - namespaced storage and the printer logic that runs by delegatecall
 /// @author MetaLeX Labs, Inc.
@@ -826,7 +826,7 @@ library LedgerEntryTokenStorage {
     }
 
     /// @dev Idempotent migration for tokens minted before acquisitionTimestamp became a base field: copies each
-    /// live token's FundInterestExtension acquisitionDate into the base mapping over [startIndex, +count).
+    /// live token's FundInterestExtensionV3 acquisitionDate into the base mapping over [startIndex, +count).
     /// Permissionless; already-set tokens skipped; no-op on non-FUND_INTEREST printers. Batch over the supply.
     function backfillAcquisitionTimestamp(uint256 startIndex, uint256 count) external {
         CyberCertStorage storage s = cyberCertStorage();

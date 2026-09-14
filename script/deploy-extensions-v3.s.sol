@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {ACESAFEExtensionV3} from "../src/storage/extensions/ACESAFEExtensionV3.sol";
-import {FundInterestExtension} from "../src/storage/extensions/FundInterestExtension.sol";
+import {FundInterestExtensionV3} from "../src/storage/extensions/FundInterestExtensionV3.sol";
 import {SAFEExtensionV3} from "../src/storage/extensions/SAFEExtensionV3.sol";
 import {SAFTEExtensionV3} from "../src/storage/extensions/SAFTEExtensionV3.sol";
 import {SAFTExtensionV3} from "../src/storage/extensions/SAFTExtensionV3.sol";
@@ -61,8 +61,8 @@ contract DeployExtensionsV3Script is Script {
             _deployProxy(address(new TokenWarrantExtensionV3{salt: salt}()), deployment.auth, salt);
         deployed.shareExtensionV3 =
             _deployProxy(address(new ShareExtensionV3{salt: salt}()), deployment.auth, salt);
-        deployed.fundInterestExtension =
-            _deployProxy(address(new FundInterestExtension{salt: salt}()), deployment.auth, salt);
+        deployed.fundInterestExtensionV3 =
+            _deployProxy(address(new FundInterestExtensionV3{salt: salt}()), deployment.auth, salt);
         vm.stopBroadcast();
 
         // Forge simulates the whole run before it broadcasts, so a mismatch here sends no transaction.
@@ -73,7 +73,7 @@ contract DeployExtensionsV3Script is Script {
         _requireMatch(expected.safteExtensionV3, deployed.safteExtensionV3);
         _requireMatch(expected.tokenWarrantExtensionV3, deployed.tokenWarrantExtensionV3);
         _requireMatch(expected.shareExtensionV3, deployed.shareExtensionV3);
-        _requireMatch(expected.fundInterestExtension, deployed.fundInterestExtension);
+        _requireMatch(expected.fundInterestExtensionV3, deployed.fundInterestExtensionV3);
 
         console2.log("==== Deployed ====");
         console2.log("ACESAFEExtensionV3:", deployed.aceSafeExtensionV3);
@@ -82,7 +82,7 @@ contract DeployExtensionsV3Script is Script {
         console2.log("SAFTEExtensionV3:", deployed.safteExtensionV3);
         console2.log("TokenWarrantExtensionV3:", deployed.tokenWarrantExtensionV3);
         console2.log("ShareExtensionV3:", deployed.shareExtensionV3);
-        console2.log("FundInterestExtension:", deployed.fundInterestExtension);
+        console2.log("FundInterestExtensionV3:", deployed.fundInterestExtensionV3);
         console2.log("");
     }
 

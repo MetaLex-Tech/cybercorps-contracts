@@ -20,7 +20,7 @@ import {
     RestrictiveLegend
 } from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICertificateExtension, IFundInterestExtension} from "../src/storage/extensions/ICertificateExtension.sol";
-import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "../src/storage/extensions/FundInterestExtension.sol";
+import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "../src/storage/extensions/FundInterestExtensionV3.sol";
 import {MockTransferHook} from "./mock/MockTransferHook.sol";
 import {BaseTransferHook} from "../src/hooks/transfer/BaseTransferHook.sol";
 
@@ -944,7 +944,7 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.tokenOfLegalOwnerByIndex(investor, 2), 3);
     }
 
-    // Backfill copies a legacy token's acquisitionDate (from FundInterestExtension data) into the base
+    // Backfill copies a legacy token's acquisitionDate (from FundInterestExtensionV3 data) into the base
     // acquisitionTimestamp mapping, is idempotent, and never overwrites a token whose base value is already set.
     function test_BackfillAcquisitionTimestamp_CopiesLegacyFromExtension() public {
         MockFundInterestExtension ext = new MockFundInterestExtension();

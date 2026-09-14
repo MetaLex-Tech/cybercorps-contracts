@@ -6,7 +6,7 @@ import {CertificateDetails, ILedgerEntryToken} from "../../../src/interfaces/ILe
 import {LedgerEntryToken} from "../../../src/LedgerEntryToken.sol";
 import {SecurityClass, SecuritySeries} from "../../../src/CyberCorpConstants.sol";
 import {HoldingPeriodCondition} from "../../../src/libs/conditions/secondary/HoldingPeriodCondition.sol";
-import {FundInterestData, FundInterestExtension} from "../../../src/storage/extensions/FundInterestExtension.sol";
+import {FundInterestData, FundInterestExtensionV3} from "../../../src/storage/extensions/FundInterestExtensionV3.sol";
 import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // timestamp; where Rule 144(d)(3) tacking is asserted (non-zero tackedFrom), the EARLIER date
 // governs. A missing anchor fails closed. A buy offer at posting has no seller yet, so it is verified later.
 //
-// Real integration: a real cert printer configured with a live FundInterestExtension holds the seller's
+// Real integration: a real cert printer configured with a live FundInterestExtensionV3 holds the seller's
 // lot; the base acquisition timestamp and the Rule 144(d)(3) tacking anchor are set via the printer's real
 // admin overrides, and the seller's lot is offered through a real postOffer.
 //
@@ -57,12 +57,12 @@ contract HoldingPeriodConditionTest is SecondaryConditionIntegrationBase {
                 abi.encodeCall(HoldingPeriodCondition.initialize, (address(auth), HOLD))
             )
         );
-        // A real printer wired to a live FundInterestExtension, holding a seller lot whose base + tacking
+        // A real printer wired to a live FundInterestExtensionV3, holding a seller lot whose base + tacking
         // anchors we drive through the printer's real admin overrides.
-        FundInterestExtension extension = FundInterestExtension(
+        FundInterestExtensionV3 extension = FundInterestExtensionV3(
             _proxy(
-                address(new FundInterestExtension()),
-                abi.encodeCall(FundInterestExtension.initialize, (address(auth)))
+                address(new FundInterestExtensionV3()),
+                abi.encodeCall(FundInterestExtensionV3.initialize, (address(auth)))
             )
         );
         fundPrinter = ILedgerEntryToken(

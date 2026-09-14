@@ -45,7 +45,7 @@ library DeploymentConstants {
         address tokenWarrantExtensionV3;
         address shareExtension;
         address shareExtensionV3;
-        address fundInterestExtension;
+        address fundInterestExtensionV3;
     }
 
     struct UmiaDeployment {
@@ -149,7 +149,7 @@ library DeploymentConstants {
                 tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on any chain
                 shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
                 shareExtensionV3: address(0), // TODO: not yet deployed on any chain
-                fundInterestExtension: address(0) // TODO: not yet deployed on any chain
+                fundInterestExtensionV3: address(0) // TODO: not yet deployed on any chain
             });
         } else if (chainId == ETH || chainId == ETH_SEPOLIA || chainId == BASE_SEPOLIA) {
             return ExtensionDeployment({
@@ -169,7 +169,7 @@ library DeploymentConstants {
                 tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on any chain
                 shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
                 shareExtensionV3: address(0), // TODO: not yet deployed on any chain
-                fundInterestExtension: address(0) // TODO: not yet deployed on any chain
+                fundInterestExtensionV3: address(0) // TODO: not yet deployed on any chain
             });
         } else {
             revert UnsupportedChain(chainId);

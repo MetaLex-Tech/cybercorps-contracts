@@ -8,10 +8,10 @@ import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {ExemptionPathway, PostOfferParams} from "../src/storage/SecondaryTradeStorage.sol";
 import {
     FundInterestData,
-    FundInterestExtension,
+    FundInterestExtensionV3,
     FundInterestSeriesData,
     SecurityIdentification
-} from "../src/storage/extensions/FundInterestExtension.sol";
+} from "../src/storage/extensions/FundInterestExtensionV3.sol";
 import {SecondaryTradeGasBase} from "./libs/SecondaryTradeGasBase.sol";
 import {console2} from "forge-std/Test.sol";
 
@@ -49,7 +49,7 @@ import {console2} from "forge-std/Test.sol";
 /// the certificate's storage slots. Their posting figures are therefore lower than the plain ones, and
 /// that difference is warm-slot accounting, not a real saving.
 contract SecondaryTradeFundInterestGasLimitTest is SecondaryTradeGasBase {
-    FundInterestExtension internal fundExtension;
+    FundInterestExtensionV3 internal fundExtension;
 
     /// @dev In-kind distributions let an SPV member tack under Rule 144(d)(3), so a fund lot can carry an
     /// anchor earlier than its own acquisition. Only a FundInterest printer can express this. The anchor
@@ -126,9 +126,9 @@ contract SecondaryTradeFundInterestGasLimitTest is SecondaryTradeGasBase {
     }
 
     function _deployPrinter() internal override {
-        fundExtension = FundInterestExtension(
+        fundExtension = FundInterestExtensionV3(
             _proxy(
-                address(new FundInterestExtension()), abi.encodeCall(FundInterestExtension.initialize, (address(auth)))
+                address(new FundInterestExtensionV3()), abi.encodeCall(FundInterestExtensionV3.initialize, (address(auth)))
             )
         );
 
