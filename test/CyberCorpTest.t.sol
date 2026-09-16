@@ -3646,7 +3646,7 @@ contract CyberCorpForkTest is Test {
         // Only company owner can call the Issuance Manager to upgrade its CyberCert Printer beacon
         vm.prank(testAddress);
         vm.expectEmit(true, true, true, true);
-        emit IssuanceManager.CertPrinterBeaconImplementationUpgraded(newCyberCertPrinterImpl);
+        emit IIssuanceManager.CertPrinterBeaconImplementationUpgraded(newCyberCertPrinterImpl);
         IssuanceManager(issuanceManager).upgradeCertPrinterBeaconImplementation(newCyberCertPrinterImpl);
 
         assertEq(IssuanceManager(issuanceManager).getCertPrinterBeaconImplementation(), newCyberCertPrinterImpl);

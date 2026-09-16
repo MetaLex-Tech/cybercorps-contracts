@@ -162,11 +162,17 @@ contract BorgAuth is Initializable {
     }
 }
 
+/// @notice The accessor every BorgAuthACL contract publishes. Declared here so a contract's own
+/// interface can extend it instead of re-declaring the getter.
+interface IBorgAuthACL {
+    function AUTH() external view returns (BorgAuth);
+}
+
 /// @title BorgAuthACL
 /// @notice ACL with modifiers for different roles
-abstract contract BorgAuthACL is Initializable {
+abstract contract BorgAuthACL is Initializable, IBorgAuthACL {
     //BorgAuth instance
-    BorgAuth public AUTH;
+    BorgAuth public override AUTH;
 
     // @dev zero address error
     error BorgAuthACL_ZeroAddress();

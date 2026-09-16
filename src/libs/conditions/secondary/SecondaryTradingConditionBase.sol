@@ -5,12 +5,6 @@ import "../BaseSecondaryTradingCondition.sol";
 import "../../auth.sol";
 import {Offer, SecondaryEscrow, OfferSide, ExemptionPathway} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
-/// @notice Minimal surface for reading the BorgAuth wired into a CyberCorp / DealManager
-/// (both inherit BorgAuthACL, whose public AUTH getter this matches).
-interface IBorgAuthProvider {
-    function AUTH() external view returns (address);
-}
-
 /// @title  SecondaryTradingConditionBase - shared helpers for secondary-trading conditions
 /// @author MetaLeX Labs, Inc.
 /// @notice Extends BaseSecondaryTradingCondition with the two things nearly every threshold condition
@@ -62,13 +56,13 @@ abstract contract SecondaryTradingConditionBase is BaseSecondaryTradingCondition
     /// @dev Reverts unless msg.sender holds ADMIN_ROLE (or above) on the target's BorgAuth.
     /// Used to gate per-SPV configuration on the SPV's (or its DealManager's) own authority.
     function _requireAuthAdmin(address authProvider) internal view {
-        BorgAuth auth = BorgAuth(IBorgAuthProvider(authProvider).AUTH());
+        BorgAuth auth = IBorgAuthACL(authProvider).AUTH();
         auth.onlyRole(auth.ADMIN_ROLE(), msg.sender);
     }
 
     /// @dev Reverts unless msg.sender holds OWNER_ROLE on the target's BorgAuth.
     function _requireAuthOwner(address authProvider) internal view {
-        BorgAuth auth = BorgAuth(IBorgAuthProvider(authProvider).AUTH());
+        BorgAuth auth = IBorgAuthACL(authProvider).AUTH();
         auth.onlyRole(auth.OWNER_ROLE(), msg.sender);
     }
 }

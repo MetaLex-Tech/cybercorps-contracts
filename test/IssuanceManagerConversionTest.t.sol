@@ -15,6 +15,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {RestrictiveLegend} from "../src/storage/LedgerEntryTokenStorage.sol";
+import "../src/interfaces/IIssuanceManager.sol";
 
 contract MockRoundManagerForConversion {
     bool public exists;
@@ -1508,7 +1509,7 @@ contract IssuanceManagerConversionTest is Test {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit IssuanceManager.ScripAddedToExistingCert(
+        emit IIssuanceManager.ScripAddedToExistingCert(
             address(certPrinter),
             otherInvestor,
             otherInvestorCertId,
@@ -1517,7 +1518,7 @@ contract IssuanceManagerConversionTest is Test {
             0
         );
         vm.expectEmit(true, true, true, true);
-        emit IssuanceManager.ScripRecertified(
+        emit IIssuanceManager.ScripRecertified(
             address(certPrinter),
             otherInvestor,
             otherInvestorCertId,

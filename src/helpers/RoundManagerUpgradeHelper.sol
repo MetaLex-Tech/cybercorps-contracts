@@ -46,8 +46,7 @@ import "../interfaces/ICyberCorp.sol";
 import "../libs/auth.sol";
 
 /// @notice Minimal interface to read a corp's AUTH and issuance manager
-interface ICyberCorpAuthReader {
-    function AUTH() external view returns (address);
+interface ICyberCorpAuthReader is IBorgAuthACL {
     function issuanceManager() external view returns (address);
 }
 
@@ -91,8 +90,8 @@ contract RoundManagerUpgradeHelper {
         if (ICyberCorp(corp).roundManager() != address(0)) revert RoundManagerAlreadyExists();
 
         // Read corp's AUTH and ensure the caller is authorized as OWNER
-        address auth = ICyberCorpAuthReader(corp).AUTH();
-        BorgAuth(auth).onlyRole(BorgAuth(auth).OWNER_ROLE(), msg.sender);
+        BorgAuth auth = ICyberCorpAuthReader(corp).AUTH();
+        auth.onlyRole(auth.OWNER_ROLE(), msg.sender);
 
         // Deploy RoundManager via factory
         roundManager = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
@@ -100,7 +99,7 @@ contract RoundManagerUpgradeHelper {
         // Initialize RoundManager
         address issuanceMgr = ICyberCorpAuthReader(corp).issuanceManager();
         IRoundManagerInit(roundManager).initialize(
-            auth,
+            address(auth),
             corp,
             registryAddress,
             issuanceMgr,
@@ -108,7 +107,7 @@ contract RoundManagerUpgradeHelper {
         );
 
         // Grant OWNER role to the newly deployed RoundManager in the corp's AUTH
-        BorgAuth(auth).updateRole(roundManager, BorgAuth(auth).OWNER_ROLE());
+        auth.updateRole(roundManager, auth.OWNER_ROLE());
 
         // Set RoundManager on the CyberCorp contract
         ICyberCorp(corp).setRoundManager(roundManager);
