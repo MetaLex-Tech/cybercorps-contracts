@@ -258,7 +258,7 @@ contract CertificateSvgCompatibilityTest is Test {
         values[1] = new string[](2); values[1][0] = "Holder"; values[1][1] = 'A"B';
         uint256[] memory signed = new uint256[](2); signed[0] = 2000000000;
         vm.mockCall(REGISTRY, abi.encodeWithSignature("getContractDetails(bytes32)", bytes32(uint256(1))),
-            abi.encode(bytes32(0), "", empty, fields, empty, new address[](0), values, signed, uint256(1), false, bytes32(0)));
+            abi.encode(bytes32(0), "", empty, fields, empty, new address[](0), values, signed, uint256(1), false));
         string memory json = _json(false, false);
         vm.parseJson(json);
         assertEq(vm.parseJsonString(json, ".endorsementHistory[0].purchaseAgreementDetails.companyDetails.name"), "Corp");

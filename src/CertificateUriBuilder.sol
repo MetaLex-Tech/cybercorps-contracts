@@ -474,9 +474,9 @@ struct CertificateDetails {
         external view returns (string memory)
     {
         (, , string[] memory globalFields, string[] memory partyFields, string[] memory globalValues, ,
-            string[][] memory partyValues, , , , ) = abi.decode(
+            string[][] memory partyValues, , , ) = abi.decode(
                 MetadataCall.read(registry, abi.encodeCall(ICyberAgreementRegistry.getContractDetails, (agreementId))),
-                (bytes32, string, string[], string[], string[], address[], string[][], uint256[], uint256, bool, bytes32)
+                (bytes32, string, string[], string[], string[], address[], string[][], uint256[], uint256, bool)
             );
         string memory fields = _fieldPairs(globalFields, globalValues);
         if (partyValues.length > 0 && partyValues[0].length > 0) {

@@ -12,6 +12,8 @@ import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
@@ -41,6 +43,7 @@ contract PassThroughCondition {
 ///   forge test --use solc:0.8.28 --via-ir --mp test/FactoryRoundAuthReplayPOC.t.sol -vv
 contract FactoryRoundAuthReplayPOCTest is Test {
     using RoundLib for Round;
+
     uint256 internal constant SALT = 909090;
 
     uint256 internal ownerPk = 0xA11CE;

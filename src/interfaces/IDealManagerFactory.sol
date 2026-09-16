@@ -45,7 +45,7 @@ interface IDealManagerFactory {
     function deployDealManager(bytes32 salt) external returns (address);
     function computeDealManagerAddress(bytes32 salt) external view returns (address);
     function computeDealManagerAddress(bytes32 salt, address deployer) external view returns (address);
-    function initialize(address _auth) external;
+    function initialize(address _auth, address _refImplementation) external;
 
     function getRefImplementation() external view returns (address);
 
