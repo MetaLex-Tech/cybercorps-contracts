@@ -48,8 +48,10 @@ import "./LedgerEntryToken.sol";
 import "./CyberScrip.sol";
 import "./libs/auth.sol";
 import "./storage/IssuanceManagerFactoryStorage.sol";
+import "./interfaces/IIssuanceManagerFactory.sol";
 
-contract IssuanceManagerFactory is BorgAuthACL, UUPSUpgradeable {
+contract IssuanceManagerFactory is BorgAuthACL, UUPSUpgradeable, IIssuanceManagerFactory
+{
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();

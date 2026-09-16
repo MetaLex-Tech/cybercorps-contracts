@@ -52,7 +52,8 @@ import "./storage/RoundManagerFactoryStorage.sol";
 /// @title RoundManagerFactory
 /// @notice Factory contract for deploying RoundManager instances
 /// @dev Uses ERC1967Proxy+UUPSUpgradeable pattern for upgradeable RoundManager instances
-contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
+contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL, IRoundManagerFactory
+{
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();

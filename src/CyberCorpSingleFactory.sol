@@ -47,8 +47,10 @@ import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorp.sol";
 import "./storage/CyberCorpSingleFactoryStorage.sol";
 import "./libs/auth.sol";
+import "./interfaces/ICyberCorpSingleFactory.sol";
 
-contract CyberCorpSingleFactory is BorgAuthACL, UUPSUpgradeable {
+contract CyberCorpSingleFactory is BorgAuthACL, UUPSUpgradeable, ICyberCorpSingleFactory
+{
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
