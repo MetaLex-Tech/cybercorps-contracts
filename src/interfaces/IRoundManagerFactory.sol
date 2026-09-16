@@ -48,6 +48,7 @@ struct FeeOverride {
 
 interface IRoundManagerFactory {
     function deployRoundManager(bytes32 _salt) external returns (address);
+    function computeRoundManagerAddress(bytes32 salt, address deployer) external view returns (address);
 
     function getRefImplementation() external view returns (address);
 

@@ -18,8 +18,13 @@ import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCertData, RoundType} from "../src/interfaces/IRoundManager.sol";
-import {Round} from "../src/libs/RoundLib.sol";
+import {Round, RoundLib} from "../src/libs/RoundLib.sol";
 import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
+import {FactoryDeploymentLib} from "../src/libs/FactoryDeploymentLib.sol";
+
+contract LegacyComponentWithoutNamespace {
+    fallback() external {}
+}
 
 /// @dev Placeholder eligibility gate. Only its address matters here.
 contract PassThroughCondition {
@@ -28,16 +33,14 @@ contract PassThroughCondition {
     }
 }
 
-/// @title MTLX1-26 proof of concept
-/// @notice PumpCorpFactory protects the deployment metadata with a second officer signature.
-///         CyberCorpFactory does not. Both factories use the same sub-factories, and the
-///         sub-factories key CREATE2 on the salt only. One salt therefore gives one CyberCorp
-///         address and one RoundManager address on either path. The escrowed signature binds
-///         those two addresses, so it verifies on the unprotected path too.
+/// @title MTLX1-26 and MTLX1-41 deployment authorization regressions
+/// @notice Signed metadata, configuration commitments and caller namespaces prevent
+///         substituted deployments from occupying an officer's predicted addresses.
 ///
 /// Run with:
 ///   forge test --use solc:0.8.28 --via-ir --mp test/FactoryRoundAuthReplayPOC.t.sol -vv
 contract FactoryRoundAuthReplayPOCTest is Test {
+    using RoundLib for Round;
     uint256 internal constant SALT = 909090;
 
     uint256 internal ownerPk = 0xA11CE;
@@ -69,7 +72,7 @@ contract FactoryRoundAuthReplayPOCTest is Test {
     uint256 internal startTime;
     uint256 internal endTime;
 
-    // Predicted addresses for SALT. Both factories produce these.
+    // Predicted addresses for the selected factory's namespace and company configuration.
     address internal predictedCorp;
     address internal predictedRM;
 
@@ -130,10 +133,17 @@ contract FactoryRoundAuthReplayPOCTest is Test {
         startTime = block.timestamp - 1;
         endTime = block.timestamp + 30 days;
 
-        bytes32 corpSalt = keccak256(abi.encodePacked(SALT));
+        _prepareFactory(address(pumpFactory));
+    }
+
+    function _prepareFactory(address factory) internal {
+        bytes32 corpSalt = pumpFactory.computeDeploymentSalt(
+            keccak256(abi.encodePacked(SALT)), "Signed Company Name", "C-Corp", "DE",
+            "contact@seedcorp.com", "Arbitration", honestPayable, _officer()
+        );
         predictedCorp = CyberCorpSingleFactory(cyberCorpSingleFactory)
-            .computeCyberCorpSingleAddress(corpSalt);
-        predictedRM = RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt);
+            .computeCyberCorpSingleAddress(corpSalt, factory);
+        predictedRM = RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt, factory);
 
         // The officer signs the escrowed round parameters. The digest binds the RoundManager
         // address as EIP-712 verifyingContract and the CyberCorp address as companyAddress.
@@ -206,6 +216,7 @@ contract FactoryRoundAuthReplayPOCTest is Test {
 
     /// @notice The officer's own package still works on CyberCorpFactory, and the metadata lands.
     function test_MTLX1_26_OfficerPackageStillDeploysOnCyberCorpFactory() public {
+        _prepareFactory(address(corpFactory));
         bytes memory officerMetaSig = _cyberCorpMetadataSignature(
             _honestCertData(),
             honestPayable,
@@ -236,19 +247,134 @@ contract FactoryRoundAuthReplayPOCTest is Test {
     // Same root cause, cheaper attack: no signature needed at all
     // =========================================================================
 
-    function test_POC_AnyoneCanBurnTheSignedDeploymentIdentity() public {
+    function test_MTLX1_41_PermissionlessComponentDeploymentCannotSquat() public {
         bytes memory metadataSig = _honestMetadataSignature();
 
-        // NOTE: still open. The metadata signature closes the replay, not the address squat.
-        // The sub-factory deploy functions are public with no access control, and CREATE2 keys
-        // on the salt only. Any address can take the CyberCorp address for a known salt.
         vm.prank(attacker);
-        address squatted = CyberCorpSingleFactory(cyberCorpSingleFactory)
+        address unrelated = CyberCorpSingleFactory(cyberCorpSingleFactory)
             .deployCyberCorpSingle(keccak256(abi.encodePacked(SALT)));
-        assertEq(squatted, predictedCorp, "attacker took the predicted corp address");
+        assertNotEq(unrelated, predictedCorp);
 
-        vm.expectRevert(Errors.FailedDeployment.selector);
         _deployHonestThroughPump(metadataSig);
+    }
+
+    function test_MTLX1_41_OfficerTransactionRequiredForStandaloneDeployment() public {
+        CompanyOfficer memory victim = _officer();
+        bytes32 salt = keccak256(abi.encodePacked(SALT));
+        vm.startPrank(attacker);
+        vm.expectRevert(PumpCorpFactory.UnauthorizedDeploymentOfficer.selector);
+        pumpFactory.deployCyberCorp(salt, "Signed Company Name", "C-Corp", "DE", "contact@seedcorp.com", "Arbitration", attacker, victim);
+        vm.expectRevert(CyberCorpFactory.UnauthorizedDeploymentOfficer.selector);
+        corpFactory.deployCyberCorp(salt, "Signed Company Name", "C-Corp", "DE", "contact@seedcorp.com", "Arbitration", attacker, victim);
+        vm.expectRevert(); // The predicted corp does not exist and cannot authorize a retrofit.
+        corpFactory.deployAndInitializeRoundManager(salt, predictedCorp);
+        vm.stopPrank();
+        _deployHonestThroughPump(_honestMetadataSignature());
+    }
+
+    function test_MTLX1_41_AllComponentFactoriesRemainPermissionless() public {
+        address[4] memory factories = [cyberCorpSingleFactory, corpFactory.issuanceManagerFactory(), corpFactory.dealManagerFactory(), rmFactory];
+        bytes4[4] memory selectors = [
+            bytes4(keccak256("deployCyberCorpSingle(bytes32)")),
+            bytes4(keccak256("deployIssuanceManager(bytes32)")),
+            bytes4(keccak256("deployDealManager(bytes32)")),
+            bytes4(keccak256("deployRoundManager(bytes32)"))
+        ];
+        for (uint256 i; i < factories.length; ++i) {
+            vm.prank(attacker);
+            (bool ok, bytes memory result) = factories[i].call(abi.encodeWithSelector(selectors[i], bytes32(SALT)));
+            assertTrue(ok);
+            assertGt(abi.decode(result, (address)).code.length, 0);
+        }
+    }
+
+    function test_MTLX1_41_PartiallyUpgradedFactoriesCannotDeploy() public {
+        address legacy = address(new LegacyComponentWithoutNamespace());
+        vm.prank(owner);
+        pumpFactory.setCyberCorpSingleFactory(legacy);
+        bytes memory metadata = _honestMetadataSignature();
+        vm.expectRevert(abi.encodeWithSelector(FactoryDeploymentLib.IncompatibleComponentFactory.selector, legacy));
+        _deployHonestThroughPump(metadata);
+        assertEq(predictedCorp.code.length, 0);
+
+        vm.prank(owner);
+        pumpFactory.setCyberCorpSingleFactory(cyberCorpSingleFactory);
+        _deployHonestThroughPump(metadata);
+    }
+
+    function test_MTLX1_41_AnotherCallerHasSeparateNamespace() public {
+        bytes32 salt = pumpFactory.computeDeploymentSalt(
+            keccak256(abi.encodePacked(SALT)), "Signed Company Name", "C-Corp", "DE",
+            "contact@seedcorp.com", "Arbitration", honestPayable, _officer()
+        );
+        vm.prank(attacker);
+        address unrelated = CyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt);
+        assertNotEq(unrelated, predictedCorp);
+        _deployHonestThroughPump(_honestMetadataSignature());
+    }
+
+    function test_MTLX1_41_StolenSignatureFailsOnSubstitutedStandaloneDeployment() public {
+        CompanyOfficer memory hostileOfficer = _officer();
+        hostileOfficer.eoa = attacker;
+        vm.prank(attacker);
+        (, , , , address hostileRM) = pumpFactory.deployCyberCorp(
+            keccak256(abi.encodePacked(SALT)), "Signed Company Name", "C-Corp", "DE",
+            "contact@seedcorp.com", "Arbitration", attacker, hostileOfficer
+        );
+        Round memory draft = RoundLib.draft()
+            .setTickets(SecuritySeries.SeriesSeed, RoundType.FCFS, true, true, false,
+                RAISE_CAP, TICKET, TICKET, address(paymentToken), PRICE_PER_UNIT, VALUATION, startTime, endTime)
+            .setAgreement(CyberCorpHelper.TEMPLATE_ID, officer, "Officer A", "CEO",
+                _legalDetails(), _roundPartyValues(), _extensionData(), _honestConditions(), escrowedSig);
+        CyberCertData[] memory certs = _honestCertData();
+        vm.prank(attacker);
+        vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
+        RoundManager(hostileRM).createRound(draft, certs);
+        _deployHonestThroughPump(_honestMetadataSignature());
+    }
+
+    function test_MTLX1_41_PayoutChangeProducesDifferentAddresses() public {
+        CompanyOfficer memory victim = _officer();
+        vm.prank(officer);
+        (address changedCorp, , , , address changedRM) = pumpFactory.deployCyberCorp(
+            keccak256(abi.encodePacked(SALT)), "Signed Company Name", "C-Corp", "DE",
+            "contact@seedcorp.com", "Arbitration", attacker, victim
+        );
+        assertNotEq(changedCorp, predictedCorp);
+        assertNotEq(changedRM, predictedRM);
+        _deployHonestThroughPump(_honestMetadataSignature());
+    }
+
+    function test_MTLX1_41_SelfSignedDeploymentCannotOccupyVictimAddresses() public {
+        address victimCorp = predictedCorp;
+        address victimRM = predictedRM;
+        address victimOfficer = officer;
+        uint256 victimKey = officerPk;
+        address victimPayable = honestPayable;
+        bytes memory victimMetadata = _honestMetadataSignature();
+        bytes memory victimSignature = escrowedSig;
+
+        officer = attacker;
+        officerPk = attackerPk;
+        honestPayable = attacker;
+        _prepareFactory(address(pumpFactory));
+        (address attackerCorp, , , , address attackerRM, ) = _deployHonestThroughPump(_honestMetadataSignature());
+        assertNotEq(attackerCorp, victimCorp);
+        assertNotEq(attackerRM, victimRM);
+        assertEq(victimCorp.code.length, 0);
+        assertEq(victimRM.code.length, 0);
+
+        // A genuine signature verifies only on its configuration-bound manager.
+        officer = victimOfficer;
+        officerPk = victimKey;
+        honestPayable = victimPayable;
+        _prepareFactory(address(pumpFactory));
+        assertEq(escrowedSig, victimSignature);
+        (address corp, , , , address rm, ) = _deployHonestThroughPump(victimMetadata);
+        assertEq(corp, victimCorp);
+        assertEq(rm, victimRM);
+        assertEq(CyberCorp(corp).companyPayable(), victimPayable);
+        assertEq(CyberCorp(corp).AUTH().userRoles(attacker), 0);
     }
 
     /// @dev Control: with an untouched salt the same package deploys and keeps the honest metadata.

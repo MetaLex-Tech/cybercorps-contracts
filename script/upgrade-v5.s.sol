@@ -6,6 +6,7 @@ import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
+import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -48,6 +49,9 @@ contract UpgradeV5Script is Script {
 
     struct Implementations {
         address cyberCorpFactory;
+        address pumpCorpFactory;
+        address cyberCorpSingleFactory;
+        address issuanceManagerFactory;
         address cyberCorp;
         address issuanceManager;
         address dealManager;
@@ -63,6 +67,7 @@ contract UpgradeV5Script is Script {
 
     struct Targets {
         address cyberCorpFactory;
+        address pumpCorpFactory;
         address cyberCorpSingleFactory;
         address issuanceManagerFactory;
         address dealManagerFactory;
@@ -87,6 +92,7 @@ contract UpgradeV5Script is Script {
         address deployer = vm.addr(privateKey);
         Targets memory targets = _targets();
         _requireOwner(targets.cyberCorpFactory, deployer);
+        if (targets.pumpCorpFactory != address(0)) _requireOwner(targets.pumpCorpFactory, deployer);
         _requireLexchexOwner(deployer);
 
         vm.startBroadcast(privateKey);
@@ -94,13 +100,12 @@ contract UpgradeV5Script is Script {
 
         // This must happen before CyberCorpFactory is upgraded: its v5 deployment
         // path invokes RoundManager.createRound using the new CyberCertData selector.
-        // The Base mainnet proxy already matches HEAD, so only the other chains upgrade it.
-        if (block.chainid != BASE) {
-            _upgradeProxy(targets.roundManagerFactory, impls.roundManagerFactory, "RoundManagerFactory");
-        }
+        // MTLX1-41 changes every component factory's salt namespace, including Base.
+        _upgradeProxy(targets.roundManagerFactory, impls.roundManagerFactory, "RoundManagerFactory");
         RoundManagerFactory(targets.roundManagerFactory).setRefImplementation(impls.roundManager);
 
-        // Unchanged factory proxies still need their v5 reference implementations.
+        _upgradeProxy(targets.cyberCorpSingleFactory, impls.cyberCorpSingleFactory, "CyberCorpSingleFactory");
+        _upgradeProxy(targets.issuanceManagerFactory, impls.issuanceManagerFactory, "IssuanceManagerFactory");
         CyberCorpSingleFactory(targets.cyberCorpSingleFactory).setRefImplementation(impls.cyberCorp);
         IssuanceManagerFactory issuanceFactory = IssuanceManagerFactory(targets.issuanceManagerFactory);
         issuanceFactory.setRefImplementation(impls.issuanceManager);
@@ -127,6 +132,9 @@ contract UpgradeV5Script is Script {
 
         // Keep last: all factory references and the RoundManager deployment dependency are now live.
         _upgradeProxy(targets.cyberCorpFactory, impls.cyberCorpFactory, "CyberCorpFactory");
+        if (targets.pumpCorpFactory != address(0)) {
+            _upgradeProxy(targets.pumpCorpFactory, impls.pumpCorpFactory, "PumpCorpFactory");
+        }
 
         vm.stopBroadcast();
 
@@ -196,6 +204,9 @@ contract UpgradeV5Script is Script {
     function _targets() internal view returns (Targets memory targets) {
         DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
         targets.cyberCorpFactory = vm.envOr("CYBERCORP_FACTORY", core.cyberCorpFactory);
+        targets.pumpCorpFactory = block.chainid == BASE
+            ? vm.envAddress("PUMP_CORP_FACTORY")
+            : vm.envOr("PUMP_CORP_FACTORY", address(0));
         targets.cyberCorpSingleFactory = vm.envOr("CYBERCORP_SINGLE_FACTORY", core.cyberCorpSingleFactory);
         targets.issuanceManagerFactory = vm.envOr("ISSUANCE_MANAGER_FACTORY", core.issuanceManagerFactory);
         targets.dealManagerFactory = vm.envOr("DEAL_MANAGER_FACTORY", core.dealManagerFactory);
@@ -216,6 +227,9 @@ contract UpgradeV5Script is Script {
 
     function _deployImplementations() internal returns (Implementations memory impls) {
         impls.cyberCorpFactory = address(new CyberCorpFactory());
+        impls.pumpCorpFactory = address(new PumpCorpFactory());
+        impls.cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
+        impls.issuanceManagerFactory = address(new IssuanceManagerFactory());
         impls.cyberCorp = address(new CyberCorp());
         impls.issuanceManager = address(new IssuanceManager());
         impls.dealManager = address(new DealManager());
@@ -229,6 +243,9 @@ contract UpgradeV5Script is Script {
         impls.lexchexMinter = address(new LeXcheXMinter());
 
         console2.log("V5 CyberCorpFactory:", impls.cyberCorpFactory);
+        console2.log("V5 PumpCorpFactory:", impls.pumpCorpFactory);
+        console2.log("V5 CyberCorpSingleFactory:", impls.cyberCorpSingleFactory);
+        console2.log("V5 IssuanceManagerFactory:", impls.issuanceManagerFactory);
         console2.log("V5 CyberCorp:", impls.cyberCorp);
         console2.log("V5 IssuanceManager:", impls.issuanceManager);
         console2.log("V5 DealManager:", impls.dealManager);

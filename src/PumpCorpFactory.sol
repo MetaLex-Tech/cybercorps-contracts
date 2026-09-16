@@ -59,6 +59,7 @@ import "./storage/LedgerEntryTokenStorage.sol";
 import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.sol";
 import {Round, RoundType, RoundLib} from "./libs/RoundLib.sol";
 import {CorpFactoryMetadataLib} from "./libs/CorpFactoryMetadataLib.sol";
+import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
 
 interface IRoundManagerInit {
     function initialize(
@@ -82,6 +83,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error RoundManagerAlreadyExists();
     error GlobalOrPartyValuesMismatch();
     error InvalidMetadataSignature();
+    error UnauthorizedDeploymentOfficer();
 
     address public registryAddress;
     address public issuanceManagerFactory;
@@ -186,6 +188,8 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         }
     }
 
+    /// @notice Permissionless standalone deployment authorized by the officer's transaction.
+    /// @dev Relayers use the signed round entry point. All deployment logic is internal.
     function deployCyberCorp(
         bytes32 salt,
         string memory companyName,
@@ -195,8 +199,50 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         string memory defaultDisputeResolution,
         address _companyPayable,
         CompanyOfficer memory _officer
+    ) external returns (
+        address cyberCorpAddress,
+        address authAddress,
+        address issuanceManagerAddress,
+        address dealManagerAddress,
+        address roundManagerAddress
+    ) {
+        if (msg.sender != _officer.eoa) revert UnauthorizedDeploymentOfficer();
+        return _deployCyberCorp(
+            salt, companyName, companyType, companyJurisdiction,
+            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer
+        );
+    }
+
+    /// @notice Configuration commitment used before applying the component factory namespace.
+    /// @dev The officer signs the predicted manager/corp addresses. Binding the full officer
+    /// and payout configuration here prevents a self-signed deployment from squatting them.
+    function computeDeploymentSalt(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(
+            salt, companyName, companyType, companyJurisdiction,
+            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer
+        ));
+    }
+
+    function _deployCyberCorp(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer
     )
-        public
+        internal
         returns (
             address cyberCorpAddress,
             address authAddress,
@@ -206,6 +252,13 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         )
     {
         if (salt == bytes32(0)) revert InvalidSalt();
+        FactoryDeploymentLib.requireNamespaces(
+            [cyberCorpSingleFactory, issuanceManagerFactory, dealManagerFactory, roundManagerFactory], salt
+        );
+        salt = computeDeploymentSalt(
+            salt, companyName, companyType, companyJurisdiction,
+            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer
+        );
 
         // Deploy BorgAuth with CREATE2 with new param address owner
         bytes memory authBytecode = type(BorgAuth).creationCode;
@@ -388,7 +441,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployCyberCorp(
+        ) = _deployCyberCorp(
             corpSalt,
             companyName,
             companyType,
@@ -519,7 +572,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployCyberCorp(
+        ) = _deployCyberCorp(
             corpSalt,
             companyName,
             companyType,

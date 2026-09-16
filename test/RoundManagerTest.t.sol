@@ -306,6 +306,9 @@ library CyberCorpHelper {
             title: "CEO"
         });
 
+        // Standalone deployments are sent by the initial officer; relayed deployments
+        // use the factory's signed round entry point.
+        vm.prank(officerEOA);
         (corp, auth, issuance, dealManager, roundManager) = corpFactory.deployCyberCorp(
             SALT,
             companyName,
@@ -3310,8 +3313,9 @@ contract CyberCorpFactoryPublicRoundTest is Test {
         // Round params
         uint256 salt = 42;
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
-        address predictedCorp = CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt);
-        address predictedRM = RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt);
+        corpSalt = corpFactory.computeDeploymentSalt(corpSalt, "Corp CF", "corporation", "DE", "contact", "arbitration", me, officer);
+        address predictedCorp = CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt, address(corpFactory));
+        address predictedRM = RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt, address(corpFactory));
 
         bytes32 templateId = CyberCorpHelper.TEMPLATE_ID;
         uint256 raiseCap = 100_000 * (10 ** usdc.decimals());

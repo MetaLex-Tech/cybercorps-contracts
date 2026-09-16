@@ -341,8 +341,13 @@ contract CyberCorpForkTest is Test {
         address[] memory parties,
         bytes32 secretHash
     ) internal view returns (bytes32) {
+        CompanyOfficer memory officer = CompanyOfficer({eoa: testAddress, name: "Test Officer", contact: "test@example.com", title: "CEO"});
+        bytes32 deploymentSalt = cyberCorpFactory.computeDeploymentSalt(
+            keccak256(abi.encodePacked(salt)), "CyberCorp", "Limited Liability Company",
+            "Juris", "Contact Details", "Dispute Res", testAddress, officer
+        );
         address dealManager = DealManagerFactory(cyberCorpFactory.dealManagerFactory())
-            .computeDealManagerAddress(keccak256(abi.encodePacked(salt)));
+            .computeDealManagerAddress(deploymentSalt, address(cyberCorpFactory));
         return _expectedAgreementId(templateId, salt, globalValues, parties, secretHash, dealManager);
     }
 

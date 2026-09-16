@@ -61,6 +61,7 @@ import "./interfaces/IRoundManagerFactory.sol";
 import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
 import {CorpFactoryMetadataLib} from "./libs/CorpFactoryMetadataLib.sol";
+import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
 
 interface IRoundManagerInit {
     function initialize(
@@ -82,6 +83,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error DeploymentFailed();
     error RoundManagerAlreadyExists();
     error InvalidMetadataSignature();
+    error UnauthorizedDeploymentOfficer();
 
     /// @dev EIP-712 domain name for the deployment metadata signature. A signature made for
     /// another factory does not verify here.
@@ -198,6 +200,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         }
     }
 
+    /// @notice Permissionless standalone deployment authorized by the officer's transaction.
+    /// @dev Relayers use the signed round entry point. All deployment logic is internal.
     function deployCyberCorp(
         bytes32 salt,
         string memory companyName,
@@ -207,8 +211,50 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         string memory defaultDisputeResolution,
         address _companyPayable,
         CompanyOfficer memory _officer
+    ) external returns (
+        address cyberCorpAddress,
+        address authAddress,
+        address issuanceManagerAddress,
+        address dealManagerAddress,
+        address roundManagerAddress
+    ) {
+        if (msg.sender != _officer.eoa) revert UnauthorizedDeploymentOfficer();
+        return _deployCyberCorp(
+            salt, companyName, companyType, companyJurisdiction,
+            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer
+        );
+    }
+
+    /// @notice Configuration commitment used before applying the component factory namespace.
+    /// @dev The officer signs the predicted manager/corp addresses. Binding the full officer
+    /// and payout configuration here prevents a self-signed deployment from squatting them.
+    function computeDeploymentSalt(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(
+            salt, companyName, companyType, companyJurisdiction,
+            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer
+        ));
+    }
+
+    function _deployCyberCorp(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer
     )
-        public
+        internal
         returns (
             address cyberCorpAddress,
             address authAddress,
@@ -218,6 +264,13 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         )
     {
         if (salt == bytes32(0)) revert InvalidSalt();
+        FactoryDeploymentLib.requireNamespaces(
+            [cyberCorpSingleFactory, issuanceManagerFactory, dealManagerFactory, roundManagerFactory], salt
+        );
+        salt = computeDeploymentSalt(
+            salt, companyName, companyType, companyJurisdiction,
+            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer
+        );
 
         // Deploy BorgAuth with CREATE2 with new param address owner
         bytes memory authBytecode = type(BorgAuth).creationCode;
@@ -276,7 +329,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         );
 
         // Deploy and initialize RoundManager
-        roundManagerAddress = deployAndInitializeRoundManager(salt, cyberCorpAddress);
+        roundManagerAddress = _deployAndInitializeRoundManager(salt, cyberCorpAddress);
 
         // Authorize peripheral contracts for the cyber corp. It is ok to do it here on behalf of the corp
         // because the corp has just been created by us.
@@ -349,7 +402,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployCyberCorp(
+        ) = _deployCyberCorp(
             corpSalt,
             companyName,
             companyType,
@@ -475,7 +528,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployCyberCorp(
+        ) = _deployCyberCorp(
             corpSalt,
             companyName,
             companyType,
@@ -529,7 +582,16 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
     /// @notice Deploy, initialize and grant LeXCheX access to a new RoundManager for the given cyber corp
     /// @dev For security, the cyber corp is expected to authorize the created RoundManager itself
-    function deployAndInitializeRoundManager(bytes32 salt, address cyberCorpAddress) public returns (address) {
+    function deployAndInitializeRoundManager(bytes32 salt, address cyberCorpAddress) external returns (address) {
+        // Existing corps authorize retrofits themselves; no platform approval is needed.
+        BorgAuth corpAuth = BorgAuthACL(cyberCorpAddress).AUTH();
+        corpAuth.onlyRole(corpAuth.OWNER_ROLE(), msg.sender);
+        FactoryDeploymentLib.requireNamespace(roundManagerFactory, salt);
+        // Retrofit requests must not occupy the namespace of signed new-corp deployments.
+        return _deployAndInitializeRoundManager(keccak256(abi.encode("retrofit", salt, cyberCorpAddress)), cyberCorpAddress);
+    }
+
+    function _deployAndInitializeRoundManager(bytes32 salt, address cyberCorpAddress) internal returns (address) {
         if (ICyberCorp(cyberCorpAddress).roundManager() != address(0)) {
             revert RoundManagerAlreadyExists();
         }
