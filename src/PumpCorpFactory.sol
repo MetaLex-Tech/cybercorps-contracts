@@ -83,7 +83,6 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error RoundManagerAlreadyExists();
     error GlobalOrPartyValuesMismatch();
     error InvalidMetadataSignature();
-    error UnauthorizedDeploymentOfficer();
 
     address public registryAddress;
     address public issuanceManagerFactory;
@@ -188,31 +187,6 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         }
     }
 
-    /// @notice Permissionless standalone deployment authorized by the officer's transaction.
-    /// @dev Relayers use the signed round entry point. All deployment logic is internal.
-    function deployCyberCorp(
-        bytes32 salt,
-        string memory companyName,
-        string memory companyType,
-        string memory companyJurisdiction,
-        string memory companyContactDetails,
-        string memory defaultDisputeResolution,
-        address _companyPayable,
-        CompanyOfficer memory _officer
-    ) external returns (
-        address cyberCorpAddress,
-        address authAddress,
-        address issuanceManagerAddress,
-        address dealManagerAddress,
-        address roundManagerAddress
-    ) {
-        if (msg.sender != _officer.eoa) revert UnauthorizedDeploymentOfficer();
-        return _deployCyberCorp(
-            salt, companyName, companyType, companyJurisdiction,
-            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer
-        );
-    }
-
     /// @notice Configuration commitment used before applying the component factory namespace.
     /// @dev The officer signs the predicted manager/corp addresses. Binding the full officer
     /// and payout configuration here prevents a self-signed deployment from squatting them.
@@ -232,7 +206,10 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         ));
     }
 
-    function _deployCyberCorp(
+    /// @notice Standalone deployment. Note msg.sender is left public so that it is multicall-friendly.
+    /// It is safe because the salt ties to officer, payout address and other key arguments,
+    /// and the officer is the sole owner of the created corp. A substituted caller gains no control.
+    function deployCyberCorp(
         bytes32 salt,
         string memory companyName,
         string memory companyType,
@@ -242,7 +219,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address _companyPayable,
         CompanyOfficer memory _officer
     )
-        internal
+        public
         returns (
             address cyberCorpAddress,
             address authAddress,
@@ -441,7 +418,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = _deployCyberCorp(
+        ) = deployCyberCorp(
             corpSalt,
             companyName,
             companyType,
@@ -572,7 +549,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = _deployCyberCorp(
+        ) = deployCyberCorp(
             corpSalt,
             companyName,
             companyType,

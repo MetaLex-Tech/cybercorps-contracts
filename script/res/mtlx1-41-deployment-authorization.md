@@ -29,13 +29,14 @@ those different addresses. BorgAuth is deployed by the corporate factory itself,
 using `keccak256(abi.encodePacked("auth", deploymentSalt))`, with that same
 configuration commitment as `deploymentSalt`.
 
-The shared deployment implementation is internal. Standalone deployments remain
-public and require `msg.sender == officer.eoa`; the officer's transaction authorizes
-the complete configuration. Relayers continue to use the public signed round
-functions: CyberCorpFactory's `deployCyberCorpAndCreateRound` and PumpCorpFactory's
-`deployCyberCorpAndCreateRoundFor`. These call internal `_deployCyberCorp` directly,
-so the standalone caller restriction does not apply to them. Their argument lists
-are unchanged; any caller can submit valid officer signatures.
+Standalone `deployCyberCorp` stays public and puts no condition on the caller. The
+configuration commitment makes a caller restriction unnecessary. A caller that
+changes the officer or the payout address gets different addresses. A caller that
+keeps them gives the owner role to that officer and keeps no role, so it cannot
+create a round. Relayers also use the public signed round functions:
+CyberCorpFactory's `deployCyberCorpAndCreateRound` and PumpCorpFactory's
+`deployCyberCorpAndCreateRoundFor`. Their argument lists are unchanged; any caller
+can submit valid officer signatures.
 
 The existing metadata signature covers certificates, conditions, agreement values
 and configuration, and the escrow signature covers round economics and the
@@ -71,10 +72,11 @@ two-argument overload with the address that will actually call the component.
 
 New deployment predictions change. Previously prepared escrow/agreement signatures
 must be regenerated; the supplemental metadata type and domain are unchanged.
-Standalone deployment rejects any immediate caller other than the initial officer,
-including a relayer or multicall contract acting for a different officer. Existing deployed
-corporations and managers retain their addresses, state and permissions. This
-change adds no storage fields to the upgraded factories.
+Standalone deployment accepts any caller, so a contract caller still works. A
+Multicall3 batch that pays a fee and forms a company in one transaction is one
+such caller. Existing deployed corporations and managers retain their addresses,
+state and permissions. This change adds no storage fields to the upgraded
+factories.
 
 ## Rollout and validation
 
@@ -102,17 +104,25 @@ not change for this fix alone, although the broader v5 script updates them for
 other changes.
 
 The regression suite in `test/FactoryRoundAuthReplayPOC.t.sol` covers permissionless
-component calls, separate caller namespaces, officer authorization, self-signed
-hostile deployments, payout substitution, rejection of a stolen round signature,
-rejection of a legacy component during a partial upgrade, and successful deployment
-of the original signed package afterward. The Pump happy-path test calls `For`
-from an address other than the officer.
+component calls, separate caller namespaces, self-signed hostile deployments, payout
+substitution, rejection of a stolen round signature, rejection of a legacy component
+during a partial upgrade, and successful deployment of the original signed package
+afterward. Two tests cover the standalone path: a substituted payout address moves
+the corp address, and a named officer receives the owner role while the caller
+receives none. The Pump happy-path test calls `For` from an address other than the
+officer.
 
-The last implementation test run passed 130 tests across eight local suites:
-FactoryRoundAuthReplayPOCTest, FactoryArbitraryErc20RoundPOCTest, RoundManagerTest,
-RoundManagerFCFSTest, CyberCorpFactoryPublicRoundTest, DealManagerTest,
-RoundManagerFactoryTest and DealManagerFactoryTest. Fork upgrade tests and a live
-client signing/relaying rehearsal have not been validated for this patch.
+`test/MulticallFormationFeeForkTest.t.sol` guards the contract caller. It upgrades
+the corporate factory and its four components on a Base fork, then forms a company
+through Multicall3.
+
+The last run passed the unit tier with no failures, the 14 tests in
+FactoryRoundAuthReplayPOCTest and the 8 tests in MulticallFormationFeeForkTest. The
+fork tier passed 173 tests and failed 4. The same 4 fail at the branch commit
+without these changes: `test_RealSignatureStillVerifiesAfterTheRefactor`, which
+replays live calldata made for the old addresses, and three tests that revert with
+`SignatureVerificationFailed`. The cause of those three is not yet known. A live
+client signing and relaying rehearsal has not been done.
 
 ## Remaining concerns
 

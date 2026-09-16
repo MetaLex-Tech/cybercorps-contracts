@@ -6,6 +6,9 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -22,6 +25,10 @@ interface IMulticall3 {
     }
 
     function aggregate3(Call3[] calldata calls) external payable returns (Result[] memory);
+}
+
+interface IUUPS {
+    function upgradeToAndCall(address newImplementation, bytes memory data) external payable;
 }
 
 interface IUSDC {
@@ -133,11 +140,53 @@ contract MulticallFormationFeeForkTest is Test {
         calls[1] = IMulticall3.Call3(address(corpFactory), false, formationCall);
     }
 
+    /// @dev The component factories must move together with the top-level factory. A partial
+    /// upgrade is rejected by FactoryDeploymentLib.requireNamespaces.
+    function _upgradeToLocalImplementations() internal {
+        // Deploy before the pranks, or a CREATE consumes one.
+        address[5] memory proxies = [
+            address(corpFactory),
+            corpFactory.cyberCorpSingleFactory(),
+            corpFactory.issuanceManagerFactory(),
+            corpFactory.dealManagerFactory(),
+            corpFactory.roundManagerFactory()
+        ];
+        address[5] memory impls = [
+            address(new CyberCorpFactory()),
+            address(new CyberCorpSingleFactory()),
+            address(new IssuanceManagerFactory()),
+            address(new DealManagerFactory()),
+            address(new RoundManagerFactory())
+        ];
+
+        address metalexSafe = DeploymentConstants.coreV2(block.chainid).metalexSafe;
+        for (uint256 i; i < proxies.length; ++i) {
+            vm.prank(metalexSafe);
+            IUUPS(proxies[i]).upgradeToAndCall(impls[i], "");
+        }
+    }
+
     function _corpAddress(bytes32 salt) internal view returns (address) {
         return corpSingleFactory.computeCyberCorpSingleAddress(salt);
     }
 
     // ── tests ────────────────────────────────────────────────────────────────
+
+    /// @dev The suite above runs against the live implementation. This one upgrades the forked
+    /// factory and its component factories to the locally compiled ones, so the current code is
+    /// actually exercised. A multicall contract is the caller, not the officer.
+    function test_feeAndFormationInOneBatchAfterUpgrade() public {
+        _upgradeToLocalImplementations();
+
+        IMulticall3.Call3[] memory calls = _batch(
+            _feeCall(metalexPayable, FEE, keccak256("nonce-upgrade"), userKey),
+            _formationCall(keccak256("fee-and-formation-after-upgrade")),
+            false
+        );
+
+        vm.prank(user);
+        MULTICALL3.aggregate3(calls);
+    }
 
     function test_feeAndFormationInOneBatch() public {
         bytes32 salt = keccak256("fee-and-formation");

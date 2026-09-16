@@ -261,18 +261,37 @@ contract FactoryRoundAuthReplayPOCTest is Test {
         _deployHonestThroughPump(metadataSig);
     }
 
-    function test_MTLX1_41_OfficerTransactionRequiredForStandaloneDeployment() public {
+    /// @notice A standalone deployment by any caller cannot take the officer's addresses with a
+    /// substituted payout address. The salt commits to the payout address, so the corp lands
+    /// elsewhere and the officer's own deployment still succeeds.
+    function test_MTLX1_41_StandaloneDeploymentCannotSubstituteThePayoutAddress() public {
         CompanyOfficer memory victim = _officer();
         bytes32 salt = keccak256(abi.encodePacked(SALT));
-        vm.startPrank(attacker);
-        vm.expectRevert(PumpCorpFactory.UnauthorizedDeploymentOfficer.selector);
-        pumpFactory.deployCyberCorp(salt, "Signed Company Name", "C-Corp", "DE", "contact@seedcorp.com", "Arbitration", attacker, victim);
-        vm.expectRevert(CyberCorpFactory.UnauthorizedDeploymentOfficer.selector);
-        corpFactory.deployCyberCorp(salt, "Signed Company Name", "C-Corp", "DE", "contact@seedcorp.com", "Arbitration", attacker, victim);
-        vm.expectRevert(); // The predicted corp does not exist and cannot authorize a retrofit.
-        corpFactory.deployAndInitializeRoundManager(salt, predictedCorp);
-        vm.stopPrank();
+
+        vm.prank(attacker);
+        (address corp, , , , ) = pumpFactory.deployCyberCorp(
+            salt, "Signed Company Name", "C-Corp", "DE", "contact@seedcorp.com", "Arbitration", attacker, victim
+        );
+        assertNotEq(corp, predictedCorp, "a substituted payout address moves the corp address");
+
         _deployHonestThroughPump(_honestMetadataSignature());
+    }
+
+    /// @notice Naming the real officer reaches the officer's address, but gives the officer the
+    /// owner role. The caller keeps none, so it cannot create the round.
+    function test_MTLX1_41_StandaloneDeploymentGivesControlToTheNamedOfficer() public {
+        vm.prank(attacker);
+        (address corp, address auth, , , ) = pumpFactory.deployCyberCorp(
+            keccak256(abi.encodePacked(SALT)),
+            "Signed Company Name", "C-Corp", "DE", "contact@seedcorp.com", "Arbitration",
+            honestPayable,
+            _officer()
+        );
+
+        assertEq(corp, predictedCorp, "the officer's own configuration reaches the officer's address");
+        assertEq(BorgAuth(auth).userRoles(attacker), 0, "the caller holds no role");
+        assertGe(BorgAuth(auth).userRoles(officer), BorgAuth(auth).OWNER_ROLE(), "the officer owns it");
+        assertEq(CyberCorp(corp).companyPayable(), honestPayable, "the signed payout address stands");
     }
 
     function test_MTLX1_41_AllComponentFactoriesRemainPermissionless() public {
