@@ -23,6 +23,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CertificateSVGParams, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {ICertificateImageBuilder} from "../src/interfaces/ICertificateImageBuilder.sol";
+import {CertificateDetails, Endorsement, OwnerDetails} from "../src/interfaces/ILedgerEntryToken.sol";
 
 contract ShareExtensionHarness is ShareExtension {
     // _buildSeriesJson returns `"terms": {...}, ` (fragment); wrap for parseable JSON.
@@ -604,13 +605,13 @@ contract CertificateUriBuilderResolvedPathTest is Test {
     }
 
     function _render(address extension) internal view returns (string memory) {
-        CertificateUriBuilder.CertificateDetails memory details;
+        CertificateDetails memory details;
         details.extensionData = bytes("payload");
         return builder.buildCertificateUriNotEncoded(
             "Corp", "C-Corp", "DE", "hi@example.com",
             SecurityClass.PreferredStock, SecuritySeries.SeriesSeed, "ipfs://cert",
-            new string[](0), details, new CertificateUriBuilder.Endorsement[](0),
-            CertificateUriBuilder.OwnerDetails("holder", address(0xBEEF)),
+            new string[](0), details, new Endorsement[](0),
+            OwnerDetails("holder", address(0xBEEF)),
             address(0), bytes32(0), 1, printer, extension
         );
     }

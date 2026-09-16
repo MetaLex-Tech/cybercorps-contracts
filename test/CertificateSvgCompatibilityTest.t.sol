@@ -5,7 +5,13 @@ import {Test} from "forge-std/Test.sol";
 import {CertificateUriBuilder, Base64} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CertificateSVGParams, CertificateSVGParamsV2, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
-import {RestrictionType, RestrictiveLegend} from "../src/interfaces/ILedgerEntryToken.sol";
+import {
+    CertificateDetails,
+    Endorsement,
+    OwnerDetails,
+    RestrictionType,
+    RestrictiveLegend
+} from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICertificateImageBuilder, ICertificateImageBuilderV2} from "../src/interfaces/ICertificateImageBuilder.sol";
 import {MockCyberCorp, MockIssuanceManager} from "./CyberCertPrinterTest.t.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
@@ -70,16 +76,16 @@ contract CertificateSvgCompatibilityTest is Test {
     }
 
     function _json(bool legacy, bool encoded) internal view returns (string memory) {
-        CertificateUriBuilder.CertificateDetails memory d;
+        CertificateDetails memory d;
         d.signingOfficerName = "Officer";
         d.signingOfficerTitle = "CEO";
         d.unitsRepresented = 25e17;
         d.investmentAmountUSD = 25e16;
         d.extensionData = hex"1234";
-        CertificateUriBuilder.Endorsement[] memory e = new CertificateUriBuilder.Endorsement[](1);
+        Endorsement[] memory e = new Endorsement[](1);
         e[0].endorseeName = "Holder";
         e[0].signatureHash = hex"1234";
-        CertificateUriBuilder.OwnerDetails memory owner = CertificateUriBuilder.OwnerDetails("Holder", address(0xCAFE));
+        OwnerDetails memory owner = OwnerDetails("Holder", address(0xCAFE));
         string[] memory texts = new string[](1); texts[0] = "Board consent";
         if (legacy) {
             if (encoded) return builder.buildCertificateUri("Example Corp", "Corp", "DE", "contact", SecurityClass.CommonStock,
