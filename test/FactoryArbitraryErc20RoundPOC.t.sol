@@ -67,17 +67,15 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
     function test_POC_ArbitraryErc20DrivesRoundDenominationAndRatio() public {
         uint256 salt = 424242;
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
-        address predictedCorp = CyberCorpSingleFactory(cyberCorpSingleFactory)
-            .computeCyberCorpSingleAddress(corpSalt);
-        address predictedRM = RoundManagerFactory(rmFactory)
-            .computeRoundManagerAddress(corpSalt);
-
         CompanyOfficer memory companyOfficer = CompanyOfficer({
             eoa: officer,
             name: "Officer A",
             contact: "officer@corp.com",
             title: "CEO"
         });
+        corpSalt = corpFactory.computeDeploymentSalt(corpSalt, "Seed Corp", "C-Corp", "DE", "contact@seedcorp.com", "Arbitration", owner, companyOfficer);
+        address predictedCorp = CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt, address(corpFactory));
+        address predictedRM = RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt, address(corpFactory));
 
         uint256 raiseCap = 1_000_000 * TOKEN_SCALE; // 5% of valuation
         uint256 ticket = 1_000_000 * TOKEN_SCALE;

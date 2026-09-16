@@ -10,6 +10,7 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {FeeOverride} from "../src/interfaces/IRoundManagerFactory.sol";
@@ -151,6 +152,11 @@ contract PumpCorpFactoryForkTest is Test {
         // The fork predates the seriesData ABI. Make the factory references used by this
         // isolated deployment point at current implementations before creating any corp.
         vm.startPrank(metalexSafe);
+        // Upgrade the shared component factories together with the corporate factory.
+        CyberCorpSingleFactory(net.cyberCorpSingleFactory).upgradeToAndCall(address(new CyberCorpSingleFactory()), "");
+        IssuanceManagerFactory(net.issuanceManagerFactory).upgradeToAndCall(address(new IssuanceManagerFactory()), "");
+        DealManagerFactory(net.dealManagerFactory).upgradeToAndCall(address(new DealManagerFactory()), "");
+        rmFactory.upgradeToAndCall(address(new RoundManagerFactory()), "");
         rmFactory.setRefImplementation(address(new RoundManager()));
         IssuanceManagerFactory issuanceFactory = IssuanceManagerFactory(net.issuanceManagerFactory);
         issuanceFactory.setRefImplementation(address(new IssuanceManager()));
@@ -195,10 +201,11 @@ contract PumpCorpFactoryForkTest is Test {
         returns (address corp, address rm)
     {
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+        corpSalt = pumpFactory.computeDeploymentSalt(corpSalt, "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", address(this), _officer(officer, "Alice Officer"));
         corp = CyberCorpSingleFactory(CYBERCORP_SINGLE_FACTORY)
-            .computeCyberCorpSingleAddress(corpSalt);
+            .computeCyberCorpSingleAddress(corpSalt, address(pumpFactory));
         rm   = rmFactory
-            .computeRoundManagerAddress(corpSalt);
+            .computeRoundManagerAddress(corpSalt, address(pumpFactory));
     }
 
     /// Build a CompanyOfficer for the given EOA.

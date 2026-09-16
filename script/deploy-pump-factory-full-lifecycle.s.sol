@@ -149,8 +149,9 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
         roundFirstPartyValues[4] = "US"; // investorJurisdiction
 
         // Predict corp and round manager addresses to build a valid escrow signature
-        address predictedCorp = CyberCorpSingleFactory(deployment.cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt);
-        address predictedRM = RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt);
+        bytes32 deploymentSalt = pumpCorpFactory.computeDeploymentSalt(corpSalt, companyName, companyType, companyJurisdiction, companyContact, disputeResolution, corpPayable, officer);
+        address predictedCorp = CyberCorpSingleFactory(deployment.cyberCorpSingleFactory).computeCyberCorpSingleAddress(deploymentSalt, address(pumpCorpFactory));
+        address predictedRM = RoundManagerFactory(rmFactory).computeRoundManagerAddress(deploymentSalt, address(pumpCorpFactory));
 
         // Define shared round parameters
         SecuritySeries roundSeriesType = SecuritySeries.ACE;

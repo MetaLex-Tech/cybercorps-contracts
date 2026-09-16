@@ -841,14 +841,18 @@ contract RoundManagerFCFSForkTest is Test {
         IUUPS(net.cyberCorpFactory).upgradeToAndCall(newFactoryImpl, "");
         CyberCorpSingleFactory cyberCorpSingleFactory = CyberCorpSingleFactory(cyberCorpFactory.cyberCorpSingleFactory());
         RoundManagerFactory roundManagerFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
+        vm.startPrank(net.metalexSafe);
+        cyberCorpSingleFactory.upgradeToAndCall(address(new CyberCorpSingleFactory()), "");
+        roundManagerFactory.upgradeToAndCall(address(new RoundManagerFactory()), "");
+        IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory()).upgradeToAndCall(address(new IssuanceManagerFactory()), "");
+        DealManagerFactory(cyberCorpFactory.dealManagerFactory()).upgradeToAndCall(address(new DealManagerFactory()), "");
+        vm.stopPrank();
 
         bytes32 templateId = bytes32(uint256(5535));
         _createFcfsTemplate(registry, net.metalexSafe, templateId);
 
         uint256 salt = uint256(keccak256("BaseSepoliaFactoryFcfsForkTest.corp"));
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
-        address predictedCorp = cyberCorpSingleFactory.computeCyberCorpSingleAddress(corpSalt);
-        address predictedRoundManager = roundManagerFactory.computeRoundManagerAddress(corpSalt);
 
         CompanyOfficer memory companyOfficer = CompanyOfficer({
             eoa: officer,
@@ -856,6 +860,9 @@ contract RoundManagerFCFSForkTest is Test {
             contact: "officer@cybercorp.test",
             title: "CEO"
         });
+        corpSalt = cyberCorpFactory.computeDeploymentSalt(corpSalt, "Base Sepolia FCFS Corp", "Delaware C-Corp", "DE", "founder@cybercorp.test", "Arbitration", founder, companyOfficer);
+        address predictedCorp = cyberCorpSingleFactory.computeCyberCorpSingleAddress(corpSalt, address(cyberCorpFactory));
+        address predictedRoundManager = roundManagerFactory.computeRoundManagerAddress(corpSalt, address(cyberCorpFactory));
 
         string[] memory legalDetails = new string[](1);
         legalDetails[0] = "Base Sepolia FCFS SAFE";
