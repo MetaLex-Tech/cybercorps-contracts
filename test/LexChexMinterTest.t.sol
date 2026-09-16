@@ -51,6 +51,7 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {LeXcheX} from "../src/creds/lexchex.sol";
 import {Test, console} from "forge-std/Test.sol";
+import "../src/interfaces/ICyberAgreementRegistry.sol";
 
 contract PaymentToken is ERC20 {
     uint8 _decimals;
@@ -265,7 +266,7 @@ contract LexChexMinterTest is Test {
 
         // Agreement should be fully signed
         vm.expectEmit(true, true, true, true);
-        emit CyberAgreementRegistry.ContractFullySigned(agreementId, block.timestamp);
+        emit ICyberAgreementRegistry.ContractFullySigned(agreementId, block.timestamp);
         vm.expectEmit(true, true, true, true);
         emit LeXcheXMinter.MintRequested(user1, 10e6, agreementId);
         vm.expectEmit(true, true, true, true);
@@ -329,7 +330,7 @@ contract LexChexMinterTest is Test {
 
         // Agreement should be fully signed
         vm.expectEmit(true, true, true, true);
-        emit CyberAgreementRegistry.ContractFullySigned(agreementId, block.timestamp);
+        emit ICyberAgreementRegistry.ContractFullySigned(agreementId, block.timestamp);
         vm.expectEmit(true, true, true, true);
         emit LeXcheXMinter.MintRequested(user1, 0, agreementId);
         vm.expectEmit(true, true, true, true);
