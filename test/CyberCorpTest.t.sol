@@ -341,14 +341,27 @@ contract CyberCorpForkTest is Test {
         address[] memory parties,
         bytes32 secretHash
     ) internal view returns (bytes32) {
-        CompanyOfficer memory officer = CompanyOfficer({eoa: testAddress, name: "Test Officer", contact: "test@example.com", title: "CEO"});
-        bytes32 deploymentSalt = cyberCorpFactory.computeDeploymentSalt(
-            keccak256(abi.encodePacked(salt)), "CyberCorp", "Limited Liability Company",
-            "Juris", "Contact Details", "Dispute Res", testAddress, officer
-        );
-        address dealManager = DealManagerFactory(cyberCorpFactory.dealManagerFactory())
-            .computeDealManagerAddress(deploymentSalt, address(cyberCorpFactory));
+        address dealManager = _predictedDealManager(salt, "CyberCorp", "Juris", "Dispute Res", testAddress);
         return _expectedAgreementId(templateId, salt, globalValues, parties, secretHash, dealManager);
+    }
+
+    /// @dev Predicts the DealManager that deployCyberCorpAndCreateOffer deploys. The deployment
+    /// salt commits to the company configuration, so a test that deploys a different company
+    /// must predict with its own values. That entry point sets the officer eoa to the caller.
+    function _predictedDealManager(
+        uint256 salt,
+        string memory companyName,
+        string memory companyJurisdiction,
+        string memory defaultDisputeResolution,
+        address caller
+    ) internal view returns (address) {
+        CompanyOfficer memory officer = CompanyOfficer({eoa: caller, name: "Test Officer", contact: "test@example.com", title: "CEO"});
+        bytes32 deploymentSalt = cyberCorpFactory.computeDeploymentSalt(
+            keccak256(abi.encodePacked(salt)), companyName, "Limited Liability Company",
+            companyJurisdiction, "Contact Details", defaultDisputeResolution, testAddress, officer
+        );
+        return DealManagerFactory(cyberCorpFactory.dealManagerFactory())
+            .computeDealManagerAddress(deploymentSalt, address(cyberCorpFactory));
     }
 
     /// @dev Same preimage, for flows where the finalizing DealManager already exists.
@@ -2577,7 +2590,8 @@ contract CyberCorpForkTest is Test {
         partyValues[0][3] = "Limited Liability Company";
         partyValues[0][4] = "Delaware";
 
-        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0));
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0),
+            _predictedDealManager(block.timestamp, "Test CyberCorp, LLC", "Delaware", "Dispute Res", testAddress));
 
         bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -5342,7 +5356,8 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Principal Party Value";
 
-        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0),
+            _predictedDealManager(block.timestamp, "DelegationTestCorp", "Delaware", "Dispute Resolution", testAddress));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -5522,7 +5537,8 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Principal Party Value";
 
-        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0),
+            _predictedDealManager(block.timestamp, "DelegationExpiryCorp", "Delaware", "Dispute Resolution", testAddress));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";

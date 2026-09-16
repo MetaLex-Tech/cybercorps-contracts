@@ -116,13 +116,12 @@ officer.
 the corporate factory and its four components on a Base fork, then forms a company
 through Multicall3.
 
-The last run passed the unit tier with no failures, the 14 tests in
-FactoryRoundAuthReplayPOCTest and the 8 tests in MulticallFormationFeeForkTest. The
-fork tier passed 173 tests and failed 4. The same 4 fail at the branch commit
-without these changes: `test_RealSignatureStillVerifiesAfterTheRefactor`, which
-replays live calldata made for the old addresses, and three tests that revert with
-`SignatureVerificationFailed`. The cause of those three is not yet known. A live
-client signing and relaying rehearsal has not been done.
+CyberCorpForkTest predicts the DealManager from the company configuration each test
+deploys. Three tests deploy a different company from the others, so they pass their
+own name, jurisdiction and dispute resolution to `_predictedDealManager`.
+
+The last run passed the unit tier with no failures and the fork tier with 173 tests
+and no failures. A live client signing and relaying rehearsal has not been done.
 
 ## Remaining concerns
 
