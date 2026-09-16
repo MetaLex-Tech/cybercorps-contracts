@@ -101,7 +101,8 @@ interface ICyberAgreementRegistry {
     function signContract(
         bytes32 contractId,
         string[] memory partyValues,
-        bool fillUnallocated,
+        bytes calldata signature,
+        bool fillUnallocated, // to fill a 0 address or not
         string memory secret
     ) external;
 
@@ -155,8 +156,7 @@ interface ICyberAgreementRegistry {
             string[][] memory partyValues,
             uint256[] memory signedAt,
             uint256 numSignatures,
-            bool isComplete,
-            bytes32 transactionHash
+            bool isComplete
         );
 
     function getTemplateDetails(
@@ -182,10 +182,6 @@ interface ICyberAgreementRegistry {
 
     function getContractJson(bytes32 contractId) external view returns (string memory);
 
-    function getContractTransactionHash(bytes32 contractId) external view returns (bytes32);
-
     function isFinalized(bytes32 contractId) external view returns (bool);
-
-    function allPartiesFinalized(bytes32 contractId) external view returns (bool);
 
 }

@@ -57,7 +57,7 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 /// CyberCertPrinter_CertificateCreated), the LedgerEntryTokenStorage library and its
 /// "cybercorp.cert.printer.storage.v1" slot, and all external signatures are intentionally unchanged.
 /// Do NOT rename any of those without treating it as a breaking ABI change.
-contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
+contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable, ILedgerEntryToken {
     using LedgerEntryTokenStorage for LedgerEntryTokenStorage.CyberCertStorage;
 
     string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
@@ -366,7 +366,7 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     }
     
     // URI storage functionality
-    function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+    function tokenURI(uint256 tokenId) public view virtual override(ERC721Upgradeable, IERC721Metadata) returns (string memory) {
         if (!_exists(tokenId)) revert ILedgerEntryToken.URIQueryForNonexistentToken();
         return LedgerEntryTokenStorage.tokenURI(tokenId);
     }

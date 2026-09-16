@@ -42,7 +42,8 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "../CyberCorpConstants.sol";
-import "openzeppelin-contracts/token/ERC721/IERC721.sol";
+import "openzeppelin-contracts/token/ERC721/extensions/IERC721Metadata.sol";
+import "openzeppelin-contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 
 struct CertificateDetails {
     string signingOfficerName;
@@ -91,7 +92,7 @@ struct RestrictiveLegend {
     bytes data;
 }
 
-interface ILedgerEntryToken is IERC721 {
+interface ILedgerEntryToken is IERC721Metadata, IERC721Enumerable {
     // Shared errors — declared once here so LedgerEntryToken and its storage library (via delegatecall) revert
     // with identical selectors.
     error NotIssuanceManager();
@@ -175,10 +176,7 @@ interface ILedgerEntryToken is IERC721 {
         address _extension,
         bytes memory _seriesData
     ) external;
-    function name() external view returns (string memory);
-    function symbol() external view returns (string memory);
     function updateIssuanceManager(address _issuanceManager) external;
-    function updateDefaultLegend(string[] memory _ledger) external;
     function defaultLegend() external view returns (string[] memory);
     function defaultRestrictiveLegends() external view returns (RestrictiveLegend[] memory);
     function setRestrictionHook(uint256 _id, address _hookAddress) external;
@@ -277,28 +275,10 @@ interface ILedgerEntryToken is IERC721 {
     function removeCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external;
     function getCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external view returns (RestrictiveLegend memory);
     function getCertRestrictiveLegendCount(uint256 tokenId) external view returns (uint256);
-    function getEndorsementHistory(
-        uint256 tokenId,
-        uint256 index
-    )
-        external
-        view
-        returns (
-            address endorser,
-            string memory endorseeName,
-            address registry,
-            bytes32 agreementId,
-            uint256 timestamp,
-            bytes memory signatureHash,
-            address endorsee
-        );
-    function tokenURI(uint256 tokenId) external view returns (string memory);
+    function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (Endorsement memory);
     function certificateUri() external view returns (string memory);
     function issuanceManager() external view returns (address);
     function holderCount() external view returns (uint256);
-    function totalSupply() external view returns (uint256);
-    function tokenByIndex(uint256 index) external view returns (uint256);
-    function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256);
 
     // ERC721-like APIs for legal owner
     function legalOwnerOf(uint256 tokenId) external view returns (address);
