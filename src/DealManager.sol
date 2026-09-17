@@ -402,7 +402,7 @@ contract DealManager is
     /// @return certIds Array of certificate IDs created
     function proposeAndSignNewCertsDeal(
         uint256 salt,
-        DealManagerStorage.CyberCertData[] memory _certData,
+        CyberCertData[] memory _certData,
         bytes32 _templateId,
         string[] memory _globalValues,
         address[] memory _parties,

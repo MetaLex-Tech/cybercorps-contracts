@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
-import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {CompanyOfficer, CyberCertData, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -239,8 +239,8 @@ contract CyberCorpUpgradeabilityForkTest is Test {
 
         // Simulate CyberCorp creation
 
-        CyberCorpFactory.CyberCertData[] memory certData = new CyberCorpFactory.CyberCertData[](1);
-        certData[0] = CyberCorpFactory.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
             name: "Cert Name 1",
             symbol: "Cert Symbol 1",
             uri: templateUri,

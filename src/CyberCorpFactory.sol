@@ -56,7 +56,6 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 import {IRoundManager as IRoundManagerInterface} from "./interfaces/IRoundManager.sol";
 import {Round, RoundType} from "./libs/RoundLib.sol";
 import "./libs/RoundLib.sol";
-import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.sol";
 import "./interfaces/IRoundManagerFactory.sol";
 import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
@@ -102,18 +101,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
     // Upgrade notes: Reduced gap to account for new variables
     uint256[38] private __gap;
-
-    struct CyberCertData {
-        string name;
-        string symbol;
-        string uri;
-        SecurityClass securityClass;
-        SecuritySeries securitySeries;
-        address extension;
-        /// @notice Series-scope payload encoded by `extension` (ICertificateExtensionV3-compatible).
-        bytes seriesData;
-        string[] defaultLegend;
-    }
 
     event CyberCorpDeployed(
         address indexed cyberCorp,
@@ -440,7 +427,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         CompanyOfficer memory _officer,
         string[] memory legalDetails,
         bytes[] memory extensionData,
-        RM_CyberCertData[] memory certData,
+        CyberCertData[] memory certData,
         bytes32 templateId,
         address paymentToken,
         uint256 pricePerUnit,

@@ -2,8 +2,7 @@
 pragma solidity 0.8.28;
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {CompanyOfficer} from "../CyberCorpConstants.sol";
-import {CyberCertData as RM_CyberCertData} from "../storage/RoundManagerStorage.sol";
+import {CompanyOfficer, CyberCertData} from "../CyberCorpConstants.sol";
 
 /// @notice Officer authorization over the deployment metadata of a corp-and-round deployment.
 /// @dev The escrowed round signature covers the round economics only. It binds the RoundManager
@@ -45,7 +44,7 @@ library CorpFactoryMetadataLib {
         bytes[] extensionData;
         string[] roundPartyValues;
         string[] legalDetails;
-        RM_CyberCertData[] certData;
+        CyberCertData[] certData;
         address[] conditionAddresses;
     }
 
@@ -75,7 +74,7 @@ library CorpFactoryMetadataLib {
         return keccak256(abi.encodePacked(hashes));
     }
 
-    function hashCertData(RM_CyberCertData memory cd) internal pure returns (bytes32) {
+    function hashCertData(CyberCertData memory cd) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             CERT_DATA_TYPEHASH,
             keccak256(bytes(cd.name)),
@@ -89,7 +88,7 @@ library CorpFactoryMetadataLib {
         ));
     }
 
-    function hashCertDataArray(RM_CyberCertData[] memory data) internal pure returns (bytes32) {
+    function hashCertDataArray(CyberCertData[] memory data) internal pure returns (bytes32) {
         bytes32[] memory hashes = new bytes32[](data.length);
         for (uint256 i = 0; i < data.length; i++) {
             hashes[i] = hashCertData(data[i]);

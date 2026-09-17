@@ -101,16 +101,6 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     //adjust storage gap based on new variable
     uint256[38] private __gap; // keep storage gap similar to CyberCorpFactory
 
-    struct CyberCertData {
-        string name;
-        string symbol;
-        string uri;
-        SecurityClass securityClass;
-        SecuritySeries securitySeries;
-        address extension;
-        string[] defaultLegend;
-    }
-
     event MetaCorpDeployed(
         address indexed cyberCorp,
         address indexed auth,

@@ -107,16 +107,6 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     //adjust storage gap based on new variable
     uint256[39] private __gap; // keep storage gap similar to CyberCorpFactory
 
-    struct CyberCertData {
-        string name;
-        string symbol;
-        string uri;
-        SecurityClass securityClass;
-        SecuritySeries securitySeries;
-        address extension;
-        string[] defaultLegend;
-    }
-
     event CorpDeployed(
         address indexed cyberCorp,
         address indexed auth,

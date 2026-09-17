@@ -56,7 +56,6 @@ import {IRoundManager as IRoundManagerInterface} from "./interfaces/IRoundManage
 import "./interfaces/ILedgerEntryToken.sol";
 import "./CyberCorpConstants.sol";
 import "./storage/LedgerEntryTokenStorage.sol";
-import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.sol";
 import {Round, RoundType, RoundLib} from "./libs/RoundLib.sol";
 import {CorpFactoryMetadataLib} from "./libs/CorpFactoryMetadataLib.sol";
 import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
@@ -94,16 +93,6 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
     // adjust storage gap based on new variable
     uint256[42] private __gap;
-
-    struct CyberCertData {
-        string name;
-        string symbol;
-        string uri;
-        SecurityClass securityClass;
-        SecuritySeries securitySeries;
-        address extension;
-        string[] defaultLegend;
-    }
 
     event CyberCorpDeployed(
         address indexed cyberCorp,
@@ -341,7 +330,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         bytes[] memory extensionData,
         string[] memory roundPartyValues,
         string[] memory legalDetails,
-        RM_CyberCertData[] memory certData,
+        CyberCertData[] memory certData,
         address[] memory conditionAddresses,
         bytes memory signature
     ) internal view {
@@ -441,7 +430,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
                     _certData[i].securityClass,
                     _certData[i].securitySeries,
                     _certData[i].extension,
-                    bytes("")
+                    _certData[i].seriesData
                 )
             );
             certPrinterAddress[i] = address(certPrinter);
@@ -479,7 +468,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         CompanyOfficer memory _officer,
         string[] memory legalDetails,
         bytes[] memory extensionData,
-        RM_CyberCertData[] memory certData,
+        CyberCertData[] memory certData,
         bytes32 templateId,
         address paymentToken,
         uint256 pricePerUnit,

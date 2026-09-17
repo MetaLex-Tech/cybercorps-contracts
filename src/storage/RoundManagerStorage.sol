@@ -68,18 +68,6 @@ interface ILexChexMinter {
 }
 
 /// @notice Certificate data structure for creating new certificates
-struct CyberCertData {
-    string name;
-    string symbol;
-    string uri;
-    SecurityClass securityClass;
-    SecuritySeries securitySeries;
-    address extension;
-    /// @notice Series-scope payload encoded by `extension`.
-    bytes seriesData;
-    string[] defaultLegend;
-}
-
 struct EOI {
     string name;
     string investorType;

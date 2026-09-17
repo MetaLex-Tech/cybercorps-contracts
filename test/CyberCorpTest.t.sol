@@ -101,7 +101,7 @@ contract CyberCorpForkTest is Test {
     address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     SecurityClass[] securityClasses;
     SecuritySeries[] securitySerieses;
-    CyberCorpFactory.CyberCertData[] certData;
+    CyberCertData[] certData;
     TokenWarrantExtension warrantExtension;
     string[] certNames;
     string[] certSymbols;
@@ -131,7 +131,7 @@ contract CyberCorpForkTest is Test {
           string[] memory _dataDefaultString = new string[](1);
             _dataDefaultString[0] = "Legend 1";
 
-        CyberCorpFactory.CyberCertData memory _certData = CyberCorpFactory.CyberCertData({
+        CyberCertData memory _certData = CyberCertData({
             name: "Cert Name 1",
             symbol: "Cert Symbol 1",
             uri: "ipfs.io/ipfs/[cid]",
@@ -141,7 +141,7 @@ contract CyberCorpForkTest is Test {
             seriesData: bytes(""),
             defaultLegend: _dataDefaultString
         });
-        certData = new CyberCorpFactory.CyberCertData[](1);
+        certData = new CyberCertData[](1);
         certData[0] = _certData;
 
         securityClasses = new SecurityClass[](1);
@@ -674,8 +674,8 @@ contract CyberCorpForkTest is Test {
         extensions = new address[](2);
         extensions[0] = address(0);
         extensions[1] = address(0);
-        CyberCorpFactory.CyberCertData[] memory certData = new CyberCorpFactory.CyberCertData[](2);
-        certData[0] = CyberCorpFactory.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](2);
+        certData[0] = CyberCertData({
             name: "SAFE",
             symbol: "SAFE",
             uri: "ipfs.io/ipfs/[cid]",
@@ -686,7 +686,7 @@ contract CyberCorpForkTest is Test {
             defaultLegend: defaultLegends[0]
         });
 
-        certData[1] = CyberCorpFactory.CyberCertData({
+        certData[1] = CyberCertData({
             name: "Token Warrant",
             symbol: "TWARRENT",
             uri: "ipfs.io/ipfs/[cid]",
@@ -2606,10 +2606,10 @@ contract CyberCorpForkTest is Test {
             testPrivateKey
         );
 
-        CyberCorpFactory.CyberCertData[] memory _certData = new CyberCorpFactory.CyberCertData[](1);
+        CyberCertData[] memory _certData = new CyberCertData[](1);
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend 1";
-        _certData[0] = CyberCorpFactory.CyberCertData({
+        _certData[0] = CyberCertData({
             name: "Cert Name 1",
             symbol: "Cert Symbol 1",
             uri: "https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeiafzkynirjta4pd3g365qv6ttlz3pkeqcquhbald7nqqfmm5vpfua",
@@ -4198,8 +4198,8 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
-        certData[0] = DealManagerStorage.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",
@@ -4354,8 +4354,8 @@ contract CyberCorpForkTest is Test {
         string[] memory warrantLegend = new string[](1);
         warrantLegend[0] = "Token Warrant Legend";
 
-        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](2);
-        certData[0] = DealManagerStorage.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](2);
+        certData[0] = CyberCertData({
             name: "SAFE Certificate",
             symbol: "SAFE",
             uri: "ipfs://safe-uri",
@@ -4365,7 +4365,7 @@ contract CyberCorpForkTest is Test {
             seriesData: bytes(""),
             defaultLegend: safeLegend
         });
-        certData[1] = DealManagerStorage.CyberCertData({
+        certData[1] = CyberCertData({
             name: "Token Warrant",
             symbol: "TWARRANT",
             uri: "ipfs://warrant-uri",
@@ -4545,8 +4545,8 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
-        certData[0] = DealManagerStorage.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",

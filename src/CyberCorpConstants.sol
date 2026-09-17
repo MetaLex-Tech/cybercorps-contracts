@@ -87,6 +87,20 @@ struct SecurityClassInfo {
     bytes classData;       // extensionData-style opaque payload
 }
 
+/// @notice Input that describes one certificate printer to create. The round path, the deal path
+/// and the corporate factories all take this shape, so it is defined once here.
+struct CyberCertData {
+    string name;
+    string symbol;
+    string uri;
+    SecurityClass securityClass;
+    SecuritySeries securitySeries;
+    address extension;
+    /// @notice Series-scope payload encoded by `extension` (ICertificateExtensionV3-compatible).
+    bytes seriesData;
+    string[] defaultLegend;
+}
+
 struct CompanyOfficer {
     address eoa;
     string name;
