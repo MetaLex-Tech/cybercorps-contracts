@@ -48,11 +48,13 @@ import "./DealManager.sol";
 import "./libs/auth.sol";
 import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
 import "./storage/DealManagerFactoryStorage.sol";
+import "./interfaces/IDealManagerFactory.sol";
 
 /// @title DealManagerFactory
 /// @notice Factory contract for deploying DealManager instances
 /// @dev Uses ERC1967Proxy+UUPSUpgradeable pattern for upgradeable DealManager instances
-contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
+contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL, IDealManagerFactory
+{
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();

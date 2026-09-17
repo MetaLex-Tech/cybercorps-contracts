@@ -46,9 +46,10 @@ import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "./ITransferRestrictionHook.sol";
 import "./ICondition.sol";
 import "../CyberCorpConstants.sol";
+import "../libs/auth.sol";
 import "../storage/LedgerEntryTokenStorage.sol";
 
-interface IIssuanceManager {
+interface IIssuanceManager is IBorgAuthACL {
     // Events
     event ScripifiedCert(
         address indexed certAddress,
@@ -341,7 +342,6 @@ interface IIssuanceManager {
     function uriBuilder() external view returns (address);
     function companyName() external view returns (string memory);
     function companyJurisdiction() external view returns (string memory);
-    function AUTH() external view returns (address);
     function DEPLOY_VERSION() external view returns (string memory);
     function cyberCertPrinterBeacon() external view returns (UpgradeableBeacon);
     function cyberScripBeacon() external view returns (UpgradeableBeacon);

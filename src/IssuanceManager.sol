@@ -50,11 +50,12 @@ import "./interfaces/ITransferRestrictionHook.sol";
 import "./interfaces/ICertificateConverter.sol";
 import "./interfaces/IIssuanceManagerFactory.sol";
 import "./storage/IssuanceManagerStorage.sol";
+import "./interfaces/IIssuanceManager.sol";
 
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
-contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
+contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuanceManager {
     string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
 
     // IssuanceManager errors
@@ -73,39 +74,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error RecertificationApprovalRequired();
     error InvalidInvestor();
     error InvalidInvestorName();
-    event ScripifiedCert(
-        address indexed certAddress,
-        uint256 indexed id,
-        address indexed scripifiedCert,
-        uint256 amount,
-        uint256 newUnitsRepresented,
-        uint256 newCertNominalShares,
-        uint256 newTotalAssetsWad,
-        uint256 newTotalNominalShares
-    );
 
-    event CertPrinterCreated(
-        address indexed certificate,
-        address indexed corp,
-        string[] ledger,
-        string name,
-        string ticker,
-        SecurityClass securityType,
-        SecuritySeries securitySeries,
-        string certificateUri
-    );
-    event CertificateCreated(
-        uint256 indexed tokenId,
-        address indexed certificate,
-        uint256 amount,
-        uint256 cap,
-        CertificateDetails details
-    );
-    event CompanyDetailsUpdated(string companyName, string jurisdiction);
     event UriBuilderUpdated(address indexed uriBuilder, address indexed oldUriBuilder);
-    event CertPrinterBeaconImplementationUpgraded(address implementation);
-    event ScripBeaconImplementationUpgraded(address implementation);
-    event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
     event ScripifyWhitelistEnabledSet(address indexed certAddress, bool enabled);
     event ScripifyWhitelistUpdated(
         address indexed certAddress,
@@ -129,24 +99,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     event RecertificationApprovalCleared(
         address indexed certAddress,
         address indexed investor
-    );
-    event ScripRecertified(
-        address indexed certAddress,
-        address indexed user,
-        uint256 indexed certId,
-        uint256 scripAmount,
-        uint256 newUnitsRepresented,
-        uint256 newCertNominalShares,
-        uint256 newTotalAssetsWad,
-        uint256 newTotalNominalShares
-    );
-    event ScripAddedToExistingCert(
-        address indexed certAddress,
-        address indexed user,
-        uint256 indexed certId,
-        uint256 scripsAdded,
-        uint256 newUnitsRepresented,
-        uint256 newUnitsScripified
     );
 
     /// @custom:oz-upgrades-unsafe-allow constructor

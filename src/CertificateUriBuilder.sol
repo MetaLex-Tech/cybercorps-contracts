@@ -48,10 +48,14 @@ import "./interfaces/ICertificateImageBuilder.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/IIssuanceManager.sol";
 import {
+    CertificateDetails,
+    Endorsement,
     ILedgerEntryToken,
+    OwnerDetails,
     RestrictionType,
     RestrictiveLegend
 } from "./interfaces/ILedgerEntryToken.sol";
+import "./interfaces/IUriBuilder.sol";
 import {
     ICertificateExtension,
     ICertificateExtensionV3
@@ -64,7 +68,7 @@ interface ICertificateUnitsReserved {
     function unitsReserved(uint256 tokenId) external view returns (uint256);
 }
 
-contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
+contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
 
     /// @notice Address of the external image builder contract
     address public imageBuilder;
@@ -312,31 +316,6 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
             result[i - 7] = strBytes[i];
         }
         return string(result);
-    }
-
-struct CertificateDetails {
-    string signingOfficerName;
-    string signingOfficerTitle;
-    uint256 investmentAmountUSD;
-    uint256 issuerUSDValuationAtTimeOfInvestment;
-    uint256 unitsRepresented;
-    string legalDetails;
-    bytes extensionData;
-}
-
-    struct Endorsement {
-        address endorser;
-        uint256 timestamp;
-        bytes signatureHash;
-        address registry;
-        bytes32 agreementId;
-        address endorsee;
-        string endorseeName;
-    }
-
-    struct OwnerDetails {
-        string name;
-        address ownerAddress;
     }
 
     /// @dev External decoding boundary: a malformed successful return is caught by the caller.

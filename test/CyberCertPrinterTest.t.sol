@@ -1207,7 +1207,7 @@ contract CyberCertPrinterTest is Test {
 
         string memory poison = '"ok", "unitsRepresented": "999999999';
         address extension = address(new SAFEExtension());
-        CertificateUriBuilder.CertificateDetails memory details = CertificateUriBuilder.CertificateDetails({
+        CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
             signingOfficerTitle: "CEO",
             investmentAmountUSD: 1_000 ether,
@@ -1227,8 +1227,8 @@ contract CyberCertPrinterTest is Test {
             "ipfs://certificate",
             new RestrictiveLegend[](0),
             details,
-            new CertificateUriBuilder.Endorsement[](0),
-            CertificateUriBuilder.OwnerDetails({name: poison, ownerAddress: investor}),
+            new Endorsement[](0),
+            OwnerDetails({name: poison, ownerAddress: investor}),
             address(0),
             bytes32(0),
             1,
@@ -1249,8 +1249,8 @@ contract CyberCertPrinterTest is Test {
             "ipfs://certificate",
             new RestrictiveLegend[](0),
             details,
-            new CertificateUriBuilder.Endorsement[](0),
-            CertificateUriBuilder.OwnerDetails({name: poison, ownerAddress: investor}),
+            new Endorsement[](0),
+            OwnerDetails({name: poison, ownerAddress: investor}),
             address(0),
             bytes32(0),
             1,

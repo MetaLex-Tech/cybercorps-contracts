@@ -6,6 +6,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import "../src/interfaces/ICyberAgreementRegistry.sol";
 
 contract CyberAgreementRegistryTest is Test {
     address deployer;
@@ -326,7 +327,7 @@ contract CyberAgreementRegistryTest is Test {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit CyberAgreementRegistry.AgreementSigned(agreementId, alice, block.timestamp);
+        emit ICyberAgreementRegistry.AgreementSigned(agreementId, alice, block.timestamp);
         vm.prank(bob);
         registry.signContractFor(
             alice,

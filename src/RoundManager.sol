@@ -56,6 +56,7 @@ import "./interfaces/ILedgerEntryToken.sol";
 import "./interfaces/IRoundManagerFactory.sol";
 import "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/ILexChex.sol";
+import "./interfaces/IRoundManager.sol";
 
 /// @title RoundManager
 /// @notice Manages fundraising rounds for CyberCorp, handling EOIs, escrows, and allocations
@@ -65,7 +66,8 @@ contract RoundManager is
     BorgAuthACL,
     UUPSUpgradeable,
     ReentrancyGuard,
-    ILexScrowStorage
+    ILexScrowStorage,
+    IRoundManager
 {
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
     using LexScrowStorage for LexScrowStorage.LexScrowData;
@@ -91,48 +93,6 @@ contract RoundManager is
     error EndTimeReductionRestricted();
     error RoundAlreadyExists();
 
-    event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round, bool publicRound);
-    event RoundSnapshotSet(
-        bytes32 indexed roundId,
-        uint256 totalCapitalSecuritiesOutstanding,
-        uint256 totalConvertingSecurities,
-        uint256 totalOptionsIssuedAndOutstanding,
-        uint256 totalPromisedOptions,
-        uint256 unissuedOptionPoolPreRound,
-        uint256 unissuedOptionPoolIncreaseIncludedInCalc,
-        uint256 cCapUsed
-    );
-    event RoundingPolicySet(
-        bytes32 indexed roundId,
-        uint8 mode,
-        uint8 priceDecimals,
-        uint8 shareDecimals
-    );
-    event PMVCSubseriesLabelSet(
-        bytes32 indexed roundId,
-        uint256 pmvc,
-        string label
-    );
-    event EOISubmitted(
-        bytes32 agreementId,
-        bytes32 indexed roundId,
-        address investor,
-        address indexed corp,
-        uint256 minAmount,
-        uint256 maxAmount,
-        uint256 expiry
-    );
-    event AllocationMade(
-        bytes32 agreementId,
-        bytes32 indexed roundId,
-        address indexed buyer,
-        uint256 allocatedAmount,
-        uint256 totalRaised,
-        uint256[] certIds
-    );
-    event EOIRejected(bytes32  agreementId, address indexed investor, bytes32 indexed roundId);
-    event RoundEndTimeUpdated(bytes32 indexed roundId, uint256 oldEndTime, uint256 newEndTime);
-    event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
     event EOIRecalled(bytes32 agreementId, address indexed investor, bytes32 indexed roundId);
     event LexChexUpdated(address indexed lexChex, address indexed oldLexChex);
 
@@ -567,14 +527,14 @@ contract RoundManager is
     /// @dev Currently the factory owner (MetaLeX) unilaterally set the fee ratio;
     /// in the future, it could be determined through a governance process.
     /// @return Fee amount
-    function computeFee(uint256 size) public view returns (uint256) {
+    function computeFee(uint256 size) public view override(ILexScrowStorage, IRoundManager) returns (uint256) {
         return size * IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getDefaultFeeRatio() / RoundManagerFactoryStorage.BASIS_POINTS;
     }
 
     /// @notice Gets the payable address for the fees
     /// @dev The factory owner (MetaLeX) unilaterally set the payable address
     /// @return Payable address for the fees
-    function getPlatformPayable() public view returns (address) {
+    function getPlatformPayable() public view override(ILexScrowStorage, IRoundManager) returns (address) {
         return IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getPlatformPayable();
     }
 

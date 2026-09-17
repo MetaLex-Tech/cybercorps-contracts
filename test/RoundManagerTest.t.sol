@@ -34,6 +34,7 @@ import {RoundManagerUpgradeHelper} from "../src/helpers/RoundManagerUpgradeHelpe
 
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
+import "../src/interfaces/IRoundManager.sol";
 
 // Import necessary types
 using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
@@ -1044,7 +1045,7 @@ contract RoundManagerTest is Test {
         parties[0] = corpOwner;
         parties[1] = investor;
         vm.expectEmit(true, true, true, true);
-        emit RoundManager.EOISubmitted(
+        emit IRoundManager.EOISubmitted(
             keccak256(abi.encode(CyberCorpHelper.TEMPLATE_ID, salt, globalValues, parties, bytes32(0), address(roundManager))),
             roundId,
             investor,
@@ -1141,7 +1142,7 @@ contract RoundManagerTest is Test {
         uint256 allocatedAmount = 7500 * 10 ** 6; // 7,500 USDC
 
         vm.expectEmit(true, true, true, true);
-        emit RoundManager.AllocationMade(agreementId, roundId, investor, allocatedAmount, allocatedAmount, new uint256[](1));
+        emit IRoundManager.AllocationMade(agreementId, roundId, investor, allocatedAmount, allocatedAmount, new uint256[](1));
         vm.prank(corpOwner);
         RoundManager(roundManager).allocate(agreementId, allocatedAmount);
 
@@ -1274,7 +1275,7 @@ contract RoundManagerTest is Test {
 
 		// Expect event with allocated (used) amount and totalRaised equal to used amount
 		//vm.expectEmit(true, true, true, true);
-		//emit RoundManager.AllocationMade(agreementId, roundId, investor, usedAmount, usedAmount, new uint256[](1));
+		//emit IRoundManager.AllocationMade(agreementId, roundId, investor, usedAmount, usedAmount, new uint256[](1));
 
 		vm.prank(corpOwner);
 		RoundManager(roundManager).allocate(agreementId, 7_505 * 10 ** 6);
@@ -1515,7 +1516,7 @@ contract RoundManagerTest is Test {
         // since `minRequired` is tested against `allocateAmount` instead of `usedAmount`, above will pass
 
         vm.expectEmit(true, true, true, true);
-        emit RoundManager.AllocationMade(
+        emit IRoundManager.AllocationMade(
             agreementId,
             roundId,
             investor,
@@ -1579,7 +1580,7 @@ contract RoundManagerTest is Test {
         // since `minRequired` is tested against `allocateAmount` instead of `usedAmount`, above will pass
 
         vm.expectEmit(true, true, true, true);
-        emit RoundManager.AllocationMade(
+        emit IRoundManager.AllocationMade(
             agreementId,
             roundId,
             investor,

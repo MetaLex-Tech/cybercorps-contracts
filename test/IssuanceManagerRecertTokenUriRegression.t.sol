@@ -17,6 +17,7 @@ import {ICondition} from "../src/interfaces/ICondition.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerConversionTest} from "./IssuanceManagerConversionTest.t.sol";
+import "../src/interfaces/IIssuanceManager.sol";
 
 contract UriBuilderWithUnits is IUriBuilder {
     function buildCertificateUri(
@@ -188,7 +189,7 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
         assertEq(certPrinter.ownerOf(1), investor2);
 
         vm.expectEmit(true, true, true, true);
-        emit IssuanceManager.ScripAddedToExistingCert(
+        emit IIssuanceManager.ScripAddedToExistingCert(
             address(certPrinter),
             investor,
             0,
@@ -240,7 +241,7 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
         assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 100 * 1e18);
 
         vm.expectEmit(true, true, true, true);
-        emit IssuanceManager.ScripAddedToExistingCert(
+        emit IIssuanceManager.ScripAddedToExistingCert(
             address(certPrinter),
             investor,
             certId,

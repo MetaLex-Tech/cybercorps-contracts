@@ -7,17 +7,18 @@ import "./interfaces/ITransferRestrictionHook.sol";
 import "./interfaces/ILedgerEntryToken.sol";
 import "./libs/auth.sol";
 import "./storage/CyberScripStorage.sol";
+import "./interfaces/ICyberScrip.sol";
 
-contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
+contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL,
+    ICyberScrip
+{
     using CyberScripStorage for CyberScripStorage.StorageData;
     
     string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
 
-    error RestrictedTransfer(string reason);
     error NotIssuanceManager();
     error ComplianceFeatureDisabled();
     error AccountFrozen(address account);
-    error HolderLimitExceeded(uint256 limit);
 
     event FreezeStatusUpdated(address indexed account, bool frozen);
     event ComplianceFeatureDisabledEvent(string feature);

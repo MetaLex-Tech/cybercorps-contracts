@@ -69,7 +69,7 @@ contract SecERC20Mock is ERC20 {
 
 // cyberCORP fixture for the real IssuanceManager/DealManager that ALSO exposes AUTH(), which the
 // per-SPV condition setters (RegS.setRegSConfig, USState.setStateBlocked) resolve via
-// IBorgAuthProvider(spv).AUTH(). offer.spvAddress == this corp.
+// IBorgAuthACL(spv).AUTH(). offer.spvAddress == this corp.
 contract MockCorpWithAuth {
     address public AUTH;
 
