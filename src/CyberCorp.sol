@@ -99,9 +99,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
     event CyberCORPExtensionSet(address indexed extension, bytes32 indexed extensionType);
     event CyberCORPExtensionDataUpdated(bytes32 indexed extensionType, bytes extensionData);
-    event IssuanceManagerUpdated(address indexed oldIssuanceManager, address indexed newIssuanceManager);
-    event DealManagerUpdated(address indexed oldDealManager, address indexed newDealManager);
-    event RoundManagerUpdated(address indexed oldRoundManager, address indexed newRoundManager);
+    event IssuanceManagerUpdated(address indexed issuanceManager, address indexed oldIssuanceManager);
+    event DealManagerUpdated(address indexed dealManager, address indexed oldDealManager);
+    event RoundManagerUpdated(address indexed roundManager, address indexed oldRoundManager);
 
     error NotRefImplementation();
     error SignatureRequired();
@@ -183,7 +183,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     function setIssuanceManager(address _issuanceManager) external onlyOwner() {
         address oldIssuanceManager = issuanceManager;
         issuanceManager = _issuanceManager;
-        emit IssuanceManagerUpdated(oldIssuanceManager, _issuanceManager);
+        emit IssuanceManagerUpdated(issuanceManager, oldIssuanceManager);
     }
 
     /// @notice Updates the deal manager address
@@ -192,7 +192,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     function setDealManager(address _dealManager) external onlyOwner() {
         address oldDealManager = dealManager;
         dealManager = _dealManager;
-        emit DealManagerUpdated(oldDealManager, _dealManager);
+        emit DealManagerUpdated(dealManager, oldDealManager);
     }
 
     /// @notice Updates the round manager address
@@ -201,7 +201,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     function setRoundManager(address _roundManager) external onlyOwner() {
         address oldRoundManager = roundManager;
         roundManager = _roundManager;
-        emit RoundManagerUpdated(oldRoundManager, _roundManager);
+        emit RoundManagerUpdated(roundManager, oldRoundManager);
     }
 
     /// @notice Checks if an address belongs to a company officer
