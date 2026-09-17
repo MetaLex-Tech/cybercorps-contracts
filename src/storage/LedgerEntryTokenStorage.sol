@@ -861,6 +861,20 @@ library LedgerEntryTokenStorage {
         }
     }
 
+    /// @notice Admin migration helper for a legacy custody counter that is still zero.
+    /// @dev Initialize every legacy holder before minting or transferring to them; a partial
+    /// nonzero counter cannot be repaired here. The unique total is complete only after all
+    /// legacy holders have been initialized. Reads custody, not legal ownership.
+    function initializeHolderCount(address holder) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        if (s.holderTokenCount[holder] != 0) revert ILedgerEntryToken.HolderCountAlreadyInitialized();
+        uint256 balance = ILedgerEntryToken(address(this)).balanceOf(holder);
+        if (balance == 0) return;
+        s.holderTokenCount[holder] = balance;
+        s.uniqueHolderCount++;
+        emit ILedgerEntryToken.HolderCountInitialized(holder, balance);
+    }
+
     function recordHolderChange(address from, address to) internal {
         CyberCertStorage storage s = cyberCertStorage();
 

@@ -670,6 +670,11 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable, ILedger
         LedgerEntryTokenStorage.backfillLegalOwnerEnumeration(startIndex, count);
     }
 
+    /// @notice Seed a legacy holder's zero custody counter from their current balance.
+    function initializeHolderCount(address holder) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.initializeHolderCount(holder);
+    }
+
     /// @notice Backfill the base acquisitionTimestamp from FundInterestExtensionV3 data. Permissionless and
     /// idempotent; batch over the supply. See LedgerEntryTokenStorage.backfillAcquisitionTimestamp.
     function backfillAcquisitionTimestamps(uint256 startIndex, uint256 count) external {

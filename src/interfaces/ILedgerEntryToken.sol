@@ -96,6 +96,7 @@ interface ILedgerEntryToken is IERC721Metadata, IERC721Enumerable {
     // Shared errors — declared once here so LedgerEntryToken and its storage library (via delegatecall) revert
     // with identical selectors.
     error NotIssuanceManager();
+    error HolderCountAlreadyInitialized();
     error TokenNotTransferable();
     /// @notice The lot is void. A void lot keeps its owner and its units, so the ownership and unit checks
     /// alone do not stop one. It must not be registered to a new holder.
@@ -135,6 +136,10 @@ interface ILedgerEntryToken is IERC721Metadata, IERC721Enumerable {
         uint256 timestamp
     );
     event HookStatusChanged(bool enabled);
+    event HolderCountInitialized(address indexed holder, uint256 balance);
+
+    /// @notice Seed a zero custody counter from the holder's current ERC-721 balance.
+    function initializeHolderCount(address holder) external;
     event WhitelistUpdated(address indexed account, bool whitelisted);
     event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
     event CyberCertTransfer(address indexed from, address indexed to, uint256 indexed tokenId);
