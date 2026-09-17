@@ -89,7 +89,7 @@ Token warrants.
 * Latest expiration time
 * V2 adds `customProvisions`; V3 adds the series-scope payload
 
-## FundInterestExtension
+## FundInterestExtensionV3
 
 Fund (LP) interests, with a split LET/series model:
 

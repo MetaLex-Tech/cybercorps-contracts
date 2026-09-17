@@ -56,9 +56,9 @@ import {IRoundManager as IRoundManagerInterface} from "./interfaces/IRoundManage
 import "./interfaces/ILedgerEntryToken.sol";
 import "./CyberCorpConstants.sol";
 import "./storage/LedgerEntryTokenStorage.sol";
-import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.sol";
 import {Round, RoundType, RoundLib} from "./libs/RoundLib.sol";
 import {CorpFactoryMetadataLib} from "./libs/CorpFactoryMetadataLib.sol";
+import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
 
 interface IRoundManagerInit {
     function initialize(
@@ -93,17 +93,6 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
     // adjust storage gap based on new variable
     uint256[42] private __gap;
-
-    struct CyberCertData {
-        string name;
-        string symbol;
-        string uri;
-        SecurityClass securityClass;
-        SecuritySeries securitySeries;
-        address extension;
-        bytes seriesData;
-        string[] defaultLegend;
-    }
 
     event CyberCorpDeployed(
         address indexed cyberCorp,
@@ -187,6 +176,28 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         }
     }
 
+    /// @notice Configuration commitment used before applying the component factory namespace.
+    /// @dev The officer signs the predicted manager/corp addresses. Binding the full officer
+    /// and payout configuration here prevents a self-signed deployment from squatting them.
+    function computeDeploymentSalt(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(
+            salt, companyName, companyType, companyJurisdiction,
+            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer
+        ));
+    }
+
+    /// @notice Standalone deployment. Note msg.sender is left public so that it is multicall-friendly.
+    /// It is safe because the salt ties to officer, payout address and other key arguments,
+    /// and the officer is the sole owner of the created corp. A substituted caller gains no control.
     function deployCyberCorp(
         bytes32 salt,
         string memory companyName,
@@ -207,6 +218,13 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         )
     {
         if (salt == bytes32(0)) revert InvalidSalt();
+        FactoryDeploymentLib.requireNamespaces(
+            [cyberCorpSingleFactory, issuanceManagerFactory, dealManagerFactory, roundManagerFactory], salt
+        );
+        salt = computeDeploymentSalt(
+            salt, companyName, companyType, companyJurisdiction,
+            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer
+        );
 
         // Deploy BorgAuth with CREATE2 with new param address owner
         bytes memory authBytecode = type(BorgAuth).creationCode;
@@ -312,7 +330,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         bytes[] memory extensionData,
         string[] memory roundPartyValues,
         string[] memory legalDetails,
-        RM_CyberCertData[] memory certData,
+        CyberCertData[] memory certData,
         address[] memory conditionAddresses,
         bytes memory signature
     ) internal view {
@@ -450,7 +468,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         CompanyOfficer memory _officer,
         string[] memory legalDetails,
         bytes[] memory extensionData,
-        RM_CyberCertData[] memory certData,
+        CyberCertData[] memory certData,
         bytes32 templateId,
         address paymentToken,
         uint256 pricePerUnit,

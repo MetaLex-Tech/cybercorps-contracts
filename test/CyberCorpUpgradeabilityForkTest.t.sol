@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
-import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {CompanyOfficer, CyberCertData, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -239,8 +239,8 @@ contract CyberCorpUpgradeabilityForkTest is Test {
 
         // Simulate CyberCorp creation
 
-        CyberCorpFactory.CyberCertData[] memory certData = new CyberCorpFactory.CyberCertData[](1);
-        certData[0] = CyberCorpFactory.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
             name: "Cert Name 1",
             symbol: "Cert Symbol 1",
             uri: templateUri,
@@ -275,6 +275,11 @@ contract CyberCorpUpgradeabilityForkTest is Test {
 
         // Mirrors createContract's preimage. The finalizer is the DealManager the factory is about to
         // deploy, so predict its CREATE2 address; `expiry` is deliberately not part of the id.
+        bytes32 deploymentSalt = cyberCorpFactory.computeDeploymentSalt(
+            keccak256(abi.encodePacked(uint256(salt))), "CyberCorp", "Limited Liability Company",
+            "Juris", "Contact Details", "Dispute Res", corpOwner,
+            CompanyOfficer({eoa: corpOwner, name: "Mr. Robot", contact: "robot@corp.com", title: "CEO"})
+        );
         bytes32 expectedAgreementId = keccak256(
             abi.encode(
                 TEMPLATE_ID,
@@ -282,7 +287,7 @@ contract CyberCorpUpgradeabilityForkTest is Test {
                 globalValues,
                 parties,
                 bytes32(0), // secretHash, as passed below
-                dmFactory.computeDealManagerAddress(keccak256(abi.encodePacked(uint256(salt))))
+                dmFactory.computeDealManagerAddress(deploymentSalt, address(cyberCorpFactory))
             )
         );
 

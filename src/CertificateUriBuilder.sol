@@ -41,25 +41,35 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity ^0.8.28;
 
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorpConstants.sol";
-
-import "./interfaces/ICertificateImageBuilder.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
+import "./interfaces/ICertificateImageBuilder.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/IIssuanceManager.sol";
-import {ILedgerEntryToken, RestrictionType, RestrictiveLegend} from "./interfaces/ILedgerEntryToken.sol";
-
+import {
+    CertificateDetails,
+    Endorsement,
+    ILedgerEntryToken,
+    OwnerDetails,
+    RestrictionType,
+    RestrictiveLegend
+} from "./interfaces/ILedgerEntryToken.sol";
+import "./interfaces/IUriBuilder.sol";
+import {
+    ICertificateExtension,
+    ICertificateExtensionV3
+} from "./storage/extensions/ICertificateExtension.sol";
+import "./libs/auth.sol";
 import {JsonLib} from "./libs/JsonLib.sol";
 import {MetadataCall} from "./libs/MetadataCall.sol";
-import "./libs/auth.sol";
-import {ICertificateExtension, ICertificateExtensionV3} from "./storage/extensions/ICertificateExtension.sol";
-import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 interface ICertificateUnitsReserved {
     function unitsReserved(uint256 tokenId) external view returns (uint256);
 }
 
-contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
+contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
+
     /// @notice Address of the external image builder contract
     address public imageBuilder;
 
@@ -138,23 +148,9 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return "Unknown";
     }
 
-    // Helper function to convert string array to JSON array string with numbered legends
-    function arrayToJsonString(string[] memory arr) public pure returns (string memory) {
-        string memory json = "[";
-        for (uint256 i = 0; i < arr.length; i++) {
-            if (i > 0) json = string.concat(json, ",");
-            json = string.concat(
-                json, '{"id": ', uint256ToString(i + 1), ', "legend": "', JsonLib.jsonEscape(arr[i]), '"}'
-            );
-        }
-        return string.concat(json, "]");
-    }
-
-    function legacyLegendsToRestrictiveLegends(string[] memory arr)
-        public
-        pure
-        returns (RestrictiveLegend[] memory legends)
-    {
+    function legacyLegendsToRestrictiveLegends(
+        string[] memory arr
+    ) public pure returns (RestrictiveLegend[] memory legends) {
         legends = new RestrictiveLegend[](arr.length);
         for (uint256 i = 0; i < arr.length; i++) {
             legends[i] = RestrictiveLegend({
@@ -180,31 +176,24 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return string.concat(json, "]");
     }
 
-    function restrictiveLegendToJson(uint256 id, RestrictiveLegend memory legend) public pure returns (string memory) {
+    function restrictiveLegendToJson(
+        uint256 id,
+        RestrictiveLegend memory legend
+    ) public pure returns (string memory) {
         string memory part1 = string.concat(
-            '{"id": ',
-            uint256ToString(id),
-            ', "restrictionType": "',
-            restrictionTypeToString(legend.restrictionType),
-            '", "title": "',
-            JsonLib.jsonEscape(legend.title),
-            '", "text": "',
-            JsonLib.jsonEscape(legend.text),
-            '", "jurisdiction": "',
-            JsonLib.jsonEscape(legend.jurisdiction),
+            '{"id": ', uint256ToString(id),
+            ', "restrictionType": "', restrictionTypeToString(legend.restrictionType),
+            '", "title": "', JsonLib.jsonEscape(legend.title),
+            '", "text": "', JsonLib.jsonEscape(legend.text),
+            '", "jurisdiction": "', JsonLib.jsonEscape(legend.jurisdiction),
             '"'
         );
         string memory part2 = string.concat(
-            ', "referenceId": "0x',
-            bytes32ToString(legend.referenceId),
-            '", "effectiveTimestamp": "',
-            uint256ToString(uint256(legend.effectiveTimestamp)),
-            '", "expirationTimestamp": "',
-            uint256ToString(uint256(legend.expirationTimestamp)),
-            '", "active": "',
-            boolToString(legend.active),
-            '", "data": "',
-            bytesToHexString(legend.data),
+            ', "referenceId": "0x', bytes32ToString(legend.referenceId),
+            '", "effectiveTimestamp": "', uint256ToString(uint256(legend.effectiveTimestamp)),
+            '", "expirationTimestamp": "', uint256ToString(uint256(legend.expirationTimestamp)),
+            '", "active": "', boolToString(legend.active),
+            '", "data": "', bytesToHexString(legend.data),
             '"}'
         );
         return string.concat(part1, part2);
@@ -284,8 +273,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
     }
 
     function unitsReservedToJson(address contractAddress, uint256 tokenId) internal view returns (string memory) {
-        (bool ok, uint256 reserved) =
-            MetadataCall.word(contractAddress, abi.encodeCall(ICertificateUnitsReserved.unitsReserved, (tokenId)));
+        (bool ok, uint256 reserved) = MetadataCall.word(contractAddress, abi.encodeCall(ICertificateUnitsReserved.unitsReserved, (tokenId)));
         return ok ? string.concat(', "unitsReserved": "', from18DecimalsToString(reserved), '"') : "";
     }
 
@@ -328,31 +316,6 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
             result[i - 7] = strBytes[i];
         }
         return string(result);
-    }
-
-    struct CertificateDetails {
-        string signingOfficerName;
-        string signingOfficerTitle;
-        uint256 investmentAmountUSD;
-        uint256 issuerUSDValuationAtTimeOfInvestment;
-        uint256 unitsRepresented;
-        string legalDetails;
-        bytes extensionData;
-    }
-
-    struct Endorsement {
-        address endorser;
-        uint256 timestamp;
-        bytes signatureHash;
-        address registry;
-        bytes32 agreementId;
-        address endorsee;
-        string endorseeName;
-    }
-
-    struct OwnerDetails {
-        string name;
-        address ownerAddress;
     }
 
     /// @dev External decoding boundary: a malformed successful return is caught by the caller.
@@ -446,25 +409,16 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         string memory cyberCORPName,
         string memory cyberCORPType
     ) internal pure returns (string memory) {
-        return string(
-            abi.encodePacked(
-                '{"trait_type": "CurrentOwner", "value": "',
-                addressToString(owner.ownerAddress),
-                '"}, {"trait_type": "CurrentOwnerName", "value": "',
-                JsonLib.jsonEscape(owner.name),
-                '"}, {"trait_type": "investmentAmount", "value": "',
-                from18DecimalsToString(details.investmentAmountUSD),
-                '"}, {"trait_type": "unitsRepresented", "value": "',
-                from18DecimalsToString(details.unitsRepresented),
-                '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "',
-                from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
-                '"}, {"trait_type": "cyberCORPName", "value": "',
-                JsonLib.jsonEscape(cyberCORPName),
-                '"}, {"trait_type": "cyberCORPType", "value": "',
-                JsonLib.jsonEscape(cyberCORPType),
-                '"}'
-            )
-        );
+        return string(abi.encodePacked(
+            '{"trait_type": "CurrentOwner", "value": "', addressToString(owner.ownerAddress),
+            '"}, {"trait_type": "CurrentOwnerName", "value": "', JsonLib.jsonEscape(owner.name),
+            '"}, {"trait_type": "investmentAmount", "value": "', from18DecimalsToString(details.investmentAmountUSD),
+            '"}, {"trait_type": "unitsRepresented", "value": "', from18DecimalsToString(details.unitsRepresented),
+            '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '"}, {"trait_type": "cyberCORPName", "value": "', JsonLib.jsonEscape(cyberCORPName),
+            '"}, {"trait_type": "cyberCORPType", "value": "', JsonLib.jsonEscape(cyberCORPType),
+            '"}'
+        ));
     }
 
     function _buildAttributesPart2(
@@ -474,119 +428,47 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         SecuritySeries securitySeries,
         string memory certificateUri
     ) internal pure returns (string memory) {
-        return string(
-            abi.encodePacked(
-                ', {"trait_type": "cyberCORPJurisdiction", "value": "',
-                JsonLib.jsonEscape(cyberCORPJurisdiction),
-                '"}, {"trait_type": "cyberCORPContactDetails", "value": "',
-                JsonLib.jsonEscape(cyberCORPContactDetails),
-                '"}, {"trait_type": "securityType", "value": "',
-                securityClassToString(securityType),
-                '"}, {"trait_type": "securitySeries", "value": "',
-                securitySeriesToString(securitySeries),
-                '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/',
-                JsonLib.jsonEscape(stripIpfsPrefix(certificateUri)),
-                '"}'
-            )
-        );
+        return string(abi.encodePacked(
+            ', {"trait_type": "cyberCORPJurisdiction", "value": "', JsonLib.jsonEscape(cyberCORPJurisdiction),
+            '"}, {"trait_type": "cyberCORPContactDetails", "value": "', JsonLib.jsonEscape(cyberCORPContactDetails),
+            '"}, {"trait_type": "securityType", "value": "', securityClassToString(securityType),
+            '"}, {"trait_type": "securitySeries", "value": "', securitySeriesToString(securitySeries),
+            '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/', JsonLib.jsonEscape(stripIpfsPrefix(certificateUri)),
+            '"}'
+        ));
     }
 
-    function buildEndorsementHistory(Endorsement[] memory endorsements, address registry, bytes32 agreementId)
-        internal
-        view
-        returns (string memory)
-    {
-        string memory json = "[";
+    function buildEndorsementHistory(
+        Endorsement[] memory endorsements,
+        address registry,
+        bytes32 agreementId
+    ) internal view returns (string memory) {
+        string memory json = '[';
         for (uint256 i = 0; i < endorsements.length; i++) {
-            if (i > 0) json = string.concat(json, ",");
-            json = string.concat(
-                json,
-                "{",
-                '"endorser": "',
-                addressToString(endorsements[i].endorser),
-                '", "timestamp": "',
-                uint256ToString(endorsements[i].timestamp),
-                '", "registry": "',
-                addressToString(endorsements[i].registry),
-                '", "agreementId": "',
-                bytes32ToString(endorsements[i].agreementId),
-                '", "investorName": "',
-                JsonLib.jsonEscape(endorsements[i].endorseeName),
-                '", "investorAddress": "',
-                addressToString(endorsements[i].endorsee),
-                '"'
-            );
+            if (i > 0) json = string.concat(json, ',');
+            json = string.concat(json, '{',
+                '"endorser": "', addressToString(endorsements[i].endorser),
+                '", "timestamp": "', uint256ToString(endorsements[i].timestamp),
+                '", "registry": "', addressToString(endorsements[i].registry),
+                '", "agreementId": "', bytes32ToString(endorsements[i].agreementId),
+                '", "investorName": "', JsonLib.jsonEscape(endorsements[i].endorseeName),
+                '", "investorAddress": "', addressToString(endorsements[i].endorsee),
+                '"');
 
             if (i == 0 && registry != address(0) && agreementId != bytes32(0)) {
-                try this.readAgreementDetails(registry, agreementId, endorsements[0].signatureHash) returns (
-                    string memory fragment
-                ) {
+                try this.readAgreementDetails(registry, agreementId, endorsements[0].signatureHash) returns (string memory fragment) {
                     json = string.concat(json, fragment);
                 } catch { /* Keep the known endorsement even when registry enrichment is unavailable. */ }
             }
 
-            json = string.concat(json, "}");
+            json = string.concat(json, '}');
         }
-        return string.concat(json, "]");
-    }
-
-    function _appendCyberCorpMetadata(
-        string memory json,
-        string memory cyberCORPName,
-        string memory cyberCORPType,
-        string memory cyberCORPJurisdiction,
-        string memory cyberCORPContactDetails,
-        SecurityClass securityType,
-        SecuritySeries securitySeries,
-        string memory certificateUri
-    ) private pure returns (string memory) {
-        json = string.concat(json, '"cyberCORPName": "', JsonLib.jsonEscape(cyberCORPName), '"');
-        json = string.concat(json, ', "cyberCORPType": "', JsonLib.jsonEscape(cyberCORPType), '"');
-        json = string.concat(json, ', "cyberCORPJurisdiction": "', JsonLib.jsonEscape(cyberCORPJurisdiction), '"');
-        json = string.concat(json, ', "cyberCORPContactDetails": "', JsonLib.jsonEscape(cyberCORPContactDetails), '"');
-        json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
-        json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
-        return string.concat(json, ', "certificateUri": "', JsonLib.jsonEscape(certificateUri), '"');
-    }
-
-    function _appendCertificateMetadata(
-        string memory json,
-        CertificateDetails memory details,
-        address contractAddress,
-        uint256 tokenId
-    ) private view returns (string memory) {
-        json = string.concat(json, ', "signingOfficerName": "', JsonLib.jsonEscape(details.signingOfficerName), '"');
-        json = string.concat(json, ', "signingOfficerTitle": "', JsonLib.jsonEscape(details.signingOfficerTitle), '"');
-        json =
-            string.concat(json, ', "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD), '"');
-        json = string.concat(
-            json,
-            ', "issuerUSDValuationAtTimeOfInvestment": "',
-            from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '"'
-        );
-        json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
-        json = string.concat(json, unitsReservedToJson(contractAddress, tokenId));
-        return string.concat(json, ', "legalDetails": "', JsonLib.jsonEscape(details.legalDetails), '"');
-    }
-
-    function _appendCurrentOwner(string memory json, OwnerDetails memory owner) private pure returns (string memory) {
-        return string.concat(
-            json,
-            ', "currentOwner": {',
-            '"name": "',
-            JsonLib.jsonEscape(owner.name),
-            '", "ownerAddress": "',
-            addressToString(owner.ownerAddress),
-            '"}'
-        );
+        return string.concat(json, ']');
     }
 
     /// @dev Separate call frame contains both registry ABI decoding and enrichment.
     function readAgreementDetails(address registry, bytes32 agreementId, bytes calldata signature)
-        external
-        view
-        returns (string memory)
+        external view returns (string memory)
     {
         (
             ,
@@ -598,38 +480,25 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
             string[][] memory partyValues,
             ,
             ,
-            ,
         ) = abi.decode(
             MetadataCall.read(registry, abi.encodeCall(ICyberAgreementRegistry.getContractDetails, (agreementId))),
-            (bytes32, string, string[], string[], string[], address[], string[][], uint256[], uint256, bool, bytes32)
+            (bytes32, string, string[], string[], string[], address[], string[][], uint256[], uint256, bool)
         );
         string memory fields = _fieldPairs(globalFields, globalValues);
         if (partyValues.length > 0 && partyValues[0].length > 0) {
-            fields =
-                _joinField(fields, string.concat('"companyDetails": {', _fieldPairs(partyFields, partyValues[0]), "}"));
+            fields = _joinField(fields, string.concat('"companyDetails": {', _fieldPairs(partyFields, partyValues[0]), '}'));
         }
         if (partyValues.length > 1 && partyValues[1].length > 0) {
-            fields =
-                _joinField(fields, string.concat('"investorDetails": {', _fieldPairs(partyFields, partyValues[1]), "}"));
+            fields = _joinField(fields, string.concat('"investorDetails": {', _fieldPairs(partyFields, partyValues[1]), '}'));
         }
-        if (signature.length > 0) {
-            fields = _joinField(fields, string.concat('"digitalSignature": "', bytesToHexString(signature), '"'));
-        }
-        return string.concat(', "purchaseAgreementDetails": {', fields, "}");
+        if (signature.length > 0) fields = _joinField(fields, string.concat('"digitalSignature": "', bytesToHexString(signature), '"'));
+        return string.concat(', "purchaseAgreementDetails": {', fields, '}');
     }
 
     function _fieldPairs(string[] memory keys, string[] memory values) private pure returns (string memory json) {
         for (uint256 i; i < keys.length; ++i) {
-            json = _joinField(
-                json,
-                string.concat(
-                    '"',
-                    JsonLib.jsonEscape(keys[i]),
-                    '": "',
-                    i < values.length ? JsonLib.jsonEscape(values[i]) : "",
-                    '"'
-                )
-            );
+            json = _joinField(json, string.concat('"', JsonLib.jsonEscape(keys[i]), '": "',
+                i < values.length ? JsonLib.jsonEscape(values[i]) : "", '"'));
         }
     }
 
@@ -695,7 +564,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
     ) public view returns (string memory) {
         return string(
             abi.encodePacked(
-                "data:application/json;base64,",
+                'data:application/json;base64,',
                 Base64.encode(
                     bytes(
                         buildCertificateUriNotEncoded(
@@ -723,13 +592,8 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
     }
 
     /// @dev Appends nothing if the issuer does not have getExtensionURI.
-    function _appendCyberCorpExtensionData(string memory json, address certificate)
-        private
-        view
-        returns (string memory)
-    {
-        return
-            string.concat(json, _optionalString(_issuer(certificate), abi.encodeCall(ICyberCorp.getExtensionURI, ())));
+    function _appendCyberCorpExtensionData(string memory json, address certificate) private view returns (string memory) {
+        return string.concat(json, _optionalString(_issuer(certificate), abi.encodeCall(ICyberCorp.getExtensionURI, ())));
     }
 
     /// @dev A V3 extension reads the cert, series and class scopes itself and returns one section. The
@@ -743,8 +607,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         bytes memory certData
     ) private view returns (string memory) {
         if (extension == address(0)) return json;
-        (bool ok, uint256 resolves) =
-            MetadataCall.word(extension, abi.encodeCall(ICertificateExtensionV3.supportsResolvedExtensionData, ()));
+        (bool ok, uint256 resolves) = MetadataCall.word(extension, abi.encodeCall(ICertificateExtensionV3.supportsResolvedExtensionData, ()));
         if (ok && resolves == 1) {
             return string.concat(json, ICertificateExtensionV3(extension).getResolvedExtensionURI(certificate, tokenId));
         }
@@ -828,44 +691,45 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
                 tokenId: tokenId,
                 certificateUri: certificateUri
             });
-            string memory imageDataUri =
-                _buildImage(svgParams, certLegend, contractAddress, owner.ownerAddress, details.investmentAmountUSD);
-            json = string(
-                abi.encodePacked(
-                    '{"title": "MetaLeX Tokenized Certificate",',
-                    '"type": "',
-                    securityClassToString(securityType),
-                    '", "image": "',
-                    imageDataUri,
-                    '",',
-                    '"attributes": [',
-                    buildAttributes(
-                        owner,
-                        details,
-                        cyberCORPName,
-                        cyberCORPType,
-                        cyberCORPJurisdiction,
-                        cyberCORPContactDetails,
-                        securityType,
-                        securitySeries,
-                        certificateUri
-                    ),
-                    "],"
-                )
-            );
+            string memory imageDataUri = _buildImage(svgParams, certLegend, contractAddress, owner.ownerAddress, details.investmentAmountUSD);
+            json = string(abi.encodePacked(
+                '{"title": "MetaLeX Tokenized Certificate",',
+                '"type": "', securityClassToString(securityType),
+                '", "image": "', imageDataUri, '",',
+                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
+                '],'
+            ));
         }
 
-        json = _appendCyberCorpMetadata(
-            json,
-            cyberCORPName,
-            cyberCORPType,
-            cyberCORPJurisdiction,
-            cyberCORPContactDetails,
-            securityType,
-            securitySeries,
-            certificateUri
-        );
-        json = _appendCertificateMetadata(json, details, contractAddress, tokenId);
+        // Escape the strings for JSON. The image builder above must get the raw text.
+        // This writes to the caller's structs. Do not reuse `details` or `owner` after this point.
+        cyberCORPName = JsonLib.jsonEscape(cyberCORPName);
+        cyberCORPType = JsonLib.jsonEscape(cyberCORPType);
+        cyberCORPJurisdiction = JsonLib.jsonEscape(cyberCORPJurisdiction);
+        cyberCORPContactDetails = JsonLib.jsonEscape(cyberCORPContactDetails);
+        certificateUri = JsonLib.jsonEscape(certificateUri);
+        details.signingOfficerName = JsonLib.jsonEscape(details.signingOfficerName);
+        details.signingOfficerTitle = JsonLib.jsonEscape(details.signingOfficerTitle);
+        details.legalDetails = JsonLib.jsonEscape(details.legalDetails);
+        owner.name = JsonLib.jsonEscape(owner.name);
+
+        // Add all existing properties at root level
+        json = string.concat(json, '"cyberCORPName": "', cyberCORPName, '"');
+        json = string.concat(json, ', "cyberCORPType": "', cyberCORPType, '"');
+        json = string.concat(json, ', "cyberCORPJurisdiction": "', cyberCORPJurisdiction, '"');
+        json = string.concat(json, ', "cyberCORPContactDetails": "', cyberCORPContactDetails, '"');
+        json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
+        json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
+        json = string.concat(json, ', "certificateUri": "', certificateUri, '"');
+
+        // Add certificate details
+        json = string.concat(json, ', "signingOfficerName": "', details.signingOfficerName, '"');
+        json = string.concat(json, ', "signingOfficerTitle": "', details.signingOfficerTitle, '"');
+        json = string.concat(json, ', "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD), '"');
+        json = string.concat(json, ', "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment), '"');
+        json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
+        json = string.concat(json, unitsReservedToJson(contractAddress, tokenId));
+        json = string.concat(json, ', "legalDetails": "', details.legalDetails, '"');
 
         json = _appendCyberCorpExtensionData(json, contractAddress);
 
@@ -875,19 +739,27 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         // Add endorsement history
         json = string.concat(json, ', "endorsementHistory": ', endorsementsJson);
 
-        json = _appendCurrentOwner(json, owner);
+        // Add current owner details
+        json = string.concat(json, 
+            ', "currentOwner": {',
+            '"name": "', owner.name,
+            '", "ownerAddress": "', addressToString(owner.ownerAddress),
+            '"}'
+        );
 
         // Add restrictive legends at the end
         json = string.concat(json, ', "restrictiveLegends": ', restrictiveLegendsToJson(certLegend));
 
         // Close the main JSON object
-        json = string.concat(json, "}");
+        json = string.concat(json, '}');
         //json = Base64.encode(bytes(string(json)));
         //json = string(abi.encodePacked('data:application/json;base64,', json));
         return json;
     }
 
-    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }
 
 /// [MIT License]
@@ -914,7 +786,11 @@ library Base64 {
             let tablePtr := add(table, 1)
             let resultPtr := add(result, 32)
 
-            for { let i := 0 } lt(i, len) {} {
+            for {
+                let i := 0
+            } lt(i, len) {
+
+            } {
                 i := add(i, 3)
                 let input := and(mload(add(data, i)), 0xffffff)
 
@@ -933,8 +809,12 @@ library Base64 {
             }
 
             switch mod(len, 3)
-            case 1 { mstore(sub(resultPtr, 2), shl(240, 0x3d3d)) }
-            case 2 { mstore(sub(resultPtr, 1), shl(248, 0x3d)) }
+            case 1 {
+                mstore(sub(resultPtr, 2), shl(240, 0x3d3d))
+            }
+            case 2 {
+                mstore(sub(resultPtr, 1), shl(248, 0x3d))
+            }
 
             mstore(result, encodedLen)
         }

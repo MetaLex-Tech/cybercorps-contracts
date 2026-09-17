@@ -57,7 +57,7 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 /// CyberCertPrinter_CertificateCreated), the LedgerEntryTokenStorage library and its
 /// "cybercorp.cert.printer.storage.v1" slot, and all external signatures are intentionally unchanged.
 /// Do NOT rename any of those without treating it as a breaking ABI change.
-contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
+contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable, ILedgerEntryToken {
     using LedgerEntryTokenStorage for LedgerEntryTokenStorage.CyberCertStorage;
 
     string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
@@ -111,7 +111,7 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     }
 
     function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {
-        LedgerEntryTokenStorage.cyberCertStorage().issuanceManager = _issuanceManager;
+        LedgerEntryTokenStorage.setIssuanceManager(_issuanceManager);
     }
 
     // Set a restriction hook for a specific security type
@@ -273,11 +273,7 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     
     // Update agreement details
     function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external onlyIssuanceManager {
-        // Enforce the reserved-units invariant at the single write chokepoint: raw unitsRepresented may never
-        // drop below the units locked in pending deals. Guards against a caller writing back an effective
-        // (scripified-inflated) or otherwise under-counted balance.
-        if (details.unitsRepresented < LedgerEntryTokenStorage.getUnitsReserved(tokenId)) revert ILedgerEntryToken.ExceedsAvailableUnits();
-        LedgerEntryTokenStorage.cyberCertStorage().certificateDetails[tokenId] = details;
+        LedgerEntryTokenStorage.updateCertificateDetails(tokenId, details);
     }
 
     /**
@@ -370,7 +366,7 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     }
     
     // URI storage functionality
-    function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+    function tokenURI(uint256 tokenId) public view virtual override(ERC721Upgradeable, IERC721Metadata) returns (string memory) {
         if (!_exists(tokenId)) revert ILedgerEntryToken.URIQueryForNonexistentToken();
         return LedgerEntryTokenStorage.tokenURI(tokenId);
     }
@@ -576,8 +572,9 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         return LedgerEntryTokenStorage._getExtensionData(tokenId);
     }
 
+    /// @notice Sets the series-scope extension contract. `tokenId` is ignored; the field is printer wide.
     function setExtension(uint256 tokenId, address extension) external onlyIssuanceManager {
-        LedgerEntryTokenStorage.cyberCertStorage().extension = extension;
+        LedgerEntryTokenStorage.setExtension(extension);
     }
 
     /// @notice Sets the series-scope extension data (this printer is the series scope).
@@ -599,8 +596,10 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         return (s.extension, s.seriesData);
     }
 
+    /// @notice Per-lot override of delivery transferability; either flag being on permits a transfer.
     function setTokenTransferable(uint256 tokenId, bool value) external onlyIssuanceManagerOrAdmin {
-        LedgerEntryTokenStorage.cyberCertStorage().tokenTransferable[tokenId] = value;
+        LedgerEntryTokenStorage.setTokenTransferable(tokenId, value);
+        emit ILedgerEntryToken.TokenTransferableSet(tokenId, value);
     }
 
     /// @notice Reserve units of a certificate against a pending deal/loan; cannot exceed the cert's units
@@ -671,7 +670,12 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         LedgerEntryTokenStorage.backfillLegalOwnerEnumeration(startIndex, count);
     }
 
-    /// @notice Backfill the base acquisitionTimestamp from FundInterestExtension data. Permissionless and
+    /// @notice Seed a legacy holder's zero custody counter from their current balance.
+    function initializeHolderCount(address holder) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.initializeHolderCount(holder);
+    }
+
+    /// @notice Backfill the base acquisitionTimestamp from FundInterestExtensionV3 data. Permissionless and
     /// idempotent; batch over the supply. See LedgerEntryTokenStorage.backfillAcquisitionTimestamp.
     function backfillAcquisitionTimestamps(uint256 startIndex, uint256 count) external {
         LedgerEntryTokenStorage.backfillAcquisitionTimestamp(startIndex, count);

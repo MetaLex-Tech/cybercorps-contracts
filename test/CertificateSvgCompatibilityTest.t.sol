@@ -5,7 +5,13 @@ import {Test} from "forge-std/Test.sol";
 import {CertificateUriBuilder, Base64} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CertificateSVGParams, CertificateSVGParamsV2, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
-import {RestrictionType, RestrictiveLegend} from "../src/interfaces/ILedgerEntryToken.sol";
+import {
+    CertificateDetails,
+    Endorsement,
+    OwnerDetails,
+    RestrictionType,
+    RestrictiveLegend
+} from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICertificateImageBuilder, ICertificateImageBuilderV2} from "../src/interfaces/ICertificateImageBuilder.sol";
 import {MockCyberCorp, MockIssuanceManager} from "./CyberCertPrinterTest.t.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
@@ -70,16 +76,16 @@ contract CertificateSvgCompatibilityTest is Test {
     }
 
     function _json(bool legacy, bool encoded) internal view returns (string memory) {
-        CertificateUriBuilder.CertificateDetails memory d;
+        CertificateDetails memory d;
         d.signingOfficerName = "Officer";
         d.signingOfficerTitle = "CEO";
         d.unitsRepresented = 25e17;
         d.investmentAmountUSD = 25e16;
         d.extensionData = hex"1234";
-        CertificateUriBuilder.Endorsement[] memory e = new CertificateUriBuilder.Endorsement[](1);
+        Endorsement[] memory e = new Endorsement[](1);
         e[0].endorseeName = "Holder";
         e[0].signatureHash = hex"1234";
-        CertificateUriBuilder.OwnerDetails memory owner = CertificateUriBuilder.OwnerDetails("Holder", address(0xCAFE));
+        OwnerDetails memory owner = OwnerDetails("Holder", address(0xCAFE));
         string[] memory texts = new string[](1); texts[0] = "Board consent";
         if (legacy) {
             if (encoded) return builder.buildCertificateUri("Example Corp", "Corp", "DE", "contact", SecurityClass.CommonStock,
@@ -258,7 +264,7 @@ contract CertificateSvgCompatibilityTest is Test {
         values[1] = new string[](2); values[1][0] = "Holder"; values[1][1] = 'A"B';
         uint256[] memory signed = new uint256[](2); signed[0] = 2000000000;
         vm.mockCall(REGISTRY, abi.encodeWithSignature("getContractDetails(bytes32)", bytes32(uint256(1))),
-            abi.encode(bytes32(0), "", empty, fields, empty, new address[](0), values, signed, uint256(1), false, bytes32(0)));
+            abi.encode(bytes32(0), "", empty, fields, empty, new address[](0), values, signed, uint256(1), false));
         string memory json = _json(false, false);
         vm.parseJson(json);
         assertEq(vm.parseJsonString(json, ".endorsementHistory[0].purchaseAgreementDetails.companyDetails.name"), "Corp");

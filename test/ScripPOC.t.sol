@@ -347,7 +347,7 @@ contract ScripPOCTest is Test {
 
         // Normal transfer to user3 should be blocked by max holder limit
         vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSelector(CyberScrip.HolderLimitExceeded.selector, 2));
+        vm.expectRevert(abi.encodeWithSelector(ICyberScrip.HolderLimitExceeded.selector, 2));
         scrip.transfer(user3, 50);
     }
 

@@ -13,7 +13,7 @@ import {Offer, OfferSide} from "../../../interfaces/ISecondaryTradeStorage.sol";
 /// @notice Shared threshold condition for the Reg S pathway. The applicable compliance period is a
 /// function of the SPV's domicile and Reg S issuer category (1/2/3) — determined by counsel and encoded
 /// here at configuration by the SPV's admin (e.g. one year for Category 3 U.S. equity). Fails if the
-/// period has not elapsed since the interest's acquisitionDate (FundInterestExtension data, §12B.3).
+/// period has not elapsed since the interest's acquisitionDate (FundInterestExtensionV3 data, §12B.3).
 contract RegSDistributionComplianceCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     struct RegSConfig {
         uint8 issuerCategory;       // Reg S issuer category 1 / 2 / 3 (informational)

@@ -46,12 +46,15 @@ import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./DealManager.sol";
 import "./libs/auth.sol";
+import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
 import "./storage/DealManagerFactoryStorage.sol";
+import "./interfaces/IDealManagerFactory.sol";
 
 /// @title DealManagerFactory
 /// @notice Factory contract for deploying DealManager instances
 /// @dev Uses ERC1967Proxy+UUPSUpgradeable pattern for upgradeable DealManager instances
-contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
+contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL, IDealManagerFactory
+{
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
@@ -77,8 +80,14 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
         emit RefImplementationSet(_refImplementation, DealManager(_refImplementation).DEPLOY_VERSION());
     }
 
+    /// @notice Salt used by a particular caller in this component factory.
+    function deploymentSalt(bytes32 salt, address deployer) public pure returns (bytes32) {
+        return FactoryDeploymentLib.deploymentSalt(salt, deployer);
+    }
+
     function deployDealManager(bytes32 _salt) public returns (address) {
         if (_salt == bytes32(0)) revert InvalidSalt();
+        _salt = deploymentSalt(_salt, msg.sender);
         
         // Create proxy deployment bytecode
         bytes memory proxyBytecode = _getBytecode();
@@ -96,8 +105,13 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @param _salt Salt used for CREATE2
     /// @return computedAddress The precomputed address of the proxy
     function computeDealManagerAddress(bytes32 _salt) external view returns (address) {
+        return computeDealManagerAddress(_salt, msg.sender);
+    }
+
+    /// @notice Predict a deployment by an explicit factory or individual caller.
+    function computeDealManagerAddress(bytes32 _salt, address deployer) public view returns (address) {
         bytes memory proxyBytecode = _getBytecode();
-        return Create2.computeAddress(_salt, keccak256(proxyBytecode));
+        return Create2.computeAddress(deploymentSalt(_salt, deployer), keccak256(proxyBytecode));
     }
 
     /// @notice Gets the bytecode for creating new DealManager proxies

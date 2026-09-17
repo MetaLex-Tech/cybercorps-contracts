@@ -46,11 +46,13 @@ import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./storage/extensions/ICyberCorpExtension.sol";
+import "./interfaces/ICyberCorp.sol";
 
 /// @title CyberCorp
 /// @notice Main contract representing a corporation's on-chain presence and management
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
-contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
+contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
+{
     string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
 
     // cyberCORP details

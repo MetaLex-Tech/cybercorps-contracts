@@ -43,7 +43,13 @@ pragma solidity 0.8.28;
 
 interface IIssuanceManagerFactory {
     function deployIssuanceManager(bytes32 salt) external returns (address issuanceManagerAddress);
-    function initialize(address _auth) external;
+    function computeIssuanceManagerAddress(bytes32 salt, address deployer) external view returns (address);
+    function initialize(
+        address _auth,
+        address refImplementation,
+        address cyberCertPrinterRefImplementation,
+        address cyberScripRefImplementation
+    ) external;
 
     function getRefImplementation() external view returns(address);
     function getCyberCertPrinterRefImplementation() external view returns(address);

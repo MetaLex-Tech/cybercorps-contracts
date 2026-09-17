@@ -12,6 +12,7 @@ import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol"
 import "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import "../src/interfaces/IIssuanceManager.sol";
 
 contract MockCyberCorpForIM {
     function cyberCORPName() external pure returns (string memory) { return "TestCorp"; }
@@ -142,7 +143,7 @@ contract IssuanceManagerTest is Test {
         CertificateDetails memory details = _buildCertificateDetails(100);
 
         vm.expectEmit(true, true, false, true);
-        emit IssuanceManager.CertificateCreated(
+        emit IIssuanceManager.CertificateCreated(
             0,
             address(certPrinter),
             details.investmentAmountUSD,
@@ -158,7 +159,7 @@ contract IssuanceManagerTest is Test {
         CertificateDetails memory details = _buildCertificateDetails(100);
 
         vm.expectEmit(true, true, false, true);
-        emit IssuanceManager.CertificateCreated(
+        emit IIssuanceManager.CertificateCreated(
             0,
             address(certPrinter),
             details.investmentAmountUSD,
@@ -174,7 +175,7 @@ contract IssuanceManagerTest is Test {
         CertificateDetails memory details = _buildCertificateDetails(100);
 
         vm.expectEmit(true, true, false, true);
-        emit IssuanceManager.CertificateCreated(
+        emit IIssuanceManager.CertificateCreated(
             0,
             address(certPrinter),
             details.investmentAmountUSD,

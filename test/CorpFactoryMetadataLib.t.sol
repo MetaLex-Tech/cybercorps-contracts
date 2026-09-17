@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {CorpFactoryMetadataLib} from "../src/libs/CorpFactoryMetadataLib.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
-import {CyberCertData as RM_CyberCertData} from "../src/storage/RoundManagerStorage.sol";
+import {CyberCertData} from "../src/CyberCorpConstants.sol";
 
 /// @notice The typehash strings of the original PumpCorpFactoryLib, copied verbatim from before the
 /// migration to CorpFactoryMetadataLib. Officer signatures already exist over these, so they are
@@ -112,7 +112,7 @@ contract CorpFactoryMetadataLibTest is Test {
             d.extensionData = new bytes[](0);
             d.roundPartyValues = new string[](0);
             d.legalDetails = new string[](0);
-            d.certData = new RM_CyberCertData[](0);
+            d.certData = new CyberCertData[](0);
             d.conditionAddresses = new address[](1);
             return;
         }
@@ -132,12 +132,12 @@ contract CorpFactoryMetadataLibTest is Test {
         d.conditionAddresses[0] = address(0xABCD);
         d.conditionAddresses[1] = address(0);
 
-        d.certData = new RM_CyberCertData[](2);
+        d.certData = new CyberCertData[](2);
         _fillCert(d.certData[0], true);
         _fillCert(d.certData[1], false);
     }
 
-    function _fillCert(RM_CyberCertData memory cd, bool restricted) private pure {
+    function _fillCert(CyberCertData memory cd, bool restricted) private pure {
         if (restricted) {
             cd.name = "SEED SAFE";
             cd.symbol = "SEEDSAFE";

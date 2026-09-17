@@ -47,12 +47,14 @@ import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
+import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
 import "./storage/RoundManagerFactoryStorage.sol";
 
 /// @title RoundManagerFactory
 /// @notice Factory contract for deploying RoundManager instances
 /// @dev Uses ERC1967Proxy+UUPSUpgradeable pattern for upgradeable RoundManager instances
-contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
+contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL, IRoundManagerFactory
+{
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
@@ -79,11 +81,17 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
         emit RefImplementationSet(_refImplementation, RoundManager(_refImplementation).DEPLOY_VERSION());
     }
 
+    /// @notice Salt used by a particular caller in this component factory.
+    function deploymentSalt(bytes32 salt, address deployer) public pure returns (bytes32) {
+        return FactoryDeploymentLib.deploymentSalt(salt, deployer);
+    }
+
     /// @notice Deploys a new RoundManager instance
     /// @param _salt Salt for deterministic deployment
     /// @return Address of the deployed RoundManager
     function deployRoundManager(bytes32 _salt) public returns (address) {
         if (_salt == bytes32(0)) revert InvalidSalt();
+        _salt = deploymentSalt(_salt, msg.sender);
         
         // Create proxy deployment bytecode
         bytes memory proxyBytecode = _getBytecode();
@@ -101,8 +109,13 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @param _salt Salt used for CREATE2
     /// @return computedAddress The precomputed address of the proxy
     function computeRoundManagerAddress(bytes32 _salt) external view returns (address) {
+        return computeRoundManagerAddress(_salt, msg.sender);
+    }
+
+    /// @notice Predict a deployment by an explicit factory or individual caller.
+    function computeRoundManagerAddress(bytes32 _salt, address deployer) public view returns (address) {
         bytes memory proxyBytecode = _getBytecode();
-        return Create2.computeAddress(_salt, keccak256(proxyBytecode));
+        return Create2.computeAddress(deploymentSalt(_salt, deployer), keccak256(proxyBytecode));
     }
 
     /// @notice Gets the bytecode for creating new RoundManager proxies

@@ -101,7 +101,7 @@ contract CyberCorpForkTest is Test {
     address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     SecurityClass[] securityClasses;
     SecuritySeries[] securitySerieses;
-    CyberCorpFactory.CyberCertData[] certData;
+    CyberCertData[] certData;
     TokenWarrantExtension warrantExtension;
     string[] certNames;
     string[] certSymbols;
@@ -131,7 +131,7 @@ contract CyberCorpForkTest is Test {
           string[] memory _dataDefaultString = new string[](1);
             _dataDefaultString[0] = "Legend 1";
 
-        CyberCorpFactory.CyberCertData memory _certData = CyberCorpFactory.CyberCertData({
+        CyberCertData memory _certData = CyberCertData({
             name: "Cert Name 1",
             symbol: "Cert Symbol 1",
             uri: "ipfs.io/ipfs/[cid]",
@@ -141,7 +141,7 @@ contract CyberCorpForkTest is Test {
             seriesData: bytes(""),
             defaultLegend: _dataDefaultString
         });
-        certData = new CyberCorpFactory.CyberCertData[](1);
+        certData = new CyberCertData[](1);
         certData[0] = _certData;
 
         securityClasses = new SecurityClass[](1);
@@ -341,9 +341,27 @@ contract CyberCorpForkTest is Test {
         address[] memory parties,
         bytes32 secretHash
     ) internal view returns (bytes32) {
-        address dealManager = DealManagerFactory(cyberCorpFactory.dealManagerFactory())
-            .computeDealManagerAddress(keccak256(abi.encodePacked(salt)));
+        address dealManager = _predictedDealManager(salt, "CyberCorp", "Juris", "Dispute Res", testAddress);
         return _expectedAgreementId(templateId, salt, globalValues, parties, secretHash, dealManager);
+    }
+
+    /// @dev Predicts the DealManager that deployCyberCorpAndCreateOffer deploys. The deployment
+    /// salt commits to the company configuration, so a test that deploys a different company
+    /// must predict with its own values. That entry point sets the officer eoa to the caller.
+    function _predictedDealManager(
+        uint256 salt,
+        string memory companyName,
+        string memory companyJurisdiction,
+        string memory defaultDisputeResolution,
+        address caller
+    ) internal view returns (address) {
+        CompanyOfficer memory officer = CompanyOfficer({eoa: caller, name: "Test Officer", contact: "test@example.com", title: "CEO"});
+        bytes32 deploymentSalt = cyberCorpFactory.computeDeploymentSalt(
+            keccak256(abi.encodePacked(salt)), companyName, "Limited Liability Company",
+            companyJurisdiction, "Contact Details", defaultDisputeResolution, testAddress, officer
+        );
+        return DealManagerFactory(cyberCorpFactory.dealManagerFactory())
+            .computeDealManagerAddress(deploymentSalt, address(cyberCorpFactory));
     }
 
     /// @dev Same preimage, for flows where the finalizing DealManager already exists.
@@ -656,8 +674,8 @@ contract CyberCorpForkTest is Test {
         extensions = new address[](2);
         extensions[0] = address(0);
         extensions[1] = address(0);
-        CyberCorpFactory.CyberCertData[] memory certData = new CyberCorpFactory.CyberCertData[](2);
-        certData[0] = CyberCorpFactory.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](2);
+        certData[0] = CyberCertData({
             name: "SAFE",
             symbol: "SAFE",
             uri: "ipfs.io/ipfs/[cid]",
@@ -668,7 +686,7 @@ contract CyberCorpForkTest is Test {
             defaultLegend: defaultLegends[0]
         });
 
-        certData[1] = CyberCorpFactory.CyberCertData({
+        certData[1] = CyberCertData({
             name: "Token Warrant",
             symbol: "TWARRENT",
             uri: "ipfs.io/ipfs/[cid]",
@@ -2572,7 +2590,8 @@ contract CyberCorpForkTest is Test {
         partyValues[0][3] = "Limited Liability Company";
         partyValues[0][4] = "Delaware";
 
-        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0));
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0),
+            _predictedDealManager(block.timestamp, "Test CyberCorp, LLC", "Delaware", "Dispute Res", testAddress));
 
         bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2587,10 +2606,10 @@ contract CyberCorpForkTest is Test {
             testPrivateKey
         );
 
-        CyberCorpFactory.CyberCertData[] memory _certData = new CyberCorpFactory.CyberCertData[](1);
+        CyberCertData[] memory _certData = new CyberCertData[](1);
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend 1";
-        _certData[0] = CyberCorpFactory.CyberCertData({
+        _certData[0] = CyberCertData({
             name: "Cert Name 1",
             symbol: "Cert Symbol 1",
             uri: "https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeiafzkynirjta4pd3g365qv6ttlz3pkeqcquhbald7nqqfmm5vpfua",
@@ -3646,7 +3665,7 @@ contract CyberCorpForkTest is Test {
         // Only company owner can call the Issuance Manager to upgrade its CyberCert Printer beacon
         vm.prank(testAddress);
         vm.expectEmit(true, true, true, true);
-        emit IssuanceManager.CertPrinterBeaconImplementationUpgraded(newCyberCertPrinterImpl);
+        emit IIssuanceManager.CertPrinterBeaconImplementationUpgraded(newCyberCertPrinterImpl);
         IssuanceManager(issuanceManager).upgradeCertPrinterBeaconImplementation(newCyberCertPrinterImpl);
 
         assertEq(IssuanceManager(issuanceManager).getCertPrinterBeaconImplementation(), newCyberCertPrinterImpl);
@@ -4179,8 +4198,8 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
-        certData[0] = DealManagerStorage.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",
@@ -4335,8 +4354,8 @@ contract CyberCorpForkTest is Test {
         string[] memory warrantLegend = new string[](1);
         warrantLegend[0] = "Token Warrant Legend";
 
-        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](2);
-        certData[0] = DealManagerStorage.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](2);
+        certData[0] = CyberCertData({
             name: "SAFE Certificate",
             symbol: "SAFE",
             uri: "ipfs://safe-uri",
@@ -4346,7 +4365,7 @@ contract CyberCorpForkTest is Test {
             seriesData: bytes(""),
             defaultLegend: safeLegend
         });
-        certData[1] = DealManagerStorage.CyberCertData({
+        certData[1] = CyberCertData({
             name: "Token Warrant",
             symbol: "TWARRANT",
             uri: "ipfs://warrant-uri",
@@ -4526,8 +4545,8 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
-        certData[0] = DealManagerStorage.CyberCertData({
+        CyberCertData[] memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",
@@ -5337,7 +5356,8 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Principal Party Value";
 
-        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0),
+            _predictedDealManager(block.timestamp, "DelegationTestCorp", "Delaware", "Dispute Resolution", testAddress));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -5517,7 +5537,8 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Principal Party Value";
 
-        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0),
+            _predictedDealManager(block.timestamp, "DelegationExpiryCorp", "Delaware", "Dispute Resolution", testAddress));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";

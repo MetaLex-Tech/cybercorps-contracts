@@ -5,7 +5,7 @@ import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
-import {FUND_INTEREST_EXTENSION_TYPE} from "../../../storage/extensions/FundInterestExtension.sol";
+import {FUND_INTEREST_EXTENSION_TYPE} from "../../../storage/extensions/FundInterestExtensionV3.sol";
 import {
     ICertificateExtension,
     IFundInterestExtension
@@ -16,7 +16,7 @@ import {Offer, OfferSide} from "../../../interfaces/ISecondaryTradeStorage.sol";
 /// @title  HoldingPeriodCondition - Rule 144 holding-period verification
 /// @author MetaLeX Labs, Inc.
 /// @notice Shared (generic) threshold condition, attached per exemption pathway (Rule 144). Reads
-/// acquisitionDate and tackedFromAcquisitionDate from the seller certificate's FundInterestExtension
+/// acquisitionDate and tackedFromAcquisitionDate from the seller certificate's FundInterestExtensionV3
 /// data (§12B.3). Where Rule 144(d)(3) tacking is asserted (non-zero tackedFromAcquisitionDate), the
 /// earlier of the two dates applies; otherwise acquisitionDate alone. Fails if the required hold
 /// (one year for non-reporting issuers) has not elapsed.

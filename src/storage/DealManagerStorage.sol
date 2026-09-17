@@ -72,18 +72,6 @@ library DealManagerStorage {
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.deal.manager.storage.v1");
 
     /// @notice Certificate data structure for creating new certificates
-    struct CyberCertData {
-        string name;
-        string symbol;
-        string uri;
-        SecurityClass securityClass;
-        SecuritySeries securitySeries;
-        address extension;
-        /// @notice Series-scope payload encoded by `extension`.
-        bytes seriesData;
-        string[] defaultLegend;
-    }
-
     /// @notice Main storage layout struct that holds all deal manager data
     /// @dev Uses unstructured storage pattern to avoid storage collisions
     struct DealManagerData {

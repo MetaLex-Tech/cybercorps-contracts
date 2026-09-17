@@ -19,10 +19,10 @@ import {
     PortfolioHolding
 } from "../src/storage/extensions/CyberCorpFundExtension.sol";
 import {
-    FundInterestExtension,
+    FundInterestExtensionV3,
     FundInterestSeriesData,
     SecurityIdentification
-} from "../src/storage/extensions/FundInterestExtension.sol";
+} from "../src/storage/extensions/FundInterestExtensionV3.sol";
 import {SAFEExtension, SAFEData} from "../src/storage/extensions/SAFEExtension.sol";
 import {SAFEExtensionV3, SAFESeriesData} from "../src/storage/extensions/SAFEExtensionV3.sol";
 import {SAFTEExtensionV2, SAFTEDataV2} from "../src/storage/extensions/SAFTEExtensionV2.sol";
@@ -167,7 +167,7 @@ contract ExtensionJsonEscapeTest is Test {
         _assertField(json, ".CyberCorpFundDetails.metadataURI");
     }
 
-    function test_FundInterestExtension() public {
+    function test_FundInterestExtensionV3() public {
         FundInterestSeriesData memory data;
         data.interestClass = POISON;
         data.fundEntityType = POISON;
@@ -176,7 +176,7 @@ contract ExtensionJsonEscapeTest is Test {
         data.governingDocumentURIs = _poisonedUris();
         data.securityIdentification = SecurityIdentification(POISON, POISON, POISON, POISON, POISON);
 
-        string memory json = _seriesFragment(address(new FundInterestExtension()), abi.encode(data));
+        string memory json = _seriesFragment(address(new FundInterestExtensionV3()), abi.encode(data));
         _assertField(json, ".FundInterestSeriesDetails.interestClass");
         _assertField(json, ".FundInterestSeriesDetails.fundEntityType");
         _assertField(json, ".FundInterestSeriesDetails.icaExceptionRelied");

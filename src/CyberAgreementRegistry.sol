@@ -46,8 +46,11 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./libs/JsonLib.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
 
-contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
+contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
+    ICyberAgreementRegistry
+{
     using ECDSA for bytes32;
     // Domain information
     string public constant name = "CyberAgreementRegistry";
@@ -64,12 +67,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         "SignatureData(bytes32 contractId,address signer,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
     );
 
-    struct Template {
-        string legalContractUri; // Off-chain legal contract URI
-        string title;
-        string[] globalFields; // Field names that are the same for all agreements
-        string[] partyFields; // party Fields that will be different per party
-    }
 
     struct AgreementData {
         bytes32 templateId; // ID of the template this contract uses
@@ -126,25 +123,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40)
     uint256[40] private __gap;
 
-    event TemplateCreated(
-        bytes32 indexed templateId,
-        string indexed title,
-        string legalContractUri,
-        string[] globalFields,
-        string[] signerFields
-    );
 
-    event ContractCreated(
-        bytes32 indexed contractId,
-        bytes32 indexed templateId,
-        address[] parties
-    );
 
-    event AgreementSigned(
-        bytes32 indexed contractId,
-        address indexed party,
-        uint256 timestamp
-    );
 
     event VoidRequested(bytes32 indexed contractId, address indexed party);
 
@@ -160,7 +140,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         uint256 timestamp
     );
 
-    event ContractFullySigned(bytes32 indexed contractId, uint256 timestamp);
 
     event DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
     event DelegationRevoked(address indexed delegator, address indexed delegate);

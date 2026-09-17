@@ -9,10 +9,6 @@ import {ILexScrowStorage} from "../../interfaces/ILexScrowStorage.sol";
 import "../auth.sol";
 import "../../interfaces/IZKPassportVerifier.sol";
 
-interface ICyberCorpManager {
-    function AUTH() external view returns (address);
-}
-
 /// @title NonUSNationalityCondition
 /// @notice Round condition requiring a valid, non-US ZKPassport proof for the participant
 contract NonUSNationalityCondition is BaseCondition, UUPSUpgradeable, BorgAuthACL {
@@ -162,7 +158,7 @@ contract NonUSNationalityCondition is BaseCondition, UUPSUpgradeable, BorgAuthAC
         if (_investor == address(0)) revert InvalidInvestor();
 
         // only the manager of the deal/round can set overrides
-        BorgAuth auth = BorgAuth(ICyberCorpManager(_manager).AUTH());
+        BorgAuth auth = IBorgAuthACL(_manager).AUTH();
         auth.onlyRole(auth.OWNER_ROLE(), msg.sender);
 
         founderOverrides[_manager][_investor] = _approved;

@@ -58,7 +58,7 @@ import {LookThroughPolicy} from "../libs/policies/LookThroughPolicy.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
-import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
+import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtensionV3.sol";
 
 /// @title  LedgerEntryTokenStorage - namespaced storage and the printer logic that runs by delegatecall
 /// @author MetaLeX Labs, Inc.
@@ -734,6 +734,17 @@ library LedgerEntryTokenStorage {
         auth.onlyRole(auth.ADMIN_ROLE(), msg.sender);
     }
 
+    /// @dev Writes the cert's details. External so the printer keeps the code out of its own bytecode.
+    function updateCertificateDetails(uint256 tokenId, CertificateDetails memory details) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        // Enforce the reserved-units invariant at the single write chokepoint: raw unitsRepresented may never
+        // drop below the units locked in pending deals. Guards against a caller writing back an effective
+        // (scripified-inflated) or otherwise under-counted balance.
+        if (details.unitsRepresented < s.unitsReserved[tokenId]) revert ILedgerEntryToken.ExceedsAvailableUnits();
+        s.certificateDetails[tokenId] = details;
+        emit ILedgerEntryToken.CertificateDetailsUpdated(tokenId);
+    }
+
     /// @dev Rewrites only the Rule 144(d)(3) tacking anchor in the cert's FundInterestData, then writes
     /// it back through the same reserved-units invariant.
     function updateTackedFromAcquisitionDate(uint256 tokenId, uint64 ts) external {
@@ -747,6 +758,7 @@ library LedgerEntryTokenStorage {
         details.extensionData = IFundInterestExtension(ext).withTackedFrom(details.extensionData, ts);
         if (details.unitsRepresented < s.unitsReserved[tokenId]) revert ILedgerEntryToken.ExceedsAvailableUnits();
         s.certificateDetails[tokenId] = details;
+        emit ILedgerEntryToken.CertificateDetailsUpdated(tokenId);
     }
 
     function setLookThroughBadge(address badge) internal {
@@ -826,7 +838,7 @@ library LedgerEntryTokenStorage {
     }
 
     /// @dev Idempotent migration for tokens minted before acquisitionTimestamp became a base field: copies each
-    /// live token's FundInterestExtension acquisitionDate into the base mapping over [startIndex, +count).
+    /// live token's FundInterestExtensionV3 acquisitionDate into the base mapping over [startIndex, +count).
     /// Permissionless; already-set tokens skipped; no-op on non-FUND_INTEREST printers. Batch over the supply.
     function backfillAcquisitionTimestamp(uint256 startIndex, uint256 count) external {
         CyberCertStorage storage s = cyberCertStorage();
@@ -847,6 +859,20 @@ library LedgerEntryTokenStorage {
             uint64 acq = IFundInterestExtension(ext).acquisitionDate(data);
             if (acq != 0) s.acquisitionTimestamp[tokenId] = acq;
         }
+    }
+
+    /// @notice Admin migration helper for a legacy custody counter that is still zero.
+    /// @dev Initialize every legacy holder before minting or transferring to them; a partial
+    /// nonzero counter cannot be repaired here. The unique total is complete only after all
+    /// legacy holders have been initialized. Reads custody, not legal ownership.
+    function initializeHolderCount(address holder) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        if (s.holderTokenCount[holder] != 0) revert ILedgerEntryToken.HolderCountAlreadyInitialized();
+        uint256 balance = ILedgerEntryToken(address(this)).balanceOf(holder);
+        if (balance == 0) return;
+        s.holderTokenCount[holder] = balance;
+        s.uniqueHolderCount++;
+        emit ILedgerEntryToken.HolderCountInitialized(holder, balance);
     }
 
     function recordHolderChange(address from, address to) internal {
@@ -882,8 +908,18 @@ library LedgerEntryTokenStorage {
         return s.certLegend[tokenId];
     }
 
+    /// @dev Tells an indexer that a rendered legend set changed. tokenURI reads the legends live.
+    function _emitLegendsChanged(uint256 tokenId, bool isDefault) private {
+        if (isDefault) {
+            emit ILedgerEntryToken.DefaultLegendsChanged();
+            return;
+        }
+        emit ILedgerEntryToken.CertLegendsChanged(tokenId);
+    }
+
     function addLegend(uint256 tokenId, bool isDefault, string memory newLegend) external {
         _legendArray(tokenId, isDefault).push(newLegend);
+        _emitLegendsChanged(tokenId, isDefault);
     }
 
     function removeLegendAt(uint256 tokenId, bool isDefault, uint256 index) external {
@@ -899,6 +935,7 @@ library LedgerEntryTokenStorage {
             arr[index] = lastLegend;
         }
         arr.pop();
+        _emitLegendsChanged(tokenId, isDefault);
     }
 
     function _restrictiveLegendArray(uint256 tokenId, bool isDefault) private view returns (RestrictiveLegend[] storage) {
@@ -918,6 +955,7 @@ library LedgerEntryTokenStorage {
 
     function addRestrictiveLegend(uint256 tokenId, bool isDefault, RestrictiveLegend memory newLegend) external {
         _restrictiveLegendArray(tokenId, isDefault).push(newLegend);
+        _emitLegendsChanged(tokenId, isDefault);
     }
 
     function removeRestrictiveLegendAt(uint256 tokenId, bool isDefault, uint256 index) external {
@@ -930,6 +968,7 @@ library LedgerEntryTokenStorage {
             arr[index] = arr[lastIndex];
         }
         arr.pop();
+        _emitLegendsChanged(tokenId, isDefault);
     }
 
     function getEffectiveRestrictiveLegends(uint256 tokenId) internal view returns (RestrictiveLegend[] memory legends) {
@@ -1016,8 +1055,13 @@ library LedgerEntryTokenStorage {
     }
 
     // Configuration setters
-    function setIssuanceManager(address _issuanceManager) internal {
-        cyberCertStorage().issuanceManager = _issuanceManager;
+    /// @dev The manager supplies the corp, the URI builder and the scripified units, so a change here
+    /// changes the metadata of every token in this printer.
+    function setIssuanceManager(address _issuanceManager) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        address previous = s.issuanceManager;
+        s.issuanceManager = _issuanceManager;
+        emit ILedgerEntryToken.IssuanceManagerUpdated(_issuanceManager, previous);
     }
 
     function setCertificateUri(string memory _certificateUri) internal {
@@ -1062,8 +1106,10 @@ library LedgerEntryTokenStorage {
     }
 
     // Extension management
-    function setExtension(uint256 tokenId, address extension) internal {
+    /// @dev The extension is series scope: this printer is the series. The event carries no tokenId.
+    function setExtension(address extension) external {
         cyberCertStorage().extension = extension;
+        emit ILedgerEntryToken.SeriesExtensionSet(extension);
     }
 
     function getExtension(uint256 tokenId) internal view returns (address) {

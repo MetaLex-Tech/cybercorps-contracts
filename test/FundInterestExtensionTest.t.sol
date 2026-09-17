@@ -5,17 +5,17 @@ import "forge-std/Test.sol";
 import {CertificateDetails} from "../src/interfaces/ILedgerEntryToken.sol";
 import {
     FundInterestData,
-    FundInterestExtension,
+    FundInterestExtensionV3,
     FundInterestResolvedData,
     FundInterestSeriesData,
     SecurityIdentification
-} from "../src/storage/extensions/FundInterestExtension.sol";
+} from "../src/storage/extensions/FundInterestExtensionV3.sol";
 
 contract FundInterestExtensionTest is Test {
-    FundInterestExtension internal extension;
+    FundInterestExtensionV3 internal extension;
 
     function setUp() public {
-        extension = new FundInterestExtension();
+        extension = new FundInterestExtensionV3();
     }
 
     function test_getExtensionURI_RendersTokenData() public view {

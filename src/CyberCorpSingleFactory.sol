@@ -47,8 +47,11 @@ import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorp.sol";
 import "./storage/CyberCorpSingleFactoryStorage.sol";
 import "./libs/auth.sol";
+import "./interfaces/ICyberCorpSingleFactory.sol";
+import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
 
-contract CyberCorpSingleFactory is BorgAuthACL, UUPSUpgradeable {
+contract CyberCorpSingleFactory is BorgAuthACL, UUPSUpgradeable, ICyberCorpSingleFactory
+{
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
@@ -69,9 +72,15 @@ contract CyberCorpSingleFactory is BorgAuthACL, UUPSUpgradeable {
         emit RefImplementationSet(_refImplementation, CyberCorp(_refImplementation).DEPLOY_VERSION());
     }
 
+    /// @notice Salt used by a particular caller in this component factory.
+    function deploymentSalt(bytes32 salt, address deployer) public pure returns (bytes32) {
+        return FactoryDeploymentLib.deploymentSalt(salt, deployer);
+    }
+
     function deployCyberCorpSingle(bytes32 _salt) public returns (address) {
         if (_salt == bytes32(0)) revert InvalidSalt();
-        
+        _salt = deploymentSalt(_salt, msg.sender);
+
         // Create proxy deployment bytecode
         bytes memory proxyBytecode = _getBytecode();
         
@@ -88,8 +97,13 @@ contract CyberCorpSingleFactory is BorgAuthACL, UUPSUpgradeable {
     /// @param _salt Salt used for CREATE2
     /// @return computedAddress The precomputed address of the proxy
     function computeCyberCorpSingleAddress(bytes32 _salt) external view returns (address) {
+        return computeCyberCorpSingleAddress(_salt, msg.sender);
+    }
+
+    /// @notice Predict a deployment by an explicit factory or individual caller.
+    function computeCyberCorpSingleAddress(bytes32 _salt, address deployer) public view returns (address) {
         bytes memory proxyBytecode = _getBytecode();
-        return Create2.computeAddress(_salt, keccak256(proxyBytecode));
+        return Create2.computeAddress(deploymentSalt(_salt, deployer), keccak256(proxyBytecode));
     }
 
     /// @notice Gets the bytecode for creating new CyberCorp proxies

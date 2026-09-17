@@ -27,7 +27,7 @@ import {
     InvestorType
 } from "../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
-import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
+import {FundInterestData} from "../src/storage/extensions/FundInterestExtensionV3.sol";
 import {
     AcceptOfferParams,
     ExemptionPathway,
@@ -69,7 +69,7 @@ contract SecERC20Mock is ERC20 {
 
 // cyberCORP fixture for the real IssuanceManager/DealManager that ALSO exposes AUTH(), which the
 // per-SPV condition setters (RegS.setRegSConfig, USState.setStateBlocked) resolve via
-// IBorgAuthProvider(spv).AUTH(). offer.spvAddress == this corp.
+// IBorgAuthACL(spv).AUTH(). offer.spvAddress == this corp.
 contract MockCorpWithAuth {
     address public AUTH;
 

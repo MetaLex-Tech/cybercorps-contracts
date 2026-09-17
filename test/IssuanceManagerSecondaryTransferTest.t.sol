@@ -10,7 +10,7 @@ import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {ExemptionPathway, HostingMode} from "../src/interfaces/ISecondaryTradeStorage.sol";
-import {FundInterestData, FundInterestExtension} from "../src/storage/extensions/FundInterestExtension.sol";
+import {FundInterestData, FundInterestExtensionV3} from "../src/storage/extensions/FundInterestExtensionV3.sol";
 import "../src/libs/auth.sol";
 import "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -434,7 +434,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         cert = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0), "Cert", "CERT", "uri://cert",
-                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(new FundInterestExtension()), bytes("")
+                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(new FundInterestExtensionV3()), bytes("")
             )
         );
         FundInterestData memory fid;

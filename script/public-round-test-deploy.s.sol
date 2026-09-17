@@ -236,8 +236,9 @@ contract PublicRoundTestDeploy is Script {
 
         // Predict corp and round manager addresses to build a valid escrow signature
         bytes32 corpSalt = keccak256(abi.encodePacked(block.timestamp + 1));
-        address predictedCorp = CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt);
-        address predictedRM = RoundManagerFactory(roundManagerFactory).computeRoundManagerAddress(corpSalt);
+        bytes32 deploymentSalt = corpFactory.computeDeploymentSalt(corpSalt, "SafeCorp", "Limited Liability Company", "DE", "contact@corp.example", "arbitration", deployer, officer);
+        address predictedCorp = CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(deploymentSalt, address(corpFactory));
+        address predictedRM = RoundManagerFactory(roundManagerFactory).computeRoundManagerAddress(deploymentSalt, address(corpFactory));
 
         bytes memory escrowedSig = _computeEscrowSignature(
             predictedRM,
@@ -519,4 +520,3 @@ contract PublicRoundTestDeploy is Script {
         sig = abi.encodePacked(r, s, v);
     }
 }
-

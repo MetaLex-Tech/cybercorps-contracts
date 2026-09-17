@@ -20,7 +20,7 @@ import {
     RestrictiveLegend
 } from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICertificateExtension, IFundInterestExtension} from "../src/storage/extensions/ICertificateExtension.sol";
-import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "../src/storage/extensions/FundInterestExtension.sol";
+import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "../src/storage/extensions/FundInterestExtensionV3.sol";
 import {MockTransferHook} from "./mock/MockTransferHook.sol";
 import {BaseTransferHook} from "../src/hooks/transfer/BaseTransferHook.sol";
 
@@ -408,6 +408,124 @@ contract CyberCertPrinterTest is Test {
         vm.prank(investor);
         vm.expectRevert(ILedgerEntryToken.NotIssuanceManager.selector);
         printer.setExtension(1, updatedExtension);
+    }
+
+    // Metadata-refresh events. tokenURI renders these fields at call time, so an indexer needs a log to
+    // learn that a rendered certificate changed.
+    function test_SetExtension_EmitsSeriesExtensionSet() public {
+        vm.expectEmit(true, false, false, false, address(printer));
+        emit ILedgerEntryToken.SeriesExtensionSet(updatedExtension);
+        vm.prank(address(issuanceManager));
+        printer.setExtension(999, updatedExtension);
+    }
+
+    function test_UpdateIssuanceManager_EmitsIssuanceManagerUpdated() public {
+        address newManager = address(0xF00D);
+
+        vm.expectEmit(true, true, false, false, address(printer));
+        emit ILedgerEntryToken.IssuanceManagerUpdated(newManager, address(issuanceManager));
+        vm.prank(address(issuanceManager));
+        printer.updateIssuanceManager(newManager);
+    }
+
+    function test_UpdateCertificateDetails_EmitsCertificateDetailsUpdated() public {
+        _mintCert(1, investor, 100, bytes(""));
+        CertificateDetails memory updated = _details(200, bytes(""));
+
+        vm.expectEmit(true, false, false, false, address(printer));
+        emit ILedgerEntryToken.CertificateDetailsUpdated(1);
+        vm.prank(address(issuanceManager));
+        printer.updateCertificateDetails(1, updated);
+    }
+
+    function test_UpdateCertificateTackedFromAcquisitionDate_EmitsCertificateDetailsUpdated() public {
+        MockFundInterestExtension ext = new MockFundInterestExtension();
+        vm.prank(address(issuanceManager));
+        printer.setExtension(0, address(ext));
+        _mintCert(1, investor, 100, _fundInterestBlob(12345));
+
+        vm.expectEmit(true, false, false, false, address(printer));
+        emit ILedgerEntryToken.CertificateDetailsUpdated(1);
+        vm.prank(address(issuanceManager));
+        printer.updateCertificateTackedFromAcquisitionDate(1, 999);
+    }
+
+    function test_AddCertLegend_EmitsCertLegendsChanged() public {
+        _mintCert(1, investor, 100, bytes(""));
+
+        vm.expectEmit(true, false, false, false, address(printer));
+        emit ILedgerEntryToken.CertLegendsChanged(1);
+        vm.prank(address(issuanceManager));
+        printer.addCertLegend(1, "Rule 144 legend");
+    }
+
+    function test_RemoveCertLegendAt_EmitsCertLegendsChanged() public {
+        _mintCert(1, investor, 100, bytes(""));
+        vm.prank(address(issuanceManager));
+        printer.addCertLegend(1, "Rule 144 legend");
+
+        vm.expectEmit(true, false, false, false, address(printer));
+        emit ILedgerEntryToken.CertLegendsChanged(1);
+        vm.prank(address(issuanceManager));
+        printer.removeCertLegendAt(1, 0);
+    }
+
+    function test_AddCertRestrictiveLegend_EmitsCertLegendsChanged() public {
+        _mintCert(1, investor, 100, bytes(""));
+        RestrictiveLegend memory legend = _legend(RestrictionType.Custom, "Custom", "Board approval", "DE", true);
+
+        vm.expectEmit(true, false, false, false, address(printer));
+        emit ILedgerEntryToken.CertLegendsChanged(1);
+        vm.prank(address(issuanceManager));
+        printer.addCertRestrictiveLegend(1, legend);
+    }
+
+    function test_RemoveCertRestrictiveLegendAt_EmitsCertLegendsChanged() public {
+        _mintCert(1, investor, 100, bytes(""));
+        vm.prank(address(issuanceManager));
+        printer.addCertRestrictiveLegend(
+            1,
+            _legend(RestrictionType.Custom, "Custom", "Board approval", "DE", true)
+        );
+
+        vm.expectEmit(true, false, false, false, address(printer));
+        emit ILedgerEntryToken.CertLegendsChanged(1);
+        vm.prank(address(issuanceManager));
+        printer.removeCertRestrictiveLegendAt(1, 0);
+    }
+
+    function test_SetTokenTransferable_EmitsTokenTransferableSet() public {
+        _mintCert(1, investor, 100, bytes(""));
+
+        vm.expectEmit(true, false, false, true, address(printer));
+        emit ILedgerEntryToken.TokenTransferableSet(1, true);
+        vm.prank(address(issuanceManager));
+        printer.setTokenTransferable(1, true);
+    }
+
+    // The default legends are printer wide and decide what the next mint copies onto a cert.
+    function test_DefaultLegendWrites_EmitDefaultLegendsChanged() public {
+        RestrictiveLegend memory legend = _legend(RestrictionType.RegulationS, "Reg S", "Offshore only", "US", true);
+
+        vm.expectEmit(false, false, false, false, address(printer));
+        emit ILedgerEntryToken.DefaultLegendsChanged();
+        vm.prank(address(issuanceManager));
+        printer.addDefaultLegend("Second default legend");
+
+        vm.expectEmit(false, false, false, false, address(printer));
+        emit ILedgerEntryToken.DefaultLegendsChanged();
+        vm.prank(address(issuanceManager));
+        printer.removeDefaultLegendAt(0);
+
+        vm.expectEmit(false, false, false, false, address(printer));
+        emit ILedgerEntryToken.DefaultLegendsChanged();
+        vm.prank(address(issuanceManager));
+        printer.addDefaultRestrictiveLegend(legend);
+
+        vm.expectEmit(false, false, false, false, address(printer));
+        emit ILedgerEntryToken.DefaultLegendsChanged();
+        vm.prank(address(issuanceManager));
+        printer.removeDefaultRestrictiveLegendAt(0);
     }
 
     function test_UnitsReserved_IncreaseAndDecreaseWithinCertificateUnits() public {
@@ -944,7 +1062,7 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.tokenOfLegalOwnerByIndex(investor, 2), 3);
     }
 
-    // Backfill copies a legacy token's acquisitionDate (from FundInterestExtension data) into the base
+    // Backfill copies a legacy token's acquisitionDate (from FundInterestExtensionV3 data) into the base
     // acquisitionTimestamp mapping, is idempotent, and never overwrites a token whose base value is already set.
     function test_BackfillAcquisitionTimestamp_CopiesLegacyFromExtension() public {
         MockFundInterestExtension ext = new MockFundInterestExtension();
@@ -1089,7 +1207,7 @@ contract CyberCertPrinterTest is Test {
 
         string memory poison = '"ok", "unitsRepresented": "999999999';
         address extension = address(new SAFEExtension());
-        CertificateUriBuilder.CertificateDetails memory details = CertificateUriBuilder.CertificateDetails({
+        CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
             signingOfficerTitle: "CEO",
             investmentAmountUSD: 1_000 ether,
@@ -1109,8 +1227,8 @@ contract CyberCertPrinterTest is Test {
             "ipfs://certificate",
             new RestrictiveLegend[](0),
             details,
-            new CertificateUriBuilder.Endorsement[](0),
-            CertificateUriBuilder.OwnerDetails({name: poison, ownerAddress: investor}),
+            new Endorsement[](0),
+            OwnerDetails({name: poison, ownerAddress: investor}),
             address(0),
             bytes32(0),
             1,
@@ -1131,8 +1249,8 @@ contract CyberCertPrinterTest is Test {
             "ipfs://certificate",
             new RestrictiveLegend[](0),
             details,
-            new CertificateUriBuilder.Endorsement[](0),
-            CertificateUriBuilder.OwnerDetails({name: poison, ownerAddress: investor}),
+            new Endorsement[](0),
+            OwnerDetails({name: poison, ownerAddress: investor}),
             address(0),
             bytes32(0),
             1,

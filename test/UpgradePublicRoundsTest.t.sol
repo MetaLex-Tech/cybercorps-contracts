@@ -183,9 +183,10 @@ contract UpgradePublicRoundsForkTest is Test {
         {
             uint256 salt = block.timestamp;
             bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+            corpSalt = CyberCorpFactory(cyberCorpFactoryProxyAddr).computeDeploymentSalt(corpSalt, "CyberCorp", "Limited Liability Company", "Juris", "Contact Details", "Dispute Res", companyOwner, officer);
 
             (bytes memory escrowedSig, ) = CyberCorpHelper.computeEscrowSignature(
-                RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt),
+                RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt, cyberCorpFactoryProxyAddr),
                 SecuritySeries.SeriesA,
                 raiseCap,
                 minTicket,
@@ -198,7 +199,7 @@ contract UpgradePublicRoundsForkTest is Test {
                 pricePerUnit,
                 valuation,
                 companyOwnerPrivateKey,
-                CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt)
+                CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt, cyberCorpFactoryProxyAddr)
             );
 
             bytes memory metaSig = CyberCorpHelper.computeMetadataSignature(
@@ -269,9 +270,10 @@ contract UpgradePublicRoundsForkTest is Test {
         {
             uint256 salt = block.timestamp + 1;
             bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+            corpSalt = CyberCorpFactory(cyberCorpFactoryProxyAddr).computeDeploymentSalt(corpSalt, "SafeCorp", "Limited Liability Company", "Juris", "Contact", "Dispute", companyOwner, officer);
 
             (bytes memory escrowedSig, ) = CyberCorpHelper.computeEscrowSignature(
-                RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt),
+                RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt, cyberCorpFactoryProxyAddr),
                 SecuritySeries.SeriesA,
                 raiseCap,
                 minTicket,
@@ -284,7 +286,7 @@ contract UpgradePublicRoundsForkTest is Test {
                 pricePerUnit,
                 valuation,
                 companyOwnerPrivateKey,
-                CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt)
+                CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt, cyberCorpFactoryProxyAddr)
             );
 
             bytes memory metaSig = CyberCorpHelper.computeMetadataSignature(
@@ -601,8 +603,9 @@ contract UpgradePublicRoundsForkTest is Test {
         address[] memory conditions = new address[](1);
         conditions[0] = lexchexConditionAddress;
 
+        corpSalt = CyberCorpFactory(cyberCorpFactoryProxyAddr).computeDeploymentSalt(corpSalt, "CyberCorp", "Limited Liability Company", "Juris", "Contact Details", "Dispute Res", companyOwner, officer);
         (bytes memory escrowedSig, ) = CyberCorpHelper.computeEscrowSignature(
-            RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt),
+            RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt, cyberCorpFactoryProxyAddr),
             series,
             raiseCap,
             minTicket,
@@ -615,7 +618,7 @@ contract UpgradePublicRoundsForkTest is Test {
             pricePerUnit,
             valuation,
             companyOwnerPrivateKey,
-            CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt)
+            CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt, cyberCorpFactoryProxyAddr)
         );
 
         bytes memory metaSig = CyberCorpHelper.computeMetadataSignature(
