@@ -591,7 +591,7 @@ contract IssuanceManagerConversionTest is Test {
         vm.prank(investor);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IssuanceManager.AccountFrozen.selector,
+                IssuanceManagerStorage.AccountFrozen.selector,
                 investor
             )
         );
@@ -631,7 +631,7 @@ contract IssuanceManagerConversionTest is Test {
         vm.prank(investor);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IssuanceManager.AccountFrozen.selector,
+                IssuanceManagerStorage.AccountFrozen.selector,
                 investor
             )
         );
@@ -645,7 +645,7 @@ contract IssuanceManagerConversionTest is Test {
         vm.prank(investor);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IssuanceManager.AccountFrozen.selector,
+                IssuanceManagerStorage.AccountFrozen.selector,
                 investor
             )
         );

@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateSVGParams, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {ICertificateImageBuilder} from "../src/interfaces/ICertificateImageBuilder.sol";
+import {CertificateDetails, Endorsement, OwnerDetails} from "../src/interfaces/ILedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
@@ -56,7 +57,7 @@ contract CertificateUriBuilderJsonEscapingTest is Test {
 
     function test_LegalDetailsCannotInjectForgedUnitsRepresented() public view {
         string memory maliciousLegalDetails = 'ok", "unitsRepresented": "999999999';
-        CertificateUriBuilder.CertificateDetails memory details = _details(maliciousLegalDetails);
+        CertificateDetails memory details = _details(maliciousLegalDetails);
 
         string memory json = _build(details, _owner("Alice"), _endorsements(""));
 
@@ -69,7 +70,7 @@ contract CertificateUriBuilderJsonEscapingTest is Test {
 
     function test_UserControlledNamesRemainDataAndJsonStaysValid() public view {
         string memory maliciousName = 'Alice", "unitsRepresented": "999999999';
-        CertificateUriBuilder.Endorsement[] memory endorsements = _endorsements(maliciousName);
+        Endorsement[] memory endorsements = _endorsements(maliciousName);
 
         string memory json = _build(_details("ok"), _owner(maliciousName), endorsements);
 
@@ -80,9 +81,9 @@ contract CertificateUriBuilderJsonEscapingTest is Test {
     }
 
     function _build(
-        CertificateUriBuilder.CertificateDetails memory details,
-        CertificateUriBuilder.OwnerDetails memory owner,
-        CertificateUriBuilder.Endorsement[] memory endorsements
+        CertificateDetails memory details,
+        OwnerDetails memory owner,
+        Endorsement[] memory endorsements
     ) private view returns (string memory) {
         string[] memory legends = new string[](1);
         legends[0] = 'Legend", "forged": "true';
@@ -110,9 +111,9 @@ contract CertificateUriBuilderJsonEscapingTest is Test {
     function _details(string memory legalDetails)
         private
         pure
-        returns (CertificateUriBuilder.CertificateDetails memory)
+        returns (CertificateDetails memory)
     {
-        return CertificateUriBuilder.CertificateDetails({
+        return CertificateDetails({
             signingOfficerName: 'Officer "Name"',
             signingOfficerTitle: "President",
             investmentAmountUSD: 1000 ether,
@@ -123,21 +124,21 @@ contract CertificateUriBuilderJsonEscapingTest is Test {
         });
     }
 
-    function _owner(string memory name) private pure returns (CertificateUriBuilder.OwnerDetails memory) {
-        return CertificateUriBuilder.OwnerDetails({name: name, ownerAddress: address(0xA11CE)});
+    function _owner(string memory name) private pure returns (OwnerDetails memory) {
+        return OwnerDetails({name: name, ownerAddress: address(0xA11CE)});
     }
 
     function _endorsements(string memory name)
         private
         pure
-        returns (CertificateUriBuilder.Endorsement[] memory endorsements)
+        returns (Endorsement[] memory endorsements)
     {
         if (bytes(name).length == 0) {
-            return new CertificateUriBuilder.Endorsement[](0);
+            return new Endorsement[](0);
         }
 
-        endorsements = new CertificateUriBuilder.Endorsement[](1);
-        endorsements[0] = CertificateUriBuilder.Endorsement({
+        endorsements = new Endorsement[](1);
+        endorsements[0] = Endorsement({
             endorser: address(0xB0B),
             timestamp: 1,
             signatureHash: "",
