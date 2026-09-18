@@ -134,42 +134,64 @@ library DeploymentConstants {
         if (chainId == BASE) {
             return ExtensionDeployment({
                 safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
-                safeExtensionV3: address(0), // TODO: not yet deployed on any chain
+                safeExtensionV3: address(0), // TODO: not yet deployed on this chain
                 aceSafeExtension: 0x6aDaef2B79FD1cbA130c5807B31DE435FEa58EAC,
-                aceSafeExtensionV3: address(0), // TODO: not yet deployed on any chain
+                aceSafeExtensionV3: address(0), // TODO: not yet deployed on this chain
                 saftExtension: 0x109D2A13932bE393011835B308F81ce1992E365B,
                 saftExtensionV2: 0x37c2A0e801e569e01f0972186aF4DB01409e92c1,
-                saftExtensionV3: address(0), // TODO: not yet deployed on any chain
+                saftExtensionV3: address(0), // TODO: not yet deployed on this chain
                 safteExtension: 0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C,
                 ethosSafteExtension: 0xC23fFF0B06aE5EBea862611F489b1329108ce603, // older SAFTEExtension code, used by the Ethos SAFTE template
                 safteExtensionV2: 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A,
-                safteExtensionV3: address(0), // TODO: not yet deployed on any chain
+                safteExtensionV3: address(0), // TODO: not yet deployed on this chain
                 tokenWarrantExtension: 0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4,
                 tokenWarrantExtensionV2: 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F,
-                tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on any chain
+                tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on this chain
                 shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
-                shareExtensionV3: address(0), // TODO: not yet deployed on any chain
-                fundInterestExtensionV3: address(0) // TODO: not yet deployed on any chain
+                shareExtensionV3: address(0), // TODO: not yet deployed on this chain
+                fundInterestExtensionV3: address(0) // TODO: not yet deployed on this chain
             });
-        } else if (chainId == ETH || chainId == ETH_SEPOLIA || chainId == BASE_SEPOLIA) {
+        } else if (chainId == BASE_SEPOLIA) {
+            // The v5 rehearsal deployed the V3 proxies here first. CREATE2 gives the same
+            // addresses on the other chains when the V3 script runs there.
             return ExtensionDeployment({
                 safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
-                safeExtensionV3: address(0), // TODO: not yet deployed on any chain
+                safeExtensionV3: 0x740003076c9F16c4a364AE07f3770FB77899299b,
                 aceSafeExtension: address(0), // deployed on Base only
-                aceSafeExtensionV3: address(0), // TODO: not yet deployed on any chain
+                aceSafeExtensionV3: 0x9a8ef946F18C4296e50f8DF0C97b5Cf5d1b5eCD2,
                 saftExtension: 0x109D2A13932bE393011835B308F81ce1992E365B,
                 saftExtensionV2: 0x37c2A0e801e569e01f0972186aF4DB01409e92c1,
-                saftExtensionV3: address(0), // TODO: not yet deployed on any chain
+                saftExtensionV3: 0x2Bf1b2f8f6009c5524886243CE4F2EF34e3d4957,
                 safteExtension: 0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C,
                 ethosSafteExtension: 0xC23fFF0B06aE5EBea862611F489b1329108ce603, // older SAFTEExtension code, used by the Ethos SAFTE template
                 safteExtensionV2: 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A,
-                safteExtensionV3: address(0), // TODO: not yet deployed on any chain
+                safteExtensionV3: 0xE79C2b4a35b2509b27686D025FB8Fbab2Ca49406,
                 tokenWarrantExtension: 0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4,
                 tokenWarrantExtensionV2: 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F,
-                tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on any chain
+                tokenWarrantExtensionV3: 0x3Bdb711517eEbd6A88D9Aa30B141adC43BAB033e,
                 shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
-                shareExtensionV3: address(0), // TODO: not yet deployed on any chain
-                fundInterestExtensionV3: address(0) // TODO: not yet deployed on any chain
+                shareExtensionV3: 0xa21C434379CC44bfeD6e3c1342e49951804ec30f,
+                fundInterestExtensionV3: 0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15
+            });
+        } else if (chainId == ETH || chainId == ETH_SEPOLIA) {
+            return ExtensionDeployment({
+                safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
+                safeExtensionV3: address(0), // TODO: not yet deployed on this chain
+                aceSafeExtension: address(0), // deployed on Base only
+                aceSafeExtensionV3: address(0), // TODO: not yet deployed on this chain
+                saftExtension: 0x109D2A13932bE393011835B308F81ce1992E365B,
+                saftExtensionV2: 0x37c2A0e801e569e01f0972186aF4DB01409e92c1,
+                saftExtensionV3: address(0), // TODO: not yet deployed on this chain
+                safteExtension: 0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C,
+                ethosSafteExtension: 0xC23fFF0B06aE5EBea862611F489b1329108ce603, // older SAFTEExtension code, used by the Ethos SAFTE template
+                safteExtensionV2: 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A,
+                safteExtensionV3: address(0), // TODO: not yet deployed on this chain
+                tokenWarrantExtension: 0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4,
+                tokenWarrantExtensionV2: 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F,
+                tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on this chain
+                shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
+                shareExtensionV3: address(0), // TODO: not yet deployed on this chain
+                fundInterestExtensionV3: address(0) // TODO: not yet deployed on this chain
             });
         } else {
             revert UnsupportedChain(chainId);

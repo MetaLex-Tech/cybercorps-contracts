@@ -6,6 +6,10 @@
 - [x] Check the tier 2 and tier 3 upgrades. Make sure that no legacy behavior breaks if a corp keeps the old version.
 - [x] Evaluate the effect of the `RoundManagerStorage.CyberCertData` field change.
 - [x] Review all public ABI changes that may impact front-ends and indexers
+- [x] Rehearse `script/upgrade-v5.s.sol` on Base Sepolia. Done on 2026-09-18. The eight core proxies,
+      the four live V1 and V2 extension proxies and the seven new V3 proxies are live there. The
+      implementation slots and the factory reference implementations were read back on chain.
+      Base Sepolia has no LegalDocRegistry and no Pump stack, so neither ran.
 
 ## Corp contracts
 
@@ -139,8 +143,12 @@ ShareExtensionV3, FundInterestExtensionV3.
 - The `ShareCertData` payloads of a ShareExtension proxy do not decode as `ShareCertDataLayer`.
 - FundInterestExtensionV3 has no earlier proxy.
 
-No known extension proxy on Base or on Base Sepolia runs V3 code. Each one fails
-`EXTENSION_TYPE_V3()`, `supportsSeriesExtensionData()` and `supportsResolvedExtensionData()`.
+No V1 or V2 extension proxy runs V3 code. Each one fails `EXTENSION_TYPE_V3()`,
+`supportsSeriesExtensionData()` and `supportsResolvedExtensionData()`.
+
+Base Sepolia holds the seven new proxies since 2026-09-18. `DeploymentConstants.extensions(84532)`
+carries the addresses, and `script/res/deployment-addresses.md` holds the run log. CREATE2 gives the
+same addresses on Base and on Ethereum, so the production run must reproduce them.
 
 A printer gets its extension when it is created. A v5 corp points its new printers at the new proxies.
 Existing printers stay on their V1 or V2 proxy. Add the new addresses to the front-end config.
