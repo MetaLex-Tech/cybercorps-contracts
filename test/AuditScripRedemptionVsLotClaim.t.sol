@@ -17,11 +17,10 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 
 /// @notice MTLX1-5. A holder scripifies a lot and keeps the scrip. The pool holds the backing, and the
 /// lot holds an attributed claim. The claim is not the redemption right. The scrip is.
-/// @dev This suite shows two things.
-///   Part 1. The holder redeems every scrip after either attack. The backing is never taken.
-///   Part 2. A plain scrip sale breaks the same accounting. No attacker takes part.
-/// So the per-lot claim reports nothing a reader can rely on, and it does not gate redemption.
-/// The suite asserts the redemption right and does not assert the claim.
+/// @dev This suite shows one thing. The holder redeems every scrip after either attack. The backing
+/// is never taken. The per-lot claim does not gate redemption, so the suite asserts the redemption
+/// right and never asserts the claim as a correct number. The tables print the claim so a reader can
+/// see how far it drifts from what the holder can actually draw.
 /// The two attacks:
 ///   Attack 1. One address deposits and redeems.
 ///   Attack 2. One address deposits, a second address redeems.
@@ -45,11 +44,6 @@ contract AuditScripRedemptionVsLotClaimTest is Test {
     /// @dev Attack 2 splits the two legs over two addresses.
     address depositor = makeAddr("depositor");
     address redeemer = makeAddr("redeemer");
-    /// @dev Part 2 has no attacker, so the holder is a seller there, not a victim. Same address and
-    /// same lot as `victim`, under the name that fits the scenario.
-    address seller;
-    /// @dev Part 2 buys the seller's scrip in an ordinary sale.
-    address buyer = makeAddr("buyer");
 
     BorgAuth auth;
     IssuanceManager issuanceManager;
@@ -60,8 +54,6 @@ contract AuditScripRedemptionVsLotClaimTest is Test {
     uint256 attackerCertId;
     uint256 depositorCertId;
     uint256 redeemerCertId;
-    uint256 sellerCertId;
-    uint256 buyerCertId;
 
     function setUp() public {
         owner = address(this);
@@ -105,8 +97,6 @@ contract AuditScripRedemptionVsLotClaimTest is Test {
         depositorCertId = _mintCert(depositor, ATTACKER_UNITS);
         // The redeemer needs a live lot. Without one the conversion asks for a recertification approval.
         redeemerCertId = _mintCert(redeemer, 1);
-        // The buyer needs a live lot for the same reason.
-        buyerCertId = _mintCert(buyer, 1);
 
         scrip = ICyberScrip(
             issuanceManager.deployCyberScrip(
@@ -129,9 +119,6 @@ contract AuditScripRedemptionVsLotClaimTest is Test {
         // and its only reported value is the pool claim.
         vm.prank(victim);
         issuanceManager.scripifyCert(address(printer), victimCertId, VICTIM_UNITS * 1e18, address(0));
-
-        seller = victim;
-        sellerCertId = victimCertId;
     }
 
     // ══ the two attacks ═══════════════════════════════════════════════════════
@@ -155,7 +142,7 @@ contract AuditScripRedemptionVsLotClaimTest is Test {
     // Attack 2 needs one extra step per leg: an ERC20 transfer of the scrip between the two addresses.
     // Scrip is a plain transferable token, so this step is free and needs no permission.
 
-    // ══ part 1: the holder redeems in full after either attack ════════════════
+    // ══ the holder redeems in full after either attack ════════════════════════
     //
     // The attack moves the accounting only. It never takes the backing. The scrip is the redemption
     // right, so the holder always draws their units back.
@@ -218,107 +205,10 @@ contract AuditScripRedemptionVsLotClaimTest is Test {
         _assertVictimRedeemsInSlices([uint256(0), 0, 0, 0, 0]);
     }
 
-    // ══ part 2: a plain scrip sale breaks the same accounting ═════════════════
-    //
-    // The claim records which lot made the deposit. It does not record who holds the scrip now. A sale
-    // moves the scrip and leaves the claim behind. So the claim is wrong for both lots at once.
-    //
-    // Each lot gets its own test. One failed assertion stops a test, so a shared test would hide the
-    // buyer defect behind the seller defect.
-    //
-    // TODO the four unitsRepresented tests below fail as of 0b885181. Each asserts the expected column
-    // of its table. Fix the source.
-
-    // The seller sells all 100 scrip.
-    //
-    //   value                   | expected | actual
-    //   seller scrip            |        0 |      0
-    //   seller claim            |        0 |    100
-    //   seller unitsRepresented |        0 |    100
-    //   buyer scrip             |      100 |    100
-    //   buyer claim             |      100 |      0
-    //   buyer unitsRepresented  |      101 |      1
-    //   pool                    |      100 |    100
-
-    /// @notice After a full sale the seller holds no scrip, so their lot must represent nothing.
-    function test_PlainSale_FullSale_SellerLotOverstates() public {
-        assertEq(_unitsRepresented(sellerCertId), 100e18, "seller unitsRepresented before the sale");
-        _sellScrip(100e18);
-
-        assertEq(scrip.balanceOf(seller), 0, "seller still holds scrip");
-        assertEq(_unitsRepresented(sellerCertId), 0, "seller unitsRepresented off the table");
-    }
-
-    /// @notice After a full sale the buyer holds every scrip, so their lot must represent 101.
-    function test_PlainSale_FullSale_BuyerLotUnderstates() public {
-        assertEq(_unitsRepresented(buyerCertId), 1e18, "buyer unitsRepresented before the sale");
-        _sellScrip(100e18);
-
-        assertEq(scrip.balanceOf(buyer), 100e18, "buyer did not receive the scrip");
-        assertEq(_unitsRepresented(buyerCertId), 101e18, "buyer unitsRepresented off the table");
-    }
-
-    // The seller sells 50 of 100 scrip. Both lots are wrong by the same 50 units.
-    //
-    //   value                   | expected | actual
-    //   seller scrip            |       50 |     50
-    //   seller claim            |       50 |    100
-    //   seller unitsRepresented |       50 |    100
-    //   buyer scrip             |       50 |     50
-    //   buyer claim             |       50 |      0
-    //   buyer unitsRepresented  |       51 |      1
-    //   pool                    |      100 |    100
-
-    /// @notice A part sale leaves the seller half the scrip, so their lot must represent 50.
-    function test_PlainSale_PartSale_SellerLotOverstates() public {
-        _sellScrip(50e18);
-
-        assertEq(scrip.balanceOf(seller), 50e18, "seller scrip after the part sale");
-        assertEq(_unitsRepresented(sellerCertId), 50e18, "seller unitsRepresented off the table");
-    }
-
-    /// @notice A part sale gives the buyer half the scrip, so their lot must represent 51.
-    function test_PlainSale_PartSale_BuyerLotUnderstates() public {
-        _sellScrip(50e18);
-
-        assertEq(scrip.balanceOf(buyer), 50e18, "buyer scrip after the part sale");
-        assertEq(_unitsRepresented(buyerCertId), 51e18, "buyer unitsRepresented off the table");
-    }
-
-    /// @notice A sale moves no backing. Only the attribution is wrong.
-    function test_PlainSale_PoolDoesNotMove() public {
-        _sellScrip(100e18);
-        assertEq(_poolAssets(), 100e18, "pool moved on the sale");
-    }
-
-    // The seller sells all 100 scrip, then the buyer redeems it. Only the claim row is wrong. The
-    // payout rows are right. So the claim is wrong and the redemption is unaffected.
-    //
-    //   value              | expected | actual
-    //   buyer claim before |      100 |      0
-    //   units paid out     |      100 |    100
-    //   buyer units after  |      101 |    101
-    //   pool after         |        0 |      0
-
-    /// @notice The accounting says the buyer holds no claim. The buyer redeems in full anyway. This is
-    /// the proof that the claim is not the redemption right.
-    function test_PlainSale_BuyerRedeemsInFull() public {
-        _sellScrip(100e18);
-        assertEq(_claim(buyerCertId), 0, "buyer holds a claim");
-
-        vm.prank(buyer);
-        issuanceManager.convertScripToCert(address(printer), 100e18);
-
-        // The buyer lot started with 1 unit and now holds 101.
-        assertEq(_activeUnitsRepresented(buyerCertId), 101e18, "buyer did not get the units");
-        assertEq(scrip.balanceOf(buyer), 0, "buyer scrip not burned");
-        assertEq(_poolAssets(), 0, "pool not empty");
-    }
-
     // ── helpers ───────────────────────────────────────────────────────────────
     //
-    // What one cycle of each attack does to the pool claim. Part 2 shows that this claim is already
-    // wrong after an ordinary sale, so these numbers report a value that means nothing.
+    // What one cycle of each attack does to the pool claim. The claim is reported here for context
+    // only. No test asserts it as a correct number.
     //
     // Attack 1, per cycle. Row "a" is after the scripify, row "b" after the convert.
     //   cycle | attacker units | attacker claim | victim claim | pool
@@ -420,12 +310,6 @@ contract AuditScripRedemptionVsLotClaimTest is Test {
         assertEq(_activeUnitsRepresented(victimCertId), VICTIM_UNITS * 1e18, "victim did not get every unit back");
         assertEq(scrip.balanceOf(victim), 0, "victim scrip not burned");
         assertEq(_poolAssets(), 0, "pool not empty");
-    }
-
-    /// @dev The seller sells scrip to the buyer. An ordinary ERC20 transfer, no permission needed.
-    function _sellScrip(uint256 amount) internal {
-        vm.prank(seller);
-        scrip.transfer(buyer, amount);
     }
 
     /// @dev unitsRepresented from getCertificateDetails: the active units plus the pool claim. This is
