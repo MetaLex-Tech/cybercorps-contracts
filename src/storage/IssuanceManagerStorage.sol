@@ -937,7 +937,8 @@ library IssuanceManagerStorage {
     /// @dev A fully scripified lot stays counted through its vault claim. Another party can remove that
     /// claim: an empty vault pool retires every position at once. The lot then holds zero units, but its
     /// status is not Void, so the tally still counts its holder and the holder cap refuses buyers on a count
-    /// that is too high. Permissionless, because a lot that still holds units cannot be voided here.
+    /// that is too high. The caller gate sits on IssuanceManager.voidEmptyCerts, which is admin only,
+    /// because another party can drive a lot's claim to zero while its holder still holds scrip.
     /// Already-void lots are skipped, so one of them does not fail the batch.
     function executeVoidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external {
         if (!isPrinter(certAddress)) revert NotAPrinter();

@@ -365,6 +365,7 @@ contract IssuanceManagerVaultEpochAdhocTest is VaultEpochHarness {
 // party can remove that claim: a conversion above the converter's own claim withdraws from the shared pool,
 // and an empty pool retires every position at once. The lot then holds zero effective units, its status is
 // still not Void, and the tally keeps counting its holder for ever. `voidEmptyCerts` is the repair.
+// It is admin only, so a third party cannot void a lot whose holder still holds redeemable scrip.
 //
 // Lot state                         | raw | claim | counted | voidEmptyCerts     | Test
 // ----------------------------------|-----|-------|---------|--------------------|--------------------------
@@ -525,7 +526,7 @@ contract IssuanceManagerEmptyLotTallyTest is VaultEpochHarness {
         issuanceManager.createCertAndAssign(address(cert), alice, _details(UNITS));
 
         uint256[] memory ids = _ids(0);
-        vm.prank(bob);
+        // The caller is an admin, so only the emptiness check can refuse this.
         vm.expectRevert(IssuanceManagerStorage.CertNotEmpty.selector);
         issuanceManager.voidEmptyCerts(address(cert), ids);
 

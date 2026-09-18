@@ -784,10 +784,11 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     }
 
     /// @notice Voids lots that hold no units and no vault claim, so the printer's holder tally stops
-    /// counting them. Permissionless: a lot that still holds units cannot be voided here.
+    /// counting them. Admin only: another party can drive a lot's vault claim to zero, so an open call
+    /// lets them void a holder's lot while that holder still holds redeemable scrip.
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenIds IDs of the lots to void
-    function voidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external {
+    function voidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external onlyAdmin {
         IssuanceManagerStorage.executeVoidEmptyCerts(certAddress, tokenIds);
     }
 

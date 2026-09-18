@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {ICyberScrip} from "../src/interfaces/ICyberScrip.sol";
 import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 
+import {BorgAuth} from "../src/libs/auth.sol";
 import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol";
 import {SecurityClass, SecuritySeries} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {VaultEpochHarness} from "./IssuanceManagerVaultEpochTest.t.sol";
@@ -26,8 +27,16 @@ contract AuditEconomicsScripVoidTest is VaultEpochHarness {
         assertEq(cert.getActiveCertificateDetails(1).unitsRepresented, 900e18);
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
-        vm.expectRevert(IssuanceManagerStorage.CertNotEmpty.selector);
+
+        // Two gates protect the lot. The attacker has no role.
+        bytes memory notAdmin =
+            abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.ADMIN_ROLE(), otherHolder);
+        vm.expectRevert(notAdmin);
         vm.prank(otherHolder);
+        issuanceManager.voidEmptyCerts(address(cert), ids);
+
+        // And the lot still holds a claim, so even an admin cannot void it.
+        vm.expectRevert(IssuanceManagerStorage.CertNotEmpty.selector);
         issuanceManager.voidEmptyCerts(address(cert), ids);
         assertFalse(cert.isVoided(0));
     }
@@ -206,7 +215,7 @@ contract AuditEconomicsScripVoidTest is VaultEpochHarness {
 
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
-        vm.prank(otherHolder);
+        // Only an admin can void the lot now. The redemption path still closes behind it.
         issuanceManager.voidEmptyCerts(address(cert), ids);
         assertTrue(cert.isVoided(0));
         assertFalse(cert.isLegalHolder(holder));
