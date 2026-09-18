@@ -697,6 +697,9 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
     }
 
+    // Units are 1e18, like production. See script/UpdateCertificate.s.sol.
+    // The pool index rounds down when it reads one certificate's share. At 1e18 the loss is one wei.
+    // With small counts the same loss is one whole unit, and a real error would hide behind it.
     function test_PostUpgrade_ForceBurnReducesPoolTotals() public {
         IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
         ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
@@ -708,7 +711,7 @@ contract CyberScripUpgradeForkTest is Test {
             issuanceManager,
             certPrinter,
             investor,
-            100
+            100e18
         );
 
         vm.prank(companyOwner);
@@ -728,32 +731,36 @@ contract CyberScripUpgradeForkTest is Test {
         );
 
         vm.prank(investor);
-        issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
+        issuanceManager.scripifyCert(address(certPrinter), certId, 10e18, address(0));
 
         (uint256 totalTrackedBefore,) = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
         (bool isScripifiedBefore, uint256 scripifiedUnitsBefore,) = issuanceManager
             .getCertScripifiedStatus(address(certPrinter), certId);
-        assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
-        assertEq(totalTrackedBefore, 20);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 20e18);
+        assertEq(totalTrackedBefore, 20e18);
         assertTrue(isScripifiedBefore);
-        assertEq(scripifiedUnitsBefore, 10);
+        assertEq(scripifiedUnitsBefore, 10e18);
 
         vm.prank(companyOwner);
-        issuanceManager.forceScripBurn(address(certPrinter), investor, 8);
+        issuanceManager.forceScripBurn(address(certPrinter), investor, 8e18);
 
         (uint256 totalTrackedAfter,) = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
         (bool isScripifiedAfter, uint256 scripifiedUnitsAfter,) = issuanceManager
             .getCertScripifiedStatus(address(certPrinter), certId);
-        assertEq(ICyberScrip(scrip).balanceOf(investor), 12);
-        assertEq(totalTrackedAfter, 12);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 12e18);
+        assertEq(totalTrackedAfter, 12e18);
         assertTrue(isScripifiedAfter);
-        assertEq(scripifiedUnitsAfter, 6);
+        // The index rounds down, so this reads one wei low. That is the documented pool dust.
+        assertApproxEqAbs(scripifiedUnitsAfter, 6e18, 1);
     }
 
+    // Units are 1e18, like production. See script/UpdateCertificate.s.sol.
+    // The pool index rounds down when it reads one certificate's share. At 1e18 the loss is one wei.
+    // With small counts the same loss is one whole unit, and a real error would hide behind it.
     function test_PostUpgrade_MultiHolderTransferAndRecertificationPoolAccounting()
         public
     {
@@ -762,69 +769,71 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(f.certPrinter.getActiveCertificateDetails(f.certIdA).unitsRepresented, 0);
         assertEq(f.certPrinter.getActiveCertificateDetails(f.certIdB).unitsRepresented, 0);
         assertEq(f.certPrinter.getActiveCertificateDetails(f.certIdC).unitsRepresented, 0);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdA).unitsRepresented, 10);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdB).unitsRepresented, 20);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdC).unitsRepresented, 50);
+        assertEq(f.certPrinter.getCertificateDetails(f.certIdA).unitsRepresented, 10e18);
+        assertEq(f.certPrinter.getCertificateDetails(f.certIdB).unitsRepresented, 20e18);
+        assertEq(f.certPrinter.getCertificateDetails(f.certIdC).unitsRepresented, 50e18);
 
-        assertEq(ICyberScrip(f.scrip).balanceOf(investor), 10);
-        assertEq(ICyberScrip(f.scrip).balanceOf(otherInvestor), 20);
-        assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 50);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdA), 10);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdB), 20);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdC), 50);
+        assertEq(ICyberScrip(f.scrip).balanceOf(investor), 10e18);
+        assertEq(ICyberScrip(f.scrip).balanceOf(otherInvestor), 20e18);
+        assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 50e18);
+        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdA), 10e18);
+        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdB), 20e18);
+        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdC), 50e18);
 
         vm.prank(investor);
-        ICyberScrip(f.scrip).transfer(f.newInvestor, 2);
+        ICyberScrip(f.scrip).transfer(f.newInvestor, 2e18);
         vm.prank(otherInvestor);
-        ICyberScrip(f.scrip).transfer(f.newInvestor, 4);
+        ICyberScrip(f.scrip).transfer(f.newInvestor, 4e18);
         vm.prank(f.thirdHolder);
-        ICyberScrip(f.scrip).transfer(f.newInvestor, 10);
+        ICyberScrip(f.scrip).transfer(f.newInvestor, 10e18);
 
-        assertEq(ICyberScrip(f.scrip).balanceOf(investor), 8);
-        assertEq(ICyberScrip(f.scrip).balanceOf(otherInvestor), 16);
-        assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 40);
-        assertEq(ICyberScrip(f.scrip).balanceOf(f.newInvestor), 16);
+        assertEq(ICyberScrip(f.scrip).balanceOf(investor), 8e18);
+        assertEq(ICyberScrip(f.scrip).balanceOf(otherInvestor), 16e18);
+        assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 40e18);
+        assertEq(ICyberScrip(f.scrip).balanceOf(f.newInvestor), 16e18);
 
         // ERC20 transfers do not move pool ownership.
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdA), 10);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdB), 20);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdC), 50);
+        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdA), 10e18);
+        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdB), 20e18);
+        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdC), 50e18);
 
         {
             (uint256 totalTrackedBefore,) = f.issuanceManager.getScripPoolTotals(
                 address(f.certPrinter)
             );
-            assertEq(totalTrackedBefore, 80);
+            assertEq(totalTrackedBefore, 80e18);
         }
 
         _approveRecertification(f.issuanceManager, address(f.certPrinter), f.newInvestor);
 
         vm.prank(f.newInvestor);
-        f.issuanceManager.convertScripToCert(address(f.certPrinter), 16);
+        f.issuanceManager.convertScripToCert(address(f.certPrinter), 16e18);
 
-        assertEq(ICyberScrip(f.scrip).balanceOf(investor), 8);
-        assertEq(ICyberScrip(f.scrip).balanceOf(otherInvestor), 16);
-        assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 40);
+        assertEq(ICyberScrip(f.scrip).balanceOf(investor), 8e18);
+        assertEq(ICyberScrip(f.scrip).balanceOf(otherInvestor), 16e18);
+        assertEq(ICyberScrip(f.scrip).balanceOf(f.thirdHolder), 40e18);
         assertEq(ICyberScrip(f.scrip).balanceOf(f.newInvestor), 0);
 
         (uint256 totalTrackedAfter,) = f.issuanceManager.getScripPoolTotals(
             address(f.certPrinter)
         );
-        assertEq(totalTrackedAfter, 64);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdA), 8);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdB), 16);
-        assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdC), 40);
+        // The pool total is exact. Only the per-certificate reads go through the index, and the
+        // index rounds down. Each one reads up to one wei low. That is the documented pool dust.
+        assertEq(totalTrackedAfter, 64e18);
+        assertApproxEqAbs(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdA), 8e18, 1);
+        assertApproxEqAbs(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdB), 16e18, 1);
+        assertApproxEqAbs(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), f.certIdC), 40e18, 1);
 
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdA).unitsRepresented, 8);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdB).unitsRepresented, 16);
-        assertEq(f.certPrinter.getCertificateDetails(f.certIdC).unitsRepresented, 40);
+        assertApproxEqAbs(f.certPrinter.getCertificateDetails(f.certIdA).unitsRepresented, 8e18, 1);
+        assertApproxEqAbs(f.certPrinter.getCertificateDetails(f.certIdB).unitsRepresented, 16e18, 1);
+        assertApproxEqAbs(f.certPrinter.getCertificateDetails(f.certIdC).unitsRepresented, 40e18, 1);
 
         uint256 newCertId = 3;
         assertEq(f.certPrinter.totalSupply(), 4);
         assertEq(f.certPrinter.ownerOf(newCertId), f.newInvestor);
-        assertEq(f.certPrinter.getCertificateDetails(newCertId).unitsRepresented, 16);
+        assertEq(f.certPrinter.getCertificateDetails(newCertId).unitsRepresented, 16e18);
         assertEq(f.issuanceManager.getScripPoolAmountById(address(f.certPrinter), newCertId), 0);
-        assertEq(f.certPrinter.getActiveCertificateDetails(newCertId).unitsRepresented, 16);
+        assertEq(f.certPrinter.getActiveCertificateDetails(newCertId).unitsRepresented, 16e18);
     }
 
     // work around stack-too-deep
@@ -837,9 +846,9 @@ contract CyberScripUpgradeForkTest is Test {
         f.thirdHolder = vm.addr(uint256(keccak256("cyberscrip-upgrade-third-holder")));
         f.newInvestor = vm.addr(uint256(keccak256("cyberscrip-upgrade-new-investor")));
 
-        f.certIdA = _mintCertAfterUpgrade(f.issuanceManager, f.certPrinter, investor, 10);
-        f.certIdB = _mintCertAfterUpgrade(f.issuanceManager, f.certPrinter, otherInvestor, 20);
-        f.certIdC = _mintCertAfterUpgrade(f.issuanceManager, f.certPrinter, f.thirdHolder, 50);
+        f.certIdA = _mintCertAfterUpgrade(f.issuanceManager, f.certPrinter, investor, 10e18);
+        f.certIdB = _mintCertAfterUpgrade(f.issuanceManager, f.certPrinter, otherInvestor, 20e18);
+        f.certIdC = _mintCertAfterUpgrade(f.issuanceManager, f.certPrinter, f.thirdHolder, 50e18);
 
         vm.prank(companyOwner);
         f.scrip = f.issuanceManager.deployCyberScrip(
@@ -858,11 +867,11 @@ contract CyberScripUpgradeForkTest is Test {
         );
 
         vm.prank(investor);
-        f.issuanceManager.scripifyCert(address(f.certPrinter), f.certIdA, 10, address(0));
+        f.issuanceManager.scripifyCert(address(f.certPrinter), f.certIdA, 10e18, address(0));
         vm.prank(otherInvestor);
-        f.issuanceManager.scripifyCert(address(f.certPrinter), f.certIdB, 20, address(0));
+        f.issuanceManager.scripifyCert(address(f.certPrinter), f.certIdB, 20e18, address(0));
         vm.prank(f.thirdHolder);
-        f.issuanceManager.scripifyCert(address(f.certPrinter), f.certIdC, 50, address(0));
+        f.issuanceManager.scripifyCert(address(f.certPrinter), f.certIdC, 50e18, address(0));
     }
 
     function test_PostUpgrade_RequiresIssuerApprovalCondition() public {

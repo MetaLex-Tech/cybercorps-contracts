@@ -221,8 +221,8 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
             bytes1 b = bytes1(uint8(uint160(_addr) >> (8 * (19 - i))));
             uint8 hi = uint8(b) >> 4;
             uint8 lo = uint8(b) & 0x0f;
-            s[2*i] = bytes1(hi + (hi < 10 ? 48 : 87));
-            s[2*i+1] = bytes1(lo + (lo < 10 ? 48 : 87));
+            s[2 * i] = bytes1(hi + (hi < 10 ? 48 : 87));
+            s[2 * i + 1] = bytes1(lo + (lo < 10 ? 48 : 87));
         }
         return string(abi.encodePacked("0x", s));
     }
@@ -241,7 +241,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         bytes memory bstr = new bytes(len);
         uint256 k = len;
         while (_i != 0) {
-            k = k-1;
+            k = k - 1;
             uint8 temp = uint8(48 + (_i % 10));
             bytes1 b1 = bytes1(temp);
             bstr[k] = b1;
@@ -258,9 +258,9 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         uint256 valueInCents = value / 1e16;
         uint256 wholePart = valueInCents / 100;
         uint256 centsPart = valueInCents % 100;
-        
+
         string memory wholeStr = uint256ToString(wholePart);
-        
+
         // Format cents with leading zero if needed
         string memory centsStr;
         if (centsPart < 10) {
@@ -268,7 +268,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         } else {
             centsStr = uint256ToString(centsPart);
         }
-        
+
         return string(abi.encodePacked(wholeStr, ".", centsStr));
     }
 
@@ -282,8 +282,8 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         bytes memory bytesArray = new bytes(64);
         for (uint256 i = 0; i < 32; i++) {
             uint8 b = uint8(uint8(bytes1(bytes32(_bytes32) >> (8 * (31 - i)))));
-            bytesArray[i*2] = bytes1(uint8(b/16 + (b/16 < 10 ? 48 : 87)));
-            bytesArray[i*2+1] = bytes1(uint8(b%16 + (b%16 < 10 ? 48 : 87)));
+            bytesArray[i * 2] = bytes1(uint8(b / 16 + (b / 16 < 10 ? 48 : 87)));
+            bytesArray[i * 2 + 1] = bytes1(uint8(b % 16 + (b % 16 < 10 ? 48 : 87)));
         }
         return string(bytesArray);
     }
@@ -294,12 +294,12 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         bytes memory hexString = new bytes(2 + data.length * 2);
         hexString[0] = "0";
         hexString[1] = "x";
-        
-        for(uint i = 0; i < data.length; i++) {
-            hexString[2 + i*2] = hexChars[uint8(data[i] >> 4)];
-            hexString[2 + i*2 + 1] = hexChars[uint8(data[i] & 0x0f)];
+
+        for (uint256 i = 0; i < data.length; i++) {
+            hexString[2 + i * 2] = hexChars[uint8(data[i] >> 4)];
+            hexString[2 + i * 2 + 1] = hexChars[uint8(data[i] & 0x0f)];
         }
-        
+
         return string(hexString);
     }
 
@@ -312,7 +312,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
             return "";
         }
         bytes memory result = new bytes(strBytes.length - 7);
-        for (uint i = 7; i < strBytes.length; i++) {
+        for (uint256 i = 7; i < strBytes.length; i++) {
             result[i - 7] = strBytes[i];
         }
         return string(result);
@@ -326,7 +326,9 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
     function _optionalString(address target, bytes memory input) internal view returns (string memory) {
         try this.readOptionalString(target, input) returns (string memory value) {
             return value;
-        } catch { return ""; }
+        } catch {
+            return "";
+        }
     }
 
     function _optionalAddress(address target, bytes memory input) private view returns (address) {
@@ -340,13 +342,18 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
     }
 
     function _issueTimestamp(address certificate, uint256 tokenId) private view returns (uint256) {
-        (bool ok, uint256 value) = MetadataCall.word(certificate, abi.encodeCall(ILedgerEntryToken.issueTimestamp, (tokenId)));
+        (bool ok, uint256 value) =
+            MetadataCall.word(certificate, abi.encodeCall(ILedgerEntryToken.issueTimestamp, (tokenId)));
         return ok && value <= 253402300799 ? value : 0;
     }
 
-    function _buildImage(CertificateSVGParams memory certificate, RestrictiveLegend[] memory legends,
-        address token, address owner, uint256 consideration) private view returns (string memory)
-    {
+    function _buildImage(
+        CertificateSVGParams memory certificate,
+        RestrictiveLegend[] memory legends,
+        address token,
+        address owner,
+        uint256 consideration
+    ) private view returns (string memory) {
         CertificateSVGParamsV2 memory params;
         params.certificate = certificate;
         params.issuerAddress = _issuer(token);
@@ -357,14 +364,21 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         for (uint256 i; i < legends.length; ++i) {
             params.transferRestrictions[i] = bytes(legends[i].text).length == 0 ? legends[i].title : legends[i].text;
         }
-        (bool ok, uint256 status) = MetadataCall.word(token, abi.encodeCall(ILedgerEntryToken.isVoided, (certificate.tokenId)));
+        (bool ok, uint256 status) =
+            MetadataCall.word(token, abi.encodeCall(ILedgerEntryToken.isVoided, (certificate.tokenId)));
         params.statusKnown = ok && status <= 1;
         params.isVoided = params.statusKnown && status == 1;
         uint256 timestamp = _issueTimestamp(token, certificate.tokenId);
-        string memory svg = _optionalString(imageBuilder, abi.encodeCall(ICertificateImageBuilderV2.buildCertificateSVGV2, (params, timestamp)));
+        string memory svg = _optionalString(
+            imageBuilder, abi.encodeCall(ICertificateImageBuilderV2.buildCertificateSVGV2, (params, timestamp))
+        );
         // Allows upgrading the URI implementation before the image builder, and rolling it back.
         // Old renderers interpret zero as 1970; do not fabricate a date when downgrading.
-        if (bytes(svg).length == 0 && timestamp != 0) svg = _optionalString(imageBuilder, abi.encodeCall(ICertificateImageBuilder.buildCertificateSVG, (certificate, timestamp)));
+        if (bytes(svg).length == 0 && timestamp != 0) {
+            svg = _optionalString(
+                imageBuilder, abi.encodeCall(ICertificateImageBuilder.buildCertificateSVG, (certificate, timestamp))
+            );
+        }
         return bytes(svg).length == 0 ? "" : string.concat("data:image/svg+xml;base64,", Base64.encode(bytes(svg)));
     }
 
@@ -379,10 +393,14 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         SecuritySeries securitySeries,
         string memory certificateUri
     ) internal pure returns (string memory) {
-        return string(abi.encodePacked(
-            _buildAttributesPart1(owner, details, cyberCORPName, cyberCORPType),
-            _buildAttributesPart2(cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri)
-        ));
+        return string(
+            abi.encodePacked(
+                _buildAttributesPart1(owner, details, cyberCORPName, cyberCORPType),
+                _buildAttributesPart2(
+                    cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri
+                )
+            )
+        );
     }
 
     function _buildAttributesPart1(
@@ -452,11 +470,20 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
     function readAgreementDetails(address registry, bytes32 agreementId, bytes calldata signature)
         external view returns (string memory)
     {
-        (, , string[] memory globalFields, string[] memory partyFields, string[] memory globalValues, ,
-            string[][] memory partyValues, , , ) = abi.decode(
-                MetadataCall.read(registry, abi.encodeCall(ICyberAgreementRegistry.getContractDetails, (agreementId))),
-                (bytes32, string, string[], string[], string[], address[], string[][], uint256[], uint256, bool)
-            );
+        (
+            ,
+            ,
+            string[] memory globalFields,
+            string[] memory partyFields,
+            string[] memory globalValues,
+            ,
+            string[][] memory partyValues,
+            ,
+            ,
+        ) = abi.decode(
+            MetadataCall.read(registry, abi.encodeCall(ICyberAgreementRegistry.getContractDetails, (agreementId))),
+            (bytes32, string, string[], string[], string[], address[], string[][], uint256[], uint256, bool)
+        );
         string memory fields = _fieldPairs(globalFields, globalValues);
         if (partyValues.length > 0 && partyValues[0].length > 0) {
             fields = _joinField(fields, string.concat('"companyDetails": {', _fieldPairs(partyFields, partyValues[0]), '}'));
@@ -734,7 +761,6 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         address newImplementation
     ) internal virtual override onlyOwner {}
 }
-
 
 /// [MIT License]
 /// @title Base64

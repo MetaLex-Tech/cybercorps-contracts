@@ -1,0 +1,405 @@
+Warning: This is a nightly build of Foundry. It is recommended to use the latest stable version. Visit https://book.getfoundry.sh/announcements for more information. 
+To mute this warning set `FOUNDRY_DISABLE_NIGHTLY_WARNING` in your environment. 
+
+Compiling 13 files with Solc 0.8.28
+Solc 0.8.28 finished in 189.78s
+Compiler run successful with warnings:
+Warning (2072): Unused local variable.
+   --> src/storage/LedgerEntryTokenStorage.sol:982:13:
+    |
+982 |             uint256 _maxUnitsRepresented
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+    --> src/storage/LedgerEntryTokenStorage.sol:1065:27:
+     |
+1065 |     function setExtension(uint256 tokenId, address extension) internal {
+     |                           ^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+    --> src/storage/LedgerEntryTokenStorage.sol:1069:27:
+     |
+1069 |     function getExtension(uint256 tokenId) internal view returns (address) {
+     |                           ^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/LedgerEntryToken.sol:571:27:
+    |
+571 |     function getExtension(uint256 tokenId) external view returns (address) {
+    |                           ^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/LedgerEntryToken.sol:579:27:
+    |
+579 |     function setExtension(uint256 tokenId, address extension) external onlyIssuanceManager {
+    |                           ^^^^^^^^^^^^^^^
+
+Warning (2072): Unused local variable.
+   --> test/IssuanceManagerConversionTest.t.sol:457:9:
+    |
+457 |         uint256 safeId = issuanceManager.createCert(address(safePrinter), investor, details);
+    |         ^^^^^^^^^^^^^^
+
+Warning (2072): Unused local variable.
+   --> test/IssuanceManagerConversionTest.t.sol:462:9:
+    |
+462 |         uint256 expectedShares = (details.investmentAmountUSD * (10 ** priceDec)) / priceBasis; // 10,000
+    |         ^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> test/mock/MockTransferHook.sol:20:9:
+   |
+20 |         address from,
+   |         ^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> test/mock/MockTransferHook.sol:21:9:
+   |
+21 |         address to,
+   |         ^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> test/mock/MockTransferHook.sol:22:9:
+   |
+22 |         uint256 amount,
+   |         ^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> test/mock/MockTransferHook.sol:23:9:
+   |
+23 |         bytes memory data
+   |         ^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> test/mock/MockTransferHook.sol:32:9:
+   |
+32 |         address from,
+   |         ^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> test/mock/MockTransferHook.sol:33:9:
+   |
+33 |         address to,
+   |         ^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> test/mock/MockTransferHook.sol:34:9:
+   |
+34 |         uint256 amount,
+   |         ^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> test/mock/MockTransferHook.sol:35:9:
+   |
+35 |         bytes memory data
+   |         ^^^^^^^^^^^^^^^^^
+
+Warning (2018): Function state mutability can be restricted to view
+   --> src/IssuanceManager.sol:852:5:
+    |
+852 |     function _authorizeUpgrade(
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/ScripPOC.t.sol:146:5:
+    |
+146 |     function tokenByIndex(uint256 index) external view returns (uint256) { return index; }
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/ScripPOC.t.sol:465:5:
+    |
+465 |     function test_POC6_AssignCert_TransferCommentedOut() public {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/ScripPOC.t.sol:527:5:
+    |
+527 |     function test_POC9_SetExtension_IgnoresTokenId() public {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/ScripPOC.t.sol:576:5:
+    |
+576 |     function test_POC14_ManualSelectorHash_MatchesButFragile() public {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+
+Ran 4 tests for test/LegalOwnerBugFix.t.sol:LegalOwnerBugPOCTest
+[PASS] test_CreateCert_EmitsLegalOwnerChanged() (gas: 555822)
+[PASS] test_POC_CreateCertAndAssign_AlsoLeavesLegalOwnerUnset() (gas: 691841)
+[PASS] test_POC_CreateCert_MintsNftButLeavesLegalOwnerUnset() (gas: 559270)
+[PASS] test_POC_ScripifyRevertsBecauseLegalOwnerIsZeroAddress() (gas: 1223894)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 19.20ms (8.69ms CPU time)
+
+Ran 13 tests for test/IssuanceManagerScripComplianceTest.t.sol:IssuanceManagerScripComplianceTest
+[PASS] test_accessControl_onlyAdmin() (gas: 125566)
+[PASS] test_disableForceBurn_blocksForceBurn() (gas: 109745)
+[PASS] test_disableForceTransfer_blocksForceTransfer() (gas: 47415)
+[PASS] test_forceScripBurn_callableViaInterface() (gas: 113216)
+[PASS] test_forceScripBurn_reducesBalance() (gas: 113084)
+[PASS] test_forceTransfer_ignoresHookAndFreeze() (gas: 151528)
+[PASS] test_scripifyCert_revertsWhenAmountExceedsFreeUnits() (gas: 139929)
+[PASS] test_scripifyCert_succeedsUpToFreeUnits() (gas: 286109)
+[PASS] test_setFrozen_blocksTransfers() (gas: 69428)
+[PASS] test_setMaxHolderCount_callableByIssuanceManager() (gas: 47528)
+[PASS] test_setMaxHolderCount_capIsEnforcedWhenSetByAdmin() (gas: 156030)
+[PASS] test_setMaxHolderCount_revertsForNonAdmin() (gas: 35721)
+[PASS] test_setRestrictionHook_updatesHook() (gas: 67188)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 23.76ms (9.40ms CPU time)
+
+Ran 49 tests for test/CyberScripTest.t.sol:CyberScripTest
+[PASS] test_Bridge_ConvertScripToCertSimulation() (gas: 41532)
+[PASS] test_Bridge_FullScripifySimulation() (gas: 80193)
+[PASS] test_Bridge_PartialScripifySimulation() (gas: 57748)
+[PASS] test_BurnFromBypassesHooksAndFreeze() (gas: 78980)
+[PASS] test_CanTransfer_AllowsTransferToExistingHolderAtLimit() (gas: 109309)
+[PASS] test_CanTransfer_FalseWhenFrozen() (gas: 51989)
+[PASS] test_CanTransfer_FalseWhenHookDenies() (gas: 43450)
+[PASS] test_CanTransfer_RespectsHolderLimit() (gas: 73559)
+[PASS] test_CanTransfer_TrueForMintOrBurn() (gas: 19140)
+[PASS] test_CanTransfer_TrueForSelfOrZeroAmount() (gas: 22483)
+[PASS] test_ComplianceGuards_AdminCanUseOneWayDisables() (gas: 94002)
+[PASS] test_ComplianceGuards_RejectUnprivilegedCaller() (gas: 112869)
+[PASS] test_CurrentHolderCount_MatchesStorage() (gas: 17608)
+[PASS] test_DisableForceBurn_EmitsEvent() (gas: 29155)
+[PASS] test_DisableForceTransfer_EmitsEvent() (gas: 29759)
+[PASS] test_DisableFreezeAfterFrozen_AllowsTransfer() (gas: 112519)
+[PASS] test_DisableFreeze_EmitsEvent() (gas: 30206)
+[PASS] test_DisableIdempotent_NoRevertTwice() (gas: 39546)
+[PASS] test_Disable_Features() (gas: 41907)
+[PASS] test_ForceBurn_IgnoresHooksAndFreeze() (gas: 77408)
+[PASS] test_ForceBurn_ZeroAddressReverts() (gas: 22378)
+[PASS] test_ForceTransfer_IgnoresHooksAndFreeze() (gas: 156392)
+[PASS] test_ForceTransfer_ZeroAddressReverts() (gas: 38391)
+[PASS] test_FreezeBlocksNormalTransfer() (gas: 78213)
+[PASS] test_FreezeStatusUpdatedEventAndGetter() (gas: 51428)
+[PASS] test_HolderCount_BurnToZero() (gas: 30616)
+[PASS] test_HolderCount_InitAndTransferAllUpdates() (gas: 83726)
+[PASS] test_Init_TogglesDisabled_And_UsageReverts() (gas: 2727270)
+[PASS] test_Init_TogglesEnabled() (gas: 20330)
+[PASS] test_Initialization() (gas: 40698)
+[PASS] test_IssuanceManagerBurn() (gas: 41386)
+[PASS] test_MaxHolderCountBlocksMint() (gas: 70312)
+[PASS] test_MaxHolderCountBlocksTransfer() (gas: 75261)
+[PASS] test_MintRespectsFreeze() (gas: 55650)
+[PASS] test_MultipleHooks_SecondDenies() (gas: 488282)
+[PASS] test_RemainingSlots_Unlimited() (gas: 16148)
+[PASS] test_RemainingSlots_WithLimit() (gas: 107088)
+[PASS] test_RevertWhen_NonIssuanceManagerBurns() (gas: 20713)
+[PASS] test_RevertWhen_TransfersDisabledByHook() (gas: 48261)
+[PASS] test_RevertWhen_UnauthorizedBridgeBurn() (gas: 20386)
+[PASS] test_RevertWhen_UnauthorizedBridgeMint() (gas: 20245)
+[PASS] test_RevertWhen_UnprivilegedCallerUpdatesHooks() (gas: 35496)
+[PASS] test_SetMaxHolderCount_EmitsEvent() (gas: 45628)
+[PASS] test_SetRestrictionHookEmptyClearsChecks() (gas: 86090)
+[PASS] test_TransferAllowed() (gas: 79487)
+[PASS] test_TransferFromRespectsRestrictions() (gas: 132792)
+[PASS] test_TransferRestrictionHooksLengthAndAccessor() (gas: 23059)
+[PASS] test_UpdateTransferRestrictionHooks() (gas: 88193)
+[PASS] test_WillCreateNewHolder_Behavior() (gas: 29558)
+Suite result: ok. 49 passed; 0 failed; 0 skipped; finished in 29.02ms (20.91ms CPU time)
+
+Ran 11 tests for test/IssuanceManagerTest.t.sol:IssuanceManagerTest
+[PASS] test_createCertAndAssign_emitsCertificateCreated() (gas: 1116892)
+[PASS] test_createCertPrinter_CreatesAndPairsCanonicalClass() (gas: 809461)
+[PASS] test_createCertSignAndAssign_emitsCertificateCreated() (gas: 1114884)
+[PASS] test_createCert_emitsCertificateCreated() (gas: 986308)
+[PASS] test_defineSecurityClass_RevertsForExistingSecurityType() (gas: 470464)
+[PASS] test_isPrinter_FalseForUnknownAddress() (gas: 469696)
+[PASS] test_isPrinter_TracksMultiplePrinters() (gas: 802145)
+[PASS] test_isPrinter_TrueForCreatedPrinter() (gas: 465956)
+[PASS] test_updateSecurityClass_KeepsIndexWhenTypeUnchanged() (gas: 508204)
+[PASS] test_updateSecurityClass_ReindexesOnTypeChange() (gas: 920416)
+[PASS] test_updateSecurityClass_RevertsWhenTargetTypeAlreadyDefined() (gas: 553329)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 31.38ms (20.74ms CPU time)
+
+Ran 15 tests for test/ScripPOC.t.sol:ScripPOCTest
+[PASS] test_POC11_PerTokenHooks_StoredButNotEnforced() (gas: 493524)
+[PASS] test_POC14_ManualSelectorHash_MatchesButFragile() (gas: 3661)
+[PASS] test_POC1_DeployCyberScrip_OwnerSucceeds() (gas: 421440)
+[PASS] test_POC1_DeployCyberScrip_RejectsUnauthorized() (gas: 32825)
+[PASS] test_POC2_AddIssuerSignature_Implemented() (gas: 314142)
+[PASS] test_POC3_ForceBurn_HolderCountTracked() (gas: 3154806)
+[PASS] test_POC3_ForceTransfer_HolderCountTracked() (gas: 3229166)
+[PASS] test_POC3_MaxHolderCount_RespectedAfterForceOps() (gas: 3270680)
+[PASS] test_POC4_ConvertScripToCert_CreatesNewWhenNoVoidedFound() (gas: 899802)
+[PASS] test_POC4_FullScripifyCert_SendsToDealManager() (gas: 904368)
+[PASS] test_POC4_PartialScripifyCert_CertStaysWithOwner() (gas: 924656)
+[PASS] test_POC5_GetEndorsementHistory_InterfaceMismatch() (gas: 1119613)
+[PASS] test_POC6_AssignCert_TransferCommentedOut() (gas: 3806)
+[PASS] test_POC8_ConvertScripToCert_StaleDataOnReform() (gas: 991961)
+[PASS] test_POC9_SetExtension_IgnoresTokenId() (gas: 3850)
+Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 36.49ms (25.11ms CPU time)
+
+Ran 1 test for test/IssuanceManagerFactoryTest.t.sol:IssuanceManagerFactoryTest
+[PASS] test_initialize() (gas: 12209356)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 7.22ms (1.87ms CPU time)
+
+Ran 7 tests for test/IssuanceManagerVaultEpochTest.t.sol:IssuanceManagerEmptyLotTallyTest
+[PASS] test_Drained_BatchRepairsAll() (gas: 3298503)
+[PASS] test_Drained_ViaCrossHolderConversion() (gas: 2565500)
+[PASS] test_Drained_ViaForceScripBurn() (gas: 2444622)
+[PASS] test_RefusesLotWithUnits() (gas: 1219978)
+[PASS] test_RejectsNonPrinter() (gas: 22079)
+[PASS] test_ScripifiedLot_StaysCountedAndIsNotEmpty() (gas: 2548016)
+[PASS] test_SkipsAlreadyVoidLot() (gas: 1827572)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 64.26ms (53.81ms CPU time)
+
+Ran 15 tests for test/IssuanceManagerSecondaryTransferTest.t.sol:IssuanceManagerSecondaryTransferTest
+[PASS] test_RevertIf_SecondaryTransfer_SellerCertVoided() (gas: 1517879)
+[PASS] test_SecondaryTransfer_AdministeredHosting_MintsLotPerFillByLegalOwner() (gas: 3608121)
+[PASS] test_SecondaryTransfer_AdministeredHosting_MultisigCustodiesBuyerOwns() (gas: 1974517)
+[PASS] test_SecondaryTransfer_DoesNotMergeIntoPrimaryCert() (gas: 2588167)
+[PASS] test_SecondaryTransfer_FullSale_VoidsSellerMintsBuyer() (gas: 2030429)
+[PASS] test_SecondaryTransfer_PartialSale_DecrementsSeller() (gas: 2101408)
+[PASS] test_SecondaryTransfer_RepeatPurchase_MintsDistinctLots() (gas: 2814144)
+[PASS] test_SecondaryTransfer_ScripifiedSellerToken_DecrementsRawUnits() (gas: 2701075)
+[PASS] test_SecondaryTransfer_ScripifiedSellerToken_FullRawSale_KeepsLotForVaultClaim() (gas: 2676220)
+[PASS] test_SecondaryTransfer_ScripifiedSellerToken_ScripRedeemedBeforeSale_StillVoids() (gas: 2611595)
+[PASS] test_SecondaryTransfer_ScripifiedSellerToken_SweeperVoidsLotOnceClaimIsGone() (gas: 2589445)
+[PASS] test_SetAcquisitionTimestamp_AdminOverridesMintStamp() (gas: 1170477)
+[PASS] test_SetIssueTimestamp_AdminOverridesMintStamp() (gas: 1173788)
+[PASS] test_UpdateCertificateTackedFromAcquisitionDate_AdminOverrides() (gas: 2828299)
+[PASS] test_UpdateCertificateTackedFromAcquisitionDate_RevertsOnNonFundInterestCert() (gas: 1144583)
+Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 102.12ms (92.79ms CPU time)
+
+Ran 28 tests for test/IssuanceManagerConversionTest.t.sol:IssuanceManagerConversionTest
+[PASS] test_ComplexScripPoolAccounting_FiveHolders_MixedRecertifications() (gas: 7116981)
+[PASS] test_ComplexScripPoolAccounting_FourHolders_MixedRecertificationsAndNewInvestors() (gas: 6678019)
+[PASS] test_DeployCyberScrip_SetsDefaultRatio() (gas: 823466)
+[PASS] test_GetScripRatio_DefaultsToOneWhenUnset() (gas: 435754)
+[PASS] test_RevertWhen_ScripifyRatioRemainder() (gas: 1471741)
+[PASS] test_RevertWhen_SetScripRatioZeroNumeratorOrDenominator() (gas: 440683)
+[PASS] test_ScripRatio_AppliesOnScripifyAndConvert() (gas: 1753290)
+[PASS] test_ScripRatio_CannotBeLoweredWhileScripOutstanding() (gas: 2595067)
+[PASS] test_ScripRatio_CannotBeRaisedWhileScripOutstanding() (gas: 2396567)
+[PASS] test_ScripRatio_OwnerRoleHolderCannotRepriceOutstandingScrip() (gas: 2617399)
+[PASS] test_ScripRatio_SettableBeforeIssuanceAndAfterFullRedemption() (gas: 1852127)
+[PASS] test_ScripifyAndUnscripify_WithConditions() (gas: 2413605)
+[PASS] test_ScripifyWhitelist_EnabledAllowsWhitelisted() (gas: 1778404)
+[PASS] test_ScripifyWhitelist_EnabledBlocksNonWhitelisted() (gas: 1494567)
+[PASS] test_ScripifyWhitelist_ToggleAndUpdate() (gas: 1827078)
+[PASS] test_TwoHolders_ScripTransferThenRecertify_UpdatesUnitsAsExpected() (gas: 2710862)
+[PASS] test_convertSAFE_floor_minPicksLower() (gas: 651029)
+[PASS] test_convertScripToCert_AllowsNonOwnerMintPath() (gas: 2570711)
+[PASS] test_convertScripToCert_RequiresNativeRecertificationApproval() (gas: 2649131)
+[PASS] test_convertScripToCert_RevertsWhenSourceAccountFrozen() (gas: 1757116)
+[PASS] test_convertScripToCert_ignoresVoidedCertAndMintsNewCertificate() (gas: 3238476)
+[PASS] test_convertScripToCert_parameterLifecycleAndRuntimeUpdates() (gas: 1897714)
+[PASS] test_convertScripToCert_revertGatesAndConditionValidation() (gas: 2868504)
+[PASS] test_createCertAndAssignWithName_storesEndorsementSignatureAndTimestamp() (gas: 1247965)
+[PASS] test_createCertAndAssignWithName_withoutSignature_skipsIssuerSignatureStorage() (gas: 1176216)
+[PASS] test_scripifyCert_RevertsWhenLegalOwnerFrozen() (gas: 1768948)
+[PASS] test_setCertLookThroughBadge_AdminWiresBadgeOnPrinter() (gas: 469903)
+[PASS] test_setCertLookThroughBadge_NonAdminReverts() (gas: 445948)
+Suite result: ok. 28 passed; 0 failed; 0 skipped; finished in 135.98ms (200.09ms CPU time)
+
+Ran 4 tests for test/IssuanceManagerProportionalVaultTest.t.sol:ProportionalVaultMathTest
+[PASS] testFuzz_BalanceMatchesFullPrecision(uint256,uint256,uint256,uint16) (runs: 256, μ: 4482, ~: 4488)
+[PASS] testFuzz_ReductionIsNormalizedAndConservative(uint256,uint256,uint256) (runs: 256, μ: 11073, ~: 11000)
+[PASS] test_257BitIntermediateQuotient() (gas: 5152)
+[PASS] test_FullWidthBigIntegerReferenceVectors() (gas: 384061)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 166.97ms (170.32ms CPU time)
+
+Ran 30 tests for test/IssuanceManagerRecertTokenUriRegression.t.sol:IssuanceManagerRecertTokenUriRegressionTest
+[PASS] test_ComplexScripPoolAccounting_FiveHolders_MixedRecertifications() (gas: 7117025)
+[PASS] test_ComplexScripPoolAccounting_FourHolders_MixedRecertificationsAndNewInvestors() (gas: 6678063)
+[PASS] test_DeployCyberScrip_SetsDefaultRatio() (gas: 823510)
+[PASS] test_GetScripRatio_DefaultsToOneWhenUnset() (gas: 435754)
+[PASS] test_HolderOneScripify50ThenRecertify25() (gas: 2502975)
+[PASS] test_ReCertBackToOriginalCert_TokenURIReflectsFlooredAttribution() (gas: 3413245)
+[PASS] test_RevertWhen_ScripifyRatioRemainder() (gas: 1471741)
+[PASS] test_RevertWhen_SetScripRatioZeroNumeratorOrDenominator() (gas: 440705)
+[PASS] test_ScripRatio_AppliesOnScripifyAndConvert() (gas: 1753290)
+[PASS] test_ScripRatio_CannotBeLoweredWhileScripOutstanding() (gas: 2595089)
+[PASS] test_ScripRatio_CannotBeRaisedWhileScripOutstanding() (gas: 2396611)
+[PASS] test_ScripRatio_OwnerRoleHolderCannotRepriceOutstandingScrip() (gas: 2617443)
+[PASS] test_ScripRatio_SettableBeforeIssuanceAndAfterFullRedemption() (gas: 1852171)
+[PASS] test_ScripifyAndUnscripify_WithConditions() (gas: 2413649)
+[PASS] test_ScripifyWhitelist_EnabledAllowsWhitelisted() (gas: 1778404)
+[PASS] test_ScripifyWhitelist_EnabledBlocksNonWhitelisted() (gas: 1494611)
+[PASS] test_ScripifyWhitelist_ToggleAndUpdate() (gas: 1827100)
+[PASS] test_TwoHolders_ScripTransferThenRecertify_UpdatesUnitsAsExpected() (gas: 2710935)
+[PASS] test_convertSAFE_floor_minPicksLower() (gas: 651029)
+[PASS] test_convertScripToCert_AllowsNonOwnerMintPath() (gas: 2570755)
+[PASS] test_convertScripToCert_RequiresNativeRecertificationApproval() (gas: 2649175)
+[PASS] test_convertScripToCert_RevertsWhenSourceAccountFrozen() (gas: 1757160)
+[PASS] test_convertScripToCert_ignoresVoidedCertAndMintsNewCertificate() (gas: 3238476)
+[PASS] test_convertScripToCert_parameterLifecycleAndRuntimeUpdates() (gas: 1897694)
+[PASS] test_convertScripToCert_revertGatesAndConditionValidation() (gas: 2868526)
+[PASS] test_createCertAndAssignWithName_storesEndorsementSignatureAndTimestamp() (gas: 1247987)
+[PASS] test_createCertAndAssignWithName_withoutSignature_skipsIssuerSignatureStorage() (gas: 1176260)
+[PASS] test_scripifyCert_RevertsWhenLegalOwnerFrozen() (gas: 1768970)
+[PASS] test_setCertLookThroughBadge_AdminWiresBadgeOnPrinter() (gas: 469903)
+[PASS] test_setCertLookThroughBadge_NonAdminReverts() (gas: 445948)
+Suite result: ok. 30 passed; 0 failed; 0 skipped; finished in 206.09ms (206.04ms CPU time)
+
+Ran 4 tests for test/IssuanceManagerProportionalVaultTest.t.sol:IssuanceManagerProportionalConversionTest
+[PASS] test_ExistingCertificateConversionSocializesItsOwnClaimToo() (gas: 3243422)
+[PASS] test_ForceBurnSocializesBothPositions() (gas: 2574466)
+[PASS] test_NewCertificateThreeActorConversion() (gas: 3442851)
+[PASS] test_SingleCertificateCyclesStayLiveThroughManyNormalizations() (gas: 18872911)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 275.85ms (274.07ms CPU time)
+
+Ran 7 tests for test/IssuanceManagerVaultEpochTest.t.sol:IssuanceManagerVaultEpochTest
+[PASS] test_FullAndPartialConversion_CostAboutTheSame() (gas: 295850545)
+[PASS] test_VaultEmptyingConversion_CostIsFlatInTotalSupply() (gas: 227970905)
+[PASS] test_VaultEpoch_EmptyingViaForceScripBurn_RetiresPositions() (gas: 6041213)
+[PASS] test_VaultEpoch_EmptyingViaWithdrawal_RetiresOtherParticipant() (gas: 6879765)
+[PASS] test_VaultEpoch_InvalidatesPositionsAcrossAnEmptying() (gas: 6122570)
+[PASS] test_VaultEpoch_RetiredCertCanScripifyAgain() (gas: 5982099)
+[PASS] test_VaultEpoch_SurvivesRepeatedEmptyRefillCycles() (gas: 6221693)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 439.35ms (814.85ms CPU time)
+
+Ran 1 test for test/IssuanceManagerVaultEpochTest.t.sol:IssuanceManagerVaultEpochAdhocTest
+[PASS] test_VaultEmptyingConversion_FitsInABlockAtLargeSupply() (gas: 3760085466)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 4.51s (4.50s CPU time)
+
+Ran 10 tests for test/IssuanceManagerProportionalVaultTest.t.sol:IssuanceManagerProportionalVaultTest
+[PASS] testFuzz_StatefulConservation(bytes32) (runs: 256, μ: 2226895, ~: 2227063)
+[PASS] testFuzz_WithdrawalMatchesProportionalAllocation(uint128,uint128,uint256) (runs: 256, μ: 219345, ~: 220348)
+[PASS] test_DustCanBeRedeemedEvenWhenAllClaimsRoundToZero() (gas: 252973)
+[PASS] test_FreshPoolInitializesOnFirstDeposit() (gas: 148676)
+[PASS] test_InvalidWithdrawalsAndZeroDeposit() (gas: 141311)
+[PASS] test_MaxUintDepositAndOneWeiResidualDoNotOverflowOrUnderflow() (gas: 201368)
+[PASS] test_NewPositionUsesCurrentIndexAfterWithdrawal() (gas: 242964)
+[PASS] test_OriginalAttack_RepeatedCrossCertificateCycles() (gas: 3829234)
+[PASS] test_PartialWithdrawalGasDoesNotScaleWithLivePositions() (gas: 7572981)
+[PASS] test_ThreeActors_1000_100_Redeem750() (gas: 312063)
+Suite result: ok. 10 passed; 0 failed; 0 skipped; finished in 4.63s (4.80s CPU time)
+
+╭---------------------------------------------+--------+--------+---------╮
+| Test Suite                                  | Passed | Failed | Skipped |
++=========================================================================+
+| CyberScripTest                              | 49     | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerConversionTest               | 28     | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerFactoryTest                  | 1      | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerProportionalConversionTest   | 4      | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerProportionalVaultTest        | 10     | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| ProportionalVaultMathTest                   | 4      | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerRecertTokenUriRegressionTest | 30     | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerScripComplianceTest          | 13     | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerSecondaryTransferTest        | 15     | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerTest                         | 11     | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerEmptyLotTallyTest            | 7      | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerVaultEpochAdhocTest          | 1      | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| IssuanceManagerVaultEpochTest               | 7      | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| LegalOwnerBugPOCTest                        | 4      | 0      | 0       |
+|---------------------------------------------+--------+--------+---------|
+| ScripPOCTest                                | 15     | 0      | 0       |
+╰---------------------------------------------+--------+--------+---------╯
+

@@ -555,6 +555,119 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(details.extensionData, approvalDetails.extensionData);
     }
 
+    function test_convertScripToCert_RevertsWhenSourceAccountFrozen() public {
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
+        uint256 amount = 100;
+        uint256 sourceCertId = _mintCert(certPrinter, investor, amount);
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            amount * 1e18,
+            address(0)
+        );
+        assertEq(ICyberScrip(scrip).balanceOf(investor), amount * 1e18);
+
+        // Freeze the scrip holder; conversion back to cert must now be blocked
+        // even though burns bypass CyberScrip's own freeze checks.
+        CyberScrip(scrip).setFrozen(investor, true);
+
+        vm.prank(investor);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IssuanceManagerStorage.AccountFrozen.selector,
+                investor
+            )
+        );
+        issuanceManager.convertScripToCert(address(certPrinter), amount * 1e18);
+
+        // Unfreezing restores the conversion path.
+        CyberScrip(scrip).setFrozen(investor, false);
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), amount * 1e18);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+    }
+
+    function test_scripifyCert_RevertsWhenLegalOwnerFrozen() public {
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
+        uint256 amount = 100;
+        uint256 sourceCertId = _mintCert(certPrinter, investor, amount);
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        CyberScrip(scrip).setFrozen(investor, true);
+
+        // Frozen legal owner must not be able to reissue the position as scrip,
+        // regardless of the mint target.
+        vm.prank(investor);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IssuanceManagerStorage.AccountFrozen.selector,
+                investor
+            )
+        );
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            amount * 1e18,
+            otherInvestor
+        );
+
+        vm.prank(investor);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IssuanceManagerStorage.AccountFrozen.selector,
+                investor
+            )
+        );
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            amount * 1e18,
+            address(0)
+        );
+
+        // Unfreezing restores the scripify path.
+        CyberScrip(scrip).setFrozen(investor, false);
+        vm.prank(investor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            amount * 1e18,
+            otherInvestor
+        );
+        assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), amount * 1e18);
+    }
+
     function test_ScripifyAndUnscripify_WithConditions() public {
         ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
@@ -808,8 +921,7 @@ contract IssuanceManagerConversionTest is Test {
         vm.expectRevert(IssuanceManagerStorage.ScripOutstanding.selector);
         issuanceManager.setScripRatio(address(certPrinter), 1, 1);
 
-        // Redeeming at the unchanged ratio returns exactly the deposit, leaving the investor's
-        // units in the vault.
+        // Redeeming consumes the insider's own attribution and preserves the investor's backing.
         vm.prank(insider);
         issuanceManager.convertScripToCert(address(certPrinter), 200 * 1e18);
         assertEq(
@@ -887,6 +999,69 @@ contract IssuanceManagerConversionTest is Test {
             true,
             true
         );
+    }
+
+    function test_MemberRedemptionAtTenToOnePreservesEffectiveCertificateUnits() public {
+        (ILedgerEntryToken cert, ICyberScrip scrip, uint256 a, uint256 b) = _tenToOnePool();
+        vm.prank(otherInvestor);
+        issuanceManager.convertScripToCert(address(cert), 500e18);
+        assertEq(cert.getActiveCertificateDetails(b).unitsRepresented, 50e18);
+        assertEq(cert.getCertificateDetails(a).unitsRepresented, 10e18);
+        assertEq(cert.getCertificateDetails(b).unitsRepresented, 90e18);
+        assertEq(issuanceManager.getScripPoolSharesById(address(cert), b), 40e18);
+        assertEq(scrip.balanceOf(otherInvestor), 400e18);
+
+        vm.prank(otherInvestor);
+        issuanceManager.convertScripToCert(address(cert), 400e18);
+        assertEq(cert.getActiveCertificateDetails(b).unitsRepresented, 90e18);
+        assertEq(cert.getCertificateDetails(b).unitsRepresented, 90e18);
+        assertEq(cert.getCertificateDetails(a).unitsRepresented, 10e18);
+        assertEq(scrip.balanceOf(otherInvestor), 0);
+
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(cert), 100e18);
+        assertEq(cert.getActiveCertificateDetails(a).unitsRepresented, 10e18);
+        (uint256 assets,) = issuanceManager.getCertScripUnitVault(address(cert));
+        assertEq(assets, 0);
+        assertEq(scrip.totalSupply(), 0);
+    }
+
+    function test_NewHolderAtTenToOneReducesOriginalCertificatesProportionally() public {
+        (ILedgerEntryToken cert, ICyberScrip scrip, uint256 a, uint256 b) = _tenToOnePool();
+        address buyer = makeAddr("tenToOneBuyer");
+        vm.prank(otherInvestor);
+        scrip.transfer(buyer, 500e18);
+        assertEq(cert.getCertificateDetails(a).unitsRepresented, 10e18);
+        assertEq(cert.getCertificateDetails(b).unitsRepresented, 90e18);
+
+        vm.expectRevert(IssuanceManagerStorage.RecertificationApprovalRequired.selector);
+        vm.prank(buyer);
+        issuanceManager.convertScripToCert(address(cert), 500e18);
+        _stageRecertificationApproval(cert, buyer, "Buyer", 50, "", bytes(""));
+        vm.prank(buyer);
+        issuanceManager.convertScripToCert(address(cert), 500e18);
+
+        assertEq(cert.getCertificateDetails(a).unitsRepresented, 5e18);
+        assertEq(cert.getCertificateDetails(b).unitsRepresented, 45e18);
+        uint256 buyerId = cert.tokenOfLegalOwnerByIndex(buyer, 0);
+        assertEq(cert.getActiveCertificateDetails(buyerId).unitsRepresented, 50e18);
+        assertEq(scrip.balanceOf(buyer), 0);
+        assertEq(scrip.totalSupply(), 500e18);
+        (uint256 assets,) = issuanceManager.getCertScripUnitVault(address(cert));
+        assertEq(assets, 50e18);
+    }
+
+    function _tenToOnePool() internal returns (ILedgerEntryToken cert, ICyberScrip scrip, uint256 a, uint256 b) {
+        cert = _deployPrinter("Ten To One", "TEN");
+        a = _mintCert(cert, investor, 10);
+        b = _mintCert(cert, otherInvestor, 90);
+        scrip = ICyberScrip(_deployScripAtRatio(cert, 10, 1));
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(cert), a, 10e18, address(0));
+        vm.prank(otherInvestor);
+        issuanceManager.scripifyCert(address(cert), b, 90e18, address(0));
+        assertEq(scrip.balanceOf(investor), 100e18);
+        assertEq(scrip.balanceOf(otherInvestor), 900e18);
     }
 
     function test_ScripifyWhitelist_EnabledBlocksNonWhitelisted() public {
@@ -1526,7 +1701,7 @@ contract IssuanceManagerConversionTest is Test {
             150 * 1e18,
             0,
             50 * 1e18,
-            100 * 1e18
+            50 * 1e18
         );
         vm.prank(otherInvestor);
         issuanceManager.convertScripToCert(address(certPrinter), 150 * 1e18);
@@ -1566,7 +1741,7 @@ contract IssuanceManagerConversionTest is Test {
         );
         assertEq(
             issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
-            100 * 1e18
+            50 * 1e18
         );
         assertEq(
             issuanceManager.getScripPoolSharesById(address(certPrinter), otherInvestorCertId),
@@ -1796,6 +1971,12 @@ contract IssuanceManagerConversionTest is Test {
         assertFalse(isScripifiedB);
         assertTrue(isScripifiedC);
         assertTrue(isScripifiedD);
+        // B consumes its 100, then socializes 20 across A/C/D (280/3 each).
+        // C consumes 50 of its own. New investors then scale the 230-unit pool to 160.
+        assertApproxEqAbs(scripifiedA, uint256(280e18) * 160 / 690, 3);
+        assertEq(scripifiedB, 0);
+        assertApproxEqAbs(scripifiedC, uint256(130e18) * 160 / 690, 3);
+        assertApproxEqAbs(scripifiedD, uint256(280e18) * 160 / 690, 3);
         assertFalse(isScripifiedNewOne);
         assertFalse(isScripifiedNewTwo);
 
@@ -1857,20 +2038,20 @@ contract IssuanceManagerConversionTest is Test {
             scripifiedNewOne +
             scripifiedNewTwo;
         // Per-cert claims use integer division (floor); summing (scrip/wad)/1e18 per cert truncates
-        // again and can under-count vs vault. Sum wads first — multi-step fixed-point can differ by ≤1 wei.
+        // again and can under-count vs vault. Each of the four positions can lose one wei here.
         (uint256 vaultAssetsWad,) = issuanceManager.getCertScripUnitVault(
             address(certPrinter)
         );
         assertApproxEqAbs(
             totalScripifiedWad,
             vaultAssetsWad,
-            1,
+            4,
             "scripified wad sum vs vault totalAssetsWad"
         );
         assertApproxEqAbs(
             totalActiveWad + totalScripifiedWad,
             400e18,
-            1,
+            4,
             "active + scripified units vs pool cap"
         );
 
@@ -2035,26 +2216,27 @@ contract IssuanceManagerConversionTest is Test {
             .getCertScripifiedStatus(address(certPrinter), 6);
 
         assertTrue(isScripifiedA);
-        assertEq(scripifiedA, 54 * 1e18);
+        assertApproxEqAbs(scripifiedA, 54e18, 2);
         assertFalse(isScripifiedB);
         assertEq(scripifiedB, 0);
         assertTrue(isScripifiedC);
-        // Vault share→asset conversion can floor nominal claims by ≤1 unit vs naive expectations
+        // B's excess leaves A/C/D/E at 90 each. C and D each consume 80 directly.
+        // New investors reduce the remaining [90, 0, 10, 10, 90] pool by 40%.
         assertApproxEqAbs(
             scripifiedC,
-            6 * 1e18,
-            1 * 1e18,
+            6e18,
+            2,
             "holder C scripified wad (rounding)"
         );
         assertTrue(isScripifiedD);
         assertApproxEqAbs(
             scripifiedD,
-            6 * 1e18,
-            1 * 1e18,
+            6e18,
+            2,
             "holder D scripified wad (rounding)"
         );
         assertTrue(isScripifiedE);
-        assertEq(scripifiedE, 54 * 1e18);
+        assertApproxEqAbs(scripifiedE, 54e18, 2);
         assertFalse(isScripifiedNewOne);
         assertEq(scripifiedNewOne, 0);
         assertFalse(isScripifiedNewTwo);
@@ -2158,7 +2340,7 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter)
         );
         // More holders / conversions → slightly larger aggregated rounding vs vault assets
-        uint256 fiveHolderWadTol = 3;
+        uint256 fiveHolderWadTol = 5; // At most one floored wei per source position in this scenario.
         assertApproxEqAbs(
             totalScripifiedWadFive,
             vaultAssetsWadFive,
@@ -2256,5 +2438,3 @@ contract IssuanceManagerConversionTest is Test {
         });
     }
 }
-
-

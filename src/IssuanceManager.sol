@@ -740,7 +740,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     }
 
     /// @notice `totalTrackedScrip` is CyberScrip `totalSupply`. Second value is vault price per
-    ///         nominal share: `totalAssetsWad * 1e27 / totalNominalShares` (ray), or 0 if empty.
+    ///         nominal share (ray), or 0 if empty. Initialized proportional pools report 1e27.
     function getScripPoolTotals(
         address certAddress
     )
@@ -751,7 +751,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         return IssuanceManagerStorage.getScripPoolTotals(certAddress);
     }
 
-    /// @notice Underlying units (wad) and total nominal shares in the scripified-units vault.
+    /// @notice Underlying units (wad) and normalized nominal shares, equal after index initialization.
+    /// @dev Individually floored certificate positions may sum to less than the total due to pool dust.
     function getCertScripUnitVault(address certAddress)
         external
         view
@@ -767,6 +768,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         return IssuanceManagerStorage.getScripPoolAmountById(certAddress, id);
     }
 
+    /// @notice Effective rebasing shares; excludes sub-wei attribution dust held by the pool.
     function getScripPoolSharesById(
         address certAddress,
         uint256 id
@@ -782,10 +784,11 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     }
 
     /// @notice Voids lots that hold no units and no vault claim, so the printer's holder tally stops
-    /// counting them. Permissionless: a lot that still holds units cannot be voided here.
+    /// counting them. Admin only: another party can drive a lot's vault claim to zero, so an open call
+    /// lets them void a holder's lot while that holder still holds redeemable scrip.
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenIds IDs of the lots to void
-    function voidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external {
+    function voidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external onlyAdmin {
         IssuanceManagerStorage.executeVoidEmptyCerts(certAddress, tokenIds);
     }
 

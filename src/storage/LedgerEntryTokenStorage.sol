@@ -457,7 +457,7 @@ library LedgerEntryTokenStorage {
         address current = record.ownerAddress;
 
         // Same owner of record: not an acquisition, so leave the clock and the enumeration move alone. Still
-        // lazily backfill a legacy token's enumeration entry, and emit if the holder-of-record name changed.
+        // backfill a legacy token's enumeration entry during this update, and emit if the holder-of-record name changed.
         if (current == newOwner) {
             if (newOwner != address(0)) {
                 _addToLegalOwnerEnumeration(s, newOwner, tokenId);
@@ -490,7 +490,7 @@ library LedgerEntryTokenStorage {
         _uncountLot(s, tokenId, current);
 
         // The remove is a no-op for an un-tracked token and the add is idempotent, so this keeps live state and
-        // lazily backfills a legacy token (minted before the enumeration existed).
+        // backfills a legacy token (minted before the enumeration existed) during this update.
         if (current != address(0)) _removeFromLegalOwnerEnumeration(s, current, tokenId);
         if (newOwner != address(0)) _addToLegalOwnerEnumeration(s, newOwner, tokenId);
         record.ownerAddress = newOwner;

@@ -95,13 +95,13 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     event OfficerRemoved(address indexed officer, uint256 index);
     event OfficerUpdated(address indexed officer, uint256 index);
     event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
-    event IssuanceManagerUpdated(address indexed issuanceManager, address indexed oldIssuanceManager);
-    event DealManagerUpdated(address indexed dealManager, address indexed oldDealManager);
-    event RoundManagerUpdated(address indexed roundManager, address indexed oldRoundManager);
     event EscrowedOfficerSignatureAdded(uint256 indexed index, address indexed officer);
     event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
     event CyberCORPExtensionSet(address indexed extension, bytes32 indexed extensionType);
     event CyberCORPExtensionDataUpdated(bytes32 indexed extensionType, bytes extensionData);
+    event IssuanceManagerUpdated(address indexed issuanceManager, address indexed oldIssuanceManager);
+    event DealManagerUpdated(address indexed dealManager, address indexed oldDealManager);
+    event RoundManagerUpdated(address indexed roundManager, address indexed oldRoundManager);
 
     error NotRefImplementation();
     error SignatureRequired();
