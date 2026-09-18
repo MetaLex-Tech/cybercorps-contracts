@@ -544,17 +544,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         }
     }
 
-    /// @notice Deploy, initialize and grant LeXCheX access to a new RoundManager for the given cyber corp
-    /// @dev For security, the cyber corp is expected to authorize the created RoundManager itself
-    function deployAndInitializeRoundManager(bytes32 salt, address cyberCorpAddress) external returns (address) {
-        // Existing corps authorize retrofits themselves; no platform approval is needed.
-        BorgAuth corpAuth = BorgAuthACL(cyberCorpAddress).AUTH();
-        corpAuth.onlyRole(corpAuth.OWNER_ROLE(), msg.sender);
-        FactoryDeploymentLib.requireNamespace(roundManagerFactory, salt);
-        // Retrofit requests must not occupy the namespace of signed new-corp deployments.
-        return _deployAndInitializeRoundManager(keccak256(abi.encode("retrofit", salt, cyberCorpAddress)), cyberCorpAddress);
-    }
-
     function _deployAndInitializeRoundManager(bytes32 salt, address cyberCorpAddress) internal returns (address) {
         if (ICyberCorp(cyberCorpAddress).roundManager() != address(0)) {
             revert RoundManagerAlreadyExists();
