@@ -91,7 +91,8 @@ All three setters are `onlyAdmin` on the SPV's own BorgAuth.
 In [`src/libs/conditions/secondary/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/libs/conditions/secondary),
 extending `SecondaryTradingConditionBase`. Most are shared singletons
 configured per SPV (cyberCORP), with configuration gated by that SPV's own
-BorgAuth admin:
+BorgAuth admin. `script/deploy-secondary-conditions.s.sol` deploys them, one
+instance per chain:
 
 | Condition | Purpose |
 |---|---|

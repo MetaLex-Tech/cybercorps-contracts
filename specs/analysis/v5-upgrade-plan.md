@@ -10,6 +10,9 @@
       the four live V1 and V2 extension proxies and the seven new V3 proxies are live there. The
       implementation slots and the factory reference implementations were read back on chain.
       Base Sepolia has no LegalDocRegistry and no Pump stack, so neither ran.
+- [x] Deploy the secondary-trading condition singletons. Done on Base Sepolia on 2026-09-19. All 19
+      conditions and the first LeXcheXBadge are live there. Each condition answers the
+      `ISecondaryTradingCondition` ERC-165 id, so a DealManager accepts it.
 
 ## Corp contracts
 
@@ -157,7 +160,26 @@ Existing printers stay on their V1 or V2 proxy. Add the new addresses to the fro
 deploys ShareCertDataLayerLib with CREATE2 and links it to ShareExtensionV3.
 
 `script/deploy-extensions-v2.s.sol` upgrades the live proxies in the table above. After the singleton
-upgrades, `script/upgrade-v5.s.sol` calls the V2 script and then the V3 script.
+upgrades, `script/upgrade-v5.s.sol` calls the V2 script, then the V3 script, then the secondary
+condition script.
+
+## Secondary-trading condition singletons
+
+`script/deploy-secondary-conditions.s.sol` deploys the shared conditions.
+`DeploymentConstants.secondaryConditions(chainId)` records them: a zero field makes the script deploy
+a new proxy, and a recorded field makes it upgrade that proxy to the new code. Record each printed
+address after a run.
+
+`LexChexBadgeKindCondition` gets six proxies from one implementation, one for each fact-key it gates.
+The badge-scoped conditions refuse a zero registry at initialize, so the script deploys a LeXcheXBadge
+and its own BorgAuth when the chain has none, then grants the LeXcheX v1 minter the three fact-keys it
+bridges. `KillSwitchCondition` and `TimeSettlementPeriodCondition` are not upgradeable, so the script
+deploys each one only when the chain has none. The two kill-switch admin keys come from the environment.
+
+Base Sepolia holds all 19 conditions and the first LeXcheXBadge since 2026-09-19. The addresses are in
+`DeploymentConstants`, and `script/res/deployment-addresses.md` holds the run log. The production run
+does not reproduce every address: the badge address is an input to the badge-scoped conditions, and the
+two admin keys are inputs to the kill switch, so those land elsewhere with production inputs.
 
 ## Version mismatch between MetaLeX singletons and corps
 

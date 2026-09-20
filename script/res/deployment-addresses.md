@@ -120,3 +120,61 @@ The proxy keeps its address. The arrow points to the new implementation.
   TokenWarrantExtensionV3: 0x3Bdb711517eEbd6A88D9Aa30B141adC43BAB033e
   ShareExtensionV3: 0xa21C434379CC44bfeD6e3c1342e49951804ec30f
   FundInterestExtensionV3: 0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15
+
+## Secondary-trading conditions (Base Sepolia, 2026-09-19)
+
+`script/deploy-secondary-conditions.s.sol`, salt `CyberCorpV5-SecondaryConditionsV1.0.0`.
+Deployer 0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf. Every condition uses the core AUTH
+0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01. The chain had no LeXcheXBadge, so the script
+deployed one with its own BorgAuth and granted the LeXcheX v1 minter
+0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960 the keys K_ACCREDITED | K_INVESTOR_TYPE |
+K_INVESTOR_JURISDICTION (65539). The two kill-switch admin keys are staging values.
+
+== Logs ==
+  ==== Configs ====
+  chainId: 84532
+  salt string: CyberCorpV5-SecondaryConditionsV1.0.0
+  deployer: 0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf
+  AUTH: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01
+  CyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134
+  kill switch MetaLeX admin: 0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf
+  kill switch Legion admin: 0x48d206948C366396a86A449DdD085FDbfC280B4b
+  Deployed LeXcheXBadge AUTH: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d
+  Deployed LeXcheXBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F
+  ==== Deployed ====
+  LeXcheXBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F
+  EligibilityCondition: 0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B
+  USStateOfResidenceCondition: 0x1d4918a83E1F971317f0DD529f088B208Ec24d8C
+  LegionSoulboundCondition: 0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04
+  HolderCapCondition: 0xA8422D5fFE6b697152aEE19d13910302dE1E0576
+  CFIUSCondition: 0x89Fa72549b5Fadf209377d5348C30bca4c7e0462
+  Section4a7DisclosureCondition: 0x42c9e2dadE9669c725D88b78cD0e545FD9e7F723
+  Rule144DisclosureCondition: 0x7e30Ef03A0C4C7094D464b714E2480EF30088629
+  HoldingPeriodCondition: 0xc5417d7DDE94310Ba334e31517deFED0aa0ED81F
+  LegalOpinionCondition: 0xD27317AED94BE6d310eA6B8c4e08360957ff24e3
+  RegSDistributionComplianceCondition: 0xe8A325Ba2dF0ba3E08A55B3E3F2bBBBc9354CebB
+  GPLPApprovalCondition: 0x4be9Eaff732F4BA3f1Fc6359a2F0858F70637c69
+  AccreditedInvestor (K_ACCREDITED): 0xedac303CAfdedd92aB6fbECFafFC0a648d9157a1
+  QualifiedPurchaser (K_QP): 0xE4bcf1c4EA266bbD7F3c58A3aa02c43B5cdc9875
+  QualifiedInstitutionalBuyer (K_QIB): 0x8A617187aF27a98c89548dfFd886EEab0De0936F
+  NonUSPerson (K_NON_US): 0xe2AAc5187058a5c97Da7e6D3D6F9D5811124dcBb
+  SpvWhitelist (K_SPV_WHITELIST): 0x0f2952dcf0279782e6048D2800ee3BeAd9f59f33
+  Syndicate (K_SYNDICATE): 0x089b4Dba2E3EB49f875c0D7F92A06276B204870f
+  KillSwitchCondition: 0x4c3b9Ec3B6e416A64Fde4a17Ea856e1cf2fE0344
+  TimeSettlementPeriodCondition: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
+
+### Implementations behind the proxies
+
+  EligibilityCondition: 0xC94211fE38c5E6573713702F54B2b1b1Ca29D86E
+  USStateOfResidenceCondition: 0x6B896856612B4f45c01DDDa4dB01DbcE681e06F2
+  LegionSoulboundCondition: 0x2B301A98F7eE3776bFa22aE57497f359512871D8
+  HolderCapCondition: 0xd6C4FF2Ec0FD80e7F3221787E7b714D9Fc13a6C0
+  CFIUSCondition: 0x8961c3370B0021507af598AF633363a0E9c6Db2b
+  Section4a7DisclosureCondition: 0xC492f904a81c8b0D64737171F2d5d4aCDA65a580
+  Rule144DisclosureCondition: 0x76c85C9060f19BB5Dff58917e35657dA33C5c685
+  HoldingPeriodCondition: 0x0f9397AEAaecbF28b1390b721caD93d1B4Fa529b
+  LegalOpinionCondition: 0xe33F3eB6638C52ab3B87Aa3290d032aa678bD329
+  RegSDistributionComplianceCondition: 0x7BaAaCf95F71B328d7249dfF40120f8EAcb74097
+  GPLPApprovalCondition: 0x4d1cFa1Cf02994C94c1Bb525fd2e83fbAdA05658
+  LexChexBadgeKindCondition: 0xCFBE52a7df301EDD3b26518Ffd53Da6cb44c8BFb (all six parameterizations)
+  LeXcheXBadge: 0xf2Fed468afA26a9C11Ba8ce5995543eB9E3B308b

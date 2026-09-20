@@ -21,6 +21,7 @@ library DeploymentConstants {
         address cyberAgreementRegistry;
         address uriBuilder;
         address lexchexAuth;
+        address lexchexBadgeAuth;
         address lexchex;
         address lexchexBadge;
         address lexchexMinter;
@@ -46,6 +47,28 @@ library DeploymentConstants {
         address shareExtension;
         address shareExtensionV3;
         address fundInterestExtensionV3;
+    }
+
+    struct SecondaryConditionDeployment {
+        address eligibility;
+        address usStateOfResidence;
+        address legionSoulbound;
+        address holderCap;
+        address cfius;
+        address section4a7Disclosure;
+        address rule144Disclosure;
+        address holdingPeriod;
+        address legalOpinion;
+        address regSDistributionCompliance;
+        address gpLpApproval;
+        address accreditedInvestor;
+        address qualifiedPurchaser;
+        address qualifiedInstitutionalBuyer;
+        address nonUsPerson;
+        address spvWhitelist;
+        address syndicate;
+        address killSwitch;
+        address timeSettlementPeriod;
     }
 
     struct UmiaDeployment {
@@ -78,8 +101,9 @@ library DeploymentConstants {
                     cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
                     lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                    lexchexBadgeAuth: address(0), // TODO: not yet deployed on this chain
                     lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
-                    lexchexBadge: address(0), // TODO: not yet deployed on any chain
+                    lexchexBadge: address(0), // TODO: not yet deployed on this chain
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95 // difference from production chains
@@ -97,8 +121,9 @@ library DeploymentConstants {
                     cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
                     lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                    lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d,
                     lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
-                    lexchexBadge: address(0), // TODO: not yet deployed on any chain
+                    lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: address(0) // no ZKPassport Verifier available
@@ -116,8 +141,9 @@ library DeploymentConstants {
                     cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
                     lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                    lexchexBadgeAuth: address(0), // TODO: not yet deployed on this chain
                     lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
-                    lexchexBadge: address(0), // TODO: not yet deployed on any chain
+                    lexchexBadge: address(0), // TODO: not yet deployed on this chain
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xe71fE689bFAA4939A760EDF7e07f44372a43932A
@@ -193,6 +219,47 @@ library DeploymentConstants {
                 shareExtensionV3: address(0), // TODO: not yet deployed on this chain
                 fundInterestExtensionV3: address(0) // TODO: not yet deployed on this chain
             });
+        } else {
+            revert UnsupportedChain(chainId);
+        }
+    }
+
+    /// @notice Shared secondary-trading condition singletons.
+    /// @dev One instance per chain, configured per SPV. The last six addresses are
+    ///      parameterizations of LexChexBadgeKindCondition: one proxy per fact-key.
+    function secondaryConditions(uint256 chainId)
+        internal
+        pure
+        returns (SecondaryConditionDeployment memory deployment)
+    {
+        if (chainId == BASE_SEPOLIA) {
+            // deployed with salt "CyberCorpV5-SecondaryConditionsV1.0.0"
+            return SecondaryConditionDeployment({
+                eligibility: 0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B,
+                usStateOfResidence: 0x1d4918a83E1F971317f0DD529f088B208Ec24d8C,
+                legionSoulbound: 0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04,
+                holderCap: 0xA8422D5fFE6b697152aEE19d13910302dE1E0576,
+                cfius: 0x89Fa72549b5Fadf209377d5348C30bca4c7e0462,
+                section4a7Disclosure: 0x42c9e2dadE9669c725D88b78cD0e545FD9e7F723,
+                rule144Disclosure: 0x7e30Ef03A0C4C7094D464b714E2480EF30088629,
+                holdingPeriod: 0xc5417d7DDE94310Ba334e31517deFED0aa0ED81F,
+                legalOpinion: 0xD27317AED94BE6d310eA6B8c4e08360957ff24e3,
+                regSDistributionCompliance: 0xe8A325Ba2dF0ba3E08A55B3E3F2bBBBc9354CebB,
+                gpLpApproval: 0x4be9Eaff732F4BA3f1Fc6359a2F0858F70637c69,
+                accreditedInvestor: 0xedac303CAfdedd92aB6fbECFafFC0a648d9157a1,
+                qualifiedPurchaser: 0xE4bcf1c4EA266bbD7F3c58A3aa02c43B5cdc9875,
+                qualifiedInstitutionalBuyer: 0x8A617187aF27a98c89548dfFd886EEab0De0936F,
+                nonUsPerson: 0xe2AAc5187058a5c97Da7e6D3D6F9D5811124dcBb,
+                spvWhitelist: 0x0f2952dcf0279782e6048D2800ee3BeAd9f59f33,
+                syndicate: 0x089b4Dba2E3EB49f875c0D7F92A06276B204870f,
+                killSwitch: 0x4c3b9Ec3B6e416A64Fde4a17Ea856e1cf2fE0344, // staging admin keys
+                timeSettlementPeriod: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
+            });
+        } else if (chainId == ETH || chainId == BASE || chainId == ETH_SEPOLIA) {
+            // TODO: not yet deployed on these chains. Each zero field makes
+            //       `script/deploy-secondary-conditions.s.sol` deploy a new proxy. Record the
+            //       address here after the run, so a later run upgrades that proxy instead.
+            return deployment;
         } else {
             revert UnsupportedChain(chainId);
         }
