@@ -18,7 +18,7 @@ import {EligibilityCondition} from "../src/libs/conditions/secondary/Eligibility
 import {GPLPApprovalCondition} from "../src/libs/conditions/secondary/GPLPApprovalCondition.sol";
 import {HolderCapCondition} from "../src/libs/conditions/secondary/HolderCapCondition.sol";
 import {HoldingPeriodCondition} from "../src/libs/conditions/secondary/HoldingPeriodCondition.sol";
-import {KillSwitchCondition} from "../src/libs/conditions/secondary/KillSwitchCondition.sol";
+//import {KillSwitchCondition} from "../src/libs/conditions/secondary/KillSwitchCondition.sol";
 import {LegalOpinionCondition} from "../src/libs/conditions/secondary/LegalOpinionCondition.sol";
 import {LegionSoulboundCondition} from "../src/libs/conditions/secondary/LegionSoulboundCondition.sol";
 import {LexChexBadgeKindCondition} from "../src/libs/conditions/secondary/LexChexBadgeKindCondition.sol";
@@ -47,7 +47,8 @@ contract DeploySecondaryConditionsScript is Script {
 
     /// @dev Values every condition initializer needs.
     struct Context {
-        bytes32 salt;
+        bytes32 proxySalt;
+        bytes32 implSalt;
         address auth;
         address registry;
         address badge;
@@ -57,53 +58,60 @@ contract DeploySecondaryConditionsScript is Script {
         return runWithArgs(
 //            // Production
 //            DeploymentConstants.BASE,
-//            "CyberCorpV5-SecondaryConditionsV1.0.0",
+//            "CyberCorpV5-SecondaryConditionsV1.0.0", // proxySaltStr
+//            "CyberCorpV5-SecondaryConditionsV1.0.0-impl0", // implSaltStr
 //            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
 
             // Staging
             DeploymentConstants.BASE_SEPOLIA,
-            "CyberCorpV5-SecondaryConditionsV1.0.0",
+            "CyberCorpV5-SecondaryConditionsV1.0.0", // proxySaltStr
+            "CyberCorpV5-SecondaryConditionsV1.0.0-impl0", // implSaltStr
             vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
         );
     }
 
     function runWithArgs(
         uint256 chainId,
-        string memory saltStr,
+        string memory proxySaltStr,
+        string memory implSaltStr,
         uint256 deployerPrivateKey
     ) public returns (DeploymentConstants.SecondaryConditionDeployment memory deployed) {
         address deployerAddress = vm.addr(deployerPrivateKey);
 
-        bytes32 salt = keccak256(bytes(saltStr));
+        bytes32 proxySalt = keccak256(bytes(proxySaltStr));
+        bytes32 implSalt = keccak256(bytes(implSaltStr));
 
         DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(chainId);
         DeploymentConstants.SecondaryConditionDeployment memory recorded =
             DeploymentConstants.secondaryConditions(chainId);
 
-        // The two keys are the whole governance surface of the kill switch, so both are explicit.
-        address metalexKillAdmin = vm.envAddress("KILL_SWITCH_METALEX_MOCK");
-        address legionKillAdmin = vm.envAddress("KILL_SWITCH_LEGION_MOCK");
+//        // The two keys are the whole governance surface of the kill switch, so both are explicit.
+//        address metalexKillAdmin = vm.envAddress("KILL_SWITCH_METALEX_MOCK");
+//        address legionKillAdmin = vm.envAddress("KILL_SWITCH_LEGION_MOCK");
 
         console2.log("==== Configs ====");
         console2.log("chainId: %d", chainId);
-        console2.log("salt string: %s", saltStr);
+        console2.log("proxy salt string: %s", proxySaltStr);
+        console2.log("implementation salt string: %s", implSaltStr);
         console2.log("deployer: %s", deployerAddress);
         console2.log("AUTH:", core.auth);
         console2.log("CyberAgreementRegistry:", core.cyberAgreementRegistry);
-        console2.log("kill switch MetaLeX admin:", metalexKillAdmin);
-        console2.log("kill switch Legion admin:", legionKillAdmin);
+//        console2.log("kill switch MetaLeX admin:", metalexKillAdmin);
+//        console2.log("kill switch Legion admin:", legionKillAdmin);
         console2.log("");
 
         vm.startBroadcast(deployerPrivateKey);
         Context memory ctx = Context({
-            salt: salt,
+            proxySalt: proxySalt,
+            implSalt: implSalt,
             auth: core.auth,
             registry: core.cyberAgreementRegistry,
-            badge: _badge(core, salt, deployerAddress)
+            badge: _badge(core, implSalt, proxySalt, deployerAddress)
         });
         _deployThresholdConditions(ctx, recorded, deployed);
         _deployBadgeKindConditions(ctx, recorded, deployed);
-        _deployClosingConditions(ctx, recorded, deployed, metalexKillAdmin, legionKillAdmin);
+        _deployClosingConditions(ctx, recorded, deployed);
+//        _deployClosingConditions(ctx, recorded, deployed, metalexKillAdmin, legionKillAdmin);
         vm.stopBroadcast();
 
         _logDeployed(ctx.badge, deployed);
@@ -117,69 +125,69 @@ contract DeploySecondaryConditionsScript is Script {
     ) internal {
         deployed.eligibility = _deployOrUpgrade(
             recorded.eligibility,
-            address(new EligibilityCondition{salt: ctx.salt}()),
+            address(new EligibilityCondition{salt: ctx.implSalt}()),
             abi.encodeCall(EligibilityCondition.initialize, (ctx.auth)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.usStateOfResidence = _deployOrUpgrade(
             recorded.usStateOfResidence,
-            address(new USStateOfResidenceCondition{salt: ctx.salt}()),
+            address(new USStateOfResidenceCondition{salt: ctx.implSalt}()),
             abi.encodeCall(USStateOfResidenceCondition.initialize, (ctx.auth, ctx.badge)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.legionSoulbound = _deployOrUpgrade(
             recorded.legionSoulbound,
-            address(new LegionSoulboundCondition{salt: ctx.salt}()),
+            address(new LegionSoulboundCondition{salt: ctx.implSalt}()),
             abi.encodeCall(LegionSoulboundCondition.initialize, (ctx.auth, ctx.badge)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.holderCap = _deployOrUpgrade(
             recorded.holderCap,
-            address(new HolderCapCondition{salt: ctx.salt}()),
+            address(new HolderCapCondition{salt: ctx.implSalt}()),
             abi.encodeCall(HolderCapCondition.initialize, (ctx.auth)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.cfius = _deployOrUpgrade(
             recorded.cfius,
-            address(new CFIUSCondition{salt: ctx.salt}()),
+            address(new CFIUSCondition{salt: ctx.implSalt}()),
             abi.encodeCall(CFIUSCondition.initialize, (ctx.auth, ctx.badge)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.section4a7Disclosure = _deployOrUpgrade(
             recorded.section4a7Disclosure,
-            address(new Section4a7DisclosureCondition{salt: ctx.salt}()),
+            address(new Section4a7DisclosureCondition{salt: ctx.implSalt}()),
             abi.encodeCall(Section4a7DisclosureCondition.initialize, (ctx.auth, ctx.registry, DISCLOSURE_MAX_AGE)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.rule144Disclosure = _deployOrUpgrade(
             recorded.rule144Disclosure,
-            address(new Rule144DisclosureCondition{salt: ctx.salt}()),
+            address(new Rule144DisclosureCondition{salt: ctx.implSalt}()),
             abi.encodeCall(Rule144DisclosureCondition.initialize, (ctx.auth, DISCLOSURE_MAX_AGE)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.holdingPeriod = _deployOrUpgrade(
             recorded.holdingPeriod,
-            address(new HoldingPeriodCondition{salt: ctx.salt}()),
+            address(new HoldingPeriodCondition{salt: ctx.implSalt}()),
             abi.encodeCall(HoldingPeriodCondition.initialize, (ctx.auth, HOLDING_PERIOD)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.legalOpinion = _deployOrUpgrade(
             recorded.legalOpinion,
-            address(new LegalOpinionCondition{salt: ctx.salt}()),
+            address(new LegalOpinionCondition{salt: ctx.implSalt}()),
             abi.encodeCall(LegalOpinionCondition.initialize, (ctx.auth)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.regSDistributionCompliance = _deployOrUpgrade(
             recorded.regSDistributionCompliance,
-            address(new RegSDistributionComplianceCondition{salt: ctx.salt}()),
+            address(new RegSDistributionComplianceCondition{salt: ctx.implSalt}()),
             abi.encodeCall(RegSDistributionComplianceCondition.initialize, (ctx.auth)),
-            ctx.salt
+            ctx.proxySalt
         );
         deployed.gpLpApproval = _deployOrUpgrade(
             recorded.gpLpApproval,
-            address(new GPLPApprovalCondition{salt: ctx.salt}()),
+            address(new GPLPApprovalCondition{salt: ctx.implSalt}()),
             abi.encodeCall(GPLPApprovalCondition.initialize, (ctx.auth)),
-            ctx.salt
+            ctx.proxySalt
         );
     }
 
@@ -190,7 +198,7 @@ contract DeploySecondaryConditionsScript is Script {
         DeploymentConstants.SecondaryConditionDeployment memory recorded,
         DeploymentConstants.SecondaryConditionDeployment memory deployed
     ) internal {
-        address implementation = address(new LexChexBadgeKindCondition{salt: ctx.salt}());
+        address implementation = address(new LexChexBadgeKindCondition{salt: ctx.implSalt}());
         deployed.accreditedInvestor = _badgeKind(ctx, recorded.accreditedInvestor, implementation, K_ACCREDITED, false);
         deployed.qualifiedPurchaser = _badgeKind(ctx, recorded.qualifiedPurchaser, implementation, K_QP, true);
         deployed.qualifiedInstitutionalBuyer =
@@ -213,24 +221,26 @@ contract DeploySecondaryConditionsScript is Script {
             recorded,
             implementation,
             abi.encodeCall(LexChexBadgeKindCondition.initialize, (ctx.auth, ctx.badge, kindKey, checkSeller)),
-            ctx.salt
+            ctx.proxySalt
         );
     }
 
-    /// @dev Neither closing condition is upgradeable, so a recorded one stays exactly as it is.
+    /// @dev The closing conditions are not upgradeable, so a recorded one stays exactly as it is.
+    ///      This script does not deploy KillSwitchCondition. Its constructor takes the two admin
+    ///      keys, so the address cannot match on all chains. A recorded one passes through.
     function _deployClosingConditions(
         Context memory ctx,
         DeploymentConstants.SecondaryConditionDeployment memory recorded,
-        DeploymentConstants.SecondaryConditionDeployment memory deployed,
-        address metalexKillAdmin,
-        address legionKillAdmin
+        DeploymentConstants.SecondaryConditionDeployment memory deployed
+//        , address metalexKillAdmin, address legionKillAdmin
     ) internal {
-        deployed.killSwitch = recorded.killSwitch != address(0)
-            ? recorded.killSwitch
-            : address(new KillSwitchCondition{salt: ctx.salt}(metalexKillAdmin, legionKillAdmin));
+        deployed.killSwitch = recorded.killSwitch;
+//        deployed.killSwitch = recorded.killSwitch != address(0)
+//            ? recorded.killSwitch
+//            : address(new KillSwitchCondition{salt: ctx.implSalt}(metalexKillAdmin, legionKillAdmin));
         deployed.timeSettlementPeriod = recorded.timeSettlementPeriod != address(0)
             ? recorded.timeSettlementPeriod
-            : address(new TimeSettlementPeriodCondition{salt: ctx.salt}());
+            : address(new TimeSettlementPeriodCondition{salt: ctx.implSalt}());
     }
 
     /// @dev A recorded proxy keeps its address and takes the new code. A zero one gets a new proxy.
@@ -238,13 +248,13 @@ contract DeploySecondaryConditionsScript is Script {
         address recorded,
         address implementation,
         bytes memory initCall,
-        bytes32 salt
+        bytes32 proxySalt
     ) internal returns (address) {
         if (recorded != address(0)) {
             UUPSUpgradeable(recorded).upgradeToAndCall(implementation, "");
             return recorded;
         }
-        return address(new ERC1967Proxy{salt: salt}(implementation, initCall));
+        return address(new ERC1967Proxy{salt: proxySalt}(implementation, initCall));
     }
 
     /// @dev The badge-scoped conditions refuse a zero registry at initialize, so the chain needs a
@@ -252,15 +262,16 @@ contract DeploySecondaryConditionsScript is Script {
     ///      shared auth would make the badge issuer grants meaningless.
     function _badge(
         DeploymentConstants.CoreDeployment memory core,
-        bytes32 salt,
+        bytes32 implSalt,
+        bytes32 proxySalt,
         address deployer
     ) internal returns (address badge) {
         if (core.lexchexBadge != address(0)) return core.lexchexBadge;
 
-        BorgAuth badgeAuth = new BorgAuth{salt: salt}(deployer);
+        BorgAuth badgeAuth = new BorgAuth{salt: implSalt}(deployer);
         badge = address(
-            new ERC1967Proxy{salt: salt}(
-                address(new LeXcheXBadge{salt: salt}()),
+            new ERC1967Proxy{salt: proxySalt}(
+                address(new LeXcheXBadge{salt: implSalt}()),
                 abi.encodeCall(LeXcheXBadge.initialize, (address(badgeAuth)))
             )
         );

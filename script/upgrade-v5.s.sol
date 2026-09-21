@@ -38,6 +38,7 @@ interface IUUPS {
 /// @notice Deploys v5 implementations and upgrades MetaLeX-owned singleton proxies.
 ///         It also upgrades the live V1 and V2 certificate extensions, deploys the V3 extensions
 ///         and deploys the secondary-trading condition singletons that the chain does not have.
+///         It sets the secondary-trade fee ratio, which the upgraded DealManagerFactory starts at zero.
 /// @dev Run this once per production chain, or on Base Sepolia as a rehearsal.
 ///      Corp upgrades intentionally are not broadcast here:
 ///      `corpUpgradeCalls` returns the six calls that a corp owner must execute in one Safe batch.
@@ -46,9 +47,20 @@ contract UpgradeV5Script is Script {
     uint256 private constant BASE = 8453;
     uint256 private constant BASE_SEPOLIA = 84532;
     bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-    string private constant EXTENSIONS_V2_SALT = "CyberCorpV5-ExtensionsV2.0.1";
-    string private constant EXTENSIONS_V3_SALT = "CyberCorpV5-ExtensionsV3";
-    string private constant SECONDARY_CONDITIONS_SALT = "CyberCorpV5-SecondaryConditionsV1.0.0";
+    // Each sub-script takes two salts. The proxy salt fixes the address of a proxy this run creates,
+    // so it stays as recorded. Bump the implementation salt to re-run on a chain that already holds
+    // these implementations, because the same code under the same salt gives an occupied address.
+    string private constant EXTENSIONS_V2_PROXY_SALT = "CyberCorpV5-ExtensionsV2.0.1";
+    string private constant EXTENSIONS_V3_PROXY_SALT = "CyberCorpV5-ExtensionsV3";
+    string private constant SECONDARY_CONDITIONS_PROXY_SALT = "CyberCorpV5-SecondaryConditionsV1.0.0";
+
+    string private constant EXTENSIONS_V2_IMPL_SALT = "CyberCorpV5-ExtensionsV2.0.1-impl0";
+    string private constant EXTENSIONS_V3_IMPL_SALT = "CyberCorpV5-ExtensionsV3-impl0";
+    string private constant SECONDARY_CONDITIONS_IMPL_SALT = "CyberCorpV5-SecondaryConditions-impl-V1.0.0-impl0";
+
+    /// @dev Secondary trades are priced apart from primary issuance. The primary rate keeps its
+    ///      stored value through the upgrade; the secondary rate is new state and starts at zero.
+    uint256 private constant SECONDARY_FEE_RATIO_BPS = 600; // 6% of the ticket
 
     struct Implementations {
         address cyberCorpFactory;
@@ -78,9 +90,7 @@ contract UpgradeV5Script is Script {
         address registry;
         address legalDocRegistry;
         address certificateUriBuilder;
-        address pumpCertificateUriBuilder;
         address lexchexMinter;
-        address pumpLexchexMinter;
     }
 
     function run() external {
@@ -117,6 +127,7 @@ contract UpgradeV5Script is Script {
 
         _upgradeProxy(targets.dealManagerFactory, impls.dealManagerFactory, "DealManagerFactory");
         DealManagerFactory(targets.dealManagerFactory).setRefImplementation(impls.dealManager);
+        DealManagerFactory(targets.dealManagerFactory).setDefaultSecondaryFeeRatio(SECONDARY_FEE_RATIO_BPS);
 
         _upgradeProxy(targets.certificateUriBuilder, impls.certificateUriBuilder, "CertificateUriBuilder");
         _upgradeProxy(targets.registry, impls.registry, "CyberAgreementRegistry");
@@ -126,11 +137,6 @@ contract UpgradeV5Script is Script {
             console2.log("LegalDocRegistry not set, skipping");
         }
 
-        // The pump stack exists on Base mainnet only.
-        if (block.chainid == BASE) {
-            _upgradeProxy(targets.pumpCertificateUriBuilder, impls.certificateUriBuilder, "Pump CertificateUriBuilder");
-            _upgradeProxy(targets.pumpLexchexMinter, impls.lexchexMinter, "Pump LeXcheXMinter");
-        }
         _upgradeProxy(targets.lexchexMinter, impls.lexchexMinter, "LeXcheXMinter");
 
         // Keep last: all factory references and the RoundManager deployment dependency are now live.
@@ -142,9 +148,15 @@ contract UpgradeV5Script is Script {
         vm.stopBroadcast();
 
         // Each called script starts its own broadcast.
-        (new DeployExtensionsV2Script()).runWithArgs(block.chainid, EXTENSIONS_V2_SALT, privateKey);
-        (new DeployExtensionsV3Script()).runWithArgs(block.chainid, EXTENSIONS_V3_SALT, privateKey);
-        (new DeploySecondaryConditionsScript()).runWithArgs(block.chainid, SECONDARY_CONDITIONS_SALT, privateKey);
+        (new DeployExtensionsV2Script()).runWithArgs(
+            block.chainid, EXTENSIONS_V2_PROXY_SALT, EXTENSIONS_V2_IMPL_SALT, privateKey
+        );
+        (new DeployExtensionsV3Script()).runWithArgs(
+            block.chainid, EXTENSIONS_V3_PROXY_SALT, EXTENSIONS_V3_IMPL_SALT, privateKey
+        );
+        (new DeploySecondaryConditionsScript()).runWithArgs(
+            block.chainid, SECONDARY_CONDITIONS_PROXY_SALT, SECONDARY_CONDITIONS_IMPL_SALT, privateKey
+        );
     }
 
     /// @notice Returns the atomic Safe batch for a single corp after singleton deployment.
@@ -209,7 +221,7 @@ contract UpgradeV5Script is Script {
         DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
         targets.cyberCorpFactory = vm.envOr("CYBERCORP_FACTORY", core.cyberCorpFactory);
         targets.pumpCorpFactory = block.chainid == BASE
-            ? vm.envAddress("PUMP_CORP_FACTORY")
+            ? vm.envOr("PUMP_CORP_FACTORY", DeploymentConstants.pump(BASE).pumpCorpFactory)
             : vm.envOr("PUMP_CORP_FACTORY", address(0));
         targets.cyberCorpSingleFactory = vm.envOr("CYBERCORP_SINGLE_FACTORY", core.cyberCorpSingleFactory);
         targets.issuanceManagerFactory = vm.envOr("ISSUANCE_MANAGER_FACTORY", core.issuanceManagerFactory);
@@ -218,15 +230,9 @@ contract UpgradeV5Script is Script {
         targets.registry = vm.envOr("CYBER_AGREEMENT_REGISTRY", core.cyberAgreementRegistry);
         targets.certificateUriBuilder = vm.envOr("CERTIFICATE_URI_BUILDER", core.uriBuilder);
         targets.lexchexMinter = vm.envOr("LEXCHEX_MINTER", core.lexchexMinter);
-        // Optional on Base Sepolia so a rehearsal works without a LegalDocRegistry deployment.
-        targets.legalDocRegistry = block.chainid == BASE_SEPOLIA
-            ? vm.envOr("LEGAL_DOC_REGISTRY", address(0))
-            : vm.envAddress("LEGAL_DOC_REGISTRY");
-
-        if (block.chainid == BASE) {
-            targets.pumpCertificateUriBuilder = vm.envAddress("PUMP_CERTIFICATE_URI_BUILDER");
-            targets.pumpLexchexMinter = vm.envAddress("PUMP_LEXCHEX_MINTER");
-        }
+        // TODO: LegalDocRegistry is disabled on all chains for now. Put it back for production:
+        //       targets.legalDocRegistry = vm.envAddress("LEGAL_DOC_REGISTRY");
+        targets.legalDocRegistry = address(0);
     }
 
     function _deployImplementations() internal returns (Implementations memory impls) {

@@ -6,6 +6,7 @@ library DeploymentConstants {
 
     uint256 internal constant ETH = 1;
     uint256 internal constant BASE = 8453;
+    uint256 internal constant ARBITRUM = 42161;
 
     uint256 internal constant ETH_SEPOLIA = 11155111;
     uint256 internal constant BASE_SEPOLIA = 84532;
@@ -77,6 +78,10 @@ library DeploymentConstants {
         bytes32 boardConsentTemplateId;
     }
 
+    struct PumpDeployment {
+        address pumpCorpFactory;
+    }
+
     struct Deps {
         address usdc;
     }
@@ -127,6 +132,26 @@ library DeploymentConstants {
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: address(0) // no ZKPassport Verifier available
+                });
+        } else if (chainId == ARBITRUM) {
+            return
+                CoreDeployment({
+                    metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
+                    auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
+                    cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
+                    issuanceManagerFactory: 0xD353972D7955F421d94d0eA8c42c88c417F7155A,
+                    cyberCorpSingleFactory: 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4,
+                    dealManagerFactory: 0x3982b078f2ac306219c9540Ebc908360a960C251,
+                    roundManagerFactory: 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9,
+                    cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
+                    uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
+                    lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                    lexchexBadgeAuth: address(0), // TODO: not yet deployed on this chain
+                    lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                    lexchexBadge: address(0), // TODO: not yet deployed on this chain
+                    lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
+                    lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
+                    zkpassportCondition: address(0) // TODO: not yet deployed on this chain
                 });
         } else {
             return
@@ -219,6 +244,26 @@ library DeploymentConstants {
                 shareExtensionV3: address(0), // TODO: not yet deployed on this chain
                 fundInterestExtensionV3: address(0) // TODO: not yet deployed on this chain
             });
+        } else if (chainId == ARBITRUM) {
+            return ExtensionDeployment({
+                safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
+                safeExtensionV3: address(0), // TODO: not yet deployed on this chain
+                aceSafeExtension: address(0), // deployed on Base only
+                aceSafeExtensionV3: address(0), // TODO: not yet deployed on this chain
+                saftExtension: 0x109D2A13932bE393011835B308F81ce1992E365B,
+                saftExtensionV2: 0x37c2A0e801e569e01f0972186aF4DB01409e92c1,
+                saftExtensionV3: address(0), // TODO: not yet deployed on this chain
+                safteExtension: 0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C,
+                ethosSafteExtension: 0xC23fFF0B06aE5EBea862611F489b1329108ce603, // older SAFTEExtension code, used by the Ethos SAFTE template
+                safteExtensionV2: 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A,
+                safteExtensionV3: address(0), // TODO: not yet deployed on this chain
+                tokenWarrantExtension: 0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4,
+                tokenWarrantExtensionV2: 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F,
+                tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on this chain
+                shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
+                shareExtensionV3: address(0), // TODO: not yet deployed on this chain
+                fundInterestExtensionV3: address(0) // TODO: not yet deployed on this chain
+            });
         } else {
             revert UnsupportedChain(chainId);
         }
@@ -255,7 +300,7 @@ library DeploymentConstants {
                 killSwitch: 0x4c3b9Ec3B6e416A64Fde4a17Ea856e1cf2fE0344, // staging admin keys
                 timeSettlementPeriod: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
             });
-        } else if (chainId == ETH || chainId == BASE || chainId == ETH_SEPOLIA) {
+        } else if (chainId == ETH || chainId == BASE || chainId == ARBITRUM || chainId == ETH_SEPOLIA) {
             // TODO: not yet deployed on these chains. Each zero field makes
             //       `script/deploy-secondary-conditions.s.sol` deploy a new proxy. Record the
             //       address here after the run, so a later run upgrades that proxy instead.
@@ -287,6 +332,21 @@ library DeploymentConstants {
                 parentCoFactory: 0xC1304898FAfF45cA2B07C0f4E10B77843eD5a47B,
                 segCoTemplateId: 0xb6da5c8e53767592c0eeb4c5c0d77eae7e1e2e795190e7237d837b3fbc98ed75,
                 boardConsentTemplateId: 0xc02175e98621a996529fb751b30e0b7a8344ece3b00f46a29c1e904c9da87a46
+            });
+        } else {
+            revert UnsupportedChain(chainId);
+        }
+    }
+
+    /// @notice Pump stack proxies. The pump stack exists on Base only.
+    function pump(uint256 chainId)
+        internal
+        pure
+        returns (PumpDeployment memory deployment)
+    {
+        if (chainId == BASE) {
+            return PumpDeployment({
+                pumpCorpFactory: 0xe73Ea052c2891cE1668742142a6634Df09c88512
             });
         } else {
             revert UnsupportedChain(chainId);
