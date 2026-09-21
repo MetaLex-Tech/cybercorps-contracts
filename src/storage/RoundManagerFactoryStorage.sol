@@ -42,7 +42,7 @@
 
 pragma solidity 0.8.28;
 
-import {FeeOverride} from "../interfaces/IRoundManagerFactory.sol";
+import {FeeOverride} from "../interfaces/FeeTypes.sol";
 
 /// @title RoundManagerFactoryStorage
 /// @notice Storage library for the RoundManagerFactory contract that handles persistent data storage

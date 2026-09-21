@@ -13,7 +13,7 @@ import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
-import {FeeOverride} from "../src/interfaces/IRoundManagerFactory.sol";
+import {FeeOverride} from "../src/interfaces/FeeTypes.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
 import {BorgAuth} from "../src/libs/auth.sol";

@@ -42,6 +42,8 @@
 
 pragma solidity 0.8.28;
 
+import {FeeOverride} from "../interfaces/FeeTypes.sol";
+
 /// @title DealManagerFactoryStorage
 /// @notice Storage library for the DealManagerFactory contract that handles persistent data storage
 /// @dev Uses the unstructured storage pattern to manage factory-related data
@@ -63,10 +65,16 @@ library DealManagerFactoryStorage {
         address refImplementation; // implementation contract to use for new deployments
 
         address platformPayable; // Recipient of platform fees
-        uint256 defaultFeeRatio; // total fee as % of ticket size (BASIS_POINTS = 100%)
+        // Primary issuance (deals and rounds) and secondary trades are priced apart, so each keeps
+        // its own platform default and its own per-DealManager override.
+        uint256 defaultPrimaryFeeRatio; // primary fee as % of ticket size (BASIS_POINTS = 100%)
         // Per-integrator fee split (spec §12B.4): each whitelisted integrator earns its own share
-        // of the protocol fee, the rest going to the platform.
+        // of the protocol fee, the rest going to the platform. Secondary trades only.
         mapping(address => Integrator) integrators;
+        // Per-instance rates: MetaLeX can price one SPV apart from the platform default.
+        mapping(address => FeeOverride) primaryFeeOverrides; // DealManager -> FeeOverride
+        uint256 defaultSecondaryFeeRatio; // secondary fee as % of ticket size (BASIS_POINTS = 100%)
+        mapping(address => FeeOverride) secondaryFeeOverrides; // DealManager -> FeeOverride
     }
 
     /// @notice Retrieves the storage reference for the DealManagerFactoryData struct
@@ -88,7 +96,11 @@ library DealManagerFactoryStorage {
     }
 
     function getDefaultFeeRatio() internal view returns (uint256) {
-        return dealManagerFactoryStorage().defaultFeeRatio;
+        return dealManagerFactoryStorage().defaultPrimaryFeeRatio;
+    }
+
+    function getDefaultSecondaryFeeRatio() internal view returns (uint256) {
+        return dealManagerFactoryStorage().defaultSecondaryFeeRatio;
     }
 
     function setRefImplementation(address newImplementation) internal {
@@ -100,7 +112,11 @@ library DealManagerFactoryStorage {
     }
 
     function setDefaultFeeRatio(uint256 feeRatio) internal {
-        dealManagerFactoryStorage().defaultFeeRatio = feeRatio;
+        dealManagerFactoryStorage().defaultPrimaryFeeRatio = feeRatio;
+    }
+
+    function setDefaultSecondaryFeeRatio(uint256 feeRatio) internal {
+        dealManagerFactoryStorage().defaultSecondaryFeeRatio = feeRatio;
     }
 
     function getIntegrator(address integrator) internal view returns (Integrator memory) {

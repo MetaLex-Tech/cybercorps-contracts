@@ -42,7 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./RoundManager.sol";
-import {FeeOverride} from "./interfaces/IRoundManagerFactory.sol";
+import {FeeOverride} from "./interfaces/FeeTypes.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";

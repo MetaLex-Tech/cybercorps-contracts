@@ -1133,7 +1133,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         vm.prank(owner);
         dmFactory.setIntegrator(integrator, true, 3000); // 30% of the fee to the integrator
         vm.prank(owner);
-        dmFactory.setDefaultFeeRatio(1000); // 10% ticket fee
+        dmFactory.setDefaultSecondaryFeeRatio(1000); // 10% ticket fee
         vm.prank(owner);
         dmFactory.setPlatformPayable(platform);
 

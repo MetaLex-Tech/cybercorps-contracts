@@ -417,7 +417,7 @@ abstract contract SecondaryTradeGasBase is SecondaryConditionIntegrationBase {
 
     function _configureFees() internal {
         dmFactory.setPlatformPayable(platformPayable);
-        dmFactory.setDefaultFeeRatio(PLATFORM_FEE_BPS);
+        dmFactory.setDefaultSecondaryFeeRatio(PLATFORM_FEE_BPS);
         dmFactory.setIntegrator(integrator, true, INTEGRATOR_FEE_SHARE_BPS);
     }
 

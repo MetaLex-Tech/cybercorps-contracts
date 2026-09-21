@@ -461,9 +461,10 @@ contract DealManager is
         );
     }
 
-    /// @notice Compute fee based on ticket size
+    /// @notice Compute the primary issuance fee based on ticket size
     /// @dev Currently the factory owner (MetaLeX) unilaterally set the fee ratio;
     /// in the future, it could be determined through a governance process.
+    /// Secondary trades are priced apart, from the factory's secondary rate.
     /// @return Fee amount
     function computeFee(uint256 size) public view returns (uint256) {
         return size * IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getDefaultFeeRatio() / DealManagerFactoryStorage.BASIS_POINTS;

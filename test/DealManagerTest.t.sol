@@ -1184,6 +1184,24 @@ contract DealManagerTest is Test {
         DealManagerFactory(dmFactory).setRefImplementation(newImplementation);
     }
 
+    // computeFee prices primary issuance. It reads the primary config only: the factory keys the rate
+    // on the calling DealManager, and a secondary rate set for the same SPV must not touch it.
+    function test_ComputeFee_UsesInstanceFeeOverride() public {
+        vm.startPrank(owner);
+        dmFactory.setDefaultFeeRatio(30); // 0.3% platform default
+        dmFactory.setDefaultSecondaryFeeRatio(1000); // 10% secondary, which primary must ignore
+        dmFactory.setInstanceFeeOverride(address(dm), true, 100); // 1% for this DealManager only
+        dmFactory.setSecondaryInstanceFeeOverride(address(dm), true, 600); // 6% secondary for the same SPV
+        vm.stopPrank();
+
+        assertEq(dm.computeFee(1 ether), 0.01 ether, "primary fee uses the primary instance rate");
+
+        vm.prank(owner);
+        dmFactory.setInstanceFeeOverride(address(dm), false, 0);
+
+        assertEq(dm.computeFee(1 ether), 0.003 ether, "primary fee falls back to the primary default");
+    }
+
     function test_ComponentSettersEmitOldAndNewAddress() public {
         address newDealRegistry = makeAddr("newDealRegistry");
         address newCorp = makeAddr("newCorp");

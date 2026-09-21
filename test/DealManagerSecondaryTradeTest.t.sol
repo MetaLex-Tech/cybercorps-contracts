@@ -3891,7 +3891,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(owner);
         dmFactory.setIntegrator(integrator, true, 3000); // 30% of the fee routes to the integrator
         vm.prank(owner);
-        dmFactory.setDefaultFeeRatio(1000); // 10% ticket fee
+        dmFactory.setDefaultSecondaryFeeRatio(1000); // 10% ticket fee
         vm.prank(owner);
         dmFactory.setPlatformPayable(platform);
 
@@ -3924,6 +3924,51 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(paymentToken.balanceOf(address(dm)), 0, "custody fully drained");
     }
 
+    // Per-instance secondary fee ratio: MetaLeX prices this SPV at 6% while the platform default stays
+    // 10%. The integrator's 33% share then applies to the 6%, so the integrator takes 1.98% of the
+    // ticket and the platform takes 4.02%. The SPV's 1% primary rate must not reach this path.
+    function test_FinalizeSecondaryTrade_SecondaryInstanceFeeOverride_AppliesToSplit() public {
+        address integrator = makeAddr("integrator");
+        address platform = makeAddr("platform");
+
+        vm.startPrank(owner);
+        dmFactory.setIntegrator(integrator, true, 3300); // 33% of the fee routes to the integrator
+        dmFactory.setDefaultSecondaryFeeRatio(1000); // 10% platform default, which this SPV does not pay
+        dmFactory.setSecondaryInstanceFeeOverride(address(dm), true, 600); // 6% for this DealManager only
+        dmFactory.setInstanceFeeOverride(address(dm), true, 100); // 1% primary, never charged here
+        dmFactory.setPlatformPayable(platform);
+        vm.stopPrank();
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_FinalizeSecondaryTrade_SecondaryInstanceFeeOverride_AppliesToSplit"));
+        p.integrator = integrator;
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        uint256 sellerBefore = paymentToken.balanceOf(seller);
+
+        uint256 fee = CONSIDERATION * 600 / 10000; // 6% of the ticket, not 10%
+        uint256 integratorFee = fee * 3300 / 10000; // 1.98% of the ticket
+        uint256 platformFee = fee - integratorFee; // 4.02% of the ticket
+
+        vm.expectEmit(true, true, true, true);
+        emit ISecondaryTradeStorage.SecondaryFeeDistributed(
+            settlementId, address(paymentToken), integrator, fee, integratorFee, platformFee
+        );
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        assertEq(fee, CONSIDERATION * 600 / 10000, "secondary instance rate used, global default ignored");
+        assertEq(dm.computeFee(CONSIDERATION), CONSIDERATION * 100 / 10000, "primary rate stays at 1% for the same SPV");
+        assertEq(paymentToken.balanceOf(seller), sellerBefore + CONSIDERATION - fee, "seller paid amount minus fee");
+        assertEq(paymentToken.balanceOf(integrator), integratorFee, "integrator gets its share of the instance fee");
+        assertEq(paymentToken.balanceOf(platform), platformFee, "platform gets the remaining fee");
+        assertEq(integratorFee + platformFee, fee, "split is exact: integrator + platform == total fee");
+        assertEq(paymentToken.balanceOf(address(dm)), 0, "custody fully drained");
+    }
+
     // Spec §12B.4 fall-through: the integrator is validated at posting, but if it is removed from the
     // factory whitelist before settlement the split must fall through to the unsplit MetaLeX-only flow
     // (full fee to platform, integrator gets nothing) rather than revert — settlement is never blocked.
@@ -3934,7 +3979,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(owner);
         dmFactory.setIntegrator(integrator, true, 3000);
         vm.prank(owner);
-        dmFactory.setDefaultFeeRatio(1000);
+        dmFactory.setDefaultSecondaryFeeRatio(1000);
         vm.prank(owner);
         dmFactory.setPlatformPayable(platform);
 

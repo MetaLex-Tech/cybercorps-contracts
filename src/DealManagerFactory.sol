@@ -49,6 +49,7 @@ import "./libs/auth.sol";
 import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
 import "./storage/DealManagerFactoryStorage.sol";
 import "./interfaces/IDealManagerFactory.sol";
+import {FeeOverride} from "./interfaces/FeeTypes.sol";
 
 /// @title DealManagerFactory
 /// @notice Factory contract for deploying DealManager instances
@@ -63,6 +64,8 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL, IDealManagerFactory
     event DealManagerDeployed(address dealManager, string version);
     event RefImplementationSet(address refImplementation, string version);
     event IntegratorSet(address indexed integrator, bool indexed approved, uint256 feeShare);
+    event InstanceFeeOverrideSet(address indexed dealManager, bool enabled, uint256 ratio);
+    event SecondaryInstanceFeeOverrideSet(address indexed dealManager, bool enabled, uint256 ratio);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -169,14 +172,69 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL, IDealManagerFactory
         emit IntegratorSet(integrator, approved, feeShare);
     }
 
-    /// @notice Get the fee ratio
-    /// @return Fee ratio (same unit as BASIS_POINTS
+    /// @notice Get the effective primary fee ratio for the calling DealManager instance.
+    /// @dev Primary issuance only. Returns the instance-specific override if set, otherwise the global default.
+    ///      Intended to be called by DealManager instances (msg.sender = the DealManager address).
+    ///      We intentionally name it `getDefaultFeeRatio` for backward compatibility so that older DealManagers can
+    ///      still utilize the fee overrides. Secondary trades read `getSecondaryFeeRatio` instead.
+    /// @return Fee ratio (same unit as BASIS_POINTS)
     function getDefaultFeeRatio() external view returns (uint256) {
+        DealManagerFactoryStorage.DealManagerFactoryData storage s = DealManagerFactoryStorage.dealManagerFactoryStorage();
+        FeeOverride storage fo = s.primaryFeeOverrides[msg.sender];
+        return fo.enabled ? fo.ratio : s.defaultPrimaryFeeRatio;
+    }
+
+    /// @notice Get the effective secondary fee ratio for the calling DealManager instance.
+    /// @dev Secondary trades only. Same keyed read as `getDefaultFeeRatio`, over the secondary config.
+    /// @return Fee ratio (same unit as BASIS_POINTS)
+    function getSecondaryFeeRatio() external view returns (uint256) {
+        DealManagerFactoryStorage.DealManagerFactoryData storage s = DealManagerFactoryStorage.dealManagerFactoryStorage();
+        FeeOverride storage fo = s.secondaryFeeOverrides[msg.sender];
+        return fo.enabled ? fo.ratio : s.defaultSecondaryFeeRatio;
+    }
+
+    /// @notice Get the underlying default primary fee ratio without overrides
+    /// @return Fee ratio (same unit as BASIS_POINTS)
+    function getUnderlyingDefaultFeeRatio() external view returns (uint256) {
         return DealManagerFactoryStorage.getDefaultFeeRatio();
     }
 
-    /// @notice Set the fee ratio
-    /// @dev Only callable by addresses with the admin role. Will check validity of the new value
+    /// @notice Get the underlying default secondary fee ratio without overrides
+    /// @return Fee ratio (same unit as BASIS_POINTS)
+    function getUnderlyingDefaultSecondaryFeeRatio() external view returns (uint256) {
+        return DealManagerFactoryStorage.getDefaultSecondaryFeeRatio();
+    }
+
+    /// @notice Get the per-instance primary fee override for a specific DealManager
+    /// @return Fee override configs
+    function getInstanceFeeOverride(address dealManager) external view returns (FeeOverride memory) {
+        return DealManagerFactoryStorage.dealManagerFactoryStorage().primaryFeeOverrides[dealManager];
+    }
+
+    /// @notice Get the per-instance secondary fee override for a specific DealManager
+    /// @return Fee override configs
+    function getSecondaryInstanceFeeOverride(address dealManager) external view returns (FeeOverride memory) {
+        return DealManagerFactoryStorage.dealManagerFactoryStorage().secondaryFeeOverrides[dealManager];
+    }
+
+    /// @notice Set a per-instance primary fee override for a specific DealManager
+    /// @dev Only callable by the factory owner. Pass enabled=false to remove the override.
+    function setInstanceFeeOverride(address dealManager, bool enabled, uint256 ratio) external onlyOwner {
+        if (ratio > DealManagerFactoryStorage.BASIS_POINTS) revert InvalidFeeRatio();
+        DealManagerFactoryStorage.dealManagerFactoryStorage().primaryFeeOverrides[dealManager] = FeeOverride(enabled, ratio);
+        emit InstanceFeeOverrideSet(dealManager, enabled, ratio);
+    }
+
+    /// @notice Set a per-instance secondary fee override for a specific DealManager
+    /// @dev Only callable by the factory owner. Pass enabled=false to remove the override.
+    function setSecondaryInstanceFeeOverride(address dealManager, bool enabled, uint256 ratio) external onlyOwner {
+        if (ratio > DealManagerFactoryStorage.BASIS_POINTS) revert InvalidFeeRatio();
+        DealManagerFactoryStorage.dealManagerFactoryStorage().secondaryFeeOverrides[dealManager] = FeeOverride(enabled, ratio);
+        emit SecondaryInstanceFeeOverrideSet(dealManager, enabled, ratio);
+    }
+
+    /// @notice Set the primary fee ratio
+    /// @dev Only callable by the factory owner. Will check validity of the new value
     /// @param feeRatio New fee ratio
     function setDefaultFeeRatio(uint256 feeRatio) external onlyOwner {
         if (feeRatio > DealManagerFactoryStorage.BASIS_POINTS) {
@@ -184,6 +242,17 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL, IDealManagerFactory
         }
 
         DealManagerFactoryStorage.setDefaultFeeRatio(feeRatio);
+    }
+
+    /// @notice Set the secondary fee ratio
+    /// @dev Only callable by the factory owner. Will check validity of the new value
+    /// @param feeRatio New fee ratio
+    function setDefaultSecondaryFeeRatio(uint256 feeRatio) external onlyOwner {
+        if (feeRatio > DealManagerFactoryStorage.BASIS_POINTS) {
+            revert InvalidFeeRatio(); // fee ratio should not exceed 100%
+        }
+
+        DealManagerFactoryStorage.setDefaultSecondaryFeeRatio(feeRatio);
     }
 
     function _authorizeUpgrade(

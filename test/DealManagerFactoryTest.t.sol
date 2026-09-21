@@ -45,6 +45,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerFactory, DealManagerFactoryStorage} from "../src/DealManagerFactory.sol";
+import {FeeOverride} from "../src/interfaces/FeeTypes.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
 contract MockDealManagerVTest is UUPSUpgradeable {
@@ -188,11 +189,11 @@ contract DealManagerFactoryTest is Test {
 
     function test_SetDefaultFeeRatio() public  {
         uint256 newValue = 123;
-        assertNotEq(dmFactory.getDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio before set");
+        assertNotEq(dmFactory.getUnderlyingDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio before set");
 
         vm.prank(owner);
         dmFactory.setDefaultFeeRatio(newValue);
-        assertEq(dmFactory.getDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio after set");
+        assertEq(dmFactory.getUnderlyingDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio after set");
     }
 
     function test_RevertIf_SetDefaultFeeRatioNonOwner() public {
@@ -251,5 +252,207 @@ contract DealManagerFactoryTest is Test {
         vm.prank(owner);
         vm.expectRevert(DealManagerFactory.InvalidFeeRatio.selector);
         dmFactory.setIntegrator(address(0x123), true, DealManagerFactoryStorage.BASIS_POINTS + 1);
+    }
+
+    function test_SetInstanceFeeOverride() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_SetInstanceFeeOverride"));
+
+        vm.startPrank(owner);
+        dmFactory.setDefaultFeeRatio(500);
+        dmFactory.setInstanceFeeOverride(dm, true, 600);
+        vm.stopPrank();
+
+        // getDefaultFeeRatio called from dm returns the override, not the global 500
+        vm.prank(dm);
+        assertEq(dmFactory.getDefaultFeeRatio(), 600);
+
+        FeeOverride memory fo = dmFactory.getInstanceFeeOverride(dm);
+        assertTrue(fo.enabled, "override enabled");
+        assertEq(fo.ratio, 600, "override ratio stored");
+    }
+
+    // A zero override is a real rate, not an unset one: it must beat a nonzero global default.
+    function test_SetInstanceFeeOverride_Zero() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_SetInstanceFeeOverrideZero"));
+
+        vm.startPrank(owner);
+        dmFactory.setDefaultFeeRatio(500);
+        dmFactory.setInstanceFeeOverride(dm, true, 0);
+        vm.stopPrank();
+
+        vm.prank(dm);
+        assertEq(dmFactory.getDefaultFeeRatio(), 0);
+    }
+
+    // Only the overridden instance moves; every other DealManager keeps the global default.
+    function test_InstanceFeeOverride_DoesNotAffectOtherInstances() public {
+        address dm1 = dmFactory.deployDealManager(keccak256("test_InstanceFeeOverrideOther1"));
+        address dm2 = dmFactory.deployDealManager(keccak256("test_InstanceFeeOverrideOther2"));
+
+        vm.startPrank(owner);
+        dmFactory.setDefaultFeeRatio(500);
+        dmFactory.setInstanceFeeOverride(dm1, true, 600);
+        vm.stopPrank();
+
+        vm.prank(dm1);
+        assertEq(dmFactory.getDefaultFeeRatio(), 600, "overridden instance uses its own rate");
+        vm.prank(dm2);
+        assertEq(dmFactory.getDefaultFeeRatio(), 500, "other instance keeps the global default");
+        assertEq(dmFactory.getUnderlyingDefaultFeeRatio(), 500, "global default unchanged");
+    }
+
+    function test_RevertIf_SetInstanceFeeOverrideNonOwner() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_SetInstanceFeeOverrideNonOwner"));
+
+        vm.prank(companyOwner);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, ownerRole, companyOwner));
+        dmFactory.setInstanceFeeOverride(dm, true, 600);
+    }
+
+    function test_RevertIf_SetInstanceFeeOverrideInvalid() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_SetInstanceFeeOverrideInvalid"));
+
+        vm.prank(owner);
+        vm.expectRevert(DealManagerFactory.InvalidFeeRatio.selector);
+        dmFactory.setInstanceFeeOverride(dm, true, DealManagerFactoryStorage.BASIS_POINTS + 1);
+    }
+
+    function test_ClearInstanceFeeOverride() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_ClearInstanceFeeOverride"));
+
+        vm.startPrank(owner);
+        dmFactory.setDefaultFeeRatio(500);
+        dmFactory.setInstanceFeeOverride(dm, true, 600);
+        vm.stopPrank();
+
+        vm.prank(dm);
+        assertEq(dmFactory.getDefaultFeeRatio(), 600, "override should be active");
+
+        vm.prank(owner);
+        dmFactory.setInstanceFeeOverride(dm, false, 0);
+
+        vm.prank(dm);
+        assertEq(dmFactory.getDefaultFeeRatio(), 500, "should fall back to global default after override cleared");
+    }
+
+    function test_InstanceFeeOverrideSet_EventEmitted() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_InstanceFeeOverrideSetEvent"));
+
+        vm.expectEmit(true, false, false, true);
+        emit DealManagerFactory.InstanceFeeOverrideSet(dm, true, 600);
+        vm.prank(owner);
+        dmFactory.setInstanceFeeOverride(dm, true, 600);
+    }
+
+    function test_SetDefaultSecondaryFeeRatio() public {
+        uint256 newValue = 600;
+        assertNotEq(dmFactory.getUnderlyingDefaultSecondaryFeeRatio(), newValue, "Unexpected defaultSecondaryFeeRatio before set");
+
+        vm.prank(owner);
+        dmFactory.setDefaultSecondaryFeeRatio(newValue);
+        assertEq(dmFactory.getUnderlyingDefaultSecondaryFeeRatio(), newValue, "Unexpected defaultSecondaryFeeRatio after set");
+    }
+
+    function test_RevertIf_SetDefaultSecondaryFeeRatioNonOwner() public {
+        vm.prank(companyOwner);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, ownerRole, companyOwner));
+        dmFactory.setDefaultSecondaryFeeRatio(600);
+    }
+
+    function test_RevertIf_SetDefaultSecondaryFeeRatioInvalid() public {
+        vm.prank(owner);
+        vm.expectRevert(DealManagerFactory.InvalidFeeRatio.selector);
+        dmFactory.setDefaultSecondaryFeeRatio(DealManagerFactoryStorage.BASIS_POINTS + 1);
+    }
+
+    function test_SetSecondaryInstanceFeeOverride() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_SetSecondaryInstanceFeeOverride"));
+
+        vm.startPrank(owner);
+        dmFactory.setDefaultSecondaryFeeRatio(500);
+        dmFactory.setSecondaryInstanceFeeOverride(dm, true, 600);
+        vm.stopPrank();
+
+        // getSecondaryFeeRatio called from dm returns the override, not the global 500
+        vm.prank(dm);
+        assertEq(dmFactory.getSecondaryFeeRatio(), 600);
+
+        FeeOverride memory fo = dmFactory.getSecondaryInstanceFeeOverride(dm);
+        assertTrue(fo.enabled, "override enabled");
+        assertEq(fo.ratio, 600, "override ratio stored");
+    }
+
+    function test_RevertIf_SetSecondaryInstanceFeeOverrideNonOwner() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_SetSecondaryInstanceFeeOverrideNonOwner"));
+
+        vm.prank(companyOwner);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, ownerRole, companyOwner));
+        dmFactory.setSecondaryInstanceFeeOverride(dm, true, 600);
+    }
+
+    function test_RevertIf_SetSecondaryInstanceFeeOverrideInvalid() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_SetSecondaryInstanceFeeOverrideInvalid"));
+
+        vm.prank(owner);
+        vm.expectRevert(DealManagerFactory.InvalidFeeRatio.selector);
+        dmFactory.setSecondaryInstanceFeeOverride(dm, true, DealManagerFactoryStorage.BASIS_POINTS + 1);
+    }
+
+    function test_ClearSecondaryInstanceFeeOverride() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_ClearSecondaryInstanceFeeOverride"));
+
+        vm.startPrank(owner);
+        dmFactory.setDefaultSecondaryFeeRatio(500);
+        dmFactory.setSecondaryInstanceFeeOverride(dm, true, 600);
+        vm.stopPrank();
+
+        vm.prank(dm);
+        assertEq(dmFactory.getSecondaryFeeRatio(), 600, "override should be active");
+
+        vm.prank(owner);
+        dmFactory.setSecondaryInstanceFeeOverride(dm, false, 0);
+
+        vm.prank(dm);
+        assertEq(dmFactory.getSecondaryFeeRatio(), 500, "should fall back to global default after override cleared");
+    }
+
+    function test_SecondaryInstanceFeeOverrideSet_EventEmitted() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_SecondaryInstanceFeeOverrideSetEvent"));
+
+        vm.expectEmit(true, false, false, true);
+        emit DealManagerFactory.SecondaryInstanceFeeOverrideSet(dm, true, 600);
+        vm.prank(owner);
+        dmFactory.setSecondaryInstanceFeeOverride(dm, true, 600);
+    }
+
+    // The two rate configs are independent: a primary rate never moves the secondary rate, and the
+    // reverse. This is the whole point of splitting them, so it is asserted on both defaults and
+    // both per-instance overrides.
+    function test_PrimaryAndSecondaryFeeConfigsAreIndependent() public {
+        address dm = dmFactory.deployDealManager(keccak256("test_PrimaryAndSecondaryFeeConfigsAreIndependent"));
+
+        vm.startPrank(owner);
+        dmFactory.setDefaultFeeRatio(30); // 0.3% platform default for primary
+        dmFactory.setDefaultSecondaryFeeRatio(1000); // 10% platform default for secondary
+        dmFactory.setInstanceFeeOverride(dm, true, 100); // 1% primary for this SPV
+        dmFactory.setSecondaryInstanceFeeOverride(dm, true, 600); // 6% secondary for this SPV
+        vm.stopPrank();
+
+        vm.prank(dm);
+        assertEq(dmFactory.getDefaultFeeRatio(), 100, "primary rate is the primary override");
+        vm.prank(dm);
+        assertEq(dmFactory.getSecondaryFeeRatio(), 600, "secondary rate is the secondary override");
+
+        // Clearing one side leaves the other untouched.
+        vm.prank(owner);
+        dmFactory.setInstanceFeeOverride(dm, false, 0);
+
+        vm.prank(dm);
+        assertEq(dmFactory.getDefaultFeeRatio(), 30, "primary falls back to its own default");
+        vm.prank(dm);
+        assertEq(dmFactory.getSecondaryFeeRatio(), 600, "secondary override survives the primary change");
+
+        assertEq(dmFactory.getUnderlyingDefaultFeeRatio(), 30, "primary default unchanged");
+        assertEq(dmFactory.getUnderlyingDefaultSecondaryFeeRatio(), 1000, "secondary default unchanged");
     }
 }

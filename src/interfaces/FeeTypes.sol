@@ -41,19 +41,10 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import {FeeOverride} from "./FeeTypes.sol";
-
-interface IRoundManagerFactory {
-    function deployRoundManager(bytes32 _salt) external returns (address);
-    function computeRoundManagerAddress(bytes32 salt, address deployer) external view returns (address);
-
-    function getRefImplementation() external view returns (address);
-
-    function getDefaultFeeRatio() external view returns (uint256);
-    function getUnderlyingDefaultFeeRatio() external view returns (uint256);
-    function getInstanceFeeOverride(address roundManager) external view returns (FeeOverride memory);
-    function setInstanceFeeOverride(address roundManager, bool enabled, uint256 ratio) external;
-    function getPlatformPayable() external view returns (address);
-    function isWhitelistedToken(address token) external view returns (bool);
-    function setWhitelistedToken(address token, bool isWhitelisted) external;
+/// @notice A per-instance fee ratio that replaces the factory default for one manager instance.
+/// @dev Shared by DealManagerFactory and RoundManagerFactory. `enabled` false means "no override":
+/// that instance pays the factory default. A zero `ratio` with `enabled` true is a real 0% rate.
+struct FeeOverride {
+    bool enabled;
+    uint256 ratio;
 }

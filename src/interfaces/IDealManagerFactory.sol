@@ -41,6 +41,8 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+import {FeeOverride} from "./FeeTypes.sol";
+
 interface IDealManagerFactory {
     function deployDealManager(bytes32 salt) external returns (address);
     function computeDealManagerAddress(bytes32 salt) external view returns (address);
@@ -49,7 +51,20 @@ interface IDealManagerFactory {
 
     function getRefImplementation() external view returns (address);
 
+    // Primary issuance keeps the legacy `getDefaultFeeRatio` name: deployed DealManagers call it.
     function getDefaultFeeRatio() external view returns (uint256);
+    function getUnderlyingDefaultFeeRatio() external view returns (uint256);
+    function getInstanceFeeOverride(address dealManager) external view returns (FeeOverride memory);
+    function setInstanceFeeOverride(address dealManager, bool enabled, uint256 ratio) external;
+    function setDefaultFeeRatio(uint256 feeRatio) external;
+
+    // Secondary trades are priced apart from primary issuance.
+    function getSecondaryFeeRatio() external view returns (uint256);
+    function getUnderlyingDefaultSecondaryFeeRatio() external view returns (uint256);
+    function getSecondaryInstanceFeeOverride(address dealManager) external view returns (FeeOverride memory);
+    function setSecondaryInstanceFeeOverride(address dealManager, bool enabled, uint256 ratio) external;
+    function setDefaultSecondaryFeeRatio(uint256 feeRatio) external;
+
     function getPlatformPayable() external view returns (address);
 
     // Integrator whitelist and per-integrator fee split (cyberTRADE spec §12B.4)
