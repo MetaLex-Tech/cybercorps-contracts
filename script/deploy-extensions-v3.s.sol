@@ -11,8 +11,6 @@ import {TokenWarrantExtensionV3} from "../src/storage/extensions/TokenWarrantExt
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {SafeUtils} from "./libs/SafeUtils.sol";
 import {GnosisTransaction} from "./libs/safe.sol";
-import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Script, console2} from "forge-std/Script.sol";
 
 /// @notice Deploys or upgrades the extension proxies that render the whole certificate.
@@ -26,6 +24,8 @@ import {Script, console2} from "forge-std/Script.sol";
 ///      The deployer only deploys. The upgrades of recorded proxies need the owner role, so
 ///      `runWithArgs` returns them as gated calls and does not send them.
 contract DeployExtensionsV3Script is Script {
+    using SafeUtils for GnosisTransaction[];
+
     GnosisTransaction[] internal gatedCalls;
 
     function run() public returns (DeploymentConstants.ExtensionDeployment memory deployed) {
@@ -88,68 +88,38 @@ contract DeployExtensionsV3Script is Script {
         console2.log("AUTH:", deployment.auth);
         console2.log("");
 
+        bytes memory initCall = abi.encodeWithSignature("initialize(address)", deployment.auth);
         vm.startBroadcast(deployerPrivateKey);
-        deployed.aceSafeExtensionV3 = _deployOrUpgrade(
-            recorded.aceSafeExtensionV3, address(new ACESAFEExtensionV3{salt: implSalt}()), deployment.auth, proxySalt
+        deployed.aceSafeExtensionV3 = gatedCalls.deployOrUpgrade("ACESAFEExtensionV3", 
+            recorded.aceSafeExtensionV3, address(new ACESAFEExtensionV3{salt: implSalt}()), initCall, proxySalt
         );
-        deployed.safeExtensionV3 = _deployOrUpgrade(
-            recorded.safeExtensionV3, address(new SAFEExtensionV3{salt: implSalt}()), deployment.auth, proxySalt
+        deployed.safeExtensionV3 = gatedCalls.deployOrUpgrade("SAFEExtensionV3", 
+            recorded.safeExtensionV3, address(new SAFEExtensionV3{salt: implSalt}()), initCall, proxySalt
         );
-        deployed.saftExtensionV3 = _deployOrUpgrade(
-            recorded.saftExtensionV3, address(new SAFTExtensionV3{salt: implSalt}()), deployment.auth, proxySalt
+        deployed.saftExtensionV3 = gatedCalls.deployOrUpgrade("SAFTExtensionV3", 
+            recorded.saftExtensionV3, address(new SAFTExtensionV3{salt: implSalt}()), initCall, proxySalt
         );
-        deployed.safteExtensionV3 = _deployOrUpgrade(
-            recorded.safteExtensionV3, address(new SAFTEExtensionV3{salt: implSalt}()), deployment.auth, proxySalt
+        deployed.safteExtensionV3 = gatedCalls.deployOrUpgrade("SAFTEExtensionV3", 
+            recorded.safteExtensionV3, address(new SAFTEExtensionV3{salt: implSalt}()), initCall, proxySalt
         );
-        deployed.tokenWarrantExtensionV3 = _deployOrUpgrade(
+        deployed.tokenWarrantExtensionV3 = gatedCalls.deployOrUpgrade("TokenWarrantExtensionV3", 
             recorded.tokenWarrantExtensionV3,
             address(new TokenWarrantExtensionV3{salt: implSalt}()),
-            deployment.auth,
+            initCall,
             proxySalt
         );
-        deployed.shareExtensionV3 = _deployOrUpgrade(
-            recorded.shareExtensionV3, address(new ShareExtensionV3{salt: implSalt}()), deployment.auth, proxySalt
+        deployed.shareExtensionV3 = gatedCalls.deployOrUpgrade("ShareExtensionV3", 
+            recorded.shareExtensionV3, address(new ShareExtensionV3{salt: implSalt}()), initCall, proxySalt
         );
-        deployed.fundInterestExtensionV3 = _deployOrUpgrade(
+        deployed.fundInterestExtensionV3 = gatedCalls.deployOrUpgrade("FundInterestExtensionV3", 
             recorded.fundInterestExtensionV3,
             address(new FundInterestExtensionV3{salt: implSalt}()),
-            deployment.auth,
+            initCall,
             proxySalt
         );
         vm.stopBroadcast();
 
-        console2.log("==== Deployed ====");
-        console2.log("ACESAFEExtensionV3:", deployed.aceSafeExtensionV3);
-        console2.log("SAFEExtensionV3:", deployed.safeExtensionV3);
-        console2.log("SAFTExtensionV3:", deployed.saftExtensionV3);
-        console2.log("SAFTEExtensionV3:", deployed.safteExtensionV3);
-        console2.log("TokenWarrantExtensionV3:", deployed.tokenWarrantExtensionV3);
-        console2.log("ShareExtensionV3:", deployed.shareExtensionV3);
-        console2.log("FundInterestExtensionV3:", deployed.fundInterestExtensionV3);
         console2.log("");
         calls = gatedCalls;
-    }
-
-    /// @dev A recorded proxy takes the new code at its own address. A zero one gets a new proxy.
-    ///      The upgrade needs the owner role, so it goes to the gated calls.
-    function _deployOrUpgrade(
-        address recorded,
-        address implementation,
-        address auth,
-        bytes32 proxySalt
-    ) internal returns (address) {
-        if (recorded != address(0)) {
-            gatedCalls.push(
-                GnosisTransaction({
-                    to: recorded,
-                    value: 0,
-                    data: abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, ""))
-                })
-            );
-            return recorded;
-        }
-        return address(
-            new ERC1967Proxy{salt: proxySalt}(implementation, abi.encodeWithSignature("initialize(address)", auth))
-        );
     }
 }

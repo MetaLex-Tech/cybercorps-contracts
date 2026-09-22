@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Vm, console2} from "forge-std/Test.sol";
 import {GnosisTransaction} from "./safe.sol";
 import {BorgAuth} from "../../src/libs/auth.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
@@ -69,6 +70,62 @@ library SafeUtils {
                 transactions: convertedSafeTxs
             }))
         );
+    }
+
+    /// @notice Adds one owner-gated call to the list.
+    /// @dev The deployer deploys new contracts. A script collects each call that needs the owner
+    ///      role in a list. `executeOrHandOff` then sends the list or hands it to the Safe.
+    function queue(GnosisTransaction[] storage gatedCalls, address to, bytes memory data) internal {
+        gatedCalls.push(GnosisTransaction({to: to, value: 0, data: data}));
+    }
+
+    function queueAll(GnosisTransaction[] storage gatedCalls, GnosisTransaction[] memory calls) internal {
+        for (uint256 i = 0; i < calls.length; i++) {
+            gatedCalls.push(calls[i]);
+        }
+    }
+
+    function queueUpgrade(
+        GnosisTransaction[] storage gatedCalls,
+        address proxy,
+        address implementation,
+        string memory name
+    ) internal {
+        if (proxy == address(0)) revert("Missing proxy address");
+        queue(gatedCalls, proxy, abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, "")));
+        console2.log(string.concat("queued upgrading proxy ", name, ":"), proxy);
+    }
+
+    /// @dev A recorded proxy keeps its address and takes the new code. A zero one gets a new proxy.
+    ///      The upgrade needs the owner role, so it goes to the gated calls.
+    function deployOrUpgrade(
+        GnosisTransaction[] storage gatedCalls,
+        string memory name,
+        address recorded,
+        address implementation,
+        bytes memory initCall,
+        bytes32 proxySalt
+    ) internal returns (address) {
+        console2.log(string.concat("deployed new implementation ", name, ":"), implementation);
+        return upgradeOrNewProxy(gatedCalls, name, recorded, implementation, initCall, proxySalt);
+    }
+
+    /// @dev The same as `deployOrUpgrade`, for an implementation that the caller already logged.
+    function upgradeOrNewProxy(
+        GnosisTransaction[] storage gatedCalls,
+        string memory name,
+        address recorded,
+        address implementation,
+        bytes memory initCall,
+        bytes32 proxySalt
+    ) internal returns (address) {
+        if (recorded != address(0)) {
+            queueUpgrade(gatedCalls, recorded, implementation, name);
+            return recorded;
+        }
+        address proxy = address(new ERC1967Proxy{salt: proxySalt}(implementation, initCall));
+        console2.log(string.concat("queued deploying new proxy ", name, ":"), proxy);
+        return proxy;
     }
 
     /// @notice Tells if the account holds the owner role on the auth.

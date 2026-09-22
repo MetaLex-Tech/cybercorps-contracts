@@ -46,13 +46,20 @@ interface IUUPS {
 ///      Corp upgrades intentionally are not broadcast here:
 ///      `corpUpgradeCalls` returns the six calls that a corp owner must execute in one Safe batch.
 contract UpgradeV5Script is Script {
+    using SafeUtils for GnosisTransaction[];
+
+    GnosisTransaction[] internal gatedCalls;
+
     // Each sub-script takes two salts. The proxy salt fixes the address of a proxy this run creates,
     // so it stays as recorded. Bump the implementation salt to re-run on a chain that already holds
     // these implementations, because the same code under the same salt gives an occupied address.
+    // The core implementations use their own salt, so each one has the same address on all chains.
+    // The same re-run rule applies to it.
     string private constant EXTENSIONS_V2_PROXY_SALT = "CyberCorpV5-ExtensionsV2.0.1";
     string private constant EXTENSIONS_V3_PROXY_SALT = "CyberCorpV5-ExtensionsV3";
     string private constant SECONDARY_CONDITIONS_PROXY_SALT = "CyberCorpV5-SecondaryConditionsV1.0.0";
 
+    string private constant CORE_V5_IMPL_SALT = "CyberCorpV5-Core-impl0";
     string private constant EXTENSIONS_V2_IMPL_SALT = "CyberCorpV5-ExtensionsV2.0.1-impl0";
     string private constant EXTENSIONS_V3_IMPL_SALT = "CyberCorpV5-ExtensionsV3-impl0";
     string private constant SECONDARY_CONDITIONS_IMPL_SALT = "CyberCorpV5-SecondaryConditions-impl-V1.0.0-impl0";
@@ -92,8 +99,6 @@ contract UpgradeV5Script is Script {
         address lexchexMinter;
     }
 
-    GnosisTransaction[] internal gatedCalls;
-
     function run() external {
         // The call reverts on a chain that DeploymentConstants does not support.
         bool testnet = DeploymentConstants.isTestnet(block.chainid);
@@ -106,6 +111,12 @@ contract UpgradeV5Script is Script {
         DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
         Targets memory targets = _targets();
 
+        console2.log("==== Configs ====");
+        console2.log("chainId: %d", block.chainid);
+        console2.log("implementation salt string: %s", CORE_V5_IMPL_SALT);
+        console2.log("deployer: %s", deployer);
+        console2.log("AUTH:", core.auth);
+
         vm.startBroadcast(privateKey);
         Implementations memory impls = _deployImplementations();
         vm.stopBroadcast();
@@ -113,17 +124,19 @@ contract UpgradeV5Script is Script {
         _queueSingletonCalls(targets, impls);
 
         // Each called script deploys in its own broadcast and returns its gated calls.
-        _queueAll((new DeployExtensionsV2Script()).runWithArgs(
+        gatedCalls.queueAll((new DeployExtensionsV2Script()).runWithArgs(
             block.chainid, EXTENSIONS_V2_PROXY_SALT, EXTENSIONS_V2_IMPL_SALT, privateKey
         ));
         (, GnosisTransaction[] memory v3Calls) = (new DeployExtensionsV3Script()).runWithArgs(
             block.chainid, EXTENSIONS_V3_PROXY_SALT, EXTENSIONS_V3_IMPL_SALT, privateKey
         );
-        _queueAll(v3Calls);
+        gatedCalls.queueAll(v3Calls);
         (, GnosisTransaction[] memory conditionCalls) = (new DeploySecondaryConditionsScript()).runWithArgs(
             block.chainid, SECONDARY_CONDITIONS_PROXY_SALT, SECONDARY_CONDITIONS_IMPL_SALT, privateKey
         );
-        _queueAll(conditionCalls);
+        gatedCalls.queueAll(conditionCalls);
+
+        console2.log("");
 
         // On a testnet the deployer must own the core AUTH, the LeXcheX AUTH and the LeXcheX badge AUTH.
         // A zero badge AUTH means this run deploys a new one, and the deployer owns it.
@@ -144,49 +157,49 @@ contract UpgradeV5Script is Script {
         // This must happen before CyberCorpFactory is upgraded: its v5 deployment
         // path invokes RoundManager.createRound using the new CyberCertData selector.
         // MTLX1-41 changes every component factory's salt namespace, including Base.
-        _queueUpgrade(targets.roundManagerFactory, impls.roundManagerFactory, "RoundManagerFactory");
-        _queue(targets.roundManagerFactory, abi.encodeCall(RoundManagerFactory.setRefImplementation, (impls.roundManager)));
+        gatedCalls.queueUpgrade(targets.roundManagerFactory, impls.roundManagerFactory, "RoundManagerFactory");
+        gatedCalls.queue(targets.roundManagerFactory, abi.encodeCall(RoundManagerFactory.setRefImplementation, (impls.roundManager)));
 
-        _queueUpgrade(targets.cyberCorpSingleFactory, impls.cyberCorpSingleFactory, "CyberCorpSingleFactory");
-        _queueUpgrade(targets.issuanceManagerFactory, impls.issuanceManagerFactory, "IssuanceManagerFactory");
-        _queue(
+        gatedCalls.queueUpgrade(targets.cyberCorpSingleFactory, impls.cyberCorpSingleFactory, "CyberCorpSingleFactory");
+        gatedCalls.queueUpgrade(targets.issuanceManagerFactory, impls.issuanceManagerFactory, "IssuanceManagerFactory");
+        gatedCalls.queue(
             targets.cyberCorpSingleFactory,
             abi.encodeCall(CyberCorpSingleFactory.setRefImplementation, (impls.cyberCorp))
         );
-        _queue(
+        gatedCalls.queue(
             targets.issuanceManagerFactory,
             abi.encodeCall(IssuanceManagerFactory.setRefImplementation, (impls.issuanceManager))
         );
-        _queue(
+        gatedCalls.queue(
             targets.issuanceManagerFactory,
             abi.encodeCall(IssuanceManagerFactory.setCyberCertPrinterRefImplementation, (impls.ledgerEntryToken))
         );
-        _queue(
+        gatedCalls.queue(
             targets.issuanceManagerFactory,
             abi.encodeCall(IssuanceManagerFactory.setCyberScripRefImplementation, (impls.cyberScrip))
         );
 
-        _queueUpgrade(targets.dealManagerFactory, impls.dealManagerFactory, "DealManagerFactory");
-        _queue(targets.dealManagerFactory, abi.encodeCall(DealManagerFactory.setRefImplementation, (impls.dealManager)));
-        _queue(
+        gatedCalls.queueUpgrade(targets.dealManagerFactory, impls.dealManagerFactory, "DealManagerFactory");
+        gatedCalls.queue(targets.dealManagerFactory, abi.encodeCall(DealManagerFactory.setRefImplementation, (impls.dealManager)));
+        gatedCalls.queue(
             targets.dealManagerFactory,
             abi.encodeCall(DealManagerFactory.setDefaultSecondaryFeeRatio, (SECONDARY_FEE_RATIO_BPS))
         );
 
-        _queueUpgrade(targets.certificateUriBuilder, impls.certificateUriBuilder, "CertificateUriBuilder");
-        _queueUpgrade(targets.registry, impls.registry, "CyberAgreementRegistry");
+        gatedCalls.queueUpgrade(targets.certificateUriBuilder, impls.certificateUriBuilder, "CertificateUriBuilder");
+        gatedCalls.queueUpgrade(targets.registry, impls.registry, "CyberAgreementRegistry");
         if (targets.legalDocRegistry != address(0)) {
-            _queueUpgrade(targets.legalDocRegistry, impls.registry, "LegalDocRegistry");
+            gatedCalls.queueUpgrade(targets.legalDocRegistry, impls.registry, "LegalDocRegistry");
         } else {
             console2.log("LegalDocRegistry not set, skipping");
         }
 
-        _queueUpgrade(targets.lexchexMinter, impls.lexchexMinter, "LeXcheXMinter");
+        gatedCalls.queueUpgrade(targets.lexchexMinter, impls.lexchexMinter, "LeXcheXMinter");
 
         // Keep last: all factory references and the RoundManager deployment dependency are now live.
-        _queueUpgrade(targets.cyberCorpFactory, impls.cyberCorpFactory, "CyberCorpFactory");
+        gatedCalls.queueUpgrade(targets.cyberCorpFactory, impls.cyberCorpFactory, "CyberCorpFactory");
         if (targets.pumpCorpFactory != address(0)) {
-            _queueUpgrade(targets.pumpCorpFactory, impls.pumpCorpFactory, "PumpCorpFactory");
+            gatedCalls.queueUpgrade(targets.pumpCorpFactory, impls.pumpCorpFactory, "PumpCorpFactory");
         }
     }
 
@@ -267,37 +280,38 @@ contract UpgradeV5Script is Script {
     }
 
     function _deployImplementations() internal returns (Implementations memory impls) {
-        impls.cyberCorpFactory = address(new CyberCorpFactory());
-        impls.pumpCorpFactory = address(new PumpCorpFactory());
-        impls.cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
-        impls.issuanceManagerFactory = address(new IssuanceManagerFactory());
-        impls.cyberCorp = address(new CyberCorp());
-        impls.issuanceManager = address(new IssuanceManager());
-        impls.dealManager = address(new DealManager());
-        impls.roundManager = address(new RoundManager());
-        impls.ledgerEntryToken = address(new LedgerEntryToken());
-        impls.cyberScrip = address(new CyberScrip());
-        impls.dealManagerFactory = address(new DealManagerFactory());
-        impls.roundManagerFactory = address(new RoundManagerFactory());
-        impls.registry = address(new CyberAgreementRegistry());
-        impls.certificateUriBuilder = address(new CertificateUriBuilder());
-        impls.lexchexMinter = address(new LeXcheXMinter());
+        bytes32 salt = keccak256(bytes(CORE_V5_IMPL_SALT));
+        impls.cyberCorpFactory = address(new CyberCorpFactory{salt: salt}());
+        impls.pumpCorpFactory = address(new PumpCorpFactory{salt: salt}());
+        impls.cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}());
+        impls.issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}());
+        impls.cyberCorp = address(new CyberCorp{salt: salt}());
+        impls.issuanceManager = address(new IssuanceManager{salt: salt}());
+        impls.dealManager = address(new DealManager{salt: salt}());
+        impls.roundManager = address(new RoundManager{salt: salt}());
+        impls.ledgerEntryToken = address(new LedgerEntryToken{salt: salt}());
+        impls.cyberScrip = address(new CyberScrip{salt: salt}());
+        impls.dealManagerFactory = address(new DealManagerFactory{salt: salt}());
+        impls.roundManagerFactory = address(new RoundManagerFactory{salt: salt}());
+        impls.registry = address(new CyberAgreementRegistry{salt: salt}());
+        impls.certificateUriBuilder = address(new CertificateUriBuilder{salt: salt}());
+        impls.lexchexMinter = address(new LeXcheXMinter{salt: salt}());
 
-        console2.log("V5 CyberCorpFactory:", impls.cyberCorpFactory);
-        console2.log("V5 PumpCorpFactory:", impls.pumpCorpFactory);
-        console2.log("V5 CyberCorpSingleFactory:", impls.cyberCorpSingleFactory);
-        console2.log("V5 IssuanceManagerFactory:", impls.issuanceManagerFactory);
-        console2.log("V5 CyberCorp:", impls.cyberCorp);
-        console2.log("V5 IssuanceManager:", impls.issuanceManager);
-        console2.log("V5 DealManager:", impls.dealManager);
-        console2.log("V5 RoundManager:", impls.roundManager);
-        console2.log("V5 LedgerEntryToken:", impls.ledgerEntryToken);
-        console2.log("V5 CyberScrip:", impls.cyberScrip);
-        console2.log("V5 DealManagerFactory:", impls.dealManagerFactory);
-        console2.log("V5 RoundManagerFactory:", impls.roundManagerFactory);
-        console2.log("V5 CyberAgreementRegistry:", impls.registry);
-        console2.log("V5 CertificateUriBuilder:", impls.certificateUriBuilder);
-        console2.log("V5 LeXcheXMinter:", impls.lexchexMinter);
+        console2.log("deployed new implementation CyberCorpFactory:", impls.cyberCorpFactory);
+        console2.log("deployed new implementation PumpCorpFactory:", impls.pumpCorpFactory);
+        console2.log("deployed new implementation CyberCorpSingleFactory:", impls.cyberCorpSingleFactory);
+        console2.log("deployed new implementation IssuanceManagerFactory:", impls.issuanceManagerFactory);
+        console2.log("deployed new implementation CyberCorp:", impls.cyberCorp);
+        console2.log("deployed new implementation IssuanceManager:", impls.issuanceManager);
+        console2.log("deployed new implementation DealManager:", impls.dealManager);
+        console2.log("deployed new implementation RoundManager:", impls.roundManager);
+        console2.log("deployed new implementation LedgerEntryToken:", impls.ledgerEntryToken);
+        console2.log("deployed new implementation CyberScrip:", impls.cyberScrip);
+        console2.log("deployed new implementation DealManagerFactory:", impls.dealManagerFactory);
+        console2.log("deployed new implementation RoundManagerFactory:", impls.roundManagerFactory);
+        console2.log("deployed new implementation CyberAgreementRegistry:", impls.registry);
+        console2.log("deployed new implementation CertificateUriBuilder:", impls.certificateUriBuilder);
+        console2.log("deployed new implementation LeXcheXMinter:", impls.lexchexMinter);
     }
 
     function _implementationsFromEnv() internal view returns (Implementations memory impls) {
@@ -307,21 +321,5 @@ contract UpgradeV5Script is Script {
         impls.roundManager = vm.envAddress("V5_ROUND_MANAGER_IMPLEMENTATION");
         impls.ledgerEntryToken = vm.envAddress("V5_LEDGER_ENTRY_TOKEN_IMPLEMENTATION");
         impls.cyberScrip = vm.envAddress("V5_CYBER_SCRIP_IMPLEMENTATION");
-    }
-
-    function _queueUpgrade(address proxy, address implementation, string memory name) internal {
-        if (proxy == address(0)) revert("Missing proxy address");
-        _queue(proxy, abi.encodeCall(IUUPS.upgradeToAndCall, (implementation, "")));
-        console2.log("Queued upgrade", name, proxy);
-    }
-
-    function _queue(address to, bytes memory data) internal {
-        gatedCalls.push(GnosisTransaction({to: to, value: 0, data: data}));
-    }
-
-    function _queueAll(GnosisTransaction[] memory calls) internal {
-        for (uint256 i = 0; i < calls.length; i++) {
-            gatedCalls.push(calls[i]);
-        }
     }
 }

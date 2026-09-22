@@ -32,7 +32,6 @@ import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {SafeUtils} from "./libs/SafeUtils.sol";
 import {GnosisTransaction} from "./libs/safe.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Script, console2} from "forge-std/Script.sol";
 
 /// @notice Deploys the shared secondary-trading condition singletons.
@@ -42,6 +41,10 @@ import {Script, console2} from "forge-std/Script.sol";
 ///      The deployer only deploys. The upgrades of recorded proxies need the owner role, so
 ///      `runWithArgs` returns them as gated calls and does not send them.
 contract DeploySecondaryConditionsScript is Script {
+    using SafeUtils for GnosisTransaction[];
+
+    GnosisTransaction[] internal gatedCalls;
+
     /// @dev Rule 144(d): one year of holding for a non-reporting issuer.
     uint256 private constant HOLDING_PERIOD = 365 days;
     /// @dev Rule 144(c)(2) practice: a balance sheet no older than 16 months.
@@ -57,8 +60,6 @@ contract DeploySecondaryConditionsScript is Script {
         address registry;
         address badge;
     }
-
-    GnosisTransaction[] internal gatedCalls;
 
     function run() public returns (DeploymentConstants.SecondaryConditionDeployment memory deployed) {
         return runAndExecute(
@@ -145,7 +146,7 @@ contract DeploySecondaryConditionsScript is Script {
 //        _deployClosingConditions(ctx, recorded, deployed, metalexKillAdmin, legionKillAdmin);
         vm.stopBroadcast();
 
-        _logDeployed(ctx.badge, deployed);
+        console2.log("");
         calls = gatedCalls;
     }
 
@@ -155,67 +156,67 @@ contract DeploySecondaryConditionsScript is Script {
         DeploymentConstants.SecondaryConditionDeployment memory recorded,
         DeploymentConstants.SecondaryConditionDeployment memory deployed
     ) internal {
-        deployed.eligibility = _deployOrUpgrade(
+        deployed.eligibility = gatedCalls.deployOrUpgrade("EligibilityCondition", 
             recorded.eligibility,
             address(new EligibilityCondition{salt: ctx.implSalt}()),
             abi.encodeCall(EligibilityCondition.initialize, (ctx.auth)),
             ctx.proxySalt
         );
-        deployed.usStateOfResidence = _deployOrUpgrade(
+        deployed.usStateOfResidence = gatedCalls.deployOrUpgrade("USStateOfResidenceCondition", 
             recorded.usStateOfResidence,
             address(new USStateOfResidenceCondition{salt: ctx.implSalt}()),
             abi.encodeCall(USStateOfResidenceCondition.initialize, (ctx.auth, ctx.badge)),
             ctx.proxySalt
         );
-        deployed.legionSoulbound = _deployOrUpgrade(
+        deployed.legionSoulbound = gatedCalls.deployOrUpgrade("LegionSoulboundCondition", 
             recorded.legionSoulbound,
             address(new LegionSoulboundCondition{salt: ctx.implSalt}()),
             abi.encodeCall(LegionSoulboundCondition.initialize, (ctx.auth, ctx.badge)),
             ctx.proxySalt
         );
-        deployed.holderCap = _deployOrUpgrade(
+        deployed.holderCap = gatedCalls.deployOrUpgrade("HolderCapCondition", 
             recorded.holderCap,
             address(new HolderCapCondition{salt: ctx.implSalt}()),
             abi.encodeCall(HolderCapCondition.initialize, (ctx.auth)),
             ctx.proxySalt
         );
-        deployed.cfius = _deployOrUpgrade(
+        deployed.cfius = gatedCalls.deployOrUpgrade("CFIUSCondition", 
             recorded.cfius,
             address(new CFIUSCondition{salt: ctx.implSalt}()),
             abi.encodeCall(CFIUSCondition.initialize, (ctx.auth, ctx.badge)),
             ctx.proxySalt
         );
-        deployed.section4a7Disclosure = _deployOrUpgrade(
+        deployed.section4a7Disclosure = gatedCalls.deployOrUpgrade("Section4a7DisclosureCondition", 
             recorded.section4a7Disclosure,
             address(new Section4a7DisclosureCondition{salt: ctx.implSalt}()),
             abi.encodeCall(Section4a7DisclosureCondition.initialize, (ctx.auth, ctx.registry, DISCLOSURE_MAX_AGE)),
             ctx.proxySalt
         );
-        deployed.rule144Disclosure = _deployOrUpgrade(
+        deployed.rule144Disclosure = gatedCalls.deployOrUpgrade("Rule144DisclosureCondition", 
             recorded.rule144Disclosure,
             address(new Rule144DisclosureCondition{salt: ctx.implSalt}()),
             abi.encodeCall(Rule144DisclosureCondition.initialize, (ctx.auth, DISCLOSURE_MAX_AGE)),
             ctx.proxySalt
         );
-        deployed.holdingPeriod = _deployOrUpgrade(
+        deployed.holdingPeriod = gatedCalls.deployOrUpgrade("HoldingPeriodCondition", 
             recorded.holdingPeriod,
             address(new HoldingPeriodCondition{salt: ctx.implSalt}()),
             abi.encodeCall(HoldingPeriodCondition.initialize, (ctx.auth, HOLDING_PERIOD)),
             ctx.proxySalt
         );
-        deployed.legalOpinion = _deployOrUpgrade(
+        deployed.legalOpinion = gatedCalls.deployOrUpgrade("LegalOpinionCondition", 
             recorded.legalOpinion,
             address(new LegalOpinionCondition{salt: ctx.implSalt}()),
             abi.encodeCall(LegalOpinionCondition.initialize, (ctx.auth)),
             ctx.proxySalt
         );
-        deployed.regSDistributionCompliance = _deployOrUpgrade(
+        deployed.regSDistributionCompliance = gatedCalls.deployOrUpgrade("RegSDistributionComplianceCondition", 
             recorded.regSDistributionCompliance,
             address(new RegSDistributionComplianceCondition{salt: ctx.implSalt}()),
             abi.encodeCall(RegSDistributionComplianceCondition.initialize, (ctx.auth)),
             ctx.proxySalt
         );
-        deployed.gpLpApproval = _deployOrUpgrade(
+        deployed.gpLpApproval = gatedCalls.deployOrUpgrade("GPLPApprovalCondition", 
             recorded.gpLpApproval,
             address(new GPLPApprovalCondition{salt: ctx.implSalt}()),
             abi.encodeCall(GPLPApprovalCondition.initialize, (ctx.auth)),
@@ -231,25 +232,28 @@ contract DeploySecondaryConditionsScript is Script {
         DeploymentConstants.SecondaryConditionDeployment memory deployed
     ) internal {
         address implementation = address(new LexChexBadgeKindCondition{salt: ctx.implSalt}());
-        deployed.accreditedInvestor = _badgeKind(ctx, recorded.accreditedInvestor, implementation, K_ACCREDITED, false);
-        deployed.qualifiedPurchaser = _badgeKind(ctx, recorded.qualifiedPurchaser, implementation, K_QP, true);
+        console2.log("deployed new implementation LexChexBadgeKindCondition:", implementation);
+        deployed.accreditedInvestor = _badgeKind(ctx, "AccreditedInvestor (K_ACCREDITED)", recorded.accreditedInvestor, implementation, K_ACCREDITED, false);
+        deployed.qualifiedPurchaser = _badgeKind(ctx, "QualifiedPurchaser (K_QP)", recorded.qualifiedPurchaser, implementation, K_QP, true);
         deployed.qualifiedInstitutionalBuyer =
-            _badgeKind(ctx, recorded.qualifiedInstitutionalBuyer, implementation, K_QIB, false);
-        deployed.nonUsPerson = _badgeKind(ctx, recorded.nonUsPerson, implementation, K_NON_US, false);
-        deployed.spvWhitelist = _badgeKind(ctx, recorded.spvWhitelist, implementation, K_SPV_WHITELIST, false);
-        deployed.syndicate = _badgeKind(ctx, recorded.syndicate, implementation, K_SYNDICATE, false);
+            _badgeKind(ctx, "QualifiedInstitutionalBuyer (K_QIB)", recorded.qualifiedInstitutionalBuyer, implementation, K_QIB, false);
+        deployed.nonUsPerson = _badgeKind(ctx, "NonUSPerson (K_NON_US)", recorded.nonUsPerson, implementation, K_NON_US, false);
+        deployed.spvWhitelist = _badgeKind(ctx, "SpvWhitelist (K_SPV_WHITELIST)", recorded.spvWhitelist, implementation, K_SPV_WHITELIST, false);
+        deployed.syndicate = _badgeKind(ctx, "Syndicate (K_SYNDICATE)", recorded.syndicate, implementation, K_SYNDICATE, false);
     }
 
     /// @dev The fact-key and the seller flag are the whole difference between two parameterizations,
     ///      so each one gets its own proxy address from the same implementation.
     function _badgeKind(
         Context memory ctx,
+        string memory name,
         address recorded,
         address implementation,
         uint256 kindKey,
         bool checkSeller
     ) internal returns (address) {
-        return _deployOrUpgrade(
+        return gatedCalls.upgradeOrNewProxy(
+            name,
             recorded,
             implementation,
             abi.encodeCall(LexChexBadgeKindCondition.initialize, (ctx.auth, ctx.badge, kindKey, checkSeller)),
@@ -270,30 +274,11 @@ contract DeploySecondaryConditionsScript is Script {
 //        deployed.killSwitch = recorded.killSwitch != address(0)
 //            ? recorded.killSwitch
 //            : address(new KillSwitchCondition{salt: ctx.implSalt}(metalexKillAdmin, legionKillAdmin));
-        deployed.timeSettlementPeriod = recorded.timeSettlementPeriod != address(0)
-            ? recorded.timeSettlementPeriod
-            : address(new TimeSettlementPeriodCondition{salt: ctx.implSalt}());
-    }
-
-    /// @dev A recorded proxy keeps its address and takes the new code. A zero one gets a new proxy.
-    ///      The upgrade needs the owner role, so it goes to the gated calls.
-    function _deployOrUpgrade(
-        address recorded,
-        address implementation,
-        bytes memory initCall,
-        bytes32 proxySalt
-    ) internal returns (address) {
-        if (recorded != address(0)) {
-            gatedCalls.push(
-                GnosisTransaction({
-                    to: recorded,
-                    value: 0,
-                    data: abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, ""))
-                })
-            );
-            return recorded;
+        deployed.timeSettlementPeriod = recorded.timeSettlementPeriod;
+        if (deployed.timeSettlementPeriod == address(0)) {
+            deployed.timeSettlementPeriod = address(new TimeSettlementPeriodCondition{salt: ctx.implSalt}());
+            console2.log("deployed new contract TimeSettlementPeriodCondition:", deployed.timeSettlementPeriod);
         }
-        return address(new ERC1967Proxy{salt: proxySalt}(implementation, initCall));
     }
 
     /// @dev The badge-scoped conditions refuse a zero registry at initialize, so the chain needs a
@@ -311,12 +296,13 @@ contract DeploySecondaryConditionsScript is Script {
         if (core.lexchexBadge != address(0)) return core.lexchexBadge;
 
         BorgAuth badgeAuth = new BorgAuth{salt: implSalt}(deployer);
+        console2.log("queued deploying new BorgAuth LeXcheXBadge AUTH:", address(badgeAuth));
+        address implementation = address(new LeXcheXBadge{salt: implSalt}());
+        console2.log("deployed new implementation LeXcheXBadge:", implementation);
         badge = address(
-            new ERC1967Proxy{salt: proxySalt}(
-                address(new LeXcheXBadge{salt: implSalt}()),
-                abi.encodeCall(LeXcheXBadge.initialize, (address(badgeAuth)))
-            )
+            new ERC1967Proxy{salt: proxySalt}(implementation, abi.encodeCall(LeXcheXBadge.initialize, (address(badgeAuth))))
         );
+        console2.log("queued deploying new proxy LeXcheXBadge:", badge);
         // The v1 minter bridges an accreditation into a badge credential.
         LeXcheXBadge(badge).setIssuerKeys(core.lexchexMinter, MINTER_ISSUER_KEYS);
 
@@ -324,36 +310,5 @@ contract DeploySecondaryConditionsScript is Script {
             badgeAuth.updateRole(core.metalexSafe, badgeAuth.OWNER_ROLE());
             badgeAuth.zeroOwner();
         }
-
-        console2.log("Deployed LeXcheXBadge AUTH:", address(badgeAuth));
-        console2.log("Deployed LeXcheXBadge:", badge);
-    }
-
-    function _logDeployed(
-        address badge,
-        DeploymentConstants.SecondaryConditionDeployment memory deployed
-    ) internal pure {
-        console2.log("==== Deployed ====");
-        console2.log("LeXcheXBadge:", badge);
-        console2.log("EligibilityCondition:", deployed.eligibility);
-        console2.log("USStateOfResidenceCondition:", deployed.usStateOfResidence);
-        console2.log("LegionSoulboundCondition:", deployed.legionSoulbound);
-        console2.log("HolderCapCondition:", deployed.holderCap);
-        console2.log("CFIUSCondition:", deployed.cfius);
-        console2.log("Section4a7DisclosureCondition:", deployed.section4a7Disclosure);
-        console2.log("Rule144DisclosureCondition:", deployed.rule144Disclosure);
-        console2.log("HoldingPeriodCondition:", deployed.holdingPeriod);
-        console2.log("LegalOpinionCondition:", deployed.legalOpinion);
-        console2.log("RegSDistributionComplianceCondition:", deployed.regSDistributionCompliance);
-        console2.log("GPLPApprovalCondition:", deployed.gpLpApproval);
-        console2.log("AccreditedInvestor (K_ACCREDITED):", deployed.accreditedInvestor);
-        console2.log("QualifiedPurchaser (K_QP):", deployed.qualifiedPurchaser);
-        console2.log("QualifiedInstitutionalBuyer (K_QIB):", deployed.qualifiedInstitutionalBuyer);
-        console2.log("NonUSPerson (K_NON_US):", deployed.nonUsPerson);
-        console2.log("SpvWhitelist (K_SPV_WHITELIST):", deployed.spvWhitelist);
-        console2.log("Syndicate (K_SYNDICATE):", deployed.syndicate);
-        console2.log("KillSwitchCondition:", deployed.killSwitch);
-        console2.log("TimeSettlementPeriodCondition:", deployed.timeSettlementPeriod);
-        console2.log("");
     }
 }

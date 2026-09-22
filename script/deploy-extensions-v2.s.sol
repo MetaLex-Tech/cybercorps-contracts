@@ -9,8 +9,6 @@ import {TokenWarrantExtensionV2} from "../src/storage/extensions/TokenWarrantExt
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {SafeUtils} from "./libs/SafeUtils.sol";
 import {GnosisTransaction} from "./libs/safe.sol";
-import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Script, console2} from "forge-std/Script.sol";
 
 /// @notice Deploys or upgrades the live V1 and V2 certificate extension proxies.
@@ -21,6 +19,8 @@ import {Script, console2} from "forge-std/Script.sol";
 ///      The deployer only deploys. The upgrades of recorded proxies need the owner role, so
 ///      `runWithArgs` returns them as gated calls and does not send them.
 contract DeployExtensionsV2Script is Script {
+    using SafeUtils for GnosisTransaction[];
+
     GnosisTransaction[] internal gatedCalls;
 
     function run() public {
@@ -82,61 +82,31 @@ contract DeployExtensionsV2Script is Script {
         console2.log("AUTH:", auth);
         console2.log("");
 
+        bytes memory initCall = abi.encodeWithSignature("initialize(address)", auth);
         vm.startBroadcast(deployerPrivateKey);
-        address safeExtension = _deployOrUpgrade(
-            recorded.safeExtension, address(new SAFEExtension{salt: implSalt}()), auth, proxySalt
+        address safeExtension = gatedCalls.deployOrUpgrade("SAFEExtension", 
+            recorded.safeExtension, address(new SAFEExtension{salt: implSalt}()), initCall, proxySalt
         );
-        address saftExtensionV2 = _deployOrUpgrade(
-            recorded.saftExtensionV2, address(new SAFTExtensionV2{salt: implSalt}()), auth, proxySalt
+        address saftExtensionV2 = gatedCalls.deployOrUpgrade("SAFTExtensionV2", 
+            recorded.saftExtensionV2, address(new SAFTExtensionV2{salt: implSalt}()), initCall, proxySalt
         );
-        address safteExtensionV2 = _deployOrUpgrade(
-            recorded.safteExtensionV2, address(new SAFTEExtensionV2{salt: implSalt}()), auth, proxySalt
+        address safteExtensionV2 = gatedCalls.deployOrUpgrade("SAFTEExtensionV2", 
+            recorded.safteExtensionV2, address(new SAFTEExtensionV2{salt: implSalt}()), initCall, proxySalt
         );
-        address tokenWarrantExtensionV2 = _deployOrUpgrade(
-            recorded.tokenWarrantExtensionV2, address(new TokenWarrantExtensionV2{salt: implSalt}()), auth, proxySalt
+        address tokenWarrantExtensionV2 = gatedCalls.deployOrUpgrade("TokenWarrantExtensionV2", 
+            recorded.tokenWarrantExtensionV2, address(new TokenWarrantExtensionV2{salt: implSalt}()), initCall, proxySalt
         );
 
         // ACESAFEExtension exists on Base mainnet only.
         address aceSafeExtension;
         if (chainId == DeploymentConstants.BASE) {
-            aceSafeExtension = _deployOrUpgrade(
-                recorded.aceSafeExtension, address(new ACESAFEExtension{salt: implSalt}()), auth, proxySalt
+            aceSafeExtension = gatedCalls.deployOrUpgrade("ACESAFEExtension", 
+                recorded.aceSafeExtension, address(new ACESAFEExtension{salt: implSalt}()), initCall, proxySalt
             );
         }
         vm.stopBroadcast();
 
-        console2.log("==== Deployed ====");
-        console2.log("SAFEExtension:", safeExtension);
-        console2.log("SAFTExtensionV2:", saftExtensionV2);
-        console2.log("SAFTEExtensionV2:", safteExtensionV2);
-        console2.log("TokenWarrantExtensionV2:", tokenWarrantExtensionV2);
-        if (chainId == DeploymentConstants.BASE) {
-            console2.log("ACESAFEExtension:", aceSafeExtension);
-        }
         console2.log("");
         return gatedCalls;
-    }
-
-    /// @dev A recorded proxy takes the new code at its own address. A zero one gets a new proxy.
-    ///      The upgrade needs the owner role, so it goes to the gated calls.
-    function _deployOrUpgrade(
-        address recorded,
-        address implementation,
-        address auth,
-        bytes32 proxySalt
-    ) internal returns (address) {
-        if (recorded != address(0)) {
-            gatedCalls.push(
-                GnosisTransaction({
-                    to: recorded,
-                    value: 0,
-                    data: abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, ""))
-                })
-            );
-            return recorded;
-        }
-        return address(
-            new ERC1967Proxy{salt: proxySalt}(implementation, abi.encodeWithSignature("initialize(address)", auth))
-        );
     }
 }
