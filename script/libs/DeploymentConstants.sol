@@ -114,9 +114,9 @@ library DeploymentConstants {
                     cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
                     lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
-                    lexchexBadgeAuth: address(0), // TODO: not yet deployed on this chain
+                    lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d,
                     lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
-                    lexchexBadge: address(0), // TODO: not yet deployed on this chain
+                    lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95 // difference from production chains
@@ -154,16 +154,15 @@ library DeploymentConstants {
                     cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
                     lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
-                    lexchexBadgeAuth: address(0), // TODO: not yet deployed on this chain
+                    lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d, // TODO: the deployer still owns it. Give it to metalexSafe, then drop the deployer role
                     lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
-                    lexchexBadge: address(0), // TODO: not yet deployed on this chain
+                    lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: address(0) // TODO: not yet deployed on this chain
                 });
-        } else {
-            return
-                CoreDeployment({
+        } else if (chainId == ETH || chainId == BASE) {
+            deployment = CoreDeployment({
                     metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
                     auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
                     cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
@@ -181,6 +180,14 @@ library DeploymentConstants {
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xe71fE689bFAA4939A760EDF7e07f44372a43932A
                 });
+            if (chainId == BASE) {
+                // TODO: the deployer still owns it. Give it to metalexSafe, then drop the deployer role
+                deployment.lexchexBadgeAuth = 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d;
+                deployment.lexchexBadge = 0x114664773Ba721a6AA43890d5FDE7939aF37618F;
+            }
+            return deployment;
+        } else {
+            revert UnsupportedChain(chainId);
         }
     }
 
@@ -193,26 +200,26 @@ library DeploymentConstants {
         if (chainId == BASE) {
             return ExtensionDeployment({
                 safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
-                safeExtensionV3: address(0), // TODO: not yet deployed on this chain
+                safeExtensionV3: 0x740003076c9F16c4a364AE07f3770FB77899299b,
                 aceSafeExtension: 0x6aDaef2B79FD1cbA130c5807B31DE435FEa58EAC,
-                aceSafeExtensionV3: address(0), // TODO: not yet deployed on this chain
+                aceSafeExtensionV3: 0x9a8ef946F18C4296e50f8DF0C97b5Cf5d1b5eCD2,
                 saftExtension: 0x109D2A13932bE393011835B308F81ce1992E365B,
                 saftExtensionV2: 0x37c2A0e801e569e01f0972186aF4DB01409e92c1,
-                saftExtensionV3: address(0), // TODO: not yet deployed on this chain
+                saftExtensionV3: 0x2Bf1b2f8f6009c5524886243CE4F2EF34e3d4957,
                 safteExtension: 0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C,
                 ethosSafteExtension: 0xC23fFF0B06aE5EBea862611F489b1329108ce603, // older SAFTEExtension code, used by the Ethos SAFTE template
                 safteExtensionV2: 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A,
-                safteExtensionV3: address(0), // TODO: not yet deployed on this chain
+                safteExtensionV3: 0xE79C2b4a35b2509b27686D025FB8Fbab2Ca49406,
                 tokenWarrantExtension: 0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4,
                 tokenWarrantExtensionV2: 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F,
-                tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on this chain
+                tokenWarrantExtensionV3: 0x3Bdb711517eEbd6A88D9Aa30B141adC43BAB033e,
                 shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
-                shareExtensionV3: address(0), // TODO: not yet deployed on this chain
-                fundInterestExtensionV3: address(0) // TODO: not yet deployed on this chain
+                shareExtensionV3: 0xa21C434379CC44bfeD6e3c1342e49951804ec30f,
+                fundInterestExtensionV3: 0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15
             });
-        } else if (chainId == BASE_SEPOLIA) {
-            // The v5 rehearsal deployed the V3 proxies here first. CREATE2 gives the same
-            // addresses on the other chains when the V3 script runs there.
+        } else if (chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM) {
+            // The v5 rehearsal deployed the V3 proxies on Base Sepolia first. A new build gives new
+            // addresses, so a later chain gets these addresses only from a replay of that broadcast.
             return ExtensionDeployment({
                 safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
                 safeExtensionV3: 0x740003076c9F16c4a364AE07f3770FB77899299b,
@@ -232,27 +239,7 @@ library DeploymentConstants {
                 shareExtensionV3: 0xa21C434379CC44bfeD6e3c1342e49951804ec30f,
                 fundInterestExtensionV3: 0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15
             });
-        } else if (chainId == ETH || chainId == ETH_SEPOLIA) {
-            return ExtensionDeployment({
-                safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
-                safeExtensionV3: address(0), // TODO: not yet deployed on this chain
-                aceSafeExtension: address(0), // deployed on Base only
-                aceSafeExtensionV3: address(0), // TODO: not yet deployed on this chain
-                saftExtension: 0x109D2A13932bE393011835B308F81ce1992E365B,
-                saftExtensionV2: 0x37c2A0e801e569e01f0972186aF4DB01409e92c1,
-                saftExtensionV3: address(0), // TODO: not yet deployed on this chain
-                safteExtension: 0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C,
-                ethosSafteExtension: 0xC23fFF0B06aE5EBea862611F489b1329108ce603, // older SAFTEExtension code, used by the Ethos SAFTE template
-                safteExtensionV2: 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A,
-                safteExtensionV3: address(0), // TODO: not yet deployed on this chain
-                tokenWarrantExtension: 0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4,
-                tokenWarrantExtensionV2: 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F,
-                tokenWarrantExtensionV3: address(0), // TODO: not yet deployed on this chain
-                shareExtension: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81,
-                shareExtensionV3: address(0), // TODO: not yet deployed on this chain
-                fundInterestExtensionV3: address(0) // TODO: not yet deployed on this chain
-            });
-        } else if (chainId == ARBITRUM) {
+        } else if (chainId == ETH) {
             return ExtensionDeployment({
                 safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
                 safeExtensionV3: address(0), // TODO: not yet deployed on this chain
@@ -285,9 +272,9 @@ library DeploymentConstants {
         pure
         returns (SecondaryConditionDeployment memory deployment)
     {
-        if (chainId == BASE_SEPOLIA) {
+        if (chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == BASE) {
             // deployed with salt "CyberCorpV5-SecondaryConditionsV1.0.0"
-            return SecondaryConditionDeployment({
+            deployment = SecondaryConditionDeployment({
                 eligibility: 0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B,
                 usStateOfResidence: 0x1d4918a83E1F971317f0DD529f088B208Ec24d8C,
                 legionSoulbound: 0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04,
@@ -308,7 +295,10 @@ library DeploymentConstants {
                 killSwitch: 0x4c3b9Ec3B6e416A64Fde4a17Ea856e1cf2fE0344, // staging admin keys
                 timeSettlementPeriod: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
             });
-        } else if (chainId == ETH || chainId == BASE || chainId == ARBITRUM || chainId == ETH_SEPOLIA) {
+            // TODO intentionally left out the kill switch, because it holds the staging admin keys.
+            if (chainId != BASE_SEPOLIA) deployment.killSwitch = address(0);
+            return deployment;
+        } else if (chainId == ETH) {
             // TODO: not yet deployed on these chains. Each zero field makes
             //       `script/deploy-secondary-conditions.s.sol` deploy a new proxy. Record the
             //       address here after the run, so a later run upgrades that proxy instead.
