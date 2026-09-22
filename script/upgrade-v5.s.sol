@@ -20,7 +20,6 @@ import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
-import {BorgAuth} from "../src/libs/auth.sol";
 
 import {DeployExtensionsV2Script} from "./deploy-extensions-v2.s.sol";
 import {DeployExtensionsV3Script} from "./deploy-extensions-v3.s.sol";
@@ -39,14 +38,14 @@ interface IUUPS {
 ///         It also upgrades the live V1 and V2 certificate extensions, deploys the V3 extensions
 ///         and deploys the secondary-trading condition singletons that the chain does not have.
 ///         It sets the secondary-trade fee ratio, which the upgraded DealManagerFactory starts at zero.
-/// @dev Run this once per production chain, or on Base Sepolia as a rehearsal.
+/// @dev Run this once per production chain, or on a testnet as a rehearsal.
+///      The deployer deploys all new contracts. The upgrades and setters need the owner role, so the
+///      script collects them as gated calls. On a testnet where the deployer is owner, the deployer
+///      sends them. Otherwise the MetaLeX Safe must sign them as one batch, and the script writes
+///      the batch JSON for the Safe Transaction Builder.
 ///      Corp upgrades intentionally are not broadcast here:
 ///      `corpUpgradeCalls` returns the six calls that a corp owner must execute in one Safe batch.
 contract UpgradeV5Script is Script {
-    uint256 private constant ETHEREUM = 1;
-    uint256 private constant BASE = 8453;
-    uint256 private constant BASE_SEPOLIA = 84532;
-    bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
     // Each sub-script takes two salts. The proxy salt fixes the address of a proxy this run creates,
     // so it stays as recorded. Bump the implementation salt to re-run on a chain that already holds
     // these implementations, because the same code under the same salt gives an occupied address.
@@ -93,70 +92,102 @@ contract UpgradeV5Script is Script {
         address lexchexMinter;
     }
 
+    GnosisTransaction[] internal gatedCalls;
+
     function run() external {
-        if (block.chainid != ETHEREUM && block.chainid != BASE && block.chainid != BASE_SEPOLIA) {
-            revert("v5 upgrade supports Ethereum, Base and Base Sepolia only");
-        }
+        // The call reverts on a chain that DeploymentConstants does not support.
+        bool testnet = DeploymentConstants.isTestnet(block.chainid);
         if (!vm.envOr("CONFIRM_V5_SINGLETON_UPGRADE", false)) {
             revert("Set CONFIRM_V5_SINGLETON_UPGRADE=true");
         }
 
         uint256 privateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address deployer = vm.addr(privateKey);
+        DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
         Targets memory targets = _targets();
-        _requireOwner(targets.cyberCorpFactory, deployer);
-        if (targets.pumpCorpFactory != address(0)) _requireOwner(targets.pumpCorpFactory, deployer);
-        _requireLexchexOwner(deployer);
 
         vm.startBroadcast(privateKey);
         Implementations memory impls = _deployImplementations();
+        vm.stopBroadcast();
 
+        _queueSingletonCalls(targets, impls);
+
+        // Each called script deploys in its own broadcast and returns its gated calls.
+        _queueAll((new DeployExtensionsV2Script()).runWithArgs(
+            block.chainid, EXTENSIONS_V2_PROXY_SALT, EXTENSIONS_V2_IMPL_SALT, privateKey
+        ));
+        (, GnosisTransaction[] memory v3Calls) = (new DeployExtensionsV3Script()).runWithArgs(
+            block.chainid, EXTENSIONS_V3_PROXY_SALT, EXTENSIONS_V3_IMPL_SALT, privateKey
+        );
+        _queueAll(v3Calls);
+        (, GnosisTransaction[] memory conditionCalls) = (new DeploySecondaryConditionsScript()).runWithArgs(
+            block.chainid, SECONDARY_CONDITIONS_PROXY_SALT, SECONDARY_CONDITIONS_IMPL_SALT, privateKey
+        );
+        _queueAll(conditionCalls);
+
+        // On a testnet the deployer must own the core AUTH, the LeXcheX AUTH and the LeXcheX badge AUTH.
+        // A zero badge AUTH means this run deploys a new one, and the deployer owns it.
+        bool direct = testnet && SafeUtils.hasOwnerRole(core.auth, deployer)
+            && SafeUtils.hasOwnerRole(core.lexchexAuth, deployer)
+            && (core.lexchexBadgeAuth == address(0) || SafeUtils.hasOwnerRole(core.lexchexBadgeAuth, deployer));
+        SafeUtils.executeOrHandOff(
+            gatedCalls,
+            block.chainid,
+            privateKey,
+            core.metalexSafe,
+            direct,
+            string.concat("script/res/gnosis-batch-upgrade-v5-", vm.toString(block.chainid), ".json")
+        );
+    }
+
+    function _queueSingletonCalls(Targets memory targets, Implementations memory impls) internal {
         // This must happen before CyberCorpFactory is upgraded: its v5 deployment
         // path invokes RoundManager.createRound using the new CyberCertData selector.
         // MTLX1-41 changes every component factory's salt namespace, including Base.
-        _upgradeProxy(targets.roundManagerFactory, impls.roundManagerFactory, "RoundManagerFactory");
-        RoundManagerFactory(targets.roundManagerFactory).setRefImplementation(impls.roundManager);
+        _queueUpgrade(targets.roundManagerFactory, impls.roundManagerFactory, "RoundManagerFactory");
+        _queue(targets.roundManagerFactory, abi.encodeCall(RoundManagerFactory.setRefImplementation, (impls.roundManager)));
 
-        _upgradeProxy(targets.cyberCorpSingleFactory, impls.cyberCorpSingleFactory, "CyberCorpSingleFactory");
-        _upgradeProxy(targets.issuanceManagerFactory, impls.issuanceManagerFactory, "IssuanceManagerFactory");
-        CyberCorpSingleFactory(targets.cyberCorpSingleFactory).setRefImplementation(impls.cyberCorp);
-        IssuanceManagerFactory issuanceFactory = IssuanceManagerFactory(targets.issuanceManagerFactory);
-        issuanceFactory.setRefImplementation(impls.issuanceManager);
-        issuanceFactory.setCyberCertPrinterRefImplementation(impls.ledgerEntryToken);
-        issuanceFactory.setCyberScripRefImplementation(impls.cyberScrip);
+        _queueUpgrade(targets.cyberCorpSingleFactory, impls.cyberCorpSingleFactory, "CyberCorpSingleFactory");
+        _queueUpgrade(targets.issuanceManagerFactory, impls.issuanceManagerFactory, "IssuanceManagerFactory");
+        _queue(
+            targets.cyberCorpSingleFactory,
+            abi.encodeCall(CyberCorpSingleFactory.setRefImplementation, (impls.cyberCorp))
+        );
+        _queue(
+            targets.issuanceManagerFactory,
+            abi.encodeCall(IssuanceManagerFactory.setRefImplementation, (impls.issuanceManager))
+        );
+        _queue(
+            targets.issuanceManagerFactory,
+            abi.encodeCall(IssuanceManagerFactory.setCyberCertPrinterRefImplementation, (impls.ledgerEntryToken))
+        );
+        _queue(
+            targets.issuanceManagerFactory,
+            abi.encodeCall(IssuanceManagerFactory.setCyberScripRefImplementation, (impls.cyberScrip))
+        );
 
-        _upgradeProxy(targets.dealManagerFactory, impls.dealManagerFactory, "DealManagerFactory");
-        DealManagerFactory(targets.dealManagerFactory).setRefImplementation(impls.dealManager);
-        DealManagerFactory(targets.dealManagerFactory).setDefaultSecondaryFeeRatio(SECONDARY_FEE_RATIO_BPS);
+        _queueUpgrade(targets.dealManagerFactory, impls.dealManagerFactory, "DealManagerFactory");
+        _queue(targets.dealManagerFactory, abi.encodeCall(DealManagerFactory.setRefImplementation, (impls.dealManager)));
+        _queue(
+            targets.dealManagerFactory,
+            abi.encodeCall(DealManagerFactory.setDefaultSecondaryFeeRatio, (SECONDARY_FEE_RATIO_BPS))
+        );
 
-        _upgradeProxy(targets.certificateUriBuilder, impls.certificateUriBuilder, "CertificateUriBuilder");
-        _upgradeProxy(targets.registry, impls.registry, "CyberAgreementRegistry");
+        _queueUpgrade(targets.certificateUriBuilder, impls.certificateUriBuilder, "CertificateUriBuilder");
+        _queueUpgrade(targets.registry, impls.registry, "CyberAgreementRegistry");
         if (targets.legalDocRegistry != address(0)) {
-            _upgradeProxy(targets.legalDocRegistry, impls.registry, "LegalDocRegistry");
+            _queueUpgrade(targets.legalDocRegistry, impls.registry, "LegalDocRegistry");
         } else {
             console2.log("LegalDocRegistry not set, skipping");
         }
 
-        _upgradeProxy(targets.lexchexMinter, impls.lexchexMinter, "LeXcheXMinter");
+        _queueUpgrade(targets.lexchexMinter, impls.lexchexMinter, "LeXcheXMinter");
 
         // Keep last: all factory references and the RoundManager deployment dependency are now live.
-        _upgradeProxy(targets.cyberCorpFactory, impls.cyberCorpFactory, "CyberCorpFactory");
+        _queueUpgrade(targets.cyberCorpFactory, impls.cyberCorpFactory, "CyberCorpFactory");
         if (targets.pumpCorpFactory != address(0)) {
-            _upgradeProxy(targets.pumpCorpFactory, impls.pumpCorpFactory, "PumpCorpFactory");
+            _queueUpgrade(targets.pumpCorpFactory, impls.pumpCorpFactory, "PumpCorpFactory");
         }
-
-        vm.stopBroadcast();
-
-        // Each called script starts its own broadcast.
-        (new DeployExtensionsV2Script()).runWithArgs(
-            block.chainid, EXTENSIONS_V2_PROXY_SALT, EXTENSIONS_V2_IMPL_SALT, privateKey
-        );
-        (new DeployExtensionsV3Script()).runWithArgs(
-            block.chainid, EXTENSIONS_V3_PROXY_SALT, EXTENSIONS_V3_IMPL_SALT, privateKey
-        );
-        (new DeploySecondaryConditionsScript()).runWithArgs(
-            block.chainid, SECONDARY_CONDITIONS_PROXY_SALT, SECONDARY_CONDITIONS_IMPL_SALT, privateKey
-        );
     }
 
     /// @notice Returns the atomic Safe batch for a single corp after singleton deployment.
@@ -220,8 +251,8 @@ contract UpgradeV5Script is Script {
     function _targets() internal view returns (Targets memory targets) {
         DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
         targets.cyberCorpFactory = vm.envOr("CYBERCORP_FACTORY", core.cyberCorpFactory);
-        targets.pumpCorpFactory = block.chainid == BASE
-            ? vm.envOr("PUMP_CORP_FACTORY", DeploymentConstants.pump(BASE).pumpCorpFactory)
+        targets.pumpCorpFactory = block.chainid == DeploymentConstants.BASE
+            ? vm.envOr("PUMP_CORP_FACTORY", DeploymentConstants.pump(block.chainid).pumpCorpFactory)
             : vm.envOr("PUMP_CORP_FACTORY", address(0));
         targets.cyberCorpSingleFactory = vm.envOr("CYBERCORP_SINGLE_FACTORY", core.cyberCorpSingleFactory);
         targets.issuanceManagerFactory = vm.envOr("ISSUANCE_MANAGER_FACTORY", core.issuanceManagerFactory);
@@ -278,32 +309,19 @@ contract UpgradeV5Script is Script {
         impls.cyberScrip = vm.envAddress("V5_CYBER_SCRIP_IMPLEMENTATION");
     }
 
-    function _requireOwner(address factory, address caller) internal view {
-        address auth = address(CyberCorpFactory(factory).AUTH());
-        if (BorgAuth(auth).userRoles(caller) < BorgAuth(auth).OWNER_ROLE()) {
-            revert("PRIVATE_KEY_MAIN is not the core AUTH owner");
-        }
-    }
-
-    /// @dev The LeXcheX stack has its own BorgAuth; check it up front so the
-    ///      broadcast cannot fail partway through the LeXcheXMinter upgrades.
-    function _requireLexchexOwner(address caller) internal view {
-        BorgAuth auth = BorgAuth(DeploymentConstants.coreV2(block.chainid).lexchexAuth);
-        if (auth.userRoles(caller) < auth.OWNER_ROLE()) {
-            revert("PRIVATE_KEY_MAIN is not the LeXcheX AUTH owner");
-        }
-    }
-
-    function _upgradeProxy(address proxy, address implementation, string memory name) internal {
+    function _queueUpgrade(address proxy, address implementation, string memory name) internal {
         if (proxy == address(0)) revert("Missing proxy address");
-        IUUPS(proxy).upgradeToAndCall(implementation, "");
-        if (_implementationOf(proxy) != implementation) {
-            revert("Implementation slot mismatch");
-        }
-        console2.log("Upgraded", name, proxy);
+        _queue(proxy, abi.encodeCall(IUUPS.upgradeToAndCall, (implementation, "")));
+        console2.log("Queued upgrade", name, proxy);
     }
 
-    function _implementationOf(address proxy) internal view returns (address) {
-        return address(uint160(uint256(vm.load(proxy, IMPLEMENTATION_SLOT))));
+    function _queue(address to, bytes memory data) internal {
+        gatedCalls.push(GnosisTransaction({to: to, value: 0, data: data}));
+    }
+
+    function _queueAll(GnosisTransaction[] memory calls) internal {
+        for (uint256 i = 0; i < calls.length; i++) {
+            gatedCalls.push(calls[i]);
+        }
     }
 }

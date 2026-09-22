@@ -29,6 +29,8 @@ import {Section4a7DisclosureCondition} from "../src/libs/conditions/secondary/Se
 import {TimeSettlementPeriodCondition} from "../src/libs/conditions/secondary/TimeSettlementPeriodCondition.sol";
 import {USStateOfResidenceCondition} from "../src/libs/conditions/secondary/USStateOfResidenceCondition.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
+import {SafeUtils} from "./libs/SafeUtils.sol";
+import {GnosisTransaction} from "./libs/safe.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Script, console2} from "forge-std/Script.sol";
@@ -37,6 +39,8 @@ import {Script, console2} from "forge-std/Script.sol";
 /// @dev Each condition is one instance for the whole chain, configured per SPV. The script is
 ///      idempotent against DeploymentConstants: a recorded proxy keeps its address and takes the
 ///      new code, a zero field gets a new proxy. Record every printed address afterwards.
+///      The deployer only deploys. The upgrades of recorded proxies need the owner role, so
+///      `runWithArgs` returns them as gated calls and does not send them.
 contract DeploySecondaryConditionsScript is Script {
     /// @dev Rule 144(d): one year of holding for a non-reporting issuer.
     uint256 private constant HOLDING_PERIOD = 365 days;
@@ -54,8 +58,10 @@ contract DeploySecondaryConditionsScript is Script {
         address badge;
     }
 
+    GnosisTransaction[] internal gatedCalls;
+
     function run() public returns (DeploymentConstants.SecondaryConditionDeployment memory deployed) {
-        return runWithArgs(
+        return runAndExecute(
 //            // Production
 //            DeploymentConstants.BASE,
 //            "CyberCorpV5-SecondaryConditionsV1.0.0", // proxySaltStr
@@ -70,12 +76,37 @@ contract DeploySecondaryConditionsScript is Script {
         );
     }
 
-    function runWithArgs(
+    /// @notice Deploys, then sends the gated calls or hands them off to the MetaLeX Safe.
+    function runAndExecute(
         uint256 chainId,
         string memory proxySaltStr,
         string memory implSaltStr,
         uint256 deployerPrivateKey
     ) public returns (DeploymentConstants.SecondaryConditionDeployment memory deployed) {
+        GnosisTransaction[] memory calls;
+        (deployed, calls) = runWithArgs(chainId, proxySaltStr, implSaltStr, deployerPrivateKey);
+        DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(chainId);
+        address deployer = vm.addr(deployerPrivateKey);
+        // On a testnet the deployer must own the core AUTH and the LeXcheX badge AUTH.
+        // A zero badge AUTH means this run deploys a new one, and the deployer owns it.
+        bool direct = DeploymentConstants.isTestnet(chainId) && SafeUtils.hasOwnerRole(core.auth, deployer)
+            && (core.lexchexBadgeAuth == address(0) || SafeUtils.hasOwnerRole(core.lexchexBadgeAuth, deployer));
+        SafeUtils.executeOrHandOff(
+            calls,
+            chainId,
+            deployerPrivateKey,
+            core.metalexSafe,
+            direct,
+            string.concat("script/res/gnosis-batch-deploy-secondary-conditions-", vm.toString(chainId), ".json")
+        );
+    }
+
+    function runWithArgs(
+        uint256 chainId,
+        string memory proxySaltStr,
+        string memory implSaltStr,
+        uint256 deployerPrivateKey
+    ) public returns (DeploymentConstants.SecondaryConditionDeployment memory deployed, GnosisTransaction[] memory calls) {
         address deployerAddress = vm.addr(deployerPrivateKey);
 
         bytes32 proxySalt = keccak256(bytes(proxySaltStr));
@@ -106,7 +137,7 @@ contract DeploySecondaryConditionsScript is Script {
             implSalt: implSalt,
             auth: core.auth,
             registry: core.cyberAgreementRegistry,
-            badge: _badge(core, implSalt, proxySalt, deployerAddress)
+            badge: _badge(core, chainId, implSalt, proxySalt, deployerAddress)
         });
         _deployThresholdConditions(ctx, recorded, deployed);
         _deployBadgeKindConditions(ctx, recorded, deployed);
@@ -115,6 +146,7 @@ contract DeploySecondaryConditionsScript is Script {
         vm.stopBroadcast();
 
         _logDeployed(ctx.badge, deployed);
+        calls = gatedCalls;
     }
 
     /// @dev The conditions that read no credential, plus the three that read one through a badge.
@@ -244,6 +276,7 @@ contract DeploySecondaryConditionsScript is Script {
     }
 
     /// @dev A recorded proxy keeps its address and takes the new code. A zero one gets a new proxy.
+    ///      The upgrade needs the owner role, so it goes to the gated calls.
     function _deployOrUpgrade(
         address recorded,
         address implementation,
@@ -251,7 +284,13 @@ contract DeploySecondaryConditionsScript is Script {
         bytes32 proxySalt
     ) internal returns (address) {
         if (recorded != address(0)) {
-            UUPSUpgradeable(recorded).upgradeToAndCall(implementation, "");
+            gatedCalls.push(
+                GnosisTransaction({
+                    to: recorded,
+                    value: 0,
+                    data: abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, ""))
+                })
+            );
             return recorded;
         }
         return address(new ERC1967Proxy{salt: proxySalt}(implementation, initCall));
@@ -260,8 +299,11 @@ contract DeploySecondaryConditionsScript is Script {
     /// @dev The badge-scoped conditions refuse a zero registry at initialize, so the chain needs a
     ///      badge first. It gets its own BorgAuth: the minter holds ADMIN on `lexchexAuth`, and a
     ///      shared auth would make the badge issuer grants meaningless.
+    ///      On a production chain the deployer gives the badge auth to the MetaLeX Safe, then drops its
+    ///      own role. On a testnet the deployer keeps it.
     function _badge(
         DeploymentConstants.CoreDeployment memory core,
+        uint256 chainId,
         bytes32 implSalt,
         bytes32 proxySalt,
         address deployer
@@ -277,6 +319,11 @@ contract DeploySecondaryConditionsScript is Script {
         );
         // The v1 minter bridges an accreditation into a badge credential.
         LeXcheXBadge(badge).setIssuerKeys(core.lexchexMinter, MINTER_ISSUER_KEYS);
+
+        if (!DeploymentConstants.isTestnet(chainId)) {
+            badgeAuth.updateRole(core.metalexSafe, badgeAuth.OWNER_ROLE());
+            badgeAuth.zeroOwner();
+        }
 
         console2.log("Deployed LeXcheXBadge AUTH:", address(badgeAuth));
         console2.log("Deployed LeXcheXBadge:", badge);

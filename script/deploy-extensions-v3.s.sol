@@ -9,6 +9,8 @@ import {SAFTExtensionV3} from "../src/storage/extensions/SAFTExtensionV3.sol";
 import {ShareExtensionV3} from "../src/storage/extensions/ShareExtensionV3.sol";
 import {TokenWarrantExtensionV3} from "../src/storage/extensions/TokenWarrantExtensionV3.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
+import {SafeUtils} from "./libs/SafeUtils.sol";
+import {GnosisTransaction} from "./libs/safe.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Script, console2} from "forge-std/Script.sol";
@@ -21,9 +23,13 @@ import {Script, console2} from "forge-std/Script.sol";
 ///      holds these proxies, because the same code under the same salt gives an occupied address.
 ///      A new proxy address depends on the implementation address, so a chain that deploys later
 ///      matches the recorded addresses only under the original implementation salt and the same code.
+///      The deployer only deploys. The upgrades of recorded proxies need the owner role, so
+///      `runWithArgs` returns them as gated calls and does not send them.
 contract DeployExtensionsV3Script is Script {
+    GnosisTransaction[] internal gatedCalls;
+
     function run() public returns (DeploymentConstants.ExtensionDeployment memory deployed) {
-        return runWithArgs(
+        return runAndExecute(
 //            // Production
 //            DeploymentConstants.BASE,
 //            "CyberCorpV5-ExtensionsV3", // proxySaltStr
@@ -38,12 +44,34 @@ contract DeployExtensionsV3Script is Script {
         );
     }
 
-    function runWithArgs(
+    /// @notice Deploys, then sends the gated calls or hands them off to the MetaLeX Safe.
+    function runAndExecute(
         uint256 chainId,
         string memory proxySaltStr,
         string memory implSaltStr,
         uint256 deployerPrivateKey
     ) public returns (DeploymentConstants.ExtensionDeployment memory deployed) {
+        GnosisTransaction[] memory calls;
+        (deployed, calls) = runWithArgs(chainId, proxySaltStr, implSaltStr, deployerPrivateKey);
+        DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(chainId);
+        bool direct = DeploymentConstants.isTestnet(chainId)
+            && SafeUtils.hasOwnerRole(core.auth, vm.addr(deployerPrivateKey));
+        SafeUtils.executeOrHandOff(
+            calls,
+            chainId,
+            deployerPrivateKey,
+            core.metalexSafe,
+            direct,
+            string.concat("script/res/gnosis-batch-deploy-extensions-v3-", vm.toString(chainId), ".json")
+        );
+    }
+
+    function runWithArgs(
+        uint256 chainId,
+        string memory proxySaltStr,
+        string memory implSaltStr,
+        uint256 deployerPrivateKey
+    ) public returns (DeploymentConstants.ExtensionDeployment memory deployed, GnosisTransaction[] memory calls) {
         address deployerAddress = vm.addr(deployerPrivateKey);
 
         bytes32 implSalt = keccak256(bytes(implSaltStr));
@@ -99,9 +127,11 @@ contract DeployExtensionsV3Script is Script {
         console2.log("ShareExtensionV3:", deployed.shareExtensionV3);
         console2.log("FundInterestExtensionV3:", deployed.fundInterestExtensionV3);
         console2.log("");
+        calls = gatedCalls;
     }
 
     /// @dev A recorded proxy takes the new code at its own address. A zero one gets a new proxy.
+    ///      The upgrade needs the owner role, so it goes to the gated calls.
     function _deployOrUpgrade(
         address recorded,
         address implementation,
@@ -109,7 +139,13 @@ contract DeployExtensionsV3Script is Script {
         bytes32 proxySalt
     ) internal returns (address) {
         if (recorded != address(0)) {
-            UUPSUpgradeable(recorded).upgradeToAndCall(implementation, "");
+            gatedCalls.push(
+                GnosisTransaction({
+                    to: recorded,
+                    value: 0,
+                    data: abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, ""))
+                })
+            );
             return recorded;
         }
         return address(

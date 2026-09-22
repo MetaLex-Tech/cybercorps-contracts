@@ -3,6 +3,9 @@ pragma solidity ^0.8.20;
 
 import {Vm, console2} from "forge-std/Test.sol";
 import {GnosisTransaction} from "./safe.sol";
+import {BorgAuth} from "../../src/libs/auth.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 // Access hidden cheatcodes
 interface EnhancedVm is Vm {
@@ -11,6 +14,9 @@ interface EnhancedVm is Vm {
 
 library SafeUtils {
     EnhancedVm constant vm = EnhancedVm(address(uint160(uint256(keccak256("hevm cheat code")))));
+    bytes32 constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+
+    error ImplementationMismatch(address proxy, address expected);
 
     struct SafeTxImport {
         string version;
@@ -63,6 +69,75 @@ library SafeUtils {
                 transactions: convertedSafeTxs
             }))
         );
+    }
+
+    /// @notice Tells if the account holds the owner role on the auth.
+    function hasOwnerRole(address auth, address account) internal view returns (bool) {
+        return BorgAuth(auth).userRoles(account) >= BorgAuth(auth).OWNER_ROLE();
+    }
+
+    /// @notice Runs the owner-gated calls of a deployment.
+    /// @dev When `direct` is true, the deployer sends the calls itself.
+    ///      When `direct` is false, the Safe must sign the calls as one batch. The script runs the calls
+    ///      as the Safe in the simulation, then prints the batch and writes it to `jsonPath`.
+    ///      A failed call stops the script before it broadcasts anything.
+    ///      Both paths check that each upgraded proxy holds its new implementation.
+    function executeOrHandOff(
+        GnosisTransaction[] memory safeTxs,
+        uint256 chainId,
+        uint256 deployerPrivateKey,
+        address safe,
+        bool direct,
+        string memory jsonPath
+    ) internal {
+        if (direct) {
+            console2.log("Deployer has authority. It sends %d gated calls itself.", safeTxs.length);
+            vm.startBroadcast(deployerPrivateKey);
+            _callAll(safeTxs);
+            vm.stopBroadcast();
+        } else {
+            console2.log("Deployer has no authority. The Safe must sign %d gated calls.", safeTxs.length);
+            console2.log("Safe:", safe);
+            for (uint256 i = 0; i < safeTxs.length; i++) {
+                vm.prank(safe);
+                Address.functionCallWithValue(safeTxs[i].to, safeTxs[i].data, safeTxs[i].value);
+            }
+            if (safeTxs.length > 0) _printAndWrite(safeTxs, chainId, jsonPath);
+        }
+        _verifyUpgrades(safeTxs);
+    }
+
+    function _callAll(GnosisTransaction[] memory safeTxs) private {
+        for (uint256 i = 0; i < safeTxs.length; i++) {
+            Address.functionCallWithValue(safeTxs[i].to, safeTxs[i].data, safeTxs[i].value);
+        }
+    }
+
+    function _printAndWrite(GnosisTransaction[] memory safeTxs, uint256 chainId, string memory jsonPath) private {
+        string memory safeTxJson = formatSafeTxJson(safeTxs, chainId);
+        console2.log("Safe tx JSON (can be imported to Safe Transaction Builder):");
+        console2.log("==== JSON data start ====");
+        console2.log(safeTxJson);
+        console2.log("==== JSON data end ====");
+        vm.writeFile(jsonPath, safeTxJson);
+        console2.log("Safe tx JSON written to:", jsonPath);
+    }
+
+    /// @dev An upgrade call to an address with no code does not revert, so read the slot to be sure.
+    function _verifyUpgrades(GnosisTransaction[] memory safeTxs) private view {
+        for (uint256 i = 0; i < safeTxs.length; i++) {
+            bytes memory data = safeTxs[i].data;
+            if (data.length < 4 || bytes4(data) != UUPSUpgradeable.upgradeToAndCall.selector) continue;
+
+            bytes memory args = new bytes(data.length - 4);
+            for (uint256 j = 0; j < args.length; j++) {
+                args[j] = data[j + 4];
+            }
+            (address implementation,) = abi.decode(args, (address, bytes));
+            if (address(uint160(uint256(vm.load(safeTxs[i].to, IMPLEMENTATION_SLOT)))) != implementation) {
+                revert ImplementationMismatch(safeTxs[i].to, implementation);
+            }
+        }
     }
 
     function parseSafeTxJson(string memory json) internal returns (SafeTxImport memory) {

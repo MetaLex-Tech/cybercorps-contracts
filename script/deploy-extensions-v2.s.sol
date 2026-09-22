@@ -7,6 +7,8 @@ import {SAFTEExtensionV2} from "../src/storage/extensions/SAFTEExtensionV2.sol";
 import {SAFTExtensionV2} from "../src/storage/extensions/SAFTExtensionV2.sol";
 import {TokenWarrantExtensionV2} from "../src/storage/extensions/TokenWarrantExtensionV2.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
+import {SafeUtils} from "./libs/SafeUtils.sol";
+import {GnosisTransaction} from "./libs/safe.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Script, console2} from "forge-std/Script.sol";
@@ -16,9 +18,13 @@ import {Script, console2} from "forge-std/Script.sol";
 ///      The new code escapes string fields in the JSON it renders.
 ///      The two salts are separate. Bump the implementation salt to re-run on a chain that already
 ///      holds these implementations, because the same code under the same salt gives an occupied address.
+///      The deployer only deploys. The upgrades of recorded proxies need the owner role, so
+///      `runWithArgs` returns them as gated calls and does not send them.
 contract DeployExtensionsV2Script is Script {
+    GnosisTransaction[] internal gatedCalls;
+
     function run() public {
-        runWithArgs(
+        runAndExecute(
 //            // Production
 //            DeploymentConstants.BASE,
 //            "CyberCorpV5-ExtensionsV2.0.1", // proxySaltStr
@@ -33,12 +39,33 @@ contract DeployExtensionsV2Script is Script {
         );
     }
 
-    function runWithArgs(
+    /// @notice Deploys, then sends the gated calls or hands them off to the MetaLeX Safe.
+    function runAndExecute(
         uint256 chainId,
         string memory proxySaltStr,
         string memory implSaltStr,
         uint256 deployerPrivateKey
     ) public {
+        GnosisTransaction[] memory calls = runWithArgs(chainId, proxySaltStr, implSaltStr, deployerPrivateKey);
+        DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(chainId);
+        bool direct = DeploymentConstants.isTestnet(chainId)
+            && SafeUtils.hasOwnerRole(core.auth, vm.addr(deployerPrivateKey));
+        SafeUtils.executeOrHandOff(
+            calls,
+            chainId,
+            deployerPrivateKey,
+            core.metalexSafe,
+            direct,
+            string.concat("script/res/gnosis-batch-deploy-extensions-v2-", vm.toString(chainId), ".json")
+        );
+    }
+
+    function runWithArgs(
+        uint256 chainId,
+        string memory proxySaltStr,
+        string memory implSaltStr,
+        uint256 deployerPrivateKey
+    ) public returns (GnosisTransaction[] memory) {
         address deployerAddress = vm.addr(deployerPrivateKey);
 
         bytes32 implSalt = keccak256(bytes(implSaltStr));
@@ -87,9 +114,11 @@ contract DeployExtensionsV2Script is Script {
             console2.log("ACESAFEExtension:", aceSafeExtension);
         }
         console2.log("");
+        return gatedCalls;
     }
 
     /// @dev A recorded proxy takes the new code at its own address. A zero one gets a new proxy.
+    ///      The upgrade needs the owner role, so it goes to the gated calls.
     function _deployOrUpgrade(
         address recorded,
         address implementation,
@@ -97,7 +126,13 @@ contract DeployExtensionsV2Script is Script {
         bytes32 proxySalt
     ) internal returns (address) {
         if (recorded != address(0)) {
-            UUPSUpgradeable(recorded).upgradeToAndCall(implementation, "");
+            gatedCalls.push(
+                GnosisTransaction({
+                    to: recorded,
+                    value: 0,
+                    data: abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, ""))
+                })
+            );
             return recorded;
         }
         return address(

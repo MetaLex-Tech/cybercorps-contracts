@@ -11,6 +11,14 @@ library DeploymentConstants {
     uint256 internal constant ETH_SEPOLIA = 11155111;
     uint256 internal constant BASE_SEPOLIA = 84532;
 
+    /// @notice Tells if the chain is a testnet. A testnet keeps new auths with the deployer.
+    ///         A production chain hands them off to the MetaLeX Safe.
+    function isTestnet(uint256 chainId) internal pure returns (bool) {
+        if (chainId == ETH_SEPOLIA || chainId == BASE_SEPOLIA) return true;
+        if (chainId == ETH || chainId == BASE || chainId == ARBITRUM) return false;
+        revert UnsupportedChain(chainId);
+    }
+
     struct CoreDeployment {
         address metalexSafe;
         address auth;
