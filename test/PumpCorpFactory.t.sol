@@ -75,20 +75,20 @@ contract PumpCorpFactoryForkTest is Test {
     address internal investor;
 
     // ── Live deployments (DeploymentConstants.coreV2) ────────────
-    DeploymentConstants.CoreDeployment internal net =
-        DeploymentConstants.coreV2(block.chainid);
-    address internal metalexSafe = net.metalexSafe;
+    // setUp sets these after it selects the Base fork.
+    DeploymentConstants.CoreDeployment internal net;
+    address internal metalexSafe;
 
     // Convenience aliases
-    address internal REGISTRY                 = net.cyberAgreementRegistry;
-    address internal CYBERCORP_SINGLE_FACTORY = net.cyberCorpSingleFactory;
-    address internal DEAL_MANAGER_FACTORY     = net.dealManagerFactory;
-    address internal URI_BUILDER              = net.uriBuilder;
+    address internal REGISTRY;
+    address internal CYBERCORP_SINGLE_FACTORY;
+    address internal DEAL_MANAGER_FACTORY;
+    address internal URI_BUILDER;
 
     // ── Live LexChex addresses on Base ───────────────────────────────────────
-    address internal LEXCHEX                  = net.lexchex;
-    address internal LEXCHEX_CONDITION        = net.lexchexCondition;
-    address internal LEXCHEX_AUTH             = net.lexchexAuth;
+    address internal LEXCHEX;
+    address internal LEXCHEX_CONDITION;
+    address internal LEXCHEX_AUTH;
 
     // ── Mock zkPassport condition deployed in setUp ───────────────────────────────
     MockZkPassportCondition internal zkpassportCondition;
@@ -121,6 +121,16 @@ contract PumpCorpFactoryForkTest is Test {
 
     function setUp() public {
         vm.createSelectFork("base", 45993317); // pinned to an old block before deployment
+
+        net = DeploymentConstants.coreV2(block.chainid);
+        metalexSafe = net.metalexSafe;
+        REGISTRY = net.cyberAgreementRegistry;
+        CYBERCORP_SINGLE_FACTORY = net.cyberCorpSingleFactory;
+        DEAL_MANAGER_FACTORY = net.dealManagerFactory;
+        URI_BUILDER = net.uriBuilder;
+        LEXCHEX = net.lexchex;
+        LEXCHEX_CONDITION = net.lexchexCondition;
+        LEXCHEX_AUTH = net.lexchexAuth;
 
         (deployer, deployerPk) = makeAddrAndKey("deployer");
         (officer, officerPk) = makeAddrAndKey("officer");
