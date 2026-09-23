@@ -43,6 +43,8 @@ interface IUUPS {
 ///      script collects them as gated calls. On a testnet where the deployer is owner, the deployer
 ///      sends them. Otherwise the MetaLeX Safe must sign them as one batch, and the script writes
 ///      the batch JSON for the Safe Transaction Builder.
+///      On a production chain, the script also moves the owner role of each core auth from the
+///      deployer to the Safe. See `SafeUtils.handOffAuthOwner`.
 ///      Corp upgrades intentionally are not broadcast here:
 ///      `corpUpgradeCalls` returns the six calls that a corp owner must execute in one Safe batch.
 contract UpgradeV5Script is Script {
@@ -143,6 +145,13 @@ contract UpgradeV5Script is Script {
             conditionCalls,
             string.concat("queued gated calls from secondary conditions, count: ", vm.toString(conditionCalls.length))
         );
+
+        // On a testnet the deployer keeps its roles, so that it can send the next rehearsal itself.
+        if (!testnet) {
+            gatedCalls.handOffAuthOwner(core.auth, "core AUTH", deployer, core.metalexSafe, privateKey);
+            gatedCalls.handOffAuthOwner(core.lexchexAuth, "LeXcheX AUTH", deployer, core.metalexSafe, privateKey);
+            gatedCalls.handOffAuthOwner(core.lexchexBadgeAuth, "LeXcheX badge AUTH", deployer, core.metalexSafe, privateKey);
+        }
 
         console2.log("");
 

@@ -145,6 +145,41 @@ library SafeUtils {
         return BorgAuth(auth).userRoles(account) >= BorgAuth(auth).OWNER_ROLE();
     }
 
+    /// @notice Moves the owner role of an auth from the deployer to the Safe.
+    /// @dev The move takes two runs. The deployer never drops its role before the Safe holds it.
+    ///      Run 1: the deployer nominates the Safe, and the Safe batch accepts the role.
+    ///      Run 2, after the Safe executes the batch: the deployer drops its role.
+    function handOffAuthOwner(
+        GnosisTransaction[] storage gatedCalls,
+        address auth,
+        string memory name,
+        address deployer,
+        address safe,
+        uint256 deployerPrivateKey
+    ) internal {
+        if (!hasOwnerRole(auth, deployer)) {
+            console2.log(string.concat("deployer has no owner role on ", name, ":"), auth);
+            return;
+        }
+        if (hasOwnerRole(auth, safe)) {
+            vm.broadcast(deployerPrivateKey);
+            BorgAuth(auth).zeroOwner();
+            console2.log(string.concat("Safe holds the owner role. Deployer dropped its owner role on ", name, ":"), auth);
+            return;
+        }
+        if (BorgAuth(auth).pendingOwner() != safe) {
+            vm.broadcast(deployerPrivateKey);
+            BorgAuth(auth).initTransferOwnership(safe);
+            console2.log(string.concat("deployer nominated the Safe as owner of ", name, ":"), auth);
+        }
+        queue(
+            gatedCalls,
+            auth,
+            abi.encodeCall(BorgAuth.acceptOwnership, ()),
+            string.concat("queued accepting the owner role of ", name, " by the Safe: ", vm.toString(auth))
+        );
+    }
+
     /// @notice Runs the owner-gated calls of a deployment.
     /// @dev When `direct` is true, the deployer sends the calls itself.
     ///      When `direct` is false, the Safe must sign the calls as one batch. The script runs the calls
