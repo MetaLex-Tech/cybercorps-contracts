@@ -72,17 +72,25 @@ library SafeUtils {
         );
     }
 
-    /// @notice Adds one owner-gated call to the list.
+    /// @notice Adds one owner-gated call to the list and logs what it does.
     /// @dev The deployer deploys new contracts. A script collects each call that needs the owner
     ///      role in a list. `executeOrHandOff` then sends the list or hands it to the Safe.
-    function queue(GnosisTransaction[] storage gatedCalls, address to, bytes memory data) internal {
+    ///      The caller writes the full log message.
+    function queue(GnosisTransaction[] storage gatedCalls, address to, bytes memory data, string memory message)
+        internal
+    {
         gatedCalls.push(GnosisTransaction({to: to, value: 0, data: data}));
+        console2.log(message);
     }
 
-    function queueAll(GnosisTransaction[] storage gatedCalls, GnosisTransaction[] memory calls) internal {
+    /// @dev The caller writes the full log message.
+    function queueAll(GnosisTransaction[] storage gatedCalls, GnosisTransaction[] memory calls, string memory message)
+        internal
+    {
         for (uint256 i = 0; i < calls.length; i++) {
             gatedCalls.push(calls[i]);
         }
+        console2.log(message);
     }
 
     function queueUpgrade(
@@ -92,8 +100,12 @@ library SafeUtils {
         string memory name
     ) internal {
         if (proxy == address(0)) revert("Missing proxy address");
-        queue(gatedCalls, proxy, abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, "")));
-        console2.log(string.concat("queued upgrading proxy ", name, ":"), proxy);
+        queue(
+            gatedCalls,
+            proxy,
+            abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, "")),
+            string.concat("queued upgrading proxy ", name, ": ", vm.toString(proxy))
+        );
     }
 
     /// @dev A recorded proxy keeps its address and takes the new code. A zero one gets a new proxy.

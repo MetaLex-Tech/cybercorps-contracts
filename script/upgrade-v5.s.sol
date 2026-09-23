@@ -124,17 +124,25 @@ contract UpgradeV5Script is Script {
         _queueSingletonCalls(targets, impls);
 
         // Each called script deploys in its own broadcast and returns its gated calls.
-        gatedCalls.queueAll((new DeployExtensionsV2Script()).runWithArgs(
+        GnosisTransaction[] memory v2Calls = (new DeployExtensionsV2Script()).runWithArgs(
             block.chainid, EXTENSIONS_V2_PROXY_SALT, EXTENSIONS_V2_IMPL_SALT, privateKey
-        ));
+        );
+        gatedCalls.queueAll(
+            v2Calls, string.concat("queued gated calls from extensions V2, count: ", vm.toString(v2Calls.length))
+        );
         (, GnosisTransaction[] memory v3Calls) = (new DeployExtensionsV3Script()).runWithArgs(
             block.chainid, EXTENSIONS_V3_PROXY_SALT, EXTENSIONS_V3_IMPL_SALT, privateKey
         );
-        gatedCalls.queueAll(v3Calls);
+        gatedCalls.queueAll(
+            v3Calls, string.concat("queued gated calls from extensions V3, count: ", vm.toString(v3Calls.length))
+        );
         (, GnosisTransaction[] memory conditionCalls) = (new DeploySecondaryConditionsScript()).runWithArgs(
             block.chainid, SECONDARY_CONDITIONS_PROXY_SALT, SECONDARY_CONDITIONS_IMPL_SALT, privateKey
         );
-        gatedCalls.queueAll(conditionCalls);
+        gatedCalls.queueAll(
+            conditionCalls,
+            string.concat("queued gated calls from secondary conditions, count: ", vm.toString(conditionCalls.length))
+        );
 
         console2.log("");
 
@@ -158,32 +166,48 @@ contract UpgradeV5Script is Script {
         // path invokes RoundManager.createRound using the new CyberCertData selector.
         // MTLX1-41 changes every component factory's salt namespace, including Base.
         gatedCalls.queueUpgrade(targets.roundManagerFactory, impls.roundManagerFactory, "RoundManagerFactory");
-        gatedCalls.queue(targets.roundManagerFactory, abi.encodeCall(RoundManagerFactory.setRefImplementation, (impls.roundManager)));
+        gatedCalls.queue(
+            targets.roundManagerFactory,
+            abi.encodeCall(RoundManagerFactory.setRefImplementation, (impls.roundManager)),
+            string.concat("queued setting RoundManager ref implementation: ", vm.toString(impls.roundManager))
+        );
 
         gatedCalls.queueUpgrade(targets.cyberCorpSingleFactory, impls.cyberCorpSingleFactory, "CyberCorpSingleFactory");
         gatedCalls.queueUpgrade(targets.issuanceManagerFactory, impls.issuanceManagerFactory, "IssuanceManagerFactory");
         gatedCalls.queue(
             targets.cyberCorpSingleFactory,
-            abi.encodeCall(CyberCorpSingleFactory.setRefImplementation, (impls.cyberCorp))
+            abi.encodeCall(CyberCorpSingleFactory.setRefImplementation, (impls.cyberCorp)),
+            string.concat("queued setting CyberCorp ref implementation: ", vm.toString(impls.cyberCorp))
         );
         gatedCalls.queue(
             targets.issuanceManagerFactory,
-            abi.encodeCall(IssuanceManagerFactory.setRefImplementation, (impls.issuanceManager))
+            abi.encodeCall(IssuanceManagerFactory.setRefImplementation, (impls.issuanceManager)),
+            string.concat("queued setting IssuanceManager ref implementation: ", vm.toString(impls.issuanceManager))
         );
         gatedCalls.queue(
             targets.issuanceManagerFactory,
-            abi.encodeCall(IssuanceManagerFactory.setCyberCertPrinterRefImplementation, (impls.ledgerEntryToken))
+            abi.encodeCall(IssuanceManagerFactory.setCyberCertPrinterRefImplementation, (impls.ledgerEntryToken)),
+            string.concat(
+                "queued setting CyberCertPrinter ref implementation (LedgerEntryToken): ",
+                vm.toString(impls.ledgerEntryToken)
+            )
         );
         gatedCalls.queue(
             targets.issuanceManagerFactory,
-            abi.encodeCall(IssuanceManagerFactory.setCyberScripRefImplementation, (impls.cyberScrip))
+            abi.encodeCall(IssuanceManagerFactory.setCyberScripRefImplementation, (impls.cyberScrip)),
+            string.concat("queued setting CyberScrip ref implementation: ", vm.toString(impls.cyberScrip))
         );
 
         gatedCalls.queueUpgrade(targets.dealManagerFactory, impls.dealManagerFactory, "DealManagerFactory");
-        gatedCalls.queue(targets.dealManagerFactory, abi.encodeCall(DealManagerFactory.setRefImplementation, (impls.dealManager)));
         gatedCalls.queue(
             targets.dealManagerFactory,
-            abi.encodeCall(DealManagerFactory.setDefaultSecondaryFeeRatio, (SECONDARY_FEE_RATIO_BPS))
+            abi.encodeCall(DealManagerFactory.setRefImplementation, (impls.dealManager)),
+            string.concat("queued setting DealManager ref implementation: ", vm.toString(impls.dealManager))
+        );
+        gatedCalls.queue(
+            targets.dealManagerFactory,
+            abi.encodeCall(DealManagerFactory.setDefaultSecondaryFeeRatio, (SECONDARY_FEE_RATIO_BPS)),
+            string.concat("queued setting default secondary fee ratio (bps): ", vm.toString(SECONDARY_FEE_RATIO_BPS))
         );
 
         gatedCalls.queueUpgrade(targets.certificateUriBuilder, impls.certificateUriBuilder, "CertificateUriBuilder");
