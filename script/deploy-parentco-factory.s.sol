@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import "./libs/SafeUtils.sol";
+import "./libs/DeploymentUtils.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
@@ -249,7 +249,7 @@ contract DeployParentCoFactoryScript is Script {
             )
         });
 
-        string memory safeTxJson = SafeUtils.formatSafeTxJson(safeTxs, chainId);
+        string memory safeTxJson = DeploymentUtils.formatSafeTxJson(safeTxs, chainId);
 
         console2.log("Safe tx JSON (can be imported to Safe Transaction Builder):");
         console2.log("==== JSON data start ====");

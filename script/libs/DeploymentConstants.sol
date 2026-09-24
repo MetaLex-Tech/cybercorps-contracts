@@ -267,11 +267,9 @@ library DeploymentConstants {
                 nonUsPerson: 0xe2AAc5187058a5c97Da7e6D3D6F9D5811124dcBb,
                 spvWhitelist: 0x0f2952dcf0279782e6048D2800ee3BeAd9f59f33,
                 syndicate: 0x089b4Dba2E3EB49f875c0D7F92A06276B204870f,
-                killSwitch: 0x4c3b9Ec3B6e416A64Fde4a17Ea856e1cf2fE0344, // staging admin keys
+                killSwitch: address(0),
                 timeSettlementPeriod: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
             });
-            // TODO intentionally left out the kill switch, because it holds the staging admin keys.
-            if (chainId != BASE_SEPOLIA) deployment.killSwitch = address(0);
             return deployment;
         } else {
             revert UnsupportedChain(chainId);
