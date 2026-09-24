@@ -14,10 +14,8 @@ import {console2} from "forge-std/Script.sol";
 /// @notice Deploys or upgrades the live V1 and V2 certificate extension proxies.
 /// @dev An existing proxy keeps its address and takes the new code. A zero field gets a new proxy.
 ///      The new code escapes string fields in the JSON it renders.
-///      A new proxy uses CREATE3, so its address depends only on the deployer and the proxy salt.
-///      An implementation is deployed only when its code changed. See `DeploymentScript`.
-///      An upgrade needs the owner role on the core AUTH. The deployer sends it when it holds the role.
-///      Otherwise `runWithArgs` returns it as a Safe call. See `DeploymentScript`.
+///      The proxy salt applies only to a zero field. A field with an address ignores the salt.
+///      See `DeploymentScript` for the checks and for who sends each call.
 contract DeployExtensionsV2Script is DeploymentScript {
     function run() public {
         runAndExecute(

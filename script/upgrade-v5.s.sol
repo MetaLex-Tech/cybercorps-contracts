@@ -18,20 +18,22 @@ interface IUUPS {
     function upgradeToAndCall(address newImplementation, bytes calldata data) external payable;
 }
 
-/// @notice Runs the whole v5 release: the core singletons (`UpgradeCoreScript`), the live V1 and V2
-///         certificate extensions, the V3 extensions and the secondary-trading condition singletons.
+/// @notice Runs the whole v5 release. Each part has its own script, which can also run alone:
+///         - `UpgradeCoreScript`: the core singletons.
+///         - `DeployExtensionsV2Script`: the live V1 and V2 certificate extensions.
+///         - `DeployExtensionsV3Script`: the V3 extensions.
+///         - `DeploySecondaryConditionsScript`: the secondary-trading condition singletons.
 /// @dev Run this once per production chain, or on a testnet as a rehearsal.
-///      The deployer deploys all new contracts. An upgrade or a setter needs the owner role on its auth.
-///      The deployer sends it when it holds that role. Otherwise the MetaLeX Safe must sign it, and the
-///      script writes the Safe batch JSON for the Safe Transaction Builder. See `DeploymentScript`.
-///      On a production chain, the script also moves the owner role of each core auth from the
+///      This script writes one Safe batch JSON for the calls of all parts. See `DeploymentScript`.
+///      On a production chain, it also moves the owner role of each core auth from the
 ///      deployer to the Safe. See `DeploymentScript.handOffAuthOwner`.
 ///      Corp upgrades intentionally are not broadcast here:
 ///      `corpUpgradeCalls` returns the six calls that a corp owner must execute in one Safe batch.
 contract UpgradeV5Script is DeploymentScript {
-    // A new contract uses CREATE3 with the proxy salt, so its address depends only on the deployer and the
-    // proxy salt. The proxy salt must stay the same. An existing contract is not deployed again.
-    // An implementation is deployed only when its code changed. See `DeploymentScript`.
+    // The proxy salt applies only to a contract whose DeploymentConstants field is zero.
+    // The script deploys that contract with CREATE3, so its address depends only on the deployer and the salt.
+    // If the field has an address, the script uses that address and ignores the salt.
+    // Keep the salt the same, so a zero field gets the same address on each chain.
     string private constant EXTENSIONS_V2_PROXY_SALT = "CyberCorpV5-ExtensionsV2.0.1";
     string private constant EXTENSIONS_V3_PROXY_SALT = "CyberCorpV5-ExtensionsV3";
     string private constant SECONDARY_CONDITIONS_PROXY_SALT = "CyberCorpV5-SecondaryConditionsV1.0.0";

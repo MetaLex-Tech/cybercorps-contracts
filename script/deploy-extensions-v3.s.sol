@@ -17,10 +17,8 @@ import {console2} from "forge-std/Script.sol";
 /// @dev An existing proxy keeps its address and takes the new code. A zero field gets a new proxy.
 ///      Do not upgrade a V1 or V2 proxy to these implementations. A v4 printer on that proxy
 ///      then reverts in `tokenURI`. Forge deploys and links ShareCertDataLayerLib for ShareExtensionV3.
-///      A new proxy uses CREATE3, so its address depends only on the deployer and the proxy salt.
-///      An implementation is deployed only when its code changed. See `DeploymentScript`.
-///      An upgrade needs the owner role on the core AUTH. The deployer sends it when it holds the role.
-///      Otherwise `runWithArgs` returns it as a Safe call. See `DeploymentScript`.
+///      The proxy salt applies only to a zero field. A field with an address ignores the salt.
+///      See `DeploymentScript` for the checks and for who sends each call.
 contract DeployExtensionsV3Script is DeploymentScript {
     function run() public {
         runAndExecute(

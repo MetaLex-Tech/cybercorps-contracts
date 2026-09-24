@@ -35,11 +35,11 @@ import {GnosisTransaction} from "./libs/safe.sol";
 import {console2} from "forge-std/Script.sol";
 
 /// @notice Deploys the shared secondary-trading condition singletons.
-/// @dev Each condition is one instance for the whole chain, configured per SPV. The script is
-///      idempotent against DeploymentConstants: an existing proxy keeps its address and takes the
-///      new code, a zero field gets a new proxy. Add every printed address to DeploymentConstants afterwards.
-///      An upgrade needs the owner role on its auth. The deployer sends it when it holds the role.
-///      Otherwise `runWithArgs` returns it as a Safe call. See `DeploymentScript`.
+/// @dev Each condition is one instance for the whole chain, configured per SPV.
+///      An existing proxy keeps its address and takes the new code. A zero field gets a new proxy.
+///      The proxy salt applies only to a zero field. A field with an address ignores the salt.
+///      Add every new address to DeploymentConstants afterwards.
+///      See `DeploymentScript` for the checks and for who sends each call.
 contract DeploySecondaryConditionsScript is DeploymentScript {
     /// @dev Rule 144(d): one year of holding for a non-reporting issuer.
     uint256 private constant HOLDING_PERIOD = 365 days;

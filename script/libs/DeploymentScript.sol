@@ -11,21 +11,28 @@ import {ERC1967Utils} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Utils.so
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 /// @notice Base for deploy scripts. A script lists what to deploy, what to upgrade and what to call.
-///         Each step decides how to do it.
-/// @dev Who sends a call:
+///         Each step decides how to do it, so a re-run does only the work that is still open.
+/// @dev Existing contracts:
+///      - DeploymentConstants holds the address of each proxy, singleton and auth that exists.
+///        A step keeps an existing address and does not deploy it again.
+///      - We do not record implementation addresses in DeploymentConstants as they change frequently during development.
+///      New singletons, proxies and auths (`deployIfNotExist`):
+///      - They use CREATE3 when their DeploymentConstants field is zero. The salt is `saltPrefix/saltName`.
+///      - The address depends only on the deployer and the salt, not on the code. The same deployer key
+///        gives the same address on each chain. Another deployer gets other addresses.
+///      - Contracts deployed prior to this script are not necessarily all created using CREATE3.
+///      - DeploymentConstants take precedence if the salt's CREATE3 disagree with it; however,
+///        if the salt's address has code, the existing address must be that address. See `DeploymentUtils.verifyExisting`.
+///      New implementations (`deployIfDifferent`):
+///      - They use CREATE, so they need no salt.
+///      - The step compares the new runtime code with the current implementation. It deploys only when
+///        the code is different. The change detection is intentionally simple and strict to avoid false negatives,
+///        as a result, a comment change also counts as a change.
+///      Who sends a call (`execute`):
 ///      - The deployer sends a call now when it holds the owner role on the call's BorgAuth.
 ///      - Otherwise the call goes to `safeTxs`, and the MetaLeX Safe must sign it.
 ///        `finish` runs these calls as the Safe after all deployer calls, which is their order on chain.
-///        Then it writes the batch for the Safe Transaction Builder.
-///      How a contract is created:
-///      - A contract that DeploymentConstants lists uses CREATE3 through `deployIfNotExist`. This covers
-///        proxies, singletons and auths. The salt is `saltPrefix/name`, so the address depends only on the
-///        deployer and that salt. A new name gives a new address. An existing address is kept.
-///      - An implementation uses CREATE through `deployIfDifferent`. The step deploys it only when its code
-///        differs from the current implementation, so a re-run with the same code deploys nothing.
-///      - An older address from CREATE2 is not checked. See `DeploymentUtils.verifyExisting`.
-///      For a proxy, use `upgradeOrDeployProxyIfDiffImpl`.
-///      Each step broadcasts its own transactions. Do not call a step inside `vm.startBroadcast`.
+///        Then it writes the batch JSON for the Safe Transaction Builder.
 abstract contract DeploymentScript is Script {
     error ImplementationMismatch(address proxy, address expected);
     error ImplementationCreationFailed(string name);

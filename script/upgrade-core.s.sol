@@ -23,10 +23,9 @@ import {console2} from "forge-std/Script.sol";
 
 /// @notice Upgrades the MetaLeX-owned core singletons and the implementations that their factories use.
 ///         It sets the secondary-trade fee ratio, which the upgraded DealManagerFactory starts at zero.
-/// @dev For each singleton: deploy a new implementation when the code changed, then upgrade the proxy
-///      and set the factory references. Steps with unchanged code are skipped. See `DeploymentScript`.
-///      An upgrade or a setter needs the owner role on its auth. The deployer sends it when it holds the role.
-///      Otherwise `runWithArgs` returns it as a Safe call.
+/// @dev All core singletons exist, so this script deploys only implementations.
+///      For each singleton: deploy a new implementation when the code changed, then upgrade the proxy
+///      and set the factory references. See `DeploymentScript` for the checks and for who sends each call.
 contract UpgradeCoreScript is DeploymentScript {
     /// @dev Secondary trades are priced apart from primary issuance. The primary rate keeps its
     ///      stored value through the upgrade; the secondary rate is new state and starts at zero.
