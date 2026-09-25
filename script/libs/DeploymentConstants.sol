@@ -270,6 +270,8 @@ library DeploymentConstants {
                 killSwitch: address(0),
                 timeSettlementPeriod: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
             });
+            // KillSwitchCondition exists on the testnets only.
+            if (chainId == ETH_SEPOLIA || chainId == BASE_SEPOLIA) deployment.killSwitch = 0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435;
             return deployment;
         } else {
             revert UnsupportedChain(chainId);

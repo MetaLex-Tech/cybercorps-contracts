@@ -43,10 +43,15 @@ abstract contract DeploymentScript is Script {
     address internal safe;
     GnosisTransaction[] internal safeTxs;
 
+    /// @dev Log markers. A step that does work (sends, deploys or queues) logs RUN. A step that skips logs SKIP.
+    string private constant RUN = unicode"🟢 ";
+    string private constant SKIP = unicode"⚫️ ";
+
     /// @dev `chainId` selects the DeploymentConstants that the script uses. It must be the chain that the
     ///      script runs on, otherwise the script would use the addresses of another chain.
     ///      It logs the chain id, the deployer and the Safe. The script logs its own header first.
-    ///      Each step that logs takes `logLabel` first and starts each of its log lines with it.
+    ///      Each step that logs takes `logLabel` first. Each of its log lines starts with that label.
+    ///      A line about a step that does work or skips starts with a RUN or SKIP marker before the label.
     function initDeployment(string memory logLabel, uint256 chainId, uint256 deployerPrivateKey_, address safe_)
         internal
     {
@@ -71,7 +76,7 @@ abstract contract DeploymentScript is Script {
         if (direct) {
             vm.broadcast(deployerPrivateKey);
             Address.functionCall(to, data);
-            console2.log(string.concat(logLabel, " executed ", description));
+            console2.log(string.concat(RUN, logLabel, " executed ", description));
         } else {
             _queueForSafe(logLabel, to, data, description);
         }
@@ -90,13 +95,13 @@ abstract contract DeploymentScript is Script {
         returns (address deployed, bool isNew)
     {
         if (current != address(0) && _sameCode(current, _create(creationCode, name))) {
-            console2.log(string.concat(logLabel, " ", name, " unchanged, keeping: ", vm.toString(current)));
+            console2.log(string.concat(SKIP, logLabel, " ", name, " unchanged, keeping: ", vm.toString(current)));
             return (current, false);
         }
         vm.broadcast(deployerPrivateKey);
         deployed = _create(creationCode, name);
         isNew = true;
-        console2.log(string.concat(logLabel, " deployed new ", name, " (CREATE): ", vm.toString(deployed)));
+        console2.log(string.concat(RUN, logLabel, " deployed new ", name, " (CREATE): ", vm.toString(deployed)));
     }
 
     /// @notice Keeps an existing contract from DeploymentConstants as it is, or deploys a new one with CREATE3.
@@ -114,13 +119,15 @@ abstract contract DeploymentScript is Script {
         string memory saltStr = string.concat(saltPrefix, "/", saltName);
         DeploymentUtils.verifyExisting(existing, deployer, saltStr);
         if (existing != address(0)) {
-            console2.log(string.concat(logLabel, " ", saltName, " already exists, skipping: ", vm.toString(existing)));
+            console2.log(
+                string.concat(SKIP, logLabel, " ", saltName, " already exists, skipping: ", vm.toString(existing))
+            );
             return (existing, false);
         }
         vm.broadcast(deployerPrivateKey);
         deployed = DeploymentUtils.deployCreate3(deployer, saltStr, initCode);
         isNew = true;
-        console2.log(string.concat(logLabel, " deployed new ", saltName, " (CREATE3): ", vm.toString(deployed)));
+        console2.log(string.concat(RUN, logLabel, " deployed new ", saltName, " (CREATE3): ", vm.toString(deployed)));
     }
 
     /// @notice Deploys a new implementation when its code differs from the current one. Then it upgrades the
@@ -172,7 +179,9 @@ abstract contract DeploymentScript is Script {
         if (proxy == address(0)) revert("Missing proxy address");
         if (implementationOf(proxy) == implementation) {
             console2.log(
-                string.concat(logLabel, " ", name, " already uses the implementation, skipping: ", vm.toString(proxy))
+                string.concat(
+                    SKIP, logLabel, " ", name, " already uses the implementation, skipping: ", vm.toString(proxy)
+                )
             );
             return;
         }
@@ -224,7 +233,9 @@ abstract contract DeploymentScript is Script {
     ///      Only the Safe can accept, so the accept always goes to the Safe.
     function handOffAuthOwner(string memory logLabel, address auth, string memory name) internal {
         if (!DeploymentUtils.hasOwnerRole(auth, deployer)) {
-            console2.log(string.concat(logLabel, " deployer has no owner role on ", name, ": ", vm.toString(auth)));
+            console2.log(
+                string.concat(SKIP, logLabel, " deployer has no owner role on ", name, ": ", vm.toString(auth))
+            );
             return;
         }
         if (DeploymentUtils.hasOwnerRole(auth, safe)) {
@@ -232,6 +243,7 @@ abstract contract DeploymentScript is Script {
             BorgAuth(auth).zeroOwner();
             console2.log(
                 string.concat(
+                    RUN,
                     logLabel,
                     " Safe holds the owner role. Deployer dropped its owner role on ",
                     name,
@@ -245,7 +257,7 @@ abstract contract DeploymentScript is Script {
             vm.broadcast(deployerPrivateKey);
             BorgAuth(auth).initTransferOwnership(safe);
             console2.log(
-                string.concat(logLabel, " deployer nominated the Safe as owner of ", name, ": ", vm.toString(auth))
+                string.concat(RUN, logLabel, " deployer nominated the Safe as owner of ", name, ": ", vm.toString(auth))
             );
         }
         _queueForSafe(
@@ -305,7 +317,7 @@ abstract contract DeploymentScript is Script {
 
     function _queueForSafe(string memory logLabel, address to, bytes memory data, string memory description) private {
         safeTxs.push(GnosisTransaction({to: to, value: 0, data: data}));
-        console2.log(string.concat(logLabel, " queued for the Safe: ", description));
+        console2.log(string.concat(RUN, logLabel, " queued for the Safe: ", description));
     }
 
     /// @dev `new` needs a fixed contract type, so a step that takes any creation code needs `create`.
