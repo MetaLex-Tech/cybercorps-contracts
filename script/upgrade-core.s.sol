@@ -29,7 +29,7 @@ import {console2} from "forge-std/Script.sol";
 contract UpgradeCoreScript is DeploymentScript {
     /// @dev Secondary trades are priced apart from primary issuance. The primary rate keeps its
     ///      stored value through the upgrade; the secondary rate is new state and starts at zero.
-    uint256 private constant SECONDARY_FEE_RATIO_BPS = 600; // 6% of the ticket
+    uint256 private constant SECONDARY_FEE_RATIO_BPS = 500; // 5% of the ticket
 
     function run() public {
         runAndExecute(
