@@ -4,7 +4,6 @@ pragma solidity ^0.8.28;
 import {DeploymentConstants} from "../../script/libs/DeploymentConstants.sol";
 import {GnosisTransaction} from "../../script/libs/safe.sol";
 import {UpgradeCoreScript} from "../../script/upgrade-core.s.sol";
-import {DealManagerFactory} from "../../src/DealManagerFactory.sol";
 import "forge-std/Test.sol";
 
 /// @notice A second run of `UpgradeCoreScript` after the Safe signed the first batch finds nothing to deploy.
@@ -24,20 +23,18 @@ contract UpgradeCoreScriptForkTest is Test {
     function test_SecondRunAfterSafeBatchDeploysNothing() public {
         // Run 1: the deployer holds no role on mainnet, so every upgrade and setter goes to the Safe.
         GnosisTransaction[] memory safeTxs = (new UpgradeCoreScript()).runWithArgs(block.chainid, deployerKey);
-        assertEq(safeTxs.length, 15);
+        assertEq(safeTxs.length, 16);
         for (uint256 i = 0; i < safeTxs.length; i++) {
             vm.prank(safe);
             (bool success,) = safeTxs[i].to.call(safeTxs[i].data);
             assertTrue(success);
         }
 
-        // Run 2: every implementation is unchanged, so the deployer sends nothing.
+        // Run 2: every implementation and parameter is unchanged, so the deployer sends nothing
+        // and the Safe has nothing to sign.
         uint256 nonce = vm.getNonce(deployer);
         safeTxs = (new UpgradeCoreScript()).runWithArgs(block.chainid, deployerKey);
         assertEq(vm.getNonce(deployer), nonce);
-
-        // The fee ratio setter has no check yet, so it is the only call left.
-        assertEq(safeTxs.length, 1);
-        assertEq(bytes4(safeTxs[0].data), DealManagerFactory.setDefaultSecondaryFeeRatio.selector);
+        assertEq(safeTxs.length, 0);
     }
 }
