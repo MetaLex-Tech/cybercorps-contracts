@@ -166,8 +166,12 @@ contract MulticallFormationFeeForkTest is Test {
         }
     }
 
+    /// @dev Uses the same formation arguments as `_formationCall`, because the factory hashes them into the salt.
     function _corpAddress(bytes32 salt) internal view returns (address) {
-        return corpSingleFactory.computeCyberCorpSingleAddress(salt);
+        bytes32 deploymentSalt = corpFactory.computeDeploymentSalt(
+            salt, "Acme Labs, Inc.", "corporation", "DE", "jane@example.com", "arbitration", user, _officer()
+        );
+        return corpSingleFactory.computeCyberCorpSingleAddress(deploymentSalt, address(corpFactory));
     }
 
     // ── tests ────────────────────────────────────────────────────────────────
