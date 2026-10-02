@@ -29,9 +29,12 @@ configured on the IssuanceManager, which assembles a
 * an `image` — an onchain-rendered SVG (see below),
 * the corp identity fields and the certificate's details —
   `investmentAmountUSD`, `issuerUSDValuationAtTimeOfInvestment`, and
-  `unitsRepresented` are 18-decimal quantities formatted as **exact decimal
-  strings** (`from18DecimalsToString`), plus the live `unitsReserved` read
-  from the printer (left out for older printers that have no such getter),
+  `unitsRepresented` are 18-decimal quantities that `from18DecimalsToString`
+  renders with **two decimal places, truncated** (it divides by `1e16`, so
+  `1.234e18` becomes `"1.23"`), plus the live `unitsReserved` read from the
+  printer, formatted the same way (left out for older printers that have no
+  such getter). These strings are display values: read exact amounts with
+  the printer's `getCertificateDetails(tokenId)`, not from the metadata,
 * extension-provided JSON, in order: the corp-level fragment
   (`CyberCorp.getExtensionURI`, skipped when the issuer has none) and then
   the certificate's own section from the printer's
