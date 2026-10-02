@@ -105,8 +105,12 @@ which the three manager setters emit.
 equal `ICyberCorpSingleFactory(upgradeFactory).getRefImplementation()` —
 otherwise it reverts `NotRefImplementation`. The constructor calls
 `_disableInitializers()`, so the implementation contract itself can never be
-initialised. An upgrade to v5 also moves the company's IssuanceManager,
-DealManager, RoundManager and both beacons, in one batch.
+initialised. This call upgrades the CyberCorp proxy only. Moving a company
+to v5 takes six calls: this one, `upgradeToAndCall` on the IssuanceManager,
+DealManager and RoundManager, and the IssuanceManager's two beacon upgrades
+(`script/upgrade-v5.s.sol` `corpUpgradeCalls` builds the batch). A company
+left part-way can see deal, round and issuance calls revert; see
+[Upgrade a cyberCORP](../../how-to/upgrade-a-cybercorp.md).
 
 This path needs the CyberCorp to sit behind its own ERC-1967 proxy. The
 oldest cyberCORPs are beacon proxies on MetaLeX-owned beacons; for them

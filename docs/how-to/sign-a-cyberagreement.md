@@ -53,9 +53,14 @@ before you send. When parties must sign before the agreement exists (the
 proposer of a standalone agreement, for example), compute it as
 `keccak256(abi.encode(templateId, salt, globalValues, parties, secretHash,
 finalizer))`, and for a standalone agreement use `secretHash = 0`,
-`finalizer = address(0)`, and the derived template id. Older registry
-deployments used fewer fields, so check the registry's version first (see
-step 3).
+`finalizer = address(0)`, and the derived template id.
+
+An older registry derives the id from four fields only:
+`keccak256(abi.encode(templateId, salt, globalValues, parties))`. That is
+the registry whose `SIGNATUREDATA_TYPEHASH()` returns `0x49ba7af1…0da4`,
+such as the separate zkSync Era deployment (see step 3). Both registries
+report `version()` `"1"`, so tell them apart by the typehash, not the
+version.
 
 ## 3. Parties sign
 

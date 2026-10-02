@@ -76,8 +76,9 @@ returns `0xe37d17c3…6f05`, and a simulated `createContract` returns the
 six-field id above. The separate zkSync Era registry
 (`0x07E0a0BeC742f90f7879830bC917E783dA6a6357`) still returns
 `0x49ba7af1fd9b42077b5e2bf090b7deb0f443e9ae99b46ce66b4859e28d670da4`, the
-older type without `signer`. Older registry implementations also derived
-ids from fewer fields. Read `SIGNATUREDATA_TYPEHASH()` on the registry you
+older type without `signer`, and derives ids from four fields:
+`keccak256(abi.encode(templateId, salt, globalValues, parties))`. Both
+report `version()` `"1"`. Read `SIGNATUREDATA_TYPEHASH()` on the registry you
 are about to sign against before choosing the typed data or the id
 formula, and prefer the id from the `ContractCreated` event or an
 `eth_call` of `createContract` where the flow allows it. Agreements created
