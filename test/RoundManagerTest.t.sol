@@ -150,7 +150,7 @@ library CyberCorpHelper {
         registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy{salt: SALT}(
-                    address(new CyberAgreementRegistry{salt: SALT}()),
+                    address(new CyberAgreementRegistry{salt: SALT}(false)),
                     abi.encodeWithSelector(
                         CyberAgreementRegistry.initialize.selector,
                         address(bootstrapAuth)

@@ -31,7 +31,7 @@ contract UpgradeArbitraryLegalSigningScript is Script {
 
         // 1) upgrade CyberAgreementRegistry
         address newRegistryImpl = address(
-            new CyberAgreementRegistry{salt: salt}()
+            new CyberAgreementRegistry{salt: salt}({zkpDevMode: false})
         );
         console2.log(
             "New CyberAgreementRegistry implementation:",

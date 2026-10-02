@@ -41,6 +41,8 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity ^0.8.0;
 
+import {ProofVerificationParams} from "./IZKPassportVerifier.sol";
+
 interface ICyberAgreementRegistry {
     struct Template {
         string legalContractUri;
@@ -98,6 +100,21 @@ interface ICyberAgreementRegistry {
         uint256 expiry
     ) external returns (bytes32);
 
+    function setIdentityScope(string calldata domain, string calldata scope) external;
+
+    function createContractWithIdentitySlots(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer,
+        uint256 expiry,
+        uint256[] memory slotIndexes,
+        bytes32[] memory uniqueIdentifiers
+    ) external returns (bytes32);
+
     function signContract(
         bytes32 contractId,
         string[] memory partyValues,
@@ -113,6 +130,16 @@ interface ICyberAgreementRegistry {
         bytes calldata signature, 
         bool fillUnallocated, // to fill a 0 address or not
         string memory secret 
+    ) external;
+
+    function signContractWithIdentityFor(
+        address signer,
+        bytes32 contractId,
+        uint256 slotIndex,
+        string[] memory partyValues,
+        bytes calldata signature,
+        string memory secret,
+        ProofVerificationParams calldata proof
     ) external;
 
     function signContractWithEscrow(

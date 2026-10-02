@@ -33,6 +33,7 @@ contract DeployCyberAgreementRegistryScript is Script {
         console2.log("chainId:", block.chainid);
         console2.log("deployer:", deployer);
         console2.log("salt string:", saltStr);
+        console2.log("ZKP dev mode:", DeploymentConstants.isTestnet(block.chainid));
         console2.logBytes32(salt);
         console2.log("AUTH:", deployment.auth);
         console2.log(
@@ -43,7 +44,7 @@ contract DeployCyberAgreementRegistryScript is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        implementation = new CyberAgreementRegistry{salt: salt}();
+        implementation = new CyberAgreementRegistry{salt: salt}(DeploymentConstants.isTestnet(block.chainid));
 
         vm.stopBroadcast();
 

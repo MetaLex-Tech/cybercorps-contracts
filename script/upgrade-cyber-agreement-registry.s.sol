@@ -30,7 +30,7 @@ contract UpgradeCyberAgreementRegistryScript is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         address newRegistryImpl = address(
-            new CyberAgreementRegistry{salt: salt}()
+            new CyberAgreementRegistry{salt: salt}({zkpDevMode: false})
         );
         console2.log(
             "New CyberAgreementRegistry implementation: %s",

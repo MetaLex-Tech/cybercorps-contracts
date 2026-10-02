@@ -55,7 +55,7 @@ library CyberAgreementUtils {
     /// on-chain code and every signature fails to verify. Upgrading makes the fork exercise the
     /// implementation under test rather than pinning tests to the old preimage.
     function upgradeRegistry(Vm vm, address registry, address owner) internal {
-        address newImpl = address(new CyberAgreementRegistry());
+        address newImpl = address(new CyberAgreementRegistry(false));
         vm.prank(owner);
         IRegistryUUPS(registry).upgradeToAndCall(newImpl, "");
     }

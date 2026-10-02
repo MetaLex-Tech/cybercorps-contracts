@@ -268,7 +268,7 @@ contract UpgradePublicRoundsScript is Script {
 
         // 8) upgrade CyberAgreementRegistry
         address newRegistryImpl = address(
-            new CyberAgreementRegistry{salt: salt}()
+            new CyberAgreementRegistry{salt: salt}({zkpDevMode: false})
         );
         console.log(
             "New CyberAgreementRegistry implementation:",

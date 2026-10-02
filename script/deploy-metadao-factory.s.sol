@@ -104,7 +104,7 @@ contract DeployScript is Script {
         address dealManagerFactory = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
 
         // upgrade CyberAgreementRegistry
-        address newAgreementRegistryImplementation = address(new CyberAgreementRegistry{salt: salt}());
+        address newAgreementRegistryImplementation = address(new CyberAgreementRegistry{salt: salt}({zkpDevMode: false}));
         CyberAgreementRegistry(registry).upgradeToAndCall(newAgreementRegistryImplementation, "");
 
         MetaDAOFactory metaDAOFactory = MetaDAOFactory(

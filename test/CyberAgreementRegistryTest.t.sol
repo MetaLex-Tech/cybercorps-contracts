@@ -48,7 +48,7 @@ contract CyberAgreementRegistryTest is Test {
         registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy{salt: coreSalt}(
-                    address(new CyberAgreementRegistry{salt: coreSalt}()),
+                    address(new CyberAgreementRegistry{salt: coreSalt}(false)),
                     abi.encodeWithSelector(
                         CyberAgreementRegistry.initialize.selector,
                         address(coreAuth)

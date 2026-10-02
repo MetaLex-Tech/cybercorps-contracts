@@ -145,8 +145,14 @@ contract UpgradeCoreScript is DeploymentScript {
 
         // TODO: LegalDocRegistry is disabled on all chains for now. Put it back for production: add it to
         //       DeploymentConstants and upgrade it to the CyberAgreementRegistry implementation.
+        // A testnet implementation accepts ZKPassport dev-mode proofs. A mainnet implementation rejects them.
         upgradeProxy(
-            core.auth, core.cyberAgreementRegistry, "CyberAgreementRegistry", type(CyberAgreementRegistry).creationCode
+            core.auth,
+            core.cyberAgreementRegistry,
+            "CyberAgreementRegistry",
+            abi.encodePacked(
+                type(CyberAgreementRegistry).creationCode, abi.encode(DeploymentConstants.isTestnet(chainId))
+            )
         );
 
         upgradeProxy(core.lexchexAuth, core.lexchexMinter, "LeXcheXMinter", type(LeXcheXMinter).creationCode);

@@ -116,7 +116,7 @@ contract PublicRoundTestDeploy is Script {
         // Upgradeable singletons
         address registry = address(
             new ERC1967Proxy{salt: salt}(
-                address(new CyberAgreementRegistry{salt: salt}()),
+                address(new CyberAgreementRegistry{salt: salt}({zkpDevMode: false})),
                 abi.encodeWithSelector(
                     CyberAgreementRegistry.initialize.selector,
                     address(auth)

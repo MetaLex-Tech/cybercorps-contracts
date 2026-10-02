@@ -45,13 +45,22 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "./libs/JsonLib.sol";
+import "./libs/CyberAgreementJsonLib.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
+import "./interfaces/IZKPassportVerifier.sol";
 
 contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     ICyberAgreementRegistry
 {
     using ECDSA for bytes32;
+
+    // ZKPassport verifier at its deterministic address. Change it with a contract upgrade.
+    address public constant ZKPASSPORT_VERIFIER = 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8;
+
+    // True accepts ZKPassport dev-mode proofs, which can come from mock passports. Set it true
+    // only for a testnet implementation. A mainnet implementation must set it false.
+    bool public immutable ZKP_DEV_MODE;
+
     // Domain information
     string public constant name = "CyberAgreementRegistry";
     string public version;
@@ -120,8 +129,21 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
 
     mapping(address => Delegation) public delegations;
 
-    // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40)
-    uint256[40] private __gap;
+    // ZKPassport domain and scope for new identity-bound agreements. The admin sets them.
+    string public identityDomain;
+    string public identityScope;
+
+    // Each identity-bound agreement keeps the domain and scope it was made with, as
+    // keccak256(abi.encode(domain, scope)). A later admin change does not affect it.
+    mapping(bytes32 => bytes32) public identityScopeHash;
+
+    // contractId => party slot index => ZKPassport unique identifier that must fill the slot.
+    // Zero means the slot has no identity constraint.
+    mapping(bytes32 => mapping(uint256 => bytes32)) public slotIdentityConstraints;
+
+    // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40),
+    // then for the four identity slots above (40 - 4 = 36)
+    uint256[36] private __gap;
 
 
 
@@ -143,6 +165,15 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
 
     event DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
     event DelegationRevoked(address indexed delegator, address indexed delegate);
+
+    event IdentityScopeSet(string domain, string scope);
+    event IdentitySlotsCreated(
+        bytes32 indexed contractId,
+        uint256[] slotIndexes,
+        bytes32[] uniqueIdentifiers,
+        string domain,
+        string scope
+    );
 
     error TemplateAlreadyExists();
     error TemplateDoesNotExist();
@@ -168,9 +199,23 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     error DelegateZeroAddress();
     error DelegateIsSelf();
     error ExpiryNotInFuture();
+    error IdentityScopeNotSet();
+    error MismatchedIdentitySlotsLength();
+    error IdentitySlotNotOpen();
+    error ZeroUniqueIdentifier();
+    error DevModeProof();
+    error IdentityScopeMismatch();
+    error ProofNotVerified();
+    error UniqueIdentifierMismatch();
+    error BoundSenderMismatch();
+    error BoundChainIdMismatch();
+    error BoundCustomDataMismatch();
+    error ProofExpired();
+    error NotIdentitySlot();
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
+    /// @custom:oz-upgrades-unsafe-allow constructor state-variable-immutable
+    constructor(bool zkpDevMode) {
+        ZKP_DEV_MODE = zkpDevMode;
         _disableInitializers();
     }
 
@@ -256,6 +301,107 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         contractId = keccak256(
             abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
+        _createContract(
+            contractId,
+            templateId,
+            globalValues,
+            parties,
+            partyValues,
+            secretHash,
+            finalizer,
+            expiry
+        );
+    }
+
+    /// @notice Set the ZKPassport domain and scope for new identity-bound agreements.
+    /// Existing agreements keep the domain and scope they were made with.
+    function setIdentityScope(string calldata domain, string calldata scope) external onlyAdmin {
+        identityDomain = domain;
+        identityScope = scope;
+        emit IdentityScopeSet(domain, scope);
+    }
+
+    /// @notice Create an agreement in which some open slots are reserved for one person.
+    /// Each reserved slot holds a ZKPassport unique identifier. Only a signer with a proof for
+    /// that identifier can fill the slot, from any wallet. The creator gets the identifier from
+    /// the person off chain. The person uses a new ZKPassport salt for each agreement, so each
+    /// identifier is different and observers cannot link the agreements to each other.
+    /// A renewed passport gives a new identifier and cannot fill the slot. One person with two
+    /// passports has two identifiers, so this does not stop sybil attacks.
+    function createContractWithIdentitySlots(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer,
+        uint256 expiry,
+        uint256[] memory slotIndexes,
+        bytes32[] memory uniqueIdentifiers
+    ) public returns (bytes32 contractId) {
+        if (bytes(identityDomain).length == 0) revert IdentityScopeNotSet();
+        if (slotIndexes.length == 0 || slotIndexes.length != uniqueIdentifiers.length)
+            revert MismatchedIdentitySlotsLength();
+
+        bytes32 scopeHash = keccak256(abi.encode(identityDomain, identityScope));
+        // The id binds the identity constraints, for the same reason as secretHash and finalizer.
+        contractId = keccak256(
+            abi.encode(
+                templateId,
+                salt,
+                globalValues,
+                parties,
+                secretHash,
+                finalizer,
+                slotIndexes,
+                uniqueIdentifiers,
+                scopeHash
+            )
+        );
+        _createContract(
+            contractId,
+            templateId,
+            globalValues,
+            parties,
+            partyValues,
+            secretHash,
+            finalizer,
+            expiry
+        );
+
+        identityScopeHash[contractId] = scopeHash;
+        for (uint256 i = 0; i < slotIndexes.length; i++) {
+            uint256 slotIndex = slotIndexes[i];
+            // Slot 0 is never open. A set constraint means the index is a duplicate.
+            if (
+                slotIndex >= parties.length ||
+                parties[slotIndex] != address(0) ||
+                slotIdentityConstraints[contractId][slotIndex] != 0
+            ) revert IdentitySlotNotOpen();
+            if (uniqueIdentifiers[i] == 0) revert ZeroUniqueIdentifier();
+            slotIdentityConstraints[contractId][slotIndex] = uniqueIdentifiers[i];
+        }
+
+        emit IdentitySlotsCreated(
+            contractId,
+            slotIndexes,
+            uniqueIdentifiers,
+            identityDomain,
+            identityScope
+        );
+    }
+
+    function _createContract(
+        bytes32 contractId,
+        bytes32 templateId,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer,
+        uint256 expiry
+    ) internal {
         if (agreements[contractId].parties.length > 0) {
             revert ContractAlreadyExists();
         }
@@ -358,27 +504,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         address signer,
         bytes calldata signature
     ) public returns (bytes32 contractId) {
-        // Derive template ID
-        bytes32 templateId = keccak256(abi.encode(
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        ));
-
-        // Create the template if needed
-        if (bytes(templates[templateId].legalContractUri).length == 0) {
-            _createTemplate(
-                templateId,
-                title,
-                legalContractUri,
-                globalFields,
-                partyFields
-            );
-        }
-
         contractId = createContract(
-            templateId,
+            _createStandaloneTemplate(title, legalContractUri, globalFields, partyFields),
             salt,
             globalValues,
             parties,
@@ -396,6 +523,103 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
             false, // proposer should explicitly add himself to the parties
             "" // secret
         );
+    }
+
+    /// @notice See `createStandaloneContractWithIdentitySlotsAndSignFor()`
+    function createStandaloneContractWithIdentitySlotsAndSign(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        uint256[] memory slotIndexes,
+        bytes32[] memory uniqueIdentifiers,
+        bytes calldata signature
+    ) external returns (bytes32 contractId) {
+        return createStandaloneContractWithIdentitySlotsAndSignFor(
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            expiry,
+            slotIndexes,
+            uniqueIdentifiers,
+            msg.sender, // signer
+            signature
+        );
+    }
+
+    /// @notice The same as `createStandaloneContractAndSignFor()`, but some open slots are
+    /// reserved for ZKPassport unique identifiers. See `createContractWithIdentitySlots()`.
+    function createStandaloneContractWithIdentitySlotsAndSignFor(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        uint256[] memory slotIndexes,
+        bytes32[] memory uniqueIdentifiers,
+        address signer,
+        bytes calldata signature
+    ) public returns (bytes32 contractId) {
+        contractId = createContractWithIdentitySlots(
+            _createStandaloneTemplate(title, legalContractUri, globalFields, partyFields),
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            "", // secretHash
+            address(0), // fixed finalizer, see `createStandaloneContractAndSignFor()`
+            expiry,
+            slotIndexes,
+            uniqueIdentifiers
+        );
+
+        signContractFor(
+            signer,
+            contractId,
+            partyValues[0], // proposer
+            signature,
+            false, // proposer should explicitly add himself to the parties
+            "" // secret
+        );
+    }
+
+    /// @notice Derive the standalone template ID and create the template if it does not exist
+    function _createStandaloneTemplate(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) internal returns (bytes32 templateId) {
+        templateId = keccak256(abi.encode(
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields
+        ));
+
+        if (bytes(templates[templateId].legalContractUri).length == 0) {
+            _createTemplate(
+                templateId,
+                title,
+                legalContractUri,
+                globalFields,
+                partyFields
+            );
+        }
     }
 
     function signContract(
@@ -476,29 +700,112 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         string memory secret
     ) public {
         AgreementData storage agreementData = agreements[contractId];
-        Template memory template = templates[agreementData.templateId];
+        _checkSignable(contractId, signer);
+
+        if (!isParty(contractId, signer)) {
+            _checkSecret(agreementData, secret);
+            // Not a named party, so check if there's an open slot
+            uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
+            if (firstOpenPartyIndex == 0 || !fillUnallocated)
+                revert NotAParty();
+            // There is a spare slot, assign the sender to this slot.
+            _fillSlot(contractId, firstOpenPartyIndex, signer);
+        }
+
+        _recordSignature(contractId, signer, partyValues, signature);
+    }
+
+    /// @notice Sign for an open slot that is reserved for one ZKPassport unique identifier.
+    /// `proof` must be a valid ZKPassport proof for that identifier, made with the agreement's
+    /// domain and scope. The proof must bind the signer wallet, this chain, and the contractId
+    /// (as a 0x lowercase hex string) in its custom data. Then nobody can use it for another
+    /// wallet or another agreement.
+    function signContractWithIdentityFor(
+        address signer,
+        bytes32 contractId,
+        uint256 slotIndex,
+        string[] memory partyValues,
+        bytes calldata signature,
+        string memory secret,
+        ProofVerificationParams calldata proof
+    ) external {
+        AgreementData storage agreementData = agreements[contractId];
+        _checkSignable(contractId, signer);
+
+        bytes32 uniqueIdentifier = slotIdentityConstraints[contractId][slotIndex];
+        if (uniqueIdentifier == 0) revert NotIdentitySlot();
+        if (agreementData.parties[slotIndex] != address(0)) revert IdentitySlotNotOpen();
+        // One address holds one slot, because signatures are recorded per address.
+        if (isParty(contractId, signer)) revert DuplicateParty();
+        _checkSecret(agreementData, secret);
+        _verifyIdentityProof(contractId, signer, uniqueIdentifier, proof);
+
+        _fillSlot(contractId, slotIndex, signer);
+        _recordSignature(contractId, signer, partyValues, signature);
+    }
+
+    function _checkSignable(bytes32 contractId, address signer) internal view {
+        AgreementData storage agreementData = agreements[contractId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
         if (agreementData.signedAt[signer] != 0) revert AlreadySigned();
         if (isVoided(contractId)) revert ContractAlreadyVoided();
         if (agreementData.finalized) revert ContractAlreadyFinalized();
         if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp)
             revert ContractExpired();
+    }
 
-        if (!isParty(contractId, signer)) {
-            if (
-                agreementData.secretHash > 0 &&
-                keccak256(abi.encode(secret)) != agreementData.secretHash
-            ) revert InvalidSecret();
-            // Not a named party, so check if there's an open slot
-            uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
-            if (firstOpenPartyIndex == 0 || !fillUnallocated)
-                revert NotAParty();
-            // There is a spare slot, assign the sender to this slot.
-            agreementData.parties[firstOpenPartyIndex] = signer;
-            agreementsForParty[agreementData.parties[firstOpenPartyIndex]].push(
-                    contractId
-                );
-        }
+    function _checkSecret(AgreementData storage agreementData, string memory secret) internal view {
+        if (
+            agreementData.secretHash > 0 &&
+            keccak256(abi.encode(secret)) != agreementData.secretHash
+        ) revert InvalidSecret();
+    }
+
+    function _fillSlot(bytes32 contractId, uint256 slotIndex, address signer) internal {
+        agreements[contractId].parties[slotIndex] = signer;
+        agreementsForParty[signer].push(contractId);
+    }
+
+    function _verifyIdentityProof(
+        bytes32 contractId,
+        address signer,
+        bytes32 uniqueIdentifier,
+        ProofVerificationParams calldata proof
+    ) internal {
+        ServiceConfig calldata config = proof.serviceConfig;
+        // A dev-mode proof can come from a mock passport with copied data.
+        if (config.devMode && !ZKP_DEV_MODE) revert DevModeProof();
+        if (keccak256(abi.encode(config.domain, config.scope)) != identityScopeHash[contractId])
+            revert IdentityScopeMismatch();
+
+        (bool verified, bytes32 provenIdentifier, IZKPassportHelper helper) =
+            IZKPassportVerifier(ZKPASSPORT_VERIFIER).verify(proof);
+        if (!verified || address(helper) == address(0)) revert ProofNotVerified();
+        if (provenIdentifier != uniqueIdentifier) revert UniqueIdentifierMismatch();
+
+        bytes32[] calldata publicInputs = proof.proofVerificationData.publicInputs;
+        if (!helper.verifyScopes(publicInputs, config.domain, config.scope))
+            revert IdentityScopeMismatch();
+
+        BoundData memory boundData = helper.getBoundData(proof.committedInputs);
+        if (boundData.senderAddress != signer) revert BoundSenderMismatch();
+        if (boundData.chainId != block.chainid) revert BoundChainIdMismatch();
+        if (keccak256(bytes(boundData.customData)) != keccak256(bytes(_bytes32ToString(contractId))))
+            revert BoundCustomDataMismatch();
+
+        if (helper.getProofTimestamp(publicInputs) + config.validityPeriodInSeconds < block.timestamp)
+            revert ProofExpired();
+    }
+
+    /// @dev Records `signer`'s signature after the caller has put `signer` in a party slot
+    function _recordSignature(
+        bytes32 contractId,
+        address signer,
+        string[] memory partyValues,
+        bytes calldata signature
+    ) internal {
+        AgreementData storage agreementData = agreements[contractId];
+        Template memory template = templates[agreementData.templateId];
 
         //verify if the contract is closed
         if (agreementData.partyValues[signer].length > 0) {
@@ -571,27 +878,16 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     ) onlyDefinedFinalizer(contractId) external {
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
-        if (agreementData.parties.length == 0) revert ContractDoesNotExist();
-        if (agreementData.signedAt[escrowSigner] != 0) revert AlreadySigned();
-        if (isVoided(contractId)) revert ContractAlreadyVoided();
-        if (agreementData.finalized) revert ContractAlreadyFinalized();
-        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp)
-            revert ContractExpired();
+        _checkSignable(contractId, escrowSigner);
 
         if (!isParty(contractId, escrowSigner)) {
-            if (
-                agreementData.secretHash > 0 &&
-                keccak256(abi.encode(secret)) != agreementData.secretHash
-            ) revert InvalidSecret();
+            _checkSecret(agreementData, secret);
             // Not a named party, so check if there's an open slot
             uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
             if (firstOpenPartyIndex == 0 || !fillUnallocated)
                 revert NotAParty();
             // There is a spare slot, assign the sender to this slot.
-            agreementData.parties[firstOpenPartyIndex] = escrowSigner;
-            agreementsForParty[agreementData.parties[firstOpenPartyIndex]].push(
-                    contractId
-                );
+            _fillSlot(contractId, firstOpenPartyIndex, escrowSigner);
         }
 
         //verify if the contract is closed
@@ -840,7 +1136,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     ) internal view returns (uint256) {
         AgreementData storage agreementData = agreements[contractId];
         for (uint256 i = 0; i < agreementData.parties.length; i++) {
-            if (agreementData.parties[i] == address(0)) {
+            // Only signContractWithIdentityFor can fill an identity-bound slot
+            if (
+                agreementData.parties[i] == address(0) &&
+                slotIdentityConstraints[contractId][i] == 0
+            ) {
                 return i;
             }
         }
@@ -860,126 +1160,31 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         AgreementData storage agreementData = agreements[contractId];
         Template storage template = templates[agreementData.templateId];
 
-        // Start with basic fields
-        string memory json = string(
-            abi.encodePacked(
-                '{"templateId": "',
-                _bytes32ToString(agreementData.templateId), // Corrected to use agreementData.templateId
-                '", "title": "',
-                JsonLib.jsonEscape(template.title),
-                '", "legalContractUri": "',
-                JsonLib.jsonEscape(template.legalContractUri),
-                '", "ContractFields": {'
-            )
-        );
-
-        // Add global fields and values as key-value pairs
-        if (template.globalFields.length > 0) {
-            for (uint256 i = 0; i < template.globalFields.length; i++) {
-                json = string.concat(
-                    json,
-                    '"',
-                    JsonLib.jsonEscape(template.globalFields[i]),
-                    '": "',
-                    JsonLib.jsonEscape(agreementData.globalValues[i]),
-                    '"'
-                );
-                if (i + 1 < template.globalFields.length) {
-                    json = string.concat(json, ",");
-                }
-            }
-        }
-        json = string.concat(json, '}, "parties": {');
-
-        // Add parties and their values as key-value pairs
-        if (agreementData.parties.length > 0) {
-            for (uint256 i = 0; i < agreementData.parties.length; i++) {
-                address party = agreementData.parties[i];
-                json = string.concat(
-                    json,
-                    '"',
-                    _addressToString(party),
-                    '": {'
-                );
-
-                // Add party fields and values
-                if (template.partyFields.length > 0) {
-                    string[] memory values = agreementData.partyValues[party];
-                    for (uint256 j = 0; j < template.partyFields.length; j++) {
-                        json = string.concat(
-                            json,
-                            '"',
-                            JsonLib.jsonEscape(template.partyFields[j]),
-                            '": "'
-                        );
-                        if (values.length > j) {
-                            json = string.concat(json, JsonLib.jsonEscape(values[j]));
-                        }
-                        json = string.concat(json, '"');
-                        if (j + 1 < template.partyFields.length) {
-                            json = string.concat(json, ",");
-                        }
-                    }
-                }
-
-                // Add signature timestamp
-                if (template.partyFields.length > 0) {
-                    json = string.concat(json, ",");
-                }
-                json = string.concat(
-                    json,
-                    '"signedAt": ',
-                    _uint256ToString(agreementData.signedAt[party])
-                );
-                json = string.concat(json, "}");
-
-                if (i + 1 < agreementData.parties.length) {
-                    json = string.concat(json, ",");
-                }
-            }
+        address[] memory parties = agreementData.parties;
+        string[][] memory partyValues = new string[][](parties.length);
+        uint256[] memory signedAt = new uint256[](parties.length);
+        for (uint256 i = 0; i < parties.length; i++) {
+            partyValues[i] = agreementData.partyValues[parties[i]];
+            signedAt[i] = agreementData.signedAt[parties[i]];
         }
 
-        // Add metadata
-        json = string.concat(
-            json,
-            '}, "numSignatures": ',
-            _uint256ToString(agreementData.numSignatures)
+        return CyberAgreementJsonLib.toJson(
+            CyberAgreementJsonLib.AgreementJson({
+                templateId: agreementData.templateId,
+                title: template.title,
+                legalContractUri: template.legalContractUri,
+                globalFields: template.globalFields,
+                partyFields: template.partyFields,
+                globalValues: agreementData.globalValues,
+                parties: parties,
+                partyValues: partyValues,
+                signedAt: signedAt,
+                numSignatures: agreementData.numSignatures,
+                voided: agreementData.voided,
+                voidRequestedBy: agreementData.voidRequestedBy,
+                finalized: agreementData.finalized
+            })
         );
-        json = string.concat(
-            json,
-            ', "isComplete": ',
-            agreementData.numSignatures == agreementData.parties.length
-                ? "true"
-                : "false"
-        );
-        // Add voided status
-        json = string.concat(
-            json,
-            ', "voided": ',
-            agreementData.voided ? "true" : "false"
-        );
-        // loop and add voidRequestedBy
-        json = string.concat(json, ', "voidRequestedBy": [');
-        for (uint256 i = 0; i < agreementData.voidRequestedBy.length; i++) {
-            json = string.concat(
-                json,
-                '"',
-                _addressToString(agreementData.voidRequestedBy[i]),
-                '"'
-            );
-            if (i + 1 < agreementData.voidRequestedBy.length) {
-                json = string.concat(json, ",");
-            }
-        }
-        json = string.concat(json, "]");
-        // add finalized status
-        json = string.concat(
-            json,
-            ', "finalized": ',
-            agreementData.finalized ? "true" : "false"
-        );
-        json = string.concat(json, "}");
-        return json;
     }
 
     function _createTemplate(
@@ -1092,46 +1297,6 @@ function _bytes32ToString(bytes32 _bytes32) public pure returns (string memory) 
     }
     return string(bytesArray);
 }
-
-    // Helper function to convert address to string
-    function _addressToString(
-        address _addr
-    ) internal pure returns (string memory) {
-        bytes memory s = new bytes(40);
-        for (uint256 i = 0; i < 20; i++) {
-            bytes1 b = bytes1(uint8(uint160(_addr) >> (8 * (19 - i))));
-            uint8 hi = uint8(b) >> 4;
-            uint8 lo = uint8(b) & 0x0f;
-            s[2 * i] = bytes1(hi + (hi < 10 ? 48 : 87));
-            s[2 * i + 1] = bytes1(lo + (lo < 10 ? 48 : 87));
-        }
-        return string(abi.encodePacked("0x", s));
-    }
-
-    // Helper function to convert uint256 to string
-    function _uint256ToString(
-        uint256 _i
-    ) internal pure returns (string memory) {
-        if (_i == 0) {
-            return "0";
-        }
-        uint256 j = _i;
-        uint256 len;
-        while (j != 0) {
-            len++;
-            j /= 10;
-        }
-        bytes memory bstr = new bytes(len);
-        uint256 k = len;
-        while (_i != 0) {
-            k = k - 1;
-            uint8 temp = uint8(48 + (_i % 10));
-            bytes1 b1 = bytes1(temp);
-            bstr[k] = b1;
-            _i /= 10;
-        }
-        return string(bstr);
-    }
 
     function isFinalized(bytes32 contractId) external view returns (bool) {
         return agreements[contractId].finalized;

@@ -58,7 +58,7 @@ contract BaseScript is Script {
         address agreementRegistryImplementation = 0xeE244A549838BE9c234BFF0F8B5A947a328A882c;
 
          //new implementation
-        address newAgreementRegistry = address(new CyberAgreementRegistry());
+        address newAgreementRegistry = address(new CyberAgreementRegistry({zkpDevMode: false}));
         CyberAgreementRegistry(agreementRegistryImplementation).upgradeToAndCall(newAgreementRegistry, "");
         
         return;*/
@@ -122,7 +122,7 @@ contract BaseScript is Script {
         //address tokenWarrantExtension = address(new TokenWarrantExtension{salt: salt}());
 
         address registry = address(new ERC1967Proxy{salt: salt}(
-           address(new CyberAgreementRegistry{salt: salt}()),
+           address(new CyberAgreementRegistry{salt: salt}({zkpDevMode: false})),
            abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
         ));
 

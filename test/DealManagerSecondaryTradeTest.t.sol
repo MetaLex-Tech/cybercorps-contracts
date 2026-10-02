@@ -261,7 +261,7 @@ contract DealManagerSecondaryTradeTest is Test {
         registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
-                    address(new CyberAgreementRegistry()),
+                    address(new CyberAgreementRegistry(false)),
                     abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )

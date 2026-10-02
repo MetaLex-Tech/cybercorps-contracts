@@ -126,7 +126,7 @@ contract CyberCorpUpgradeabilityForkTest is Test {
         CyberAgreementRegistry registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy{salt: salt}(
-                    address(new CyberAgreementRegistry{salt: salt}()),
+                    address(new CyberAgreementRegistry{salt: salt}(false)),
                     abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(metalexAuth))
                 )
             )
