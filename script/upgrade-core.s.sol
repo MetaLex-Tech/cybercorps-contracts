@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
+import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -120,15 +121,28 @@ contract UpgradeCoreScript is DeploymentScript {
             "DealManager",
             type(DealManager).creationCode
         );
-        execute(
-            "[set fee ratio]",
+        setParamIfDifferent(
             core.auth,
             address(dmFactory),
-            abi.encodeCall(DealManagerFactory.setDefaultSecondaryFeeRatio, (SECONDARY_FEE_RATIO_BPS)),
-            string.concat("setting default secondary fee ratio (bps): ", vm.toString(SECONDARY_FEE_RATIO_BPS))
+            dmFactory.getUnderlyingDefaultSecondaryFeeRatio.selector, // after upgrade, use this getter to check values
+            bytes4(0), // before upgrade, no getter since the legacy DealManagerFactory has no secondary fee ratio
+            dmFactory.setDefaultSecondaryFeeRatio.selector,
+            abi.encode(SECONDARY_FEE_RATIO_BPS),
+            string.concat("default secondary fee ratio (bps): ", vm.toString(SECONDARY_FEE_RATIO_BPS))
         );
 
         upgradeProxy(core.auth, core.uriBuilder, "CertificateUriBuilder", type(CertificateUriBuilder).creationCode);
+
+        CertificateUriBuilder uriBuilder = CertificateUriBuilder(core.uriBuilder);
+        upgradeIfDifferent(
+            core.auth,
+            core.uriBuilder,
+            uriBuilder.imageBuilder.selector,
+            uriBuilder.setImageBuilder.selector,
+            "CertificateImageBuilderContract",
+            type(CertificateImageBuilderContract).creationCode
+        );
+
         // TODO: LegalDocRegistry is disabled on all chains for now. Put it back for production: add it to
         //       DeploymentConstants and upgrade it to the CyberAgreementRegistry implementation.
         upgradeProxy(

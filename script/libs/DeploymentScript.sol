@@ -204,6 +204,71 @@ abstract contract DeploymentScript is Script {
         upgradeProxy("[upgrade proxy]", auth, proxy, name, implementation);
     }
 
+    /// @notice The counterpart of `upgradeProxy` for a contract that is not a proxy. Deploys a new contract when
+    ///         the code differs from the one that `to` uses now, then sets the new contract on `to`.
+    /// @dev `getter` returns the current contract address. `setter` takes the new address as its only argument.
+    ///      See `execute` for who sends it.
+    function upgradeIfDifferent(
+        address auth,
+        address to,
+        bytes4 getter,
+        bytes4 setter,
+        string memory name,
+        bytes memory creationCode
+    ) internal {
+        address current = abi.decode(Address.functionStaticCall(to, abi.encodeWithSelector(getter)), (address));
+        (address deployed, bool isNew) = deployIfDifferent("[deploy contract]", name, creationCode, current);
+        if (!isNew) return;
+        execute(
+            "[set contract]",
+            auth,
+            to,
+            abi.encodeWithSelector(setter, deployed),
+            string.concat(name, ": ", vm.toString(deployed))
+        );
+    }
+
+    /// @notice Sets a parameter on `to` when the current value differs from `value`.
+    /// @dev `getter` returns the current value. `setter` takes the new value as its only argument.
+    ///      `value` is the ABI encoding of the new value, for example `abi.encode(500)`.
+    ///      See `execute` for who sends it.
+    function setParamIfDifferent(
+        address auth,
+        address to,
+        bytes4 getter,
+        bytes4 setter,
+        bytes memory value,
+        string memory description
+    ) internal {
+        bytes memory current = Address.functionStaticCall(to, abi.encodeWithSelector(getter));
+        _setParamIfDifferent(auth, to, current, setter, value, description);
+    }
+
+    /// @notice The same as the version above, with a legacy getter for when `getter` reverts.
+    /// @dev Use it when the Safe must sign an upgrade that adds `getter`. The upgrade is not live while the
+    ///      script runs, so the current implementation may not have `getter` yet.
+    ///      `legacyGetter` must not revert. A zero `legacyGetter` means that the legacy implementation has no
+    ///      getter for the parameter, so the step always sets it.
+    function setParamIfDifferent(
+        address auth,
+        address to,
+        bytes4 getter,
+        bytes4 legacyGetter,
+        bytes4 setter,
+        bytes memory value,
+        string memory description
+    ) internal {
+        (bool success, bytes memory current) = to.staticcall(abi.encodeWithSelector(getter));
+        if (!success) {
+            if (legacyGetter == bytes4(0)) {
+                execute("[set param]", auth, to, abi.encodePacked(setter, value), description);
+                return;
+            }
+            current = Address.functionStaticCall(to, abi.encodeWithSelector(legacyGetter));
+        }
+        _setParamIfDifferent(auth, to, current, setter, value, description);
+    }
+
     /// @notice Deploys a new reference implementation when the code changed, then sets it on the factory.
     /// @dev A factory keeps a reference implementation for the contracts that it creates. `setter` takes the new
     ///      implementation address as its only argument. See `execute` for who sends it.
@@ -326,6 +391,21 @@ abstract contract DeploymentScript is Script {
             created := create(0, add(creationCode, 0x20), mload(creationCode))
         }
         if (created == address(0)) revert ImplementationCreationFailed(name);
+    }
+
+    function _setParamIfDifferent(
+        address auth,
+        address to,
+        bytes memory current,
+        bytes4 setter,
+        bytes memory value,
+        string memory description
+    ) private {
+        if (keccak256(current) == keccak256(value)) {
+            console2.log(string.concat(SKIP, "[set param] ", description, " unchanged, skipping"));
+            return;
+        }
+        execute("[set param]", auth, to, abi.encodePacked(setter, value), description);
     }
 
     function _sameCode(address a, address b) private view returns (bool) {
