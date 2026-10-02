@@ -157,7 +157,9 @@ changes the id and invalidates the signature (see
 [CyberAgreementRegistry](../reference/contracts/CyberAgreementRegistry.md#data-model)).
 
 Each lot is priced from the offer's running total:
-`consideration × (unitsAccepted + units) / units − paymentAccepted`, so
+`offer.consideration × (offer.unitsAccepted + params.units) / offer.units − offer.paymentAccepted`,
+where `params.units` is this fill's size and `offer.units` the offer's
+total (integer division rounds down; a negative result counts as zero). So
 the lot that exhausts the offer pays whatever remains and rounding does not
 accumulate across fills. A priced lot that rounds to zero reverts
 `ZeroConsiderationFill`. The minimum-trade threshold applies to a partial

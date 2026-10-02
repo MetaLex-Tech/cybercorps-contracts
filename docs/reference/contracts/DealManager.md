@@ -166,8 +166,10 @@ separate, with `signer` as the authorized party.
   partially), reserving the seller's cert units and escrowing the buyer's
   consideration, and creates a settlement agreement. Each fill is priced
   from the offer's running total: the lot pays
-  `consideration × (unitsAccepted + units) / units − paymentAccepted`, so
-  rounding error does not grow with the number of fills and the lot that
+  `offer.consideration × (offer.unitsAccepted + params.units) / offer.units − offer.paymentAccepted`,
+  where `params.units` is this fill's size and `offer.units` the offer's
+  total (integer division rounds down; a negative result counts as zero),
+  so rounding error does not grow with the number of fills and the lot that
   exhausts the offer pays the remainder. A priced fill that rounds to zero
   reverts `ZeroConsiderationFill`.
   `finalizeSecondaryTradeAgreement` settles it — the ownership change is
