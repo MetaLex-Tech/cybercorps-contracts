@@ -28,7 +28,7 @@ model:
 
 1. **Reserve** (company) — mint shares to the company and scripify them,
    so there is scrip to escrow.
-2. **Grant** (company) — record the award on the ledger.
+2. **Grant** (company) — record the award on the cap table.
 3. **Sign** (grantee) — the recipient e-signs the award in cyberSign.
 4. **Escrow** (automatic) — the moment they sign, the scrip is pulled
    from the company wallet into the vesting contract.
@@ -57,7 +57,18 @@ Two prerequisites, both prompted by the app when missing:
   awards, mind the **clawback** choice on the
   [scripify form](mainframe.md#enabling-scrip-scripify): a grant whose
   vested shares are meant to be irrevocable cannot escrow into a scrip
-  that still has issuer force-transfer, freeze, or burn enabled.
+  that still has issuer force-transfer, freeze, or burn enabled. The
+  same form's **Who can scripify** choice, "Only whitelisted
+  certificates can be scripified (recommended for private shares)", is
+  on by default. It starts the whitelist with the certificates the cap
+  table links as the class's plan reserve, so other holders can't turn
+  unvested or restricted shares into transferable scrip. A reserve
+  certificate minted after the scrip was deployed isn't on the list;
+  scripifying it stops with "This certificate isn't on the class's
+  scripify whitelist" until an officer adds it in the class's
+  **Scripify whitelist** section in the Tokenization Hub. That section
+  also turns the whitelist on for scrip deployed before the option
+  existed, which starts with it off.
 * **An award-agreement template.** **Register award template** uploads
   your award document (one template per award type, since an option
   carries strike fields an RSU doesn't), registers it onchain in one
@@ -68,7 +79,7 @@ Two prerequisites, both prompted by the app when missing:
 
 ## Creating a grant
 
-**New grant** records the award on the ledger; nothing touches the
+**New grant** records the award on the cap table; nothing touches the
 chain yet. The form walks through the award type, the recipient and
 underlying class, the granting plan (drawing down the plan's pool), the
 units, and the schedule: vesting start and end, a cliff in months
@@ -97,8 +108,8 @@ termination either way.
 The **award agreement** section picks the signing method. **Sign in
 cyberSign** is the path that supports onchain escrow today. You can also
 **import** a separately signed document (wet ink, DocuSign) or record
-**no agreement**, but such grants stay ledger-only until a direct-escrow
-path ships; the form says so when you pick them.
+**no agreement**, but such grants stay on the cap table only until a
+direct-escrow path ships; the form says so when you pick them.
 
 **Create grant** issues the award; **Save as draft** stages it without
 counting toward anything (issue drafts later from
@@ -115,6 +126,18 @@ with the scrip's force-ops, no recorded termination or expired option
 term, and an advisory when a transfer-restriction hook will need the
 escrow (and later the grantee) allowlisted — with a fix-it link for
 anything that fails.
+
+Two checks refuse a grant that could never complete. The recipient's
+selected wallet must not be the company wallet that controls grants,
+since an award agreement can't have the same wallet on both sides; link
+a separate personal wallet for the recipient. And the company's
+issuance manager must be a build with the scrip vault and
+recertification that let a grantee settle vested scrip into shares; on
+an older build the checklist says "Upgrade the company's contracts
+before escrowing grants." The grantee's cyberSign page applies the same
+settlement check and refuses with "The award can't be created". Before
+anything is sent, the app also re-checks on the server that your
+signed-in profile is an owner of the corporation.
 
 Then the transaction ladder:
 
@@ -142,14 +165,25 @@ The grants hub lists every award in two groups — **escrowed onchain**
 (recorded offchain; tokenize to escrow) — with the recipient, class,
 award type, units, vested percentage, and a stage track from `GRANTED`
 through `SIGNING` and `VESTING` to `VESTED`, plus per-group subtotal
-rows and an all-grants total. Each row carries one stage-appropriate
-primary action plus a menu:
+rows and an all-grants total. Award-shaped positions that came from an
+in-app formation sit in a separate **FORMATION-MANAGED** group: they
+stay cap table entries, and MetaVesT tokenization is not available for
+them. Each row carries one stage-appropriate primary action plus a
+menu:
 
 * **Check status** — after the recipient signs, confirms the escrow
-  finalized and stamps it on the ledger.
-* **Sync ledger** — mirrors onchain events (exercises, withdrawals,
+  finalized and stamps it on the cap table.
+* **Sync cap table** — mirrors onchain events (exercises, withdrawals,
   buybacks, terminations) into the cap table. Runs automatically once
   when drift is detected.
+* **Backing certificate…** — for a grant funded from a company-held
+  certificate rather than a plan reserve (for a founder, typically a
+  certificate in the name of the company FBO the founder), links the
+  live certificate of exactly the grant's size whose scrip funds the
+  grant. The cap table then counts those shares once, on the grant,
+  instead of also as a company holding, and the row notes the nominee
+  holding, or warns "⚠ backing cert #N left the company wallet" if the
+  certificate moves. **Unlink** reverses it.
 * **Copy signing link / Open in cyberSign / Vesting chart** —
   navigation and handoff.
 * **Void proposal** — kills a signing link that hasn't been signed
@@ -164,6 +198,46 @@ primary action plus a menu:
   **Repurchase unvested** (RSAs) sweep the company's side of a
   termination. Repurchase is two transactions (approve USDC, then buy
   back); the payment waits in the award for the recipient to collect.
+
+## The grants authority
+
+Each corp's MetaVesT controller has one **authority**: the wallet that
+terminates grants, repurchases unvested shares and funds escrows. The
+**Grants authority** panel on the grants page shows the **Controller**
+and the **Authority (terminates, repurchases, funds escrows)**, marked
+"· connected" when that is your wallet.
+
+When the authority should move to another corp owner, it takes one
+transaction from each side:
+
+1. The current authority chooses the new owner under **Hand over to**,
+   checks the address against that owner's own record, and clicks
+   **Start handover**.
+2. The nominee connects their wallet on the same panel, sees the
+   handover notice, and clicks **Accept authority**.
+
+The handover refuses while proposals are still waiting for a grantee's
+signature, because only the authority that proposed them can void them;
+finish or void those first. Only current corp owners can be nominated
+or accept. The handover moves control only. Unescrowed reserve scrip,
+the scrip allowance to the controller and company-held reserve
+certificates stay with the old wallet, so move them to the new
+authority and approve the controller from it before funding new grants.
+Keep the owner who first set up grants on the corp even after a
+handover: the app confirms the controller belongs to the company by
+deriving it from that owner, and removing that owner pauses new
+proposals and reserve minting until it is restored. The officer
+removal, resignation, ownership transfer and board removal forms warn
+you with a **GRANTS AUTHORITY** notice, and ask you to tick "I
+understand, and want to remove this owner anyway.", when the wallet
+being removed holds the authority or set up the controller.
+
+If the authority sits with a wallet that is no longer a corp owner, the
+panel shows **GRANTS PAUSED**: "Grants are paused until that wallet
+hands the authority to a current owner (or is restored as one)." Grants
+also stop, with an explanation in the panel and the Tokenize dialog,
+when the company's grant records point at more than one controller or
+at one the app can't confirm belongs to the company.
 
 ## For grant recipients
 
@@ -185,6 +259,11 @@ The actions, all from the recipient's own wallet:
   cost from the contract and checks your balance first.
 * **Collect** (RSAs) — after a company buyback, the payment sits in the
   award; one transaction collects it.
+
+Claimed shares arrive in your wallet as scrip. Settling them into a
+registered holding is the **De-scripify** step in My Portfolio,
+described in
+[For holders](holders.md#de-scripify-back-to-the-register).
 
 Deadlines are surfaced on the card: an option's closing exercise window
 counts down in days, and a terminated RSA shows the date from which the
@@ -208,7 +287,7 @@ If you hold positions and certificates too, the same view is embedded in
 
 ## Good to know
 
-* **Free vs. gas.** Recording a grant and issuing a draft are ledger
+* **Free vs. gas.** Recording a grant and issuing a draft are cap table
   writes. Grantor and grantee agreement signatures are free. Escrowing,
   claiming, exercising, terminating, and repurchasing are transactions.
 * **The option term is a legal term, not an onchain one.** The app
@@ -217,6 +296,6 @@ If you hold positions and certificates too, the same view is embedded in
   term onchain yet. The post-termination window, by contrast, does
   flow onchain.
 * **Imported and no-agreement grants can't escrow yet.** They live on
-  the ledger, fully counted, until the direct-escrow path ships.
+  the cap table, fully counted, until the direct-escrow path ships.
 * **A signing link is the handoff.** Treat it like the private link it
   is and send it only to the recipient.

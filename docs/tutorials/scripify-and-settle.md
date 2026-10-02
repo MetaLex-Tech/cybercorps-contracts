@@ -68,7 +68,9 @@ IIssuanceManager(issuanceManager).scripifyCert(
 This reduces the cert's `unitsRepresented`, records the scripified units in
 the scrip pool, and mints cyberSCRIP to Alice (`1_000_000e18` base units —
 1,000,000 whole tokens — at the `1:1` ratio above). Units reserved for
-pending deals cannot be scripified.
+pending deals cannot be scripified, nor can a void cert. The scrip's
+transfer hooks also apply to this mint, so with a `WhitelistTransferHook`
+installed Alice must be whitelisted first.
 The cyberSCRIP is the *same security in fungible form* — see
 [the dual-token model](../explanation/dual-token-model.md).
 

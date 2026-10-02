@@ -47,11 +47,50 @@ bytes32 contractId = ICyberAgreementRegistry(registry).createContract(
 );
 ```
 
+`createContract` returns the id, and the registry emits it in
+`ContractCreated`; an `eth_call` of the same `createContract` predicts it
+before you send. When parties must sign before the agreement exists (the
+proposer of a standalone agreement, for example), compute it as
+`keccak256(abi.encode(templateId, salt, globalValues, parties, secretHash,
+finalizer))`, and for a standalone agreement use `secretHash = 0`,
+`finalizer = address(0)`, and the derived template id. Older registry
+deployments used fewer fields, so check the registry's version first (see
+step 3).
+
 ## 3. Parties sign
 
 Each party signs. Every entry point carries the signer's EIP-712 signature
-over the agreement content (contract id, canonical text URI, fields and
-values):
+over the agreement content. On the current registry the typed data is:
+
+```ts
+// viem signTypedData
+const domain = {
+  name: "CyberAgreementRegistry",
+  version: "1",
+  chainId,
+  verifyingContract: registry,
+};
+const types = {
+  SignatureData: [
+    { name: "contractId", type: "bytes32" },
+    { name: "signer", type: "address" },      // the party this signature counts for
+    { name: "legalContractUri", type: "string" },
+    { name: "globalFields", type: "string[]" },
+    { name: "partyFields", type: "string[]" },
+    { name: "globalValues", type: "string[]" },
+    { name: "partyValues", type: "string[]" },
+  ],
+};
+// message: the template's URI and fields, the agreement's global values,
+// and this party's own partyValues, with signer = the party's address
+```
+
+Set `signer` to the party's address even when a delegate produces the
+signature; the registry accepts it for that party only. Before signing,
+read `SIGNATUREDATA_TYPEHASH()` on the registry: `0xe37d17c3…6f05` means
+the type above, while an older registry (such as the separate zkSync Era
+deployment) returns `0x49ba7af1…0da4` and expects the same struct without
+`signer`. The entry points are:
 
 * `signContract(contractId, partyValues, signature, fillUnallocated, secret)`
   — the caller signs for itself.
@@ -64,7 +103,9 @@ values):
 When every party has signed, the registry emits `ContractFullySigned`.
 
 A party can also delegate signing authority with
-`setDelegation(delegate, expiry)` / `revokeDelegation()`.
+`setDelegation(delegate, expiry)` / `revokeDelegation()` (`expiry == 0`
+for no expiry). The delegate signs `SignatureData` with `signer` set to the
+delegating party.
 
 ## 4. Finalise
 
@@ -78,7 +119,9 @@ ICyberAgreementRegistry(registry).finalizeContract(contractId);
 ## Voiding
 
 `voidContractFor(contractId, party, signature)` records a party's void
-request (EIP-712-signed, or submitted by the finalizer). The contract voids
+request (an EIP-712 `VoidSignatureData(bytes32 contractId,address party)`
+signature by the party or its delegate, or no signature when the finalizer
+submits it). The contract voids
 when every allocated party requests it (unfilled open slots don't count
 toward unanimity), when its nonzero expiry has passed, or when the first
 party requests it while only one signature has been collected.

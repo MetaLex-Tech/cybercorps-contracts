@@ -77,9 +77,10 @@ requires the officer to allocate each one.
 
 The `escrowedSignature` is the `authorityOfficer`'s EIP-712 signature over
 the round's economic parameters (the `EscrowedSignatureData` struct in
-[`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)).
-`createRound` recomputes the hash from the draft and reverts
-`InvalidEscrowedSignature` if it does not verify.
+[`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)),
+under the domain `"RoundManager"`, version `"1"`, with the RoundManager as
+verifying contract. `createRound` recomputes the hash from the draft and
+reverts `InvalidEscrowedSignature` if it does not verify.
 
 ## 2. Create the round
 
@@ -87,8 +88,7 @@ the round's economic parameters (the `EscrowedSignatureData` struct in
 `CyberCertData` entry you pass.
 
 ```solidity
-import {CyberCertData} from "src/storage/RoundManagerStorage.sol";
-import {SecurityClass} from "src/CyberCorpConstants.sol";
+import {CyberCertData, SecurityClass} from "src/CyberCorpConstants.sol";
 
 CyberCertData[] memory certData = new CyberCertData[](1);
 certData[0] = CyberCertData({
@@ -107,8 +107,15 @@ bytes32 roundId = IRoundManager(roundManager).createRound(round, certData);
 
 ## 3. Investor submits an EOI
 
-The investor signs the round's agreement (EIP-712) offchain and submits an
-`EOI` struct ([`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)):
+The investor signs the round's agreement offchain and submits an
+`EOI` struct ([`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)).
+The signature is the agreement registry's EIP-712 `SignatureData` for the
+EOI agreement that `submitEOI` creates (template from the round, the
+investor's `salt` and `secretHash`, the RoundManager as finalizer), with
+the investor as `signer`; see
+[Sign a cyberAgreement](../how-to/sign-a-cyberagreement.md) (step 3)
+for the typed data. The registry verifies it inside `submitEOI`, so a
+signature over the wrong id or type reverts the whole call.
 
 ```solidity
 import {EOI} from "src/storage/RoundManagerStorage.sol";

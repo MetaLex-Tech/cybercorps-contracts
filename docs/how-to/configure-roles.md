@@ -11,8 +11,8 @@ levels in a hierarchy — see [Access control](../reference/access-control.md).
 
 | Level | Meaning |
 |---|---|
-| `99` (`OWNER_ROLE`) | Owner. Can grant/revoke roles. Held by the suite's manager contracts. |
-| `98` (`ADMIN_ROLE`) | Admin. Gates operational functions (e.g. scrip compliance actions, hook updates). Any level `≥ 98` passes. |
+| `99` (`OWNER_ROLE`) | Owner. Can grant/revoke roles and approve upgrades. Held by the suite's manager contracts and, from deployment, by the deploying factory. |
+| `98` (`ADMIN_ROLE`) | Admin. Gates operational functions (e.g. scrip compliance actions, hook updates, opening a printer's transfer switches). Any level `≥ 98` passes. |
 | `200` | Company officer. Set for an officer's address; `200 ≥ 99`, so officers also pass `onlyOwner`. |
 | `0` | No authority. |
 
@@ -81,6 +81,11 @@ BorgAuth auth = BorgAuth(BorgAuthACL(cyberCorp).AUTH());
 auth.updateRole(someAddress, 200);   // grant officer level
 auth.updateRole(someAddress, 0);     // revoke
 ```
+
+The factory that deployed the company starts with level `99` on its
+BorgAuth and does not give it up on its own. `auth.userRoles(factory)`
+shows whether your company still grants it; see
+[Access control](../reference/access-control.md#roles-the-protocol-assigns).
 
 ## Transfer ownership
 

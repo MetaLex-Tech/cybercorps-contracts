@@ -13,8 +13,9 @@ printer for Common Stock, and one cyberCERT held by the founder.
 
 > **Naming note:** the certificate printer contract is now called
 > `LedgerEntryToken` in the source (formerly `CyberCertPrinter`). The rename
-> is source-level only — the ABI and storage layout are unchanged, and the
-> docs still say "cert printer" for the deployed instances.
+> itself changed neither the ABI nor the storage layout, and the docs still
+> say "cert printer" for the deployed instances. (The v5 printer has a
+> different ABI from v4 for other reasons; this tutorial uses v5.)
 
 > Code here is **illustrative of the flow** and uses the real contract
 > signatures from `cybercorps-contracts` (`develop`). Confirm structs and
@@ -55,9 +56,22 @@ CompanyOfficer memory officer = CompanyOfficer({
 );
 ```
 
-The factory grants the founder BorgAuth role `200` (officer) and grants the
-IssuanceManager / DealManager / RoundManager role `99`. See
+The factory grants the founder and the `CyberCorp` BorgAuth role `200`
+(officer) and grants the IssuanceManager / DealManager / RoundManager role
+`99`. The factory itself also keeps role `99`, which BorgAuth gives the
+address that deploys it. See
 [Access control](../reference/access-control.md). It emits `CyberCorpDeployed`.
+
+The salt does not pick the addresses on its own. The factory first hashes
+it with the company name, type, jurisdiction, contact details, dispute
+forum, payout address, and officer (`computeDeploymentSalt`), and each
+component factory then namespaces the result by its caller. Changing any
+of those arguments therefore produces different addresses, so a deployment
+with other terms cannot occupy the addresses your configuration predicts.
+(Anyone may submit your exact configuration; the result is the same company
+with your officer in control.) On the factories
+upgraded to v5, the new company's components all report `DEPLOY_VERSION`
+`"5"`.
 
 ## 2. Create a Common Stock certificate printer
 
@@ -110,9 +124,10 @@ uint256 tokenId = IIssuanceManager(issuanceManager).createCertAndAssign(
 ```
 
 `createCertAndAssign` mints the ERC-721 *and* records the founder as the
-registered owner. (`createCert` mints without assigning a registered owner;
-other `createCert*` variants also attach a name, an endorsement, or a
-signature — see [IssuanceManager](../reference/contracts/IssuanceManager.md).)
+registered owner. (On a v5 printer `createCert` also records the recipient
+as registered owner, with no name; the other `createCert*` variants attach
+a name, an endorsement, or a signature — see
+[IssuanceManager](../reference/contracts/IssuanceManager.md).)
 
 ## 4. Inspect the register
 

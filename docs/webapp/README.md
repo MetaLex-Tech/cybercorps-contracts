@@ -25,37 +25,38 @@ once and they appear everywhere.
 | [**cyberCORPs app**](mainframe.md) | `cybercorps.metalex.tech` | Form a new LLC or C-Corp, or bring your existing company onchain; run its cap table, board, grants, and register of holders; issue and manage its securities and scrip. Home of the **Tokenization Hub**. |
 | [**cyberRAISE**](cyberraise.md) | `cyberraise.metalex.tech` | Run fundraising rounds, and invest in them. **Rounds are created and configured here.** |
 | [**ACE**](ace.md) | inside cyberRAISE | Token-community fundraising — raises denominated in a community token. (Old `ace.metalex.tech` links redirect to cyberRAISE.) |
+| [**cyberSign**](cybersign.md) | `app.metalex.tech` | Propose, review, sign and countersign agreements. The cyberCORPs app's **cyberSign** sidebar item opens it. |
 | [**LeXcheX**](lexchex.md) | `lexchex.metalex.tech` | Prove accredited-investor status. |
 | [**Your profile**](profile.md) | `profile.metalex.tech` | Your MetaLeX identity, accreditation status, and signing delegation. |
 
 The cyberCORPs app is big enough that its largest areas get their own
 guides:
 
-* [**The cap table**](captable.md) — the unified ledger of tokenized and
-  untokenized positions, importing (including the AI-assisted import),
-  and tokenizing.
+* [**The cap table**](captable.md) — the unified cap table of tokenized
+  and untokenized positions, importing (including the AI-assisted
+  import), and tokenizing.
 * [**Cap-table records, modeling and compliance**](captable-tools.md) —
   §219 stockholder lists, 409A / Rule 701 / 3921 / 83(b) records, round
   modeling, and the exit waterfall.
 * [**Token grants and onchain vesting**](grants.md) — options, RSUs, and
   restricted stock escrowed onchain via MetaVesT.
-* [**The boardRoom and company records**](boardroom.md) — officers,
+* [**The boardRoom and Incorporation Hub**](boardroom.md) — officers,
   directors, board consents, and the formation record.
 * [**For holders: your securities**](holders.md) — the stakeholder and
   investor side: My holdings, certificates, transfers, scrip.
 
-Two more surfaces are covered separately:
+One more surface is covered separately:
 
-* [**MetaDAO**](metadao.md) — a one-step entity-formation page for tokens
-  launched via MetaDAO.
-* **cyberSign** — standalone agreement signing, on MetaLeX's main app at
-  `app.metalex.tech`.
+* [**Launchpads: MetaDAO and Umia**](metadao.md) — one-step
+  entity-formation pages for tokens launched via MetaDAO or Umia, plus
+  the public company pages and the launchpad directory.
 
 > **Which app do I need?**
 > Forming a new company, or setting up or running one → the **cyberCORPs
 > app**.
 > Managing who owns what → [the cap table](captable.md).
 > Vesting stock to your team → [grants](grants.md).
+> Signing or sending an agreement → [**cyberSign**](cybersign.md).
 > Raising money, or investing in a raise → **cyberRAISE**.
 > A token community converting to equity → **ACE**.
 > Getting accredited → **LeXcheX**.
@@ -74,16 +75,19 @@ Two more surfaces are covered separately:
    record on the payment chain — Ethereum mainnet.)
 3. **A desktop browser is recommended** for company setup and other
    heavier flows, though the apps work on mobile.
-4. **Nothing else** — there is no separate account. Your wallet is your
-   identity.
+4. **No separate account setup** — your first wallet sign-in creates a
+   MetaLeX account and its profile record, and links that wallet to the
+   account. Your profile follows the account across all linked wallets;
+   add or switch wallets later in **Wallet Settings**.
 
 On cost: signing with cyberSign, setting up an **existing** company on
 MetaLeX, and manual securities issuance and management in the Tokenization
 Hub are free (gas aside). **Forming a new company** through the app is a
 flat **\$1,000 fee, paid in USDC** — state filing, formation documents,
-initial tax filings, and a lawyer consultation included. MetaLeX charges a
-**0.3% fee on funds an issuer claims from a cyberRAISE round** — investors
-pay nothing.
+initial tax filings, and a lawyer consultation included. Filing a later
+annual report for a company formed this way costs only the state's fee.
+MetaLeX charges a **0.3% fee on funds an issuer claims from a cyberRAISE
+round** — investors pay nothing.
 
 ## Signing in
 
@@ -92,6 +96,12 @@ verified session — managing a company, editing your profile, encrypting
 data — you complete a one-time **Authenticate** step: you sign a short
 Sign-In With Ethereum message. This signature is **free** — not a
 transaction, no gas.
+
+Access to a company follows your profile: its pages open for a signed-in
+profile that has one of the company's owner wallets linked, whichever
+wallet you are browsing with. Signing for the company still needs an
+owner wallet connected on the company's network, and the app tells you
+which wallet to switch to.
 
 > MetaLeX never takes custody of your funds or your securities. Money in
 > transit during a raise or deal sits in an onchain escrow that no one can
@@ -123,13 +133,15 @@ The full [Glossary](../reference/glossary.md) has the rest.
 ## How the apps relate to the protocol
 
 The apps are **front ends over the cyberCORPs smart-contract protocol**.
-Every meaningful button is a call to a contract; nothing important happens
-in a database that the chain doesn't already record.
+Creating a company, issuing and transferring securities, and signing
+agreements are contract calls. The app also keeps offchain records
+(untokenized cap table positions, drafts, formation details, legal terms
+versions), and each guide says which actions are which.
 
 * When you **deploy a cyberCORP**, the app calls the protocol's factory,
-  which deploys your company's contracts. The chain becomes your company's
-  *official register* — not a copy of one. This is the core idea of the
-  protocol: see
+  which deploys your company's contracts. When the company's governing
+  documents designate it, the chain is the company's *official register*,
+  not a copy of one. This is the core idea of the protocol: see
   [Constitutive vs. pointer tokenization](../explanation/constitutive-vs-pointer.md).
 * When you **issue a security**, the app mints a **cyberCERT** — an entry on
   that register.

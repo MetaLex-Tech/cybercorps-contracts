@@ -12,6 +12,9 @@ cyberCORPs is designed so that MetaLeX is **not** an intermediary.
 
 * Develops the contracts.
 * Publishes new implementations to the factories.
+* Sets the platform fees on the factories: a primary rate for rounds and
+  deals, a separate rate for secondary trades, and optional per-company
+  overrides of either.
 * Maintains a library of agreement templates — though template creation on
   the `CyberAgreementRegistry` is permissionless: anyone can register a
   template, and standalone agreements create their own templates
@@ -28,15 +31,25 @@ cyberCORPs is designed so that MetaLeX is **not** an intermediary.
   embedded in each issuer's own `DealManager` / `RoundManager`, and can only
   move along the deal's own signature, finalization, and expiry paths.
   MetaLeX cannot move them.
-* Hold issuer admin keys. Each cyberCORP's BorgAuth roles are owned by the
-  issuer's governance addresses (board / officer multisigs). MetaLeX is not
-  on the list.
-* Force upgrades. The co-approval upgrade model requires the issuer's
-  BorgAuth owner to opt in. MetaLeX cannot push an upgrade. (See
-  [co-approval upgradeability](co-approval-upgradeability.md).)
+* Hold issuer admin keys. Each cyberCORP's BorgAuth roles are held by the
+  issuer's officers and governance addresses (board / officer multisigs)
+  and by the company's own contracts. No MetaLeX wallet is on the list.
+  The one MetaLeX-controlled entry is the factory that deployed the
+  company (usually `CyberCorpFactory`), which keeps the `OWNER_ROLE`
+  BorgAuth gives its deployer; its current code does not use that role
+  after deployment, but the factory is upgradeable by MetaLeX (see
+  [co-approval upgradeability](co-approval-upgradeability.md)).
+* Force upgrades. The co-approval upgrade model requires an account with
+  the company's `OWNER_ROLE` to opt in, and no MetaLeX contract in its
+  current code exercises that role to push one.
 * Approve trades. Deals are proposed and approved by the issuer's own
   BorgAuth owner and its signing officers; MetaLeX is not in that loop.
-* Maintain a separate offchain register. There is no offchain register.
+* Keep a parallel register for onchain securities. Where a company's
+  governing documents designate the onchain register, there is no offchain
+  copy to reconcile. The cyberCORPs app's cap table can also hold offchain
+  entries for untokenized units; those are app records, and which record is
+  the company's securities ledger is a question for its governing
+  documents.
 
 ## Why this matters
 

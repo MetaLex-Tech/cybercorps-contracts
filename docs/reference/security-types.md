@@ -51,7 +51,11 @@ through an ACE offering.
 enum SecurityStatus { Unassigned, Assigned, Void }
 ```
 
-A cyberCERT's status; `Void` is set by `LedgerEntryToken.voidCert`.
+A cyberCERT's status; `Void` is set by `LedgerEntryToken.voidCert`, which
+the IssuanceManager also calls when it voids an emptied lot
+(`voidEmptyCerts`, or a seller's lot fully sold in a secondary trade). A
+void lot keeps its holder and units but cannot be registered to a new
+holder.
 
 ## Security classes (`SecurityClassInfo`)
 
@@ -68,9 +72,15 @@ struct SecurityClassInfo {
 ```
 
 `IssuanceManager.defineSecurityClass` (`onlyOwner`) registers a class;
-classIds are sequential starting at `1` (`0` = unclassified).
-`setPrinterClass` assigns a cert printer (the series scope) to a class;
-multiple printers can share one class.
+classIds are sequential starting at `1` (`0` = unclassified). Each
+`SecurityClass` value has at most one class (a second definition reverts
+`SecurityClassAlreadyDefined`). `createCertPrinter` files each new printer
+(the series scope) under its type's class, creating an empty class when
+none exists; `updateSecurityClass` fills in the document URI and data, and
+`setPrinterClass` reassigns or clears (`0`) a printer's class. Multiple
+printers share one class. `ShareExtensionV3` reads `classData` as the
+class-wide layer of every share certificate in the class; see
+[Certificate extensions](extensions.md).
 
 ## Instrument-specific metadata
 

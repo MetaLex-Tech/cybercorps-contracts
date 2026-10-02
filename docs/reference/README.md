@@ -10,10 +10,12 @@ up what something *is*, not to learn or to do.
 > **The contract source is authoritative.** These pages are generated from
 > the contracts in
 > [`cybercorps-contracts`](https://github.com/MetaLex-Tech/cybercorps-contracts)
-> as of the `develop` branch (contracts in the `DEPLOY_VERSION` `"4"` line —
-> per contract: `CyberCorp`, `RoundManager`, `CyberScrip`, and
-> `LedgerEntryToken` at `"4"`, `IssuanceManager` at `"4.1"`, `DealManager`
-> at `"4.0.1"`). The
+> as of the `develop` branch, where `CyberCorp`, `IssuanceManager`,
+> `DealManager`, `RoundManager`, `LedgerEntryToken`, and `CyberScrip` all
+> report `DEPLOY_VERSION` `"5"`. Companies that have not upgraded still run
+> v4 components (`"4"`, with `IssuanceManager` at `"4.1"` and `DealManager`
+> at `"4.0.1"`), and the pages note v4 differences where a reader can meet
+> both. The
 > protocol is under active development — some contracts contain stubbed or
 > in-progress functions, noted on the relevant pages. Always check the
 > current `.sol` source before relying on an exact signature, and treat the

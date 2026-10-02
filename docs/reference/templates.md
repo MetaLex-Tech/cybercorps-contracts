@@ -2,7 +2,12 @@
 
 Reusable legal-instrument templates live in the
 [`/templates`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/templates)
-directory and are pre-registered in `CyberAgreementRegistry`.
+directory. Registration in `CyberAgreementRegistry` is per chain, so a
+template can exist on one chain and not another
+(on 2026-10-02 the cyberSTOCK template below was registered on Ethereum
+and Base Sepolia but not on Base or Arbitrum). Call
+`getTemplateDetails(templateId)` on the target chain before relying on one;
+it reverts `TemplateDoesNotExist` for an unregistered id.
 
 ## cyberSAFE
 
@@ -59,8 +64,13 @@ with `CyberAgreementRegistry.createTemplate(templateId, title,
 legalContractUri, globalFields, partyFields)`. Template ids are
 caller-chosen `bytes32` values (by convention, `bytes32(bytes("<name>"))`)
 and must be unused; a template's fields cannot be overwritten once created.
-For example, the `Three Prime Custom cyberSAFE and cyberTokenWarrant.md`
-template demonstrates a custom variant.
+The directory also holds a combined cyberSAFE and cyberTokenWarrant
+template prepared for one issuer, as an example of a custom variant.
+
+Standalone agreements (`createStandaloneContractAndSign`) skip this step:
+the registry derives the template id from
+`keccak256(abi.encode(title, legalContractUri, globalFields, partyFields))`
+and registers the template on first use.
 
 Two `DEPRECATED-*` templates (`SAFE-version-0-1`, `SAFEplusT-version-0-1`)
 remain in the directory for historical reference only.

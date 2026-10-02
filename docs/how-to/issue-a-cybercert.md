@@ -31,6 +31,14 @@ address printer = IIssuanceManager(issuanceManager).createCertPrinter(
 );
 ```
 
+The new printer is filed under its `SecurityClass`'s class on the
+IssuanceManager (an empty class is created if none exists). Its transfer
+switches all start closed: certificates issue freely, but holders cannot
+move them and the holder of record cannot change until an admin opens the
+printer (`setGlobalTransferable`, `setGlobalLegalTransferable`, or the
+per-lot equivalents). See
+[LedgerEntryToken](../reference/contracts/LedgerEntryToken.md#delivery-and-registration-gates).
+
 ## 2. Build the `CertificateDetails`
 
 From [`ILedgerEntryToken.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ILedgerEntryToken.sol):
@@ -57,12 +65,20 @@ one share (or one dollar) = `1e18`.
 
 ## 3. Mint
 
+Every variant registers a holder of record; they differ in what else they
+write.
+
 | Function | Use when |
 |---|---|
-| `createCert(certAddress, to, details)` | Mint without setting a registered owner. |
-| `createCertAndAssign(certAddress, investor, details)` | Mint and record the registered owner. |
-| `createCertAndAssignWithName(certAddress, investor, details, investorName, endorsementSignature, timestamp)` | As above, plus a holder name, an endorsement signature, and its timestamp. |
-| `createCertSignAndAssign(certAddress, investor, details, endorsementSignature, registry, agreementId, investorName)` | As above, plus a registry/agreement reference. |
+| `createCert(certAddress, to, details)` | Bare mint: `to` is registered with a blank name, and no endorsement or signature is written. |
+| `createCertAndAssign(certAddress, investor, details)` | Mint with an issuance endorsement naming the investor, dated now. |
+| `createCertAndAssignWithName(certAddress, investor, details, investorName, endorsementSignature, timestamp)` | As above, plus the holder's legal name, an officer signature, and an endorsement date you choose (a reissue keeps the original date). |
+| `createCertSignAndAssign(certAddress, investor, details, endorsementSignature, registry, agreementId, investorName)` | As above, but the endorsement points at an agreement in a registry and is dated now. |
+
+To move an existing lot to a different holder of record (a correction, not
+a trade), use `assignCert(certAddress, from, tokenId, investor, details,
+investorName)`, where `from` is the current holder of record. It needs the
+printer's register to be open.
 
 ```solidity
 uint256 tokenId = IIssuanceManager(issuanceManager).createCertAndAssign(

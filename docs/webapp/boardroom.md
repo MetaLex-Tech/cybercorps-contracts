@@ -2,13 +2,15 @@
 description: Officers, directors, board consents, and the company's formation record
 ---
 
-# The boardRoom and company records
+# The boardRoom and Incorporation Hub
 
 The **boardRoom** is the cyberCORPs app's corporate-authority hub:
 officers and directors, governance documents, board approvals, and the
-company's payment destination. Its sibling page, **company record**, is
-the formation record. Both live in the app sidebar and require an owner
-wallet plus the free Authenticate signature.
+company's payment destination. Its sibling page, **Incorporation Hub**, is
+the formation record. Both live in the app sidebar and open for a
+signed-in profile that has one of the company's owner wallets linked
+(signing in is the free Authenticate signature). Actions that change the
+company still need an owner wallet connected on the company's network.
 
 ## Corporate authority
 
@@ -23,25 +25,41 @@ their MetaLeX profile — only fields they have made public. The app
 refuses to remove (or let resign) the last officer, because removing the
 final owner would permanently brick the corp; add a successor first.
 
+Removing an owner whose wallet holds the company's
+[grants authority](grants.md#the-grants-authority) does not move that
+authority. Removal, resignation, a remove-and-re-add retitle, and the
+cyberCORP transfer all show a **GRANTS AUTHORITY** warning in that case
+(and when the app cannot confirm who holds it), and you must tick **I
+understand, and want to remove this owner anyway** to continue. Hand the
+authority over on the grants page first if you can.
+
 For a company formed through the app, the officers you named during
 formation appear here waiting to be published: a panel lists the people
 "waiting to be added onchain," and **Publish officer to roster** writes
 each one — name, title, and wallet — to the public onchain record, one
 transaction per officer. The boardRoom is the single place officers get
-published; the company record page shows the roster read-only.
+published; the Incorporation Hub shows the roster read-only.
 
 ### The board of directors
 
 Directors are officers whose title contains "Director" or "Chair" (the
 app badges the two separately); the roster derives from titles rather
-than a separate onchain role. Until the protocol ships a distinct board
-tier, the app is explicit about what that means: a director added here
-holds the same onchain authority as any officer, so add only people you
-intend to trust with it.
+than a separate onchain role. The app is explicit about what that means:
+a director added here holds the same onchain authority as any officer,
+so add only people you intend to trust with it.
 
-**+ add a director** either promotes an existing officer (re-titling
-them — "CEO" becomes "CEO, Director"; the app rejects "&" in titles,
-use commas or "and") or adds a new director outright. The protocol now
+On a v5 cyberCORP, which "uses separate board and officer authority" in
+the app's words, two of these title-based flows are held back.
+Promoting an officer shows "This cyberCORP's contract version does not
+use this title-based board promotion flow" and sends nothing, and
+resigning your own officer entry is disabled until the boardRoom
+supports v5's own resignation path. **Add a different wallet**, which
+adds a new officer with a director title, does not depend on that check.
+
+**+ add a director** either promotes an existing officer (**Promote an
+officer**, re-titling them — "CEO" becomes "CEO, Director"; the app
+rejects "&" in titles, use commas or "and") or adds a new director
+outright (**Add a different wallet**). The protocol now
 has an in-place `updateOfficer` title-setter, and the app supports it —
 but only for changing your *own* entry, and only on contract versions
 MetaLeX has reviewed for it, which no deployed cyberCORP is on yet. So
@@ -77,16 +95,18 @@ failed add can't strand the company ownerless.
 Investment and agreement proceeds are sent directly to the company
 payable address set at incorporation. **Change address** updates it in
 one transaction, behind a two-step confirm that shows both addresses and
-warns that funds sent to the wrong one cannot be recovered. Use a
-company-controlled wallet or multisig.
+warns that funds sent to the wrong one cannot be recovered. The change
+is signed by an owner wallet; if the connected wallet is not one, the
+dialog names the owner wallets to switch to. Use a company-controlled
+wallet or multisig as the destination.
 
 ## Governance documents
 
 The registry-backed archive of the company's governance paperwork —
 constitutive documents, stock plans, consents, anything executed in
-cyberSign — and, now, the place to put new ones onchain:
+cyberSign — and the place to put new ones onchain:
 
-* **New governance document** — upload a PDF (up to 75 MB), give it a
+* **Upload PDF** — upload a PDF (up to 75 MB), give it a
   title, and classify it from a taxonomy of about fifty document kinds in
   three groups — *constitutional* (certificate of incorporation, bylaws,
   operating agreement, certificate of designation, and the rest),
@@ -115,6 +135,16 @@ expired), and links to open the PDF or the agreement in cyberSign.
 Board consents appear in this list too — see the next section for their
 dedicated workflow.
 
+If creating a document is interrupted, the dialog tells you what it
+knows instead of letting you submit twice. **BoardRoom link needs
+recovery** means the registry transaction succeeded but the archive link
+was not saved: use **Retry BoardRoom link**, or copy the agreement ID and
+use **Attach existing**, which then offers **Finish recovery** for that
+exact agreement. **Outcome unknown** means your wallet may have sent the
+transaction but no receipt was confirmed: do not submit again; **Check
+chain evidence** looks for it, and if it never landed the dialog lets you
+reopen the same prepared agreement after confirming that.
+
 ## Board approvals
 
 Board approvals put written consents of the board (in lieu of a
@@ -126,7 +156,7 @@ consent's status before it is issued or tokenized.
 cap-table positions and the network's registry supports it) is a
 three-step wizard:
 
-1. **Positions to cover** — pick the ledger positions the consent
+1. **Positions to cover** — pick the cap table positions the consent
    approves (covering an already-issued position is ratification).
 2. **Signers** — the roster is fixed, not editable: every director
    signs, or every officer when no directors are on the board, because a
@@ -181,26 +211,30 @@ threshold, treasury Safe, and pending board actions. A generic cyberCORP
 today has no onchain board multisig, so the panel shows placeholders
 until one is deployed for your company.
 
-## The company record page
+## The Incorporation Hub
 
-**company record** (formerly *incorporation*) is the constitutive
-register: the public formation record (legal name, entity type,
-jurisdiction, dispute resolution, the cybernation date, treasury
-address, and the cyberCORP contract address), the addresses of the
-onchain suite (BorgAuth, issuance, deal, and round managers), and the
-founding documents executed in cyberSign. For a company formed through
-the app it also carries the **private** state formation record — filing
-status, filing date and number, EIN, and required signatures. The
+**Incorporation Hub** is the constitutive register: the public formation
+record (legal name, entity type, jurisdiction, dispute resolution, the
+date the company went onchain, treasury address, and the cyberCORP
+contract address), the addresses of the onchain suite (BorgAuth,
+issuance, deal, and round managers), and the agreements published to the
+company record at formation (**Public onchain agreements**). For a
+company formed through the app it also carries the **private** state
+formation record — filing status, filing date and number, EIN, and
+required signatures — together with the formation partner's private
+**Mail, notices & filings** and the **Annual reports** panel. The
 officer roster shows here read-only, with a **Manage officers in
-boardRoom →** hand-off.
+boardRoom →** hand-off. The cyberCORPs app guide describes each part in
+[Incorporation Hub](mainframe.md#incorporation-hub).
 
 > **Under the hood.** Officer and director changes are calls on your
 > [`CyberCorp`](../reference/contracts/CyberCorp.md) contract —
 > `addOfficer` / `removeOfficer`, plus the newer `updateOfficer` the app
 > adopts per contract version as MetaLeX reviews each deployment — and
-> authority is the flat officer role in
-> [BorgAuth](../reference/access-control.md); there is no separate
-> onchain director tier yet. Consents are agreements in the
+> officer authority is a role in
+> [BorgAuth](../reference/access-control.md); the boardRoom's director
+> roster is read from officer titles, not from an onchain director
+> tier. Consents are agreements in the
 > [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md)
 > created and signed in one transaction. The formation record reads the
 > state your deploy transaction wrote; see

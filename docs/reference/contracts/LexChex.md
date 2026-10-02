@@ -175,6 +175,10 @@ The issuance gateway for LeXcheX credentials
   BorgAuth admin over the `MintRequest`, takes the mint fee to the
   treasury, creates and signs the backing agreement in the
   CyberAgreementRegistry, mints the LeXcheX, and finalizes the agreement.
+  The subject's agreement signature is relayed to the registry's
+  `signContractFor`, so it must use the `SignatureData` type of the
+  configured registry (on a current registry, with the subject as
+  `signer`; see [CyberAgreementRegistry](CyberAgreementRegistry.md#data-model)).
 * `requestMintFor` — admin-only variant that skips the authority-signature
   check (used by RoundManager auto-credentialing during allocation).
 * `adminMintFor` — admin-only mint without a backing agreement.

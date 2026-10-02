@@ -48,13 +48,14 @@ and how to use it.
 | [The cap table](webapp/captable.md) | Issuers running the register — tokenized and offchain positions, AI-assisted import. |
 | [Cap-table records, modeling and compliance](webapp/captable-tools.md) | Issuers — §219 lists, 409A / 701 / 3921 / 83(b), round and exit modeling. |
 | [Token grants and onchain vesting](webapp/grants.md) | Issuers granting equity awards; recipients vesting them. |
-| [The boardRoom and company records](webapp/boardroom.md) | Officers and directors — consents, authority, formation record. |
+| [The boardRoom and Incorporation Hub](webapp/boardroom.md) | Officers and directors — consents, authority, formation record. |
 | [For holders: your securities](webapp/holders.md) | Stakeholders and investors holding MetaLeX-issued securities. |
 | [cyberRAISE](webapp/cyberraise.md) | Issuers raising capital; investors funding rounds. |
 | [ACE](webapp/ace.md) | Token communities converting to equity; investors. |
+| [cyberSign](webapp/cybersign.md) | Anyone proposing, signing or countersigning an onchain agreement. |
 | [LeXcheX](webapp/lexchex.md) | Anyone who needs to prove accredited-investor status. |
 | [Your profile](webapp/profile.md) | Everyone — identity, wallets, and entities. |
-| [MetaDAO](webapp/metadao.md) | Participants in futarchy-governed entities. |
+| [Launchpads: MetaDAO and Umia](webapp/metadao.md) | Projects forming the entity a launchpad prescribes; anyone reading a company's public page. |
 
 ## The two-minute version
 

@@ -13,10 +13,16 @@ is identified by a `bytes32 agreementId`.
   / interface [`IDealManager.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/IDealManager.sol)
 * **Pattern:** UUPS proxy. Heavy logic is delegated to the
   `DealManagerStorage`, `SecondaryTradeStorage`, and `LexScrowStorage`
-  libraries; their events and errors are surfaced through the
-  `IDealManagerStorage`, `ISecondaryTradeStorage`, and `ILexScrowStorage`
-  interfaces so they appear in DealManager's ABI.
-* **`DEPLOY_VERSION`:** `"4.0.1"`
+  libraries. The deal and secondary-trade events and errors are declared
+  in the `IDealManagerStorage` and `ISecondaryTradeStorage` interfaces so
+  they appear in DealManager's ABI; `ILexScrowStorage` contributes the
+  shared `AgreementConditionsNotMet` error and the escrow views, while the
+  escrow events (`DealPaidAt` etc.) are declared in the `LexScrowStorage`
+  library itself. All of them are emitted from the DealManager's address.
+* **`DEPLOY_VERSION`:** `"5"` in the current source. DealManagers of
+  companies that have not upgraded report `"4.0.1"` or earlier; read
+  `DEPLOY_VERSION()` on the instance before choosing an ABI (see
+  [Integrate from a frontend](../../how-to/integrate-from-frontend.md#abis-and-versions)).
 
 ## Primary deal lifecycle
 
@@ -62,7 +68,16 @@ function initialize(address _auth, address _corp, address _dealRegistry,
 `IssuanceManager.createCertPrinter`, prefixing the company name) and
 proposes + signs the deal in one transaction. `CyberCertData` carries
 `{name, symbol, uri, securityClass, securitySeries, extension, seriesData,
-defaultLegend}`.
+defaultLegend}`; it is declared once in `src/CyberCorpConstants.sol` and
+shared by the deal path, the round path and the corporate factories.
+v4 DealManagers take the struct without `seriesData`, so the function
+selector differs between the two versions.
+
+`proposeDeal` creates the registry agreement with the DealManager as its
+`finalizer`, so only the DealManager can finalize it and the registry
+accepts a relayed signature only when the DealManager submits it. Parties
+sign the registry's `SignatureData` with `signer` set to their own address
+(see [CyberAgreementRegistry](CyberAgreementRegistry.md#data-model)).
 
 ## How primary deals work
 
@@ -79,8 +94,8 @@ defaultLegend}`.
   void-expirable (`voidExpiredDeal` reverts `DealNotExpired`), so it unwinds
   only by void request — see [Voiding a primary deal](#voiding-a-primary-deal).
 * On `finalizeDeal` the deal's certificate effects (mint/assign/endorse) are
-  applied via the IssuanceManager, and escrowed payment (less the platform
-  fee — see `computeFee` / `getPlatformPayable`) is released.
+  applied via the IssuanceManager, and escrowed payment (less the primary
+  platform fee — see `computeFee` / `getPlatformPayable`) is released.
 * Escrow state lives in the shared `LexScrowStorage` library — see
   [LeXscroWLite](LeXscroWLite.md). `getEscrowDetails(agreementId)` and
   `conditionCheck(agreementId)` expose it.
@@ -90,24 +105,31 @@ defaultLegend}`.
 Every void ultimately runs through the registry's `voidContractFor`, which
 voids the agreement once every **allocated** party has requested it, as soon
 as the proposer (party index 0) requests while still the only signer, or —
-for a nonzero expiry only — once that expiry has passed. What differs between
-the entry points is how much DealManager-side teardown follows.
+for a nonzero expiry only — once that expiry has passed. The registry knows
+nothing of the escrow, so the DealManager entry points add the teardown:
+voiding the corp certificates minted into escrow at proposal and refunding
+or closing the escrow.
 
-* `signToVoid` is the complete route. It forwards the request and, once the
-  registry reports the agreement voided, voids the escrowed corp certificates
-  and settles the escrow: a `PAID` escrow is refunded, a `PENDING` one is
-  marked `VOIDED`.
-* `revokeDeal` is **not** a full unwind. It only forwards the request for a
-  still-pending deal (it reverts `DealNotPending` otherwise) and performs no
-  teardown of its own, so a request that tips the agreement into voided — the
-  sole-signer proposer, say — leaves the escrow `PENDING` and its certificates
-  live. Another allocated party's `signToVoid` is what cleans that up
-  afterwards.
+* `signToVoid` forwards the request and, once the registry reports the
+  agreement voided, voids the escrowed corp certificates and settles the
+  escrow: a `PAID` escrow is refunded, a `PENDING` one is marked `VOIDED`.
+  Until then it only records the request.
+* `revokeDeal` is the same route for a deal that has not been paid. It
+  reverts `DealNotPending` unless the escrow is `PENDING`, forwards the
+  request, and, when that request voids the agreement (the sole-signer
+  proposer, say), voids the escrowed corp certificates and marks the escrow
+  `VOIDED`.
+* Both require the caller to be the `signer` they name
+  (`CounterPartyValueMismatch` otherwise).
+* `voidExpiredDeal` applies only to a deal with a nonzero expiry that has
+  passed. It forwards the request, voids the certificates, and refunds or
+  closes the escrow.
 * Requests may also go straight to the registry, bypassing the DealManager
   entirely. The escrow then lags the agreement until `refundVoidedDeal` syncs
   it, which voids the corp certificates and refunds — but only for a `PAID`
   escrow (`voidAndRefund` reverts `EscrowNotPaid` on a `PENDING` one, so an
-  unpaid deal voided this way still needs a party's `signToVoid`).
+  unpaid deal voided this way still needs `signToVoid` from a party that has
+  not yet requested the void).
 
 ## Secondary trading
 
@@ -142,7 +164,12 @@ separate, with `signer` as the authorized party.
   FULLY_ACCEPTED → FINALIZED`, or `CANCELLED`.
 * **Acceptance and settlement.** `acceptOffer` fills an offer (fully or
   partially), reserving the seller's cert units and escrowing the buyer's
-  consideration, and creates a settlement agreement.
+  consideration, and creates a settlement agreement. Each fill is priced
+  from the offer's running total: the lot pays
+  `consideration × (unitsAccepted + units) / units − paymentAccepted`, so
+  rounding error does not grow with the number of fills and the lot that
+  exhausts the offer pays the remainder. A priced fill that rounds to zero
+  reverts `ZeroConsiderationFill`.
   `finalizeSecondaryTradeAgreement` settles it — the ownership change is
   effectuated through
   `IssuanceManager.secondaryTransfer` (the LET never moves wallets; legal
@@ -155,7 +182,14 @@ separate, with `signer` as the authorized party.
   Only pathways the SPV has enabled can be pinned or elected.
 * **Hosting modes.** `HostingMode.DIRECT` delivers the LET to the buyer;
   `ADMINISTERED` delivers it to an admin multisig while the buyer is
-  registered as legal owner.
+  registered as legal owner. `ADMINISTERED` with a zero `adminMultisig`
+  reverts `MissingAdminMultisig` at `postOffer` (buy offers) and at
+  `acceptOffer`.
+* **Void certificates.** A void seller certificate keeps its owner and its
+  units, so the ownership and unit checks alone would pass it. Posting a
+  sell offer against it, accepting an offer that settles from it, and
+  finalizing all revert (`CertificateVoided` at post and accept, the
+  printer's `VoidCertificate` at finalize).
 
 ### Secondary-trade configuration (owner/admin)
 
@@ -181,12 +215,38 @@ finalization. Each layer is set as a whole list. Views: `getSpvThresholdConditio
 
 `setDealRegistry`, `setCorp`, `setIssuanceManager` (all `onlyOwner`);
 `issuanceManager()`, `getCounterPartyValues(agreementId)`;
-`computeFee(size)` (factory-set fee ratio, in basis points) and
-`getPlatformPayable()` for the platform fee recipient.
+`computeFee(size)` and `getPlatformPayable()` for the platform fee
+recipient.
+
+Primary deals and secondary trades are priced separately, both from the
+DealManagerFactory and both in basis points of the ticket
+(`BASIS_POINTS = 10000`):
+
+* **Primary** (`computeFee`, used by `finalizeDeal`): the factory's
+  `getDefaultFeeRatio()`, which returns the per-DealManager override when
+  one is enabled (`setInstanceFeeOverride`) and the platform default
+  otherwise. The name is kept so older DealManagers keep working.
+* **Secondary** (`finalizeSecondaryTradeAgreement`): the factory's
+  `getSecondaryFeeRatio()`, with its own per-DealManager override
+  (`setSecondaryInstanceFeeOverride`) and default
+  (`setDefaultSecondaryFeeRatio`). The integrator's share is then carved
+  out of that fee.
+
+The factory owner (MetaLeX) sets the defaults and overrides; an override
+with `enabled = true` and a zero ratio is a real 0% rate. Read the
+platform defaults, ignoring overrides, with `getUnderlyingDefaultFeeRatio()` /
+`getUnderlyingDefaultSecondaryFeeRatio()` and one instance's override with
+`getInstanceFeeOverride(dm)` / `getSecondaryInstanceFeeOverride(dm)`.
+A DealManager implementation from before the split reads
+`getDefaultFeeRatio()` for secondary trades too, so it pays the primary
+rate on them until it is upgraded.
 
 ## Events
 
-Owned directly: `MinTradeThresholdSet`, `SettlementWindowSet`. From the
+Owned directly: `MinTradeThresholdSet`, `SettlementWindowSet`,
+`DealRegistrySet`, `CorpSet`, `IssuanceManagerSet`, and
+`DefaultIntegratorSet` (each setter event carries the new value, the old
+value, and the caller). From the
 libraries (via the interfaces): `DealProposed`, `DealFinalized`
 (`IDealManagerStorage`); `DealPaidAt`, `DealVoidedAt`, `DealFinalizedAt`,
 `FeeDistributed` (`LexScrowStorage`); `OfferPosted`, `OfferCancelled`,

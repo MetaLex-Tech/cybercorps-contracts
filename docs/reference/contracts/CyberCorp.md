@@ -4,8 +4,8 @@ The root contract of a cyberCORP — the onchain representation of the legal
 entity.
 
 * **Source:** [`src/CyberCorp.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberCorp.sol)
-* **Inherits:** `Initializable`, `BorgAuthACL`, `UUPSUpgradeable`
-* **`DEPLOY_VERSION`:** `"4"`
+* **Inherits:** `Initializable`, `BorgAuthACL`, `UUPSUpgradeable`, `ICyberCorp`
+* **`DEPLOY_VERSION`:** `"5"` in the current source (existing companies may report `"3"` or `"4"` until upgraded)
 
 ## State
 
@@ -21,6 +21,7 @@ entity.
 | `dealManager` | `address` | The cyberCORP's DealManager. |
 | `roundManager` | `address` | The cyberCORP's RoundManager. |
 | `upgradeFactory` | `address` | Factory whose reference implementation gates upgrades. |
+| `cyberCertPrinterImplementation` | `address` | Legacy slot kept for storage layout; nothing reads it. |
 | `companyOfficers` | `CompanyOfficer[]` | Officers (`{eoa, name, contact, title}`). |
 | `escrowedOfficerSignatures` | `bytes[]` | Reusable pre-authorised officer signatures. |
 | `extension` | `address` | Optional corp-level extension contract that interprets `extensionData`. |
@@ -88,7 +89,9 @@ cyberCERT's metadata.
 `CyberCORPDetailsUpdated`, `OfficerAdded`, `OfficerUpdated`,
 `OfficerRemoved`, `CompanyPayableUpdated`, `EscrowedOfficerSignatureAdded`,
 `EscrowedOfficerSignatureUpdated`, `CyberCORPExtensionSet`,
-`CyberCORPExtensionDataUpdated`.
+`CyberCORPExtensionDataUpdated`, and `IssuanceManagerUpdated` /
+`DealManagerUpdated` / `RoundManagerUpdated` (new address, old address),
+which the three manager setters emit.
 
 ## Errors
 
@@ -102,4 +105,10 @@ cyberCERT's metadata.
 equal `ICyberCorpSingleFactory(upgradeFactory).getRefImplementation()` —
 otherwise it reverts `NotRefImplementation`. The constructor calls
 `_disableInitializers()`, so the implementation contract itself can never be
-initialised. See [Upgrade model](../upgrade-model.md).
+initialised. An upgrade to v5 also moves the company's IssuanceManager,
+DealManager, RoundManager and both beacons, in one batch.
+
+This path needs the CyberCorp to sit behind its own ERC-1967 proxy. The
+oldest cyberCORPs are beacon proxies on MetaLeX-owned beacons; for them
+`upgradeToAndCall` reverts `UUPSUnauthorizedCallContext`. See
+[Upgrade model](../upgrade-model.md).

@@ -1,7 +1,8 @@
 # Constitutive vs. pointer tokenization
 
-Most "tokenized securities" today are **pointer tokens**. The official cap
-table lives at a transfer agent, on Carta, or in a law firm's filing cabinet.
+Most "tokenized securities" today are **pointer tokens**. The securities
+ledger, the record that legally controls who owns what, lives at a transfer
+agent, on Carta, or in a law firm's filing cabinet.
 The chain is a notification layer. Onchain transfers are not the legal
 transfer; they are a request to update an offchain register that the issuer
 or its agents may decline to honour. The blockchain does no essential work
