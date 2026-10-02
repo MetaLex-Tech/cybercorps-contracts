@@ -141,11 +141,18 @@ agreement's id, before the agreement exists. On the current registry that
 id is
 
 ```solidity
+// A dynamic array, as SecondaryTradeStorage builds it. A literal
+// [offeror, acceptor] is address[2], which encodes differently and gives
+// another id.
+address[] memory parties = new address[](2);
+parties[0] = offeror;
+parties[1] = acceptor;
+
 keccak256(abi.encode(
     offer.templateId,
     uint256(keccak256(abi.encodePacked(offer.salt, n))), // n = earlier acceptances of this offer
-    offer.globalValues,
-    [offeror, acceptor],
+    offer.globalValues,                                  // string[]
+    parties,                                             // address[]
     bytes32(0),        // no secret
     dealManager        // the DealManager is the finalizer
 ))
