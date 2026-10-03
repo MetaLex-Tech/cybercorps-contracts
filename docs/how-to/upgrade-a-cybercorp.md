@@ -71,12 +71,37 @@ Run the six as one transaction where you can; for a Safe-owned company,
 that is one Safe batch. Each version calls functions the other version
 lacks, so a company left part-way (a v5 IssuanceManager next to a v4
 DealManager, for example) can see deal, round and issuance calls revert
-until the rest land. The app's Upgrade page sends each upgrade as its own
-transaction, so finish all six there before running deals, rounds or
-issuance. The contracts repository's `script/upgrade-v5.s.sol` builds this
-batch for one company (`corpUpgradeCalls`, and `printCorpUpgradeSafeBatch`,
-which prints Safe Transaction Builder JSON) and refuses a company that has
-no RoundManager.
+until the rest land. The contracts repository's `script/upgrade-v5.s.sol`
+builds this batch for one company (`corpUpgradeCalls`, and
+`printCorpUpgradeSafeBatch`, which prints Safe Transaction Builder JSON)
+and refuses a company that has no RoundManager.
+
+The app's **Upgrade** page runs the same calls in the same order. If a
+Safe that the connected wallet owns holds the owner role, it proposes
+every call that is not done as one Safe transaction, followed by the LET
+migrations of step 3 that need no dates. Its gas grows with the holders
+(one `initializeHolderCount` each) and the lots (each backfill touches
+each lot). The page estimates it from bounds measured on a Base fork and
+does not offer a batch above half the block gas limit; such a company
+needs a plan with MetaLeX, because running the migrations after the
+upgrade in a separate transaction reopens the period described in step
+3. Otherwise it sends one call at
+a time from a wallet with the owner role, and only the next call is
+available. From a wallet, the LET migrations follow in later
+transactions, and in between the v5-only paths (for example a
+secondary offer that a buyer accepts and settles with
+`finalizeSecondaryTradeAgreement`) can mint a LET to a holder that is
+not seeded yet. Nothing outside the contracts can stop those calls, so
+use a Safe batch for a company whose LET contracts have holders from
+before the upgrade, and read step 3 first. It
+starts the sequence only for a company with all contracts on a v4
+release (any 4.x `DEPLOY_VERSION`, such as `"4"`, `"4.0.1"` or
+`"4.1"`), UUPS proxies, an IssuanceManager and a DealManager, and
+v5 references for every call. A v4 company without a RoundManager
+takes the five other calls; a fork test of a deal and an issuance after
+those five calls passed before the app allowed it. While a company runs
+v5 and older contracts side by side, the app refuses new deals, rounds
+and issuance. See [Run your company](../webapp/company.md#upgrade-an-existing-company-to-v5).
 
 ## 3. Prepare the upgraded LET contracts
 
@@ -85,6 +110,16 @@ empty, zero or closed. Work through the steps below on each LET contract as
 soon as the upgrade lands, because holders can call `convertScripToCert` at
 any time. [LedgerEntryToken](../reference/contracts/LedgerEntryToken.md)
 documents each function and the holder-counting rules.
+
+The app's Upgrade page runs these steps from a checklist for each LET
+contract once the company runs v5. It reads which lots and holders still
+need each step from the contract's storage. It sends the required calls
+in this order: holder counters, legal-owner backfill, the badge when the
+company has a `HolderCapCondition` configuration, tally backfill. It
+refuses issuance, deal settlement and scrip conversion on a LET contract
+until its holder counters, legal-owner index and holder tally are
+complete. It proposes dates from onchain and company records, and sends
+them only after the owner confirms them.
 
 Existing LET contracts keep the certificate extension they were created
 with. New LET contracts can bind the [V3 extensions](../reference/extensions.md),
@@ -96,7 +131,53 @@ On a LET contract whose lots were minted before it kept a per-wallet
 possession counter, a holder's counter reads zero and a transfer out of
 that wallet reverts. An admin seeds each such holder with
 `initializeHolderCount(holder)` before anything is minted or transferred to
-or from it.
+or from it. Seed the DealManager and RoundManager last when they hold
+lots in escrow: a pending deal or allocation settles by a transfer out
+of them, which reverts while their counter is zero, so no settlement
+can reach a holder that is not seeded yet. The app's checklist uses this
+order.
+
+A mint or transfer that reaches a holder first sets the counter to 1,
+below the holder's balance. `initializeHolderCount` then reverts
+`HolderCountAlreadyInitialized`, and no deployed function corrects the
+counter. A holder can cause this without the company:
+`convertScripToCert` looks up the holder's lot through the legal-owner
+enumeration, which is empty until the backfill below. With a
+recertification approval on file, it then mints a new LET to the
+holder. An FCFS round that has not ended does the same without the
+company once it opens:
+`RoundManager.submitEOI` is public, and for an FCFS round it calls
+`allocate` in the same transaction, which mints a LET to the investor.
+A new LET also reaches a legacy holder indirectly: if the LET contract
+is `transferable` (or a lot has `setTokenTransferable` on), any holder
+whose counter is already seeded can transfer possession to a legacy
+holder without an endorsement. No seeding order prevents this, so turn
+transfers off (`setGlobalTransferable(false)` and each lot's override)
+until every counter is seeded. Seed the counters in the
+same transaction as the beacon upgrade where you can, as the app's Safe
+batch does. A batch is built when it is proposed, so a lot minted while
+it waits for signatures is not in it. So for a wallet upgrade and for a
+Safe batch, close every FCFS round that has not ended, including one
+that has not started, with `closeRoundNow(roundId)`, and clear every
+outstanding approval with
+`clearRecertificationApproval(certAddress, investor)`, before the
+upgrade. Also settle or void every pending deal and secondary offer
+whose lots the DealManager holds: `finalizeDeal` is public, and
+`processTransfer` lets the current DealManager deliver even with
+transfers off, so a delivery after the batch was encoded reaches a
+holder that the batch does not seed. Check all of these again right
+before the Safe executes the batch, and do not issue or propose deals
+while it waits for signatures; the app's Upgrade page refuses to build
+or show the batch until they hold. `closeRoundNow` sets `endTime` to the current
+block's timestamp, and `submitEOI` reverts `RoundNotOpen` only when
+`block.timestamp > endTime`. So wait for a block with a later timestamp
+before the beacon upgrade. `closeRoundNow` reverts
+`EndTimeReductionRestricted` for a round that restricts it; for such a
+round, wait until the round ends. Set the approvals
+again only after the counters are seeded
+and the legal-owner enumeration is backfilled (see below), because
+until then a conversion with an approval also draws on the shared
+vault.
 
 ### Backfill legal owners and the look-through tally
 
