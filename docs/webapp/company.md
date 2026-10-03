@@ -377,7 +377,10 @@ badge need the owner or admin role.
 Holders can still call the contract directly, which is why the Safe
 batch carries these calls in the same transaction as the upgrade.
 
-The checklist also handles the dates, which block nothing in the app:
+The checklist also handles the dates. Missing dates do not cause the
+app to refuse issuance, deal settlement or scrip conversion as above.
+But a missing acquisition date still blocks Rule 144 and Reg S trades
+of that LET, so set the acquisition dates before holders need to trade:
 
 * **Acquisition dates (Rule 144 and Reg S).** Each pre-upgrade LET's
   acquisition date reads zero, and Rule 144 and Reg S trades refuse it.
@@ -395,10 +398,9 @@ wrong, and confirm the table before you send. A date earlier than the
 onchain record is allowed, but the page flags it. The Rule 144 and Reg
 S conditions add their fixed period to this date, so an earlier date
 makes more of that period count as served, and the LET can trade
-sooner. From a wallet, each
-date is its own transaction; a Safe sends them as one. Mission control
-shows **Set acquisition and issue dates of pre-upgrade lots** until
-they are set.
+sooner. From a wallet, each date is its own transaction; a Safe sends
+them as one. Mission control shows **Set acquisition and issue dates of
+pre-upgrade lots** until they are set.
 
 Each class panel in the Tokenization Hub shows **Registered-owner
 transfer permission (v5)**, which starts off on an upgraded LET
