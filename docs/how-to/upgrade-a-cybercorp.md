@@ -135,7 +135,10 @@ possession to a legacy holder without an endorsement. Seed the counters
 in the same transaction as the beacon upgrade, as the app's Safe batch
 does. If the upgrade runs from a wallet instead, clear every outstanding
 approval with `clearRecertificationApproval(certAddress, investor)`
-before the upgrade, and set them again after the counters are seeded.
+before the upgrade. Set them again only after the counters are seeded
+and the legal-owner enumeration is backfilled (see below), because
+until then a conversion with an approval also draws on the shared
+vault.
 
 ### Backfill legal owners and the look-through tally
 

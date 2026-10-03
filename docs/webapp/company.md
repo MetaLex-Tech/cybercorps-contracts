@@ -370,9 +370,13 @@ holds a pre-upgrade LET. So before you upgrade from a wallet:
   `clearRecertificationApproval` on the Issuance Manager.
 * Do not mint or transfer LETs outside the app.
 
-Set the cleared approvals again after the checklist shows the holder
-counters done. A Safe does not have this problem: the Safe batch seeds
-the counters in the same transaction as the upgrade. If a counter does
+Set the cleared approvals again only after the checklist shows every
+required migration done, so that the app no longer pauses the LET
+contract. The holder counters are not enough: until the legal-owner
+index is backfilled, a conversion with an approval also takes its units
+from the shared scrip vault instead of the holder's own positions. A
+Safe does not have this problem: the Safe batch seeds the counters and
+runs the backfills in the same transaction as the upgrade. If a counter does
 go wrong, the checklist reports a mismatched holder counter, and the
 app keeps issuance, deal settlement and scrip conversion paused on that
 LET contract. Contact MetaLeX in that case.
