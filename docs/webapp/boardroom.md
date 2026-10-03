@@ -29,13 +29,13 @@ the last officer is the company's last owner and the company would be
 left with no one able to manage it, permanently. Add a successor first.
 On a v5 company, the contract revokes a resigning officer's authority
 only when the wallet has one roster entry and the standard officer role.
-Before it sends a resignation, the app checks both, and that no
-owner-role adapter is set that could keep authorizing the wallet. If a
-check fails, it explains why and sends nothing. If an owner changes your
-role or the adapter while the transaction is pending, you can keep
-authority. After the transaction, the app reads your role and the
-owner-role adapter again and tells you if you still hold a role or owner
-authority. It does not check adapters set for other roles.
+Before it sends a resignation, the app checks both, and that no role
+adapter is set for the officer, owner, admin or privileged role, which
+could keep authorizing the wallet. If a check fails, it explains why and
+sends nothing. If an owner changes your role or an adapter while the
+transaction is pending, you can keep authority. After the transaction,
+the app reads your role and those adapters again and tells you if you
+still hold a role or adapter authority. It does not check other roles.
 
 Removing an owner whose wallet holds the company's
 [grants authority](grants.md) does not move that authority. Removal,
