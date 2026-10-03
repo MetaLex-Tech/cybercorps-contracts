@@ -79,7 +79,13 @@ and refuses a company that has no RoundManager.
 The app's **Upgrade** page runs the same calls in the same order. If a
 Safe that the connected wallet owns holds the owner role, it proposes
 every call that is not done as one Safe transaction, followed by the LET
-migrations of step 3 that need no dates. Otherwise it sends one call at
+migrations of step 3 that need no dates. Its gas grows with the holders
+(one `initializeHolderCount` each) and the lots (each backfill touches
+each lot). The page estimates it from bounds measured on a Base fork and
+does not offer a batch above half the block gas limit; such a company
+needs a plan with MetaLeX, because running the migrations after the
+upgrade in a separate transaction reopens the period described in step
+3. Otherwise it sends one call at
 a time from a wallet with the owner role, and only the next call is
 available. From a wallet, the LET migrations follow in later
 transactions, so read the scrip conversion risk in step 3 first. It

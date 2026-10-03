@@ -328,7 +328,17 @@ To upgrade:
    revert together, so the company never runs v5 and older contracts
    side by side. Collect the Safe signatures and execute it in the Safe
    app. If the same batch already waits in the Safe queue, the page
-   shows its signature count instead of proposing it again.
+   shows its signature count instead of proposing it again. If a queued
+   batch was proposed for an earlier state of the company, the page
+   tells you to reject it.
+
+   The batch grows with the company's holders and lots. The page
+   estimates its gas from bounds measured on a Base fork (at most
+   120,000 gas for each holder counter, and 100,000 for each lot in each
+   backfill). It does not offer a batch whose estimate is more than half
+   of the chain's block gas limit, because the Safe may not be able to
+   execute it. In that case, contact MetaLeX. Do not split the batch: a
+   split reopens the period that the warning below describes.
 3. Otherwise, send the steps from a wallet that holds the owner role.
    Only the next step's **Upgrade** button is active. Each step is its
    own transaction, and the page reads the chain again before each one.
