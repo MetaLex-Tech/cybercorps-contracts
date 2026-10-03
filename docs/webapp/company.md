@@ -373,9 +373,11 @@ pre-upgrade LET. So before you upgrade from a wallet:
   with `getRecertificationApproval` and clears it with
   `clearRecertificationApproval` on the Issuance Manager.
 * Close every open FCFS round with **Close round now**
-  (`closeRoundNow`). A round that restricts the reduction of its end
-  time cannot be closed early. If you have one, use a Safe, or wait
-  until the round ends.
+  (`closeRoundNow`). The Upgrade page lists the company's FCFS rounds
+  that have not ended, with that button for each, and the next wallet
+  step shows **Close FCFS rounds first** until none is open. A round
+  that restricts the reduction of its end time cannot be closed early.
+  If you have one, use a Safe, or wait until the round ends.
 * Do not mint or transfer LETs outside the app.
 
 Set the cleared approvals again only after the checklist shows every
