@@ -166,10 +166,13 @@ A ticket for an existing company mints its securities from the company's
 LET contracts. How the offer gets those contracts depends on the company's
 version (see [v4 and v5 companies](#v4-and-v5-companies)).
 
-**On a v4 company**, the app reuses the LET contract that matches each
+**On a v3 or v4 company**, the app reuses the LET contract that matches each
 certificate's type, series, legal document and payment token. If none
 matches, as on a company's first ticket, the offer creates the LET
-contracts in the same transaction as the offer.
+contracts in the same transaction as the offer. The company, its deal and
+issuance managers and each reused LET contract must all report the same
+version. If one of them reports another version, the app stops before you
+sign.
 
 **On a v5 company**, each security in the offer needs a class identity and
 active class terms before the ticket can be signed:
@@ -370,6 +373,9 @@ newer than it supports, with a visible message.
   way on v4 and v5 companies.
 * **Tickets for an existing company** differ, as described in
   [Set up a ticket for an existing company](#set-up-a-ticket-for-an-existing-company).
+  Some older companies run v3. For tickets, the app treats a v3 company the
+  same way as a v4 company. The app does not support tickets for v1 or v2
+  companies.
 * **A signature is tied to the major version** of the manager it was given
   for, whether the founder's or an investor's. If the company upgrades that
   manager from v4 to v5 before the transaction is sent, the app asks for a

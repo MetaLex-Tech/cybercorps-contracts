@@ -167,15 +167,27 @@ because it makes you a registered holder again. There are two paths:
   from the Tokenization Hub, and once it approves, your button becomes
   **De-scripify**.
 
-The review checks the conversion against the class's activated legal
-terms (see
-[Legal classes, series and versioned terms](captable.md#legal-classes-series-and-versioned-terms)),
-so in the app it works for classes on v5 contracts whose company has
-approved and activated those terms. Otherwise the review stops with an
-explanation, such as that the class's legal terms are not activated, and
-the company has to act first. The dialog notes that the conversion
-creates a tokenized cap table position, and that the company's governing
-documents decide whether that position is part of its securities ledger.
+What the review checks depends on the company's version:
+
+* **On a v5 company**, the review checks the conversion against the
+  class's activated legal terms (see
+  [Legal classes, series and versioned terms](captable.md#legal-classes-series-and-versioned-terms)).
+  If the company has not approved and activated those terms, the review
+  stops with an explanation, and the company has to act first.
+* **On a v4 company**, the LET contract has no protocol class, so there are
+  no activated terms to check. The review shows the company's onchain terms
+  for the destination instead: the terms on your LET, or the terms in the
+  issuer's approval. The protocol also picks the LET differently. It takes
+  the first non-void LET that is both in your wallet and registered to you.
+  A LET registered to you that another address holds, such as an escrow,
+  does not count. Conversion works on the current v4 release of the
+  company's issuance manager. On an earlier v4 release, the review stops
+  with an explanation, and the company can upgrade to v5.
+
+The app refuses the conversion if the issuer has frozen your scrip. The
+dialog notes that the conversion creates a tokenized cap table position,
+and that the company's governing documents decide whether that position is
+part of its securities ledger.
 
 ### Transfer scrip
 
