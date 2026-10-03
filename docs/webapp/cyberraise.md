@@ -123,8 +123,9 @@ be an offshore transaction
 * When the investor places the order, the investor is outside the United
   States, or the company and anyone acting for it reasonably believe so.
 
-The company and anyone acting for it must also make no directed selling
-efforts in the United States
+No directed selling efforts may be made in the United States by the company,
+a distributor (for example a placement agent), an affiliate of either, or
+anyone acting for any of them
 ([Rule 903](https://www.law.cornell.edu/cfr/text/17/230.903)). Some offerings
 have more Regulation S conditions.
 
