@@ -97,8 +97,14 @@ Transaction Builder JSON) and refuses a company that has no RoundManager.
   backfilled, existing holders read zero through `balanceOfLegalOwner` and
   `isLegalHolder`, and `lookThroughHolderCount()` starts at zero, so a
   configured `HolderCapCondition` can admit a buyer although the real cap
-  is already full. Before enabling registration or secondary settlement on
-  the printer:
+  is already full. Scrip redemption depends on the enumeration too:
+  `convertScripToCert` finds the holder's lot and draws down the holder's
+  own vault positions through it. So before backfilling, it cannot find
+  the lot (reverting for a missing recertification approval), or, with an
+  approval, it takes the withdrawal from the shared vault instead of the
+  holder's positions. Holders can call it at any time, so run these steps
+  as soon as the upgrade lands, and before enabling registration or
+  secondary settlement on the printer:
   1. if the SPV uses look-through counting, wire the badge with
      `setLookThroughBadge(badge)` first;
   2. run `backfillLegalOwners(start, count)` and
