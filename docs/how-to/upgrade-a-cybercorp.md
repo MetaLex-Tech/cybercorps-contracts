@@ -144,8 +144,11 @@ company once it opens:
 `RoundManager.submitEOI` is public, and for an FCFS round it calls
 `allocate` in the same transaction, which mints a LET to the investor.
 A new LET also reaches a legacy holder indirectly: if the LET contract
-is `transferable`, the wallet that received it can transfer possession
-to a legacy holder without an endorsement. Seed the counters in the
+is `transferable` (or a lot has `setTokenTransferable` on), any holder
+whose counter is already seeded can transfer possession to a legacy
+holder without an endorsement. No seeding order prevents this, so turn
+transfers off (`setGlobalTransferable(false)` and each lot's override)
+until every counter is seeded. Seed the counters in the
 same transaction as the beacon upgrade where you can, as the app's Safe
 batch does. A batch is built when it is proposed, so a lot minted while
 it waits for signatures is not in it. So for a wallet upgrade and for a

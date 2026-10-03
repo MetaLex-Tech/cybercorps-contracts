@@ -356,7 +356,7 @@ Closing a round early, refunds, rejections and recalls are not refused.
 {% endhint %}
 
 {% hint style="danger" %}
-**Close FCFS rounds and clear recertification approvals before you upgrade.**
+**Turn off transfers, close FCFS rounds and clear recertification approvals before you upgrade.**
 After the LET contract beacon upgrade, each wallet that holds a
 pre-upgrade LET has a holder counter of zero until it is seeded. If a
 LET is minted or transferred to that wallet first, its counter stays
@@ -374,8 +374,10 @@ But two calls do not need the company:
   first-come, first-served (FCFS) round that has not ended, the round
   allocates and mints a LET in the same call once the round opens.
 
-If the LET contract allows transfers, a wallet that receives a new LET
-can also pass it to a wallet that holds a pre-upgrade LET.
+If the LET contract allows transfers, any holder can also transfer a
+lot without the company. Once one holder's counter is seeded, a
+transfer from that holder to a holder that is not seeded yet has the
+same effect, whatever the seeding order.
 
 A pending deal or allocation settles by a transfer out of the Deal
 Manager or Round Manager, which anyone can trigger once it is signed and
@@ -389,6 +391,15 @@ them in the same transaction, but the page builds the batch when you
 propose it, so a lot minted while it waits for signatures is not in it.
 So both ways need the same preparation:
 
+* Turn off holder transfers on every LET contract: the contract's
+  global flag (`setGlobalTransferable`) and each lot's own override
+  (`setTokenTransferable`). The Upgrade page lists each one that is on,
+  with a **Turn off** button, and holds both ways until all are off.
+  Turn transfers on again only after the checklist shows every holder
+  counter seeded; until then, the checklist does not send the next
+  counter call while transfers are on. Transfers out of the Deal and
+  Round Managers settle deals and allocations, and the contract allows
+  them either way.
 * Clear every recertification approval on the company's LET
   contracts. The contracts cannot list their approvals. So the Upgrade
   page takes them from the app's index, up to the last block the index
