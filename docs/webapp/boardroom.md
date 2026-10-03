@@ -66,9 +66,8 @@ one:
   The app rejects "&" in titles, so use commas or "and". Promoting another
   officer takes two transactions, a remove followed by a re-add. If the
   first mines and the second fails, the app tells you the person is
-  temporarily off the roster and offers a one-click retry. On a v5
-  company, you can also re-title yourself, in one transaction. On older
-  companies you can't, so another officer must do it.
+  temporarily off the roster and offers a one-click retry. You can't
+  re-title yourself this way, so another officer must do it.
 * **Add a different wallet** adds a new officer with a director title.
 
 **Promote an officer** and **keep as officer** (below) run only on
@@ -229,11 +228,11 @@ deployed for your company.
 > `removeOfficer` calls on your
 > [`CyberCorp`](../reference/contracts/CyberCorp.md) contract, and
 > officer authority is a role in [BorgAuth](../reference/access-control.md).
-> The app sends CyberCorp's in-place `updateOfficer` only for your own
-> entry and only on contract implementations MetaLeX has reviewed for it,
-> which are the v5 reference implementations. A re-title of another
-> officer, and any re-title on an older company, is a remove and a
-> re-add. CyberCorp has no separate onchain director tier,
+> The app does not send CyberCorp's in-place `updateOfficer`. v5 has
+> it, but a v5 removal keeps any role other than the standard officer
+> role, so a pending update could change a different officer's entry.
+> A re-title is a remove and a re-add. CyberCorp has no separate onchain
+> director tier,
 > so the boardRoom reads its director roster from officer titles. Consents are agreements in the
 > [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md),
 > created and signed in one transaction.
