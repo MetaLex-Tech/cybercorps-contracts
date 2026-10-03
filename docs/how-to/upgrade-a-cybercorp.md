@@ -88,7 +88,12 @@ upgrade in a separate transaction reopens the period described in step
 3. Otherwise it sends one call at
 a time from a wallet with the owner role, and only the next call is
 available. From a wallet, the LET migrations follow in later
-transactions, so read the scrip conversion risk in step 3 first. It
+transactions, and in between the v5-only paths (for example a
+secondary offer that a buyer accepts and settles with
+`finalizeSecondaryTradeAgreement`) can mint a LET to a holder that is
+not seeded yet. Nothing outside the contracts can stop those calls, so
+use a Safe batch for a company whose LET contracts have holders from
+before the upgrade, and read step 3 first. It
 starts the sequence only for a company with all contracts on a v4
 release (any 4.x `DEPLOY_VERSION`, such as `"4"`, `"4.0.1"` or
 `"4.1"`), UUPS proxies, an IssuanceManager and a DealManager, and

@@ -386,10 +386,17 @@ So the checklist seeds those two managers last: a settlement cannot
 succeed until every other holder is seeded. Keep that order if you send
 the calls yourself.
 
-From a wallet, the migrations run after the upgrade. A Safe batch runs
-them in the same transaction, but the page builds the batch when you
-propose it, so a lot minted while it waits for signatures is not in it.
-So both ways need the same preparation:
+From a wallet, the migrations run after the upgrade. In that period
+the company's contracts run v5, so v5-only paths open too: a holder can
+post a secondary offer, and a buyer can accept it and settle it with
+`finalizeSecondaryTradeAgreement`, which mints a LET to the buyer. The
+app cannot stop these direct calls, and the preparation below does not
+close them. A Safe batch closes the period, because it seeds every
+counter in the same transaction as the beacon upgrade. **If the
+company's LET contracts have holders from before the upgrade, upgrade
+through a Safe.** The page builds a Safe batch when you propose it, so
+a lot minted while it waits for signatures is not in it. So both ways
+need the same preparation:
 
 * Turn off holder transfers on every LET contract: the contract's
   global flag (`setGlobalTransferable`) and each lot's own override
