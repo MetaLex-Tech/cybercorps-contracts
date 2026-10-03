@@ -20,6 +20,9 @@ have one. Do not assume another checkout's files are present here.
 ## Shared tasks
 
 - [Shared-state setup](tasks/shared-project-state.md): this documentation change.
+- [Robinhood pre-v5 bootstrap](tasks/robinhood-bootstrap.md): local implementation
+  on `codex/robinhood-bootstrap`; local historical-bytecode and v5-core tests pass.
+  Independent review and target-chain acceptance remain pending.
 
 This seed is not a complete inventory of ongoing tasks. Existing work, PR owners,
 review monitors and audit ledgers retain ownership. No protocol task is reassigned
