@@ -354,15 +354,17 @@ contract:
   cannot transfer a pre-upgrade LET out, and a LET minted to it first
   leaves its counter wrong for good. **Run next call** seeds each
   counter (an owner call).
-* **Legal-owner index.** Until it is backfilled, a holder-cap check can
-  undercount existing holders, and converting scrip back to a LET can
-  fail or draw on the shared scrip vault instead of the holder's own
-  positions.
+* **Legal-owner index.** Until it is backfilled, converting scrip back
+  to a LET can fail or draw on the shared scrip vault instead of the
+  holder's own positions.
 * **LeXcheX badge.** If the company has a holder cap configured, the
   badge is wired before the holders are counted, so the tally counts
   beneficial owners. Otherwise wiring it is optional; after a late
   wiring, **Recount** counts the holders again.
-* **Holder tally.** The count a holder-cap check reads.
+* **Holder tally.** The count a holder-cap check reads, including
+  whether a buyer already holds the class. Until it is backfilled, the
+  check undercounts existing holders and can admit a buyer although the
+  cap is already full.
 
 Until the holder counters, legal-owner index and holder tally of a LET
 contract are complete, the app refuses issuance, deal settlement and
