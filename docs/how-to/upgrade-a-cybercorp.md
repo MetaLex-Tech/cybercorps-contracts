@@ -127,6 +127,14 @@ Transaction Builder JSON) and refuses a company that has no RoundManager.
      period, so take it from the company's records.
 
   See [LedgerEntryToken](../reference/contracts/LedgerEntryToken.md).
+* `issueTimestamp` is new as well: v4 printers never stored it, so it reads
+  zero for every pre-upgrade lot, and the certificate image built by
+  `CertificateUriBuilder` shows a blank **Issue Date** for each one. Nothing
+  backfills it automatically. An admin sets each lot's issuance date with
+  `setIssueTimestamp(tokenId, ts)`, taking the date from the company's
+  records (for example the lot's original issuance endorsement). This does
+  not block any transfer or trade; it fixes the certificate's displayed
+  record.
 
 ## What you can and cannot do
 
