@@ -157,8 +157,8 @@ until every counter is seeded. Seed the counters in the
 same transaction as the beacon upgrade where you can, as the app's Safe
 batch does. A batch is built when it is proposed, so a lot minted while
 it waits for signatures is not in it. So for a wallet upgrade and for a
-Safe batch, close every FCFS round that has not ended, including one
-that has not started, with `closeRoundNow(roundId)`, and clear every
+Safe batch, close every FCFS round that has not ended, on every Round
+Manager the company has used, including one that has not started, with `closeRoundNow(roundId)`, and clear every
 outstanding approval with
 `clearRecertificationApproval(certAddress, investor)`, before the
 upgrade. Also settle or void every pending deal and secondary offer
