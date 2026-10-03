@@ -92,6 +92,21 @@ Transaction Builder JSON) and refuses a company that has no RoundManager.
   that wallet reverts. An admin seeds each such holder with
   `initializeHolderCount(holder)`, before anything is minted or transferred
   to or from it.
+* The legal-owner enumeration and the look-through holder tally are also
+  new storage and start empty on an upgraded printer. Until they are
+  backfilled, existing holders read zero through `balanceOfLegalOwner` and
+  `isLegalHolder`, and `lookThroughHolderCount()` starts at zero, so a
+  configured `HolderCapCondition` can admit a buyer although the real cap
+  is already full. Before enabling registration or secondary settlement on
+  the printer:
+  1. if the SPV uses look-through counting, wire the badge with
+     `setLookThroughBadge(badge)` first;
+  2. run `backfillLegalOwners(start, count)` and
+     `backfillLookThroughTally(start, count)` in batches over
+     `[0, totalSupply())`. Both are permissionless and idempotent, so a
+     batch can be re-run safely.
+
+  See [Holder counts](../reference/contracts/LedgerEntryToken.md#holder-counts).
 
 ## What you can and cannot do
 
