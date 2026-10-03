@@ -115,6 +115,20 @@ partnership organized under U.S. law. For an individual the test is
 residence, so a U.S. citizen who lives abroad is generally not a U.S.
 person.
 
+Investor status is not the only Regulation S condition. Each sale must also
+be an offshore transaction
+([Rule 902(h)](https://www.law.cornell.edu/cfr/text/17/230.902)):
+
+* The offer is not made to a person in the United States.
+* When the investor places the order, the investor is outside the United
+  States, or the company and anyone acting for it reasonably believe so.
+
+No directed selling efforts may be made in the United States by the company,
+a distributor (for example a placement agent), an affiliate of either, or
+anyone acting for any of them
+([Rule 903](https://www.law.cornell.edu/cfr/text/17/230.903)). Some offerings
+have more Regulation S conditions.
+
 The round type from step 1 can settle the variant for you:
 
 | Round type | Ticket types offered |
