@@ -528,8 +528,10 @@ records exist.
   backs the as-of reconstruction behind dated stockholder lists.
 * **v4 and v5 companies share most of the cap table.** The app reads each
   company's contract version and refuses visibly where a feature needs
-  v5: partial tokenization, LLC tokenization, converting scrip back into
-  a LET, and private sales (see
-  [For holders](holders.md#prepare-a-private-sale-v5-companies)). A
-  company keeps its deployed version until its owners upgrade it (see
+  v5: partial tokenization, LLC tokenization and private sales (see
+  [For holders](holders.md#prepare-a-private-sale-v5-companies)).
+  Converting scrip back into a LET also works on a v4 company that runs
+  the current v4 release of its issuance manager (see
+  [Convert scrip back into a LET](holders.md#convert-scrip-back-into-a-let)).
+  A company keeps its deployed version until its owners upgrade it (see
   [Run your company](company.md)).
