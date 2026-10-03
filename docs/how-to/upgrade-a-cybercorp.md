@@ -161,7 +161,14 @@ Safe batch, close every FCFS round that has not ended, including one
 that has not started, with `closeRoundNow(roundId)`, and clear every
 outstanding approval with
 `clearRecertificationApproval(certAddress, investor)`, before the
-upgrade. `closeRoundNow` sets `endTime` to the current
+upgrade. Also settle or void every pending deal and secondary offer
+whose lots the DealManager holds: `finalizeDeal` is public, and
+`processTransfer` lets the current DealManager deliver even with
+transfers off, so a delivery after the batch was encoded reaches a
+holder that the batch does not seed. Check all of these again right
+before the Safe executes the batch, and do not issue or propose deals
+while it waits for signatures; the app's Upgrade page refuses to build
+or show the batch until they hold. `closeRoundNow` sets `endTime` to the current
 block's timestamp, and `submitEOI` reverts `RoundNotOpen` only when
 `block.timestamp > endTime`. So wait for a block with a later timestamp
 before the beacon upgrade. `closeRoundNow` reverts
