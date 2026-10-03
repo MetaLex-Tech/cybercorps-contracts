@@ -97,10 +97,36 @@ link.
 * **Pitch deck**, an optional description and up to three files.
 
 **Step 2, choose the ticket type.** Pick the deal paper: SAFE, SAFT, SAFTE,
-or SAFE + Token Warrant, each in a Reg D and a Reg S variant. Custom
-templates approved in the MetaLeX console appear as extra cards here and in
-ticket-by-ticket raises, and each card says whether the template was
-registered for your company or approved by MetaLeX for any company. The
+or SAFE + Token Warrant, each in a Reg D and a Reg S variant. Choose the
+variant by who invests in the round:
+
+* If any investor in the round is a U.S. person, use the Reg D variant for
+  the whole round, including the non-U.S. investors. Non-U.S. investors in a
+  Reg D round must also be accredited investors.
+* Use the Reg S variant only if no investor in the round is a U.S. person.
+* Do not split one round into Reg D tickets and Reg S tickets. In a
+  ticket-by-ticket raise you choose the type for each ticket, so apply the
+  rule to every ticket in the round.
+
+"U.S. person" has its Regulation S meaning
+([Rule 902(k)](https://www.law.cornell.edu/cfr/text/17/230.902)). It
+includes anyone who lives in the United States and any corporation or
+partnership organized under U.S. law. For an individual the test is
+residence, so a U.S. citizen who lives abroad is generally not a U.S.
+person.
+
+The round type from step 1 can settle the variant for you:
+
+| Round type | Ticket types offered |
+| --- | --- |
+| Publicly Advertised - U.S. | Reg D only. The round relies on Rule 506(c), and non-U.S. investors can invest in it too. |
+| Publicly or Privately Advertised - U.S. Excluded | Reg S only. |
+| Privately Advertised - U.S. | Reg D and Reg S. Apply the rule above. |
+
+Custom templates approved in the MetaLeX console appear as extra cards here
+and in ticket-by-ticket raises, and the round type filters them the same
+way. Each card says whether the template was registered for your company or
+approved by MetaLeX for any company. The
 *Custom* option takes a template name or registry ID agreed with MetaLeX,
 which the app checks against the onchain registry. If the series already
 has a line, you add a **sub-series label** (e.g. "2" to run Series A-2) so
