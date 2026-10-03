@@ -423,7 +423,13 @@ need the same preparation:
   Round Manager's `RoundCreated` events, and shows that button for
   each. If an FCFS round that has not ended runs on a Round Manager the
   company replaced, the page cannot check or close it there, and it
-  holds the upgrade: contact MetaLeX. Both ways stay disabled until none is left. Closing sets the
+  holds the upgrade: contact MetaLeX. The index records a Round Manager
+  only when the factory deploys it. If the company uses a Round Manager
+  that the index does not record, the page also holds the upgrade:
+  contact MetaLeX. The page cannot find a round on a manager that the
+  company set with `setRoundManager` and then replaced again. If you
+  did this, close every FCFS round on that manager before you upgrade.
+  Both ways stay disabled until none is left. Closing sets the
   round's end time to the time of that block, and the round refuses an
   EOI only after that time, so the page counts the round as open until
   a later block. A round that restricts the reduction of its end time
