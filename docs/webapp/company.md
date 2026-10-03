@@ -346,7 +346,7 @@ Closing a round early, refunds, rejections and recalls are not refused.
 {% endhint %}
 
 {% hint style="danger" %}
-**From a wallet, clear the risky recertification approvals first.**
+**From a wallet, clear all recertification approvals first.**
 After the LET contract beacon upgrade, each wallet that holds a
 pre-upgrade LET has a holder counter of zero until the checklist seeds
 it. If a LET is minted
@@ -357,16 +357,17 @@ balance. The deployed contracts cannot correct this, because
 The app refuses issuance in this period. But a holder can still call
 `convertScripToCert` on the Issuance Manager directly. If the company
 has a recertification approval on file for that holder, the call mints
-a new LET to the holder's wallet. So before you upgrade from a wallet:
+a new LET to the holder's wallet. If the LET contract allows transfers,
+a wallet that receives a new LET can also pass it to a wallet that
+holds a pre-upgrade LET. So before you upgrade from a wallet:
 
-* Clear the recertification approval of each wallet that holds a
-  pre-upgrade LET of the company. The **Scrips** table shows these
-  investors as **Auto-approved** and has no **Revoke** for them, but an
+* Clear every recertification approval on the company's LET
+  contracts. The **Scrips** table shows **Revoke** for approved
+  investors who hold no LET. For an investor who already holds a LET,
+  the table shows **Auto-approved** and has no **Revoke**, but an
   approval set earlier can still be on file. An admin checks it with
   `getRecertificationApproval` and clears it with
-  `clearRecertificationApproval` on the Issuance Manager. An approval
-  for a wallet that holds no LET is safe: the new LET gives that wallet
-  a counter that matches its balance.
+  `clearRecertificationApproval` on the Issuance Manager.
 * Do not mint or transfer LETs outside the app.
 
 Set the cleared approvals again after the checklist shows the holder

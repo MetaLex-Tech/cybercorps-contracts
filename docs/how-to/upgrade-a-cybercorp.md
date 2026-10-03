@@ -129,13 +129,13 @@ counter. A holder can cause this without the company:
 `convertScripToCert` looks up the holder's lot through the legal-owner
 enumeration, which is empty until the backfill below. With a
 recertification approval on file, it then mints a new LET to the
-holder. Seed the counters in the same transaction as the beacon upgrade,
-as the app's Safe batch does. If the upgrade runs from a wallet instead,
-clear the approval of each wallet that holds a pre-upgrade LET with
-`clearRecertificationApproval(certAddress, investor)` before the
-upgrade, and set it again after the counters are seeded. An approval
-for a wallet that holds no LET is safe, because the new LET gives that
-wallet a counter equal to its balance.
+holder. A new LET also reaches a legacy holder indirectly: if the LET
+contract is `transferable`, the wallet that received it can transfer
+possession to a legacy holder without an endorsement. Seed the counters
+in the same transaction as the beacon upgrade, as the app's Safe batch
+does. If the upgrade runs from a wallet instead, clear every outstanding
+approval with `clearRecertificationApproval(certAddress, investor)`
+before the upgrade, and set them again after the counters are seeded.
 
 ### Backfill legal owners and the look-through tally
 
