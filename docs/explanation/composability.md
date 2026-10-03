@@ -29,12 +29,14 @@ through whitelisted venues.
 ### Compliance powers are visible
 
 Force transfer, force burn, and per-account freeze are opt-in powers chosen
-when the scrip is deployed, exercisable only through the issuer's
-`IssuanceManager`. Even when never invoked, their presence is visible, and
-some lending protocols will decline to list any ERC-20 with these powers.
-The **one-way disable** functions (`disableScripForceTransfer`,
-`disableScripForceBurn`, `disableScripFreeze`) exist for exactly this
-reason: an issuer can credibly and irreversibly commit to an open posture.
+when the scrip is deployed. Force burn runs only through the issuer's
+`IssuanceManager`; force transfer and freeze can also be called by the
+issuer's admins directly on the scrip. Even when never invoked, their
+presence is visible, and some lending protocols will decline to list any
+ERC-20 with these powers. The **one-way disable** functions on the scrip
+(`disableForceTransfer`, `disableForceBurn`, `disableFreeze`) exist for
+exactly this reason: an issuer can credibly and irreversibly commit to an
+open posture.
 
 ### Token possession ≠ registered ownership
 

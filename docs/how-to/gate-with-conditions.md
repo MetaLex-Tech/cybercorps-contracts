@@ -62,7 +62,10 @@ dealManager.setSpvThresholdConditions(conditions);
 dealManager.setClosingConditions(conditions);
 ```
 
-See [Run a secondary trade](run-a-secondary-trade.md).
+These lists take contracts implementing the typed
+`ISecondaryTradingCondition` (checked through ERC-165 when you set them),
+not the generic `ICondition`. See
+[Run a secondary trade](run-a-secondary-trade.md).
 
 ## Writing a custom condition
 

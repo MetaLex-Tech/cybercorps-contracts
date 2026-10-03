@@ -9,8 +9,9 @@ cyberCORP.
 ## How it works
 
 Each cyberCORP's top-level contracts (`CyberCorp`, `IssuanceManager`,
-`DealManager`, `RoundManager` in v3) are UUPS-upgradeable proxies. The
-`upgradeToAndCall(impl, data)` function is gated on **two** invariants:
+`DealManager`, and, from v3 on, `RoundManager`) are UUPS-upgradeable
+proxies. The `upgradeToAndCall(impl, data)` function is gated on **two**
+invariants:
 
 1. `impl` must be a MetaLeX-published reference implementation (tracked on
    the relevant factory via `setRefImplementation` / variants).
@@ -23,6 +24,22 @@ Neither condition is sufficient alone:
   factory's reference is just a published address.
 * An issuer attempting to upgrade to an arbitrary implementation will
   revert. The implementation must be on the factory's allow-list.
+
+{% hint style="warning" %}
+`OWNER_ROLE` is held by every address at level 99 or above on the
+company's BorgAuth, not only by the issuer's officers. The company's own
+manager contracts hold it, and so does the factory that deployed the
+company (`CyberCorpFactory` for most companies; `PumpCorpFactory`,
+`MetaDAOFactory`, and `ParentCoFactory` deploy the same way): BorgAuth
+gives its deployer `OWNER_ROLE`, and the factory does not give it up
+(confirmed onchain for an existing Ethereum company on 2026-10-02). The
+current factory code never uses that role after the deployment
+transaction, but the factories are themselves upgradeable by MetaLeX.
+While a factory holds the role, the guarantee that MetaLeX cannot push an
+upgrade rests on MetaLeX not upgrading that factory to code that would. An
+issuer can read the factory's level with
+`BorgAuth.userRoles(<factory address>)`.
+{% endhint %}
 
 ## What this buys you
 
@@ -51,9 +68,21 @@ factory.
 Legacy cyberCORPs deployed before v3 use top-level beacon proxies pointing
 at MetaLeX-owned beacons. They continue to receive upgrades via the beacon
 pattern (which is more MetaLeX-controlled), but the underlying invariant
-— co-approval — is preserved at the implementation-publication step. Legacy
-deployments can migrate to v3 in place via the `*WithMigration.sol`
-variants.
+— co-approval — is preserved at the implementation-publication step. Of the
+in-place migration contracts for those deployments, only
+`DealManagerWithMigration` remains active in the source:
+`CyberCorpWithMigration` has been removed and `IssuanceManagerWithMigration`
+is commented out.
+
+## Versions coexist
+
+Because each company opts in to its own upgrades, companies on different
+versions run side by side. The v5 release changed the factories' reference
+implementations on Ethereum, Base, and Arbitrum, so companies created since
+then start on v5, while each existing company stays on its deployed version
+until its owners upgrade it. Integrations read each contract's
+`DEPLOY_VERSION` rather than assuming one version per chain (see
+[Integrate from a frontend](../how-to/integrate-from-frontend.md#abis-and-versions)).
 
 ## See also
 

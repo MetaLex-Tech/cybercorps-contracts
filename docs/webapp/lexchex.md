@@ -81,6 +81,20 @@ Reg D / Reg S gating is covered in
   voided) and time remaining, with a **Renew Certificate** button when it
   lapses.
 
+## Your MetaLeX account in LeXcheX
+
+LeXcheX uses the same MetaLeX account and account card as the other
+apps. Clicking the card opens the account menu: **Profile**, **Wallet
+Settings**, the wallets connected in this browser, **Link another
+wallet** and **Sign out**. **Profile** and **Wallet Settings** open the
+[profile app](profile.md#wallets-and-your-account) in a new tab, and
+**Sign out** ends your MetaLeX session as well as the wallet connection.
+The notices the other apps show about your wallets, such as a wallet
+that belongs to another profile, appear here too.
+
+Linking or unlinking wallets on your profile never moves a credential.
+It stays in the wallet that earned it.
+
 ## Good to know
 
 * **Onchain wealth counts.** LeXcheX exists specifically so assets held in

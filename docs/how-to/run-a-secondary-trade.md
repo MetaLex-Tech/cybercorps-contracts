@@ -50,6 +50,13 @@ dealManager.setDefaultIntegrator(integrator);        // optional fee-split partn
 
 A pathway that is not enabled can be neither pinned nor elected.
 
+The platform fee on a settlement is not set here. It comes from the
+DealManagerFactory's **secondary** rate (`getSecondaryFeeRatio()`, which
+MetaLeX can override per DealManager), separate from the primary rate used
+for deals and rounds; a whitelisted integrator's share is carved out of
+that fee. See the fee notes in
+[DealManager](../reference/contracts/DealManager.md).
+
 ## 1. Post the offer
 
 ```solidity
@@ -86,11 +93,20 @@ bytes32 offerId = dealManager.postOffer(PostOfferParams({
 (USDC = 6). Mixing these up misprices the offer by orders of magnitude.
 {% endhint %}
 
-* **SELL** offers require the caller to be the cert's registered owner; the
-  offered units are reserved on the cert (they cannot be scripified or
-  reassigned while reserved).
+* **SELL** offers require the caller to be the cert's registered owner and
+  the cert not to be void (`CertificateVoided`); the offered units are
+  reserved on the cert (they cannot be scripified or reassigned while
+  reserved).
 * **BUY** offers pull the full `consideration` into DealManager custody up
   front, and must pin an exemption pathway.
+* `HostingMode.ADMINISTERED` delivers the buyer's lot to `adminMultisig`,
+  so it needs a nonzero address there (`MissingAdminMultisig` otherwise),
+  on a buy offer at posting and on a sell offer at acceptance.
+* `offerorAgreementSig` is stored with the offer and attached to each
+  settlement agreement through `signContractWithEscrow`. Neither the
+  DealManager nor the registry verifies it; the offeror's commitment rests
+  on its own `postOffer` transaction (or its relayer authorization), and
+  the stored signature is the record of what it signed.
 
 ## 2. Accept the offer
 
@@ -116,7 +132,46 @@ bytes32 settlementAgreementId = dealManager.acceptOffer(AcceptOfferParams({
 Acceptance creates the settlement agreement in the registry (signed by both
 sides), funds the escrow (the buyer pays here on a sell offer), and re-runs
 the SPV and elected-pathway conditions against the concrete buyer. A failed
-condition reverts the whole acceptance.
+condition reverts the whole acceptance, as does a seller cert that has
+been voided since the offer was posted.
+
+`acceptorAgreementSig` is verified by the registry, so the acceptor signs
+`SignatureData` (with `signer` = the acceptor) for the settlement
+agreement's id, before the agreement exists. On the current registry that
+id is
+
+```solidity
+// A dynamic array, as SecondaryTradeStorage builds it. A literal
+// [offeror, acceptor] is address[2], which encodes differently and gives
+// another id.
+address[] memory parties = new address[](2);
+parties[0] = offeror;
+parties[1] = acceptor;
+
+keccak256(abi.encode(
+    offer.templateId,
+    uint256(keccak256(abi.encodePacked(offer.salt, n))), // n = earlier acceptances of this offer
+    offer.globalValues,                                  // string[]
+    parties,                                             // address[]
+    bytes32(0),        // no secret
+    dealManager        // the DealManager is the finalizer
+))
+```
+
+The settlement expiry is not part of the id. `n` counts every earlier
+acceptance, including voided ones, so a competing acceptance mined first
+changes the id and invalidates the signature (see
+[CyberAgreementRegistry](../reference/contracts/CyberAgreementRegistry.md#data-model)).
+
+Each lot is priced from the offer's running total:
+`offer.consideration × (offer.unitsAccepted + params.units) / offer.units − offer.paymentAccepted`,
+where `params.units` is this fill's size and `offer.units` the offer's
+total (integer division rounds down; a negative result counts as zero). So
+the lot that exhausts the offer pays whatever remains and rounding does not
+accumulate across fills. A priced lot that rounds to zero reverts
+`ZeroConsiderationFill`. The minimum-trade threshold applies to a partial
+lot and to the remainder it leaves; the lot that exhausts the offer is
+exempt, so raising the threshold never strands an existing tail.
 
 ## 3. Finalize
 
@@ -128,7 +183,8 @@ dealManager.finalizeSecondaryTradeAgreement(settlementAgreementId);
 
 Finalization re-checks the pathway, threshold, and closing conditions
 (eligibility must hold at settlement, not just at acceptance), pays the
-seller net of the platform/integrator fee, releases the unit reservation,
+seller net of the secondary fee (from which any integrator share is paid),
+releases the unit reservation,
 and executes the ownership change through
 `IssuanceManager.secondaryTransfer` — decrementing the seller's cert and
 minting the buyer's cert with the seller's endorsement attached.

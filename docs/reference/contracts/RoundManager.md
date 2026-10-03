@@ -13,7 +13,8 @@ agreement identified by a `bytes32 agreementId`.
 * **Pattern:** UUPS proxy; round state in the `RoundManagerStorage` library,
   escrow state in the shared `LexScrowStorage` library (see
   [LeXscroWLite](LeXscroWLite.md)).
-* **`DEPLOY_VERSION`:** `"4"`
+* **`DEPLOY_VERSION`:** `"5"` in the current source; RoundManagers of
+  companies that have not upgraded report `"4"` or earlier.
 
 ## Functions
 
@@ -53,7 +54,9 @@ function setPrimarySecurity(bytes32 roundId, SecurityClass cls, SecuritySeries s
   series, round type FCFS/FounderApproved, public/private, ticket sizing,
   raise cap, price per unit, valuation, start/end time, payment token,
   agreement template, conditions, `allowTimedOffers`,
-  `restrictEndTimeReduction`) plus per-series `CyberCertData`. The `roundId`
+  `restrictEndTimeReduction`) plus per-series `CyberCertData` (declared in
+  `src/CyberCorpConstants.sol`; v5 adds the extension's `seriesData`
+  payload, so v4 and v5 `createRound` selectors differ). The `roundId`
   is derived from the round's economic terms plus the corp address, and
   duplicate rounds revert `RoundAlreadyExists`.
 * The draft must carry an **escrowed officer signature**: `createRound`
@@ -62,9 +65,14 @@ function setPrimarySecurity(bytes32 roundId, SecurityClass cls, SecuritySeries s
   otherwise). The signature is reused throughout the round — to countersign
   each EOI agreement on the officer's behalf
   (`CyberAgreementRegistry.signContractWithEscrow`), and as the issuer
-  signature and endorsement on each minted cyberCERT.
+  signature and endorsement on each minted cyberCERT. It is checked under
+  the RoundManager's own EIP-712 domain, so the registry's `SignatureData`
+  change does not affect it.
 * Investors `submitEOI` with a min/max amount inside the round's ticket
-  bounds; payment is escrowed immediately. In an **FCFS** round the EOI is
+  bounds; payment is escrowed immediately. The investor's `signature` is
+  the registry's `SignatureData` signature over the EOI agreement (the
+  RoundManager is its finalizer), so on a current registry it names the
+  investor as `signer`. In an **FCFS** round the EOI is
   auto-allocated in the same transaction; in a **FounderApproved** round the
   issuer `allocate`s accepted EOIs (or `reject`s them).
 * If `allowTimedOffers` is true each EOI carries its own expiry; otherwise
@@ -82,7 +90,8 @@ function setPrimarySecurity(bytes32 roundId, SecurityClass cls, SecuritySeries s
   unless the round was created with `restrictEndTimeReduction`, which
   blocks any end-time reduction (`EndTimeReductionRestricted`).
 * `computeFee` / `getPlatformPayable` cover the platform fee on a round
-  (fee ratio and payable set on the RoundManagerFactory).
+  (fee ratio and payable set on the RoundManagerFactory, which can give
+  one RoundManager its own rate through a per-instance `FeeOverride`).
 * `initialize` wires a default LeXcheX credential configuration (credential
   contract, condition, and minter addresses); `setLexChex` / `getLexChex`
   manage the credential contract used by rounds. An EOI carries
@@ -94,7 +103,9 @@ function setPrimarySecurity(bytes32 roundId, SecurityClass cls, SecuritySeries s
 ## Events
 
 `RoundCreated`, `RoundEndTimeUpdated`, `RoundClosed`, `EOISubmitted`,
-`AllocationMade`, `EOIRejected`, `EOIRecalled`.
+`AllocationMade`, `EOIRejected` (declared in `IRoundManager`);
+`EOIRecalled` and `LexChexUpdated(lexChex, oldLexChex)` (emitted by
+`setLexChex`) in the contract.
 
 > `RoundSnapshotSet`, `RoundingPolicySet`, and `PMVCSubseriesLabelSet` are
 > declared in the ABI but not emitted by any function in the current source

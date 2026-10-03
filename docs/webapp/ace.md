@@ -40,9 +40,11 @@ final **SAFE Setup** step:
    method, and add any optional **custom provisions**. The raise cap,
    min/max investment, company identity, and payable address carry over
    read-only from the earlier steps.
-3. **Sign.** Sign the agreement preview — a free signature. (A Solana-token
-   raise that also creates the company asks for a second free signature for
-   token metadata.)
+3. **Sign.** Sign the agreement preview — a free signature. A raise that
+   also creates the company then asks for a second free signature,
+   **Sign to approve round**, which approves the company's deployment
+   details and the token. This applies to ERC-20 and Solana-token raises
+   alike.
 4. **Review the summary** — the *New ACE Round Summary* shows the network,
    round type, admission mode, ticket size, funding cap, valuation, dates,
    and dispute resolution — then **Confirm & Submit** deploys the round
@@ -57,6 +59,13 @@ actions plus ACE extras: **Bridge your token to Solana** and **Set up a
 Ticket** for individually negotiated tickets (Reg D or Reg S). It also
 carries **Manage zkPassport Overrides**, which is not ACE-specific — it
 appears on any round gated to non-U.S. persons.
+
+ACE tickets use the same ticket form as other cyberRAISE tickets. A new
+ACE raise creates a v5 company, and on a v5 company the ticket form
+first has you choose each security's class and set up its terms and
+cert printer; on a v4 company the offer reuses or creates its printers
+itself. The steps, and what happens on other versions, are in
+[Setting up a ticket for an existing company](cyberraise.md#setting-up-a-ticket-for-an-existing-company).
 
 ### zkPassport overrides
 

@@ -53,8 +53,13 @@ This pattern lets you:
   legally.
 
 For regulated instruments where even the swap layer must be gated, the
-whitelisted-pool model checks credentials on every swap. Both models live in
-the same contract suite.
+whitelisted-pool model restricts every scrip transfer, mints included, to
+whitelisted addresses. Both models live in the same contract suite.
+
+The register has its own gate as well. A v5 cert printer consults its
+transfer hooks at two points: when a certificate token moves (possession)
+and when the holder of record changes (registration). It also carries
+separate stop-transfer flags for each. See [Hooks](../reference/hooks.md).
 
 ## Credentials: LeXcheX
 
@@ -109,9 +114,10 @@ register side, `HolderCapCondition` gates secondary trades against
 Investment Company Act §3(c)(1) / §3(c)(7)-style limits, counting
 credentialed beneficial owners look-through rather than wallets — an
 unattested acquirer conservatively counts as US. The cert register's
-holder-count views also support 12(g) threshold monitoring (US) and its
-analogues, and the cyberCORPs app's Tokenization Hub surfaces these
-alongside the holder lists for proactive management.
+holder-count views can also feed 12(g) threshold monitoring (US) and its
+analogues. The cyberCORPs app lists cert and scrip holders in the
+Tokenization Hub and shows a stakeholder count on the capTable page; it
+does not itself track 12(g) thresholds.
 
 ## See also
 

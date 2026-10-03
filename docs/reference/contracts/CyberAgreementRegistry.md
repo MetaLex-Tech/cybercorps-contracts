@@ -7,12 +7,15 @@ underlying agreements.
 * **Source:** [`src/CyberAgreementRegistry.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberAgreementRegistry.sol)
   / interface [`ICyberAgreementRegistry.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ICyberAgreementRegistry.sol)
 * **Pattern:** UUPS proxy (`Initializable`, `UUPSUpgradeable`,
-  `BorgAuthACL`); EIP-712 domain `"CyberAgreementRegistry"` version `"1"`.
+  `BorgAuthACL`); EIP-712 domain `EIP712Domain(string name,string
+  version,uint256 chainId,address verifyingContract)` with name
+  `"CyberAgreementRegistry"`, version `"1"`, the chain id and the registry
+  proxy address. `DOMAIN_SEPARATOR()` and `version()` are public getters.
 
 ## Data model
 
 ```solidity
-struct Template {
+struct Template {                              // declared in ICyberAgreementRegistry
     string legalContractUri;   // canonical legal text
     string title;
     string[] globalFields;     // field names common to the whole contract
@@ -33,6 +36,23 @@ struct AgreementData {
     uint256 expiry;
     address[] voidRequestedBy;
 }
+
+// What each party signs (EIP-712)
+struct SignatureData {
+    bytes32 contractId;
+    address signer;            // the party this signature consents for
+    string legalContractUri;
+    string[] globalFields;
+    string[] partyFields;
+    string[] globalValues;
+    string[] partyValues;      // the signing party's own values
+}
+
+bytes32 public constant SIGNATUREDATA_TYPEHASH = keccak256(
+    "SignatureData(bytes32 contractId,address signer,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
+); // = 0xe37d17c3ab7740aee31093101f9d27d139a5c3b35324b266efe5d085d6486f05
+
+bytes32 public VOIDSIGNATUREDATA_TYPEHASH; // keccak256("VoidSignatureData(bytes32 contractId,address party)")
 ```
 
 The `contractId` is `keccak256(abi.encode(templateId, salt, globalValues,
@@ -40,6 +60,30 @@ parties, secretHash, finalizer))` — `secretHash` and `finalizer` are
 deliberately bound into the id so a front-runner cannot seize the same id
 with hostile terms; `expiry` is deliberately **not** bound so presigned
 offchain signatures stay verifiable.
+
+The `signer` field binds a signature to one party. A delegate can hold
+delegations from several parties, and without the field one delegate
+signature over the same agreement would verify for each of them. The
+string fields are hashed as EIP-712 requires: `legalContractUri` as
+`keccak256(bytes(uri))`, each `string[]` as the `keccak256` of the
+concatenated `keccak256` of its elements.
+
+{% hint style="warning" %}
+**Registry versions on live chains.** Checked onchain on 2026-10-02: the
+registry proxy `0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134` on Ethereum,
+Base and Arbitrum runs this implementation. `SIGNATUREDATA_TYPEHASH()`
+returns `0xe37d17c3…6f05`, and a simulated `createContract` returns the
+six-field id above. The separate zkSync Era registry
+(`0x07E0a0BeC742f90f7879830bC917E783dA6a6357`) still returns
+`0x49ba7af1fd9b42077b5e2bf090b7deb0f443e9ae99b46ce66b4859e28d670da4`, the
+older type without `signer`, and derives ids from four fields:
+`keccak256(abi.encode(templateId, salt, globalValues, parties))`. Both
+report `version()` `"1"`. Read `SIGNATUREDATA_TYPEHASH()` on the registry you
+are about to sign against before choosing the typed data or the id
+formula, and prefer the id from the `ContractCreated` event or an
+`eth_call` of `createContract` where the flow allows it. Agreements created
+before an upgrade keep the ids they were created with.
+{% endhint %}
 
 ## Functions
 
@@ -94,8 +138,9 @@ function finalizeContract(bytes32 contractId) external; // onlyFinalizerIfSet
   agreement in one transaction — for single-party agreements that is one
   transaction and done. Standalone contracts always have
   `finalizer = address(0)`.
-* Each party signs an EIP-712 `SignatureData` payload (contract id, legal
-  URI, field schema, global values, and their party values) —
+* Each party signs an EIP-712 `SignatureData` payload (contract id, the
+  party's own address as `signer`, legal URI, field schema, global values,
+  and their party values) —
   `signContract` (self), `signContractFor` (relayed), or
   `signContractWithEscrow` (a pre-escrowed signature, submittable only by
   the contract's defined finalizer, e.g. a RoundManager holding an
@@ -108,7 +153,12 @@ function finalizeContract(bytes32 contractId) external; // onlyFinalizerIfSet
   (`setDelegation` / `revokeDelegation`, with optional expiry): signature
   verification accepts a valid, unexpired delegate's EIP-712 signature in
   place of the party's own. Delegation affects signature recovery only — a
-  delegate is not treated as the party itself.
+  delegate is not treated as the party itself. The delegate signs with
+  `signer` set to the delegating party, so the signature counts for that
+  party alone. `setDelegation` reverts `DelegateZeroAddress`,
+  `DelegateIsSelf`, or `ExpiryNotInFuture` (a nonzero expiry at or before
+  the current block); `expiry == 0` means the delegation does not expire.
+  The same delegate check applies to `VoidSignatureData` signatures.
 * When all parties have signed, the registry emits `ContractFullySigned`.
   With no finalizer set, the contract auto-finalizes at that point;
   otherwise the finalizer calls `finalizeContract`.
@@ -129,8 +179,16 @@ voids only by unanimous request of its allocated parties (or by the
 proposer while sole signer).
 {% endhint %}
 
+`getContractJson(contractId)` returns the agreement as a JSON string
+(template id, title, legal URI, global fields, per-party values with
+`signedAt`, signature count, `isComplete`, `voided`, `voidRequestedBy`,
+`finalized`). Titles, URIs, field names and values are JSON-escaped, so a
+quote or backslash typed into a field cannot break the document.
+
 ## Events
 
-`TemplateCreated`, `ContractCreated`, `AgreementSigned`,
-`ContractFullySigned`, `ContractFinalized`, `VoidRequested`,
-`ContractVoided`, `DelegationSet`, `DelegationRevoked`.
+`TemplateCreated`, `ContractCreated`, `AgreementSigned`, and
+`ContractFullySigned` are declared in `ICyberAgreementRegistry`;
+`ContractFinalized`, `VoidRequested`, `ContractVoided`, `DelegationSet`,
+and `DelegationRevoked` in the contract. All are emitted by the registry
+proxy.

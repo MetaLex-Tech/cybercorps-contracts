@@ -1,25 +1,28 @@
 ---
-description: Stockholder lists, 409A and Rule 701 records, tax trackers, and scenario modeling
+description: Stockholder lists, 409A and Rule 701 records, tax trackers, token claims, and scenario modeling
 ---
 
 # Cap-table records, modeling and compliance
 
-Alongside the ledger itself, the [cap table](captable.md) carries a set
+Alongside the table itself, the [cap table](captable.md) carries a set
 of records-and-analysis tools. They share a posture worth stating up
 front: MetaLeX tracks what you record and does the arithmetic, and the
 app says so wherever a legal judgment is involved. None of these panels
 is a valuation, a filing, or legal advice.
 
 Everything on this page is offchain and free; no tool here writes to the
-ledger except where noted.
+cap table except where noted. The tools belong to the corporate cap
+table: an LLC's register has its own exports and none of these panels
+(see [LLC cap tables](captable.md#llc-cap-tables)).
 
 ## DGCL §219 stockholder list
 
 The **§219 List** panel reconstructs the registered record holders of
-issued and outstanding stock **as of any record date**, by replaying the
-offchain stock ledger and the tokenized ledger to that date. Scrip
-holders are excluded: scrips are not stock until de-scripification, and
-the panel cites the bylaws provision that says so.
+issued and outstanding stock **as of any record date**, from offchain
+cap table changes and onchain certificate history through that date.
+Scrip holders are excluded: scrips are not stock until
+de-scripification, and the panel cites the bylaws provision that says
+so.
 
 Pick a record date, optionally label the snapshot ("2026 annual meeting
 record date"), and either **Download list (.csv)** or **Save snapshot**.
@@ -27,6 +30,18 @@ Saved snapshots are immutable audit records. Because as-of
 reconstruction resolves identities retroactively, regenerating the same
 date later may not reproduce a past list exactly, so save the snapshot
 you actually used.
+
+The list is a registered export, so the app refuses it rather than
+produce it from an incomplete source. For the onchain half it needs the
+indexer to have processed the record date's block and that block to be
+final; a recent record date can therefore be refused for a short while,
+with "Registered export unavailable: the record date is not yet final"
+and the block numbers. It also refuses while a tokenization allocation
+is unreconciled or a class's legal terms evidence is unresolved, and
+each refusal names the cause. The `.csv` records each class's terms
+source (activated legal terms or the app's class line), the tokenized
+and untokenized units of partially tokenized positions, and the block
+the list was read at.
 
 ## 409A / FMV records
 
@@ -103,7 +118,9 @@ whether to distribute on the **Registered** or **Beneficial** basis; the
 panel notes that Registered is the §219-valid default.
 
 Both calculators are scenario-only. Nothing they compute is written to
-the ledger.
+the cap table. Both also need a complete source: while the cap table
+reports incomplete records, each tab shows "Analysis requires complete
+source quantities and terms." instead of a model.
 
 ## Class terms
 
@@ -118,6 +135,16 @@ also the remedy when creating a class is refused as a duplicate).
 Onchain classes keep their chain-defined terms; only offchain classes
 are editable here.
 
+Where a class line has activated legal terms (see
+[Legal classes, series and versioned terms](captable.md#legal-classes-series-and-versioned-terms)),
+the conversion ratio field is locked and labelled "set by the activated
+legal terms", with a note naming the version, its effective date and
+document. To change it, amend and activate a new version in the
+Tokenization Hub. Otherwise the line's own stored terms govern, and the
+note says why: no legal class attached, no version activated, a
+conflict between legal identities, or an activated version that records
+no ratio ("A null ratio is unknown, never 1:1.").
+
 ## Token cap table
 
 The **Token cap table** view tracks project-token claims (SAFTs, SAFTEs,
@@ -128,7 +155,33 @@ they are fixed. Fixed claims calculate now; model-based claims (minimum
 percentages implied by an instrument's formula) display their recorded
 terms but show as pending until each formula is implemented from its
 controlling legal text. Percentages stay unavailable until a total
-supply is recorded, and the panel says so instead of guessing.
+supply is recorded, and the panel says so instead of guessing. A
+**Percentage denominator** selector switches between **Total supply**,
+**Recorded allocations** and **Circulating / minted**; the last stays
+unavailable until a token or indexer integration is configured.
+
+**Unlock projection date (UTC)** projects each fixed claim's recorded
+unlock schedule to the start of the chosen day, filling the **Projected
+unlocked** and **Projected locked** columns. Monthly schedules use
+calendar anniversaries, clamped to month end. Where a projection can't
+be made, the **Projection status** column says why: no unlock schedule
+recorded, no valid token launch date for a schedule that starts at the
+token generation event, no verified agreement execution date, or an
+onchain schedule without verified provenance. The panel states that
+these are current claims and terms, not a historical ownership record,
+and that a projected unlocked amount does not establish token
+availability or permission to transfer.
+
+For a calculated claim, the position form has an optional **Agreement
+source and calculation inputs** section: the agreement document
+reference, version and controlling clause, the measurement event and
+date, an input evidence reference, and the event-specific figures the
+formula would use (equity ratio, allocable token supply, company
+reserve, purchase amount, valuation cap, allocated entitlement and
+allocation references). Leave unknown facts blank. The app does not
+verify these inputs, and recording them does not enable a calculation
+or change any token total; they travel with the position through the
+`.csv`, `.xlsx` and OCF exports.
 
 ## Good to know
 

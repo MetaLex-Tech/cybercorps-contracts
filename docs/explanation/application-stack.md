@@ -35,12 +35,16 @@ settlement.
 
 **Two settlement paths:**
 
-* **Registered ledger path** — edits to the existing cyberCERT (or
-  burn-and-mint with new metadata) under issuer approval, with the buyer
-  electing an exemption pathway (Rule 144, §4(a)(7), §4(a)(1½), Rule 144A,
-  or Reg S) and the trade gated by that pathway's conditions — holder caps,
-  accreditation, qualified-purchaser status, holding periods, and
-  jurisdiction screens.
+* **Register path** — the DealManager's offer flow. At settlement the
+  seller's cyberCERT is reduced (or used up) and a new cyberCERT carrying
+  the seller's endorsement is minted to the buyer. The buyer elects an
+  exemption pathway (Rule 144, §4(a)(7), §4(a)(1½), Rule 144A, or Reg S),
+  and the trade is gated by that pathway's conditions plus the issuer's
+  own conditions: holder caps, accreditation, qualified-purchaser status,
+  holding periods, jurisdiction screens, and, where the issuer installs
+  one, a per-deal approval condition. Settlements pay the DealManager's
+  secondary fee, which is set separately from the primary fee on rounds and
+  deals.
 * **Scrip path** — settlement at the cyberSCRIP layer with deferred
   de-scripification, including the AMM-native variant powered by LiquiLeX.
 
@@ -57,8 +61,8 @@ stakeholders of an issuing corporation. Live at
 [ace.metalex.tech](https://ace.metalex.tech).
 
 **Contracts:**
-[`PumpCorpFactory`](../reference/factories.md#pumpcorpfactory),
-[`ACESAFEExtension`](../reference/extensions.md#acesafeextension).
+[`PumpCorpFactory`](../reference/factories.md#specialised-factories),
+[`ACESAFEExtension`](../reference/extensions.md).
 
 **Reference UI:** the `/ace` route in
 [`apps/cybercorps-web/src/app/ace`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web/src/app/ace),
@@ -88,15 +92,30 @@ legal instrument.
 **Contracts:**
 [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md).
 
+**Reference UI:** the `/cybersign` route in
+[`apps/web`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/web/src/app/%28frame-layout%29/cybersign);
+the cyberCORPs app's **cyberSign** sidebar entry opens it.
+
 ## The cyberCORPs app
 
-Issuer-facing hub (its securities console is the **Tokenization Hub**,
-formerly called the Mainframe). Cap table / holder register by class,
-fundraising round configuration, deal management, agreement signing,
-scripification controls, transfer hook configuration, BorgAuth role
-management, holder-of-record reporting, and 12(g) (or jurisdictional
-analogue) threshold monitoring across cyberCERT and cyberSCRIP holder
-bases.
+The issuer-facing app. Once a company is selected, its sidebar holds these
+sections (labels as the app shows them):
+
+| Section | What it covers |
+|---|---|
+| **mission control** | The company dashboard: what needs action now and what changed. |
+| **Incorporation Hub** | Company identity, formation progress, and the public company record. |
+| **Documents** | The company's documents and its signing workflows. |
+| **boardRoom** | Officers, governance documents, and the board multisig. |
+| **capTable** | Tokenized and untokenized positions in one cap table. |
+| **grants** | Equity awards (options, RSUs, restricted stock) with onchain vesting. |
+| **cyberRaise** | The company's raises, or a new one (see cyberRAISE above). |
+| **Tokenization Hub** | Configure, issue, and manage tokenized securities: security classes and their cert printers, issuance, scripification, transfer controls, and cert and scrip holder lists. Formerly called the Mainframe. |
+| **cyberSign** | Opens cyberSign to sign and countersign the company's agreements. |
+
+The app talks to v4 and v5 companies side by side and chooses each call's
+shape from the targeted contract's `DEPLOY_VERSION`; see
+[Integrate from a frontend](../how-to/integrate-from-frontend.md#abis-and-versions).
 
 **Reference UI:** the `/cybercorps` route in
 [`apps/cybercorps-web/src/app/(frame-layout)/cybercorps`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web/src/app/%28frame-layout%29/cybercorps).
@@ -107,7 +126,7 @@ Futarchy-governed Cayman SPC structure. Each portfolio (SegCo) has its own
 futarchy oracle.
 
 **Contracts:**
-[`MetaDAOFactory`](../reference/factories.md#metadaofactory).
+[`MetaDAOFactory`](../reference/factories.md#specialised-factories).
 
 **Reference UI:** the `/metadao` route in
 [`apps/cybercorps-web/src/app/(frame-layout)/metadao`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web/src/app/%28frame-layout%29/metadao).
@@ -127,15 +146,9 @@ jurisdiction and beneficial-owner attestations, and per-issuer whitelists.
 at lexchex.metalex.tech, with an oracle service at
 [`apps/lexchex-oracle`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/lexchex-oracle).
 
-## Supporting services in `metalex-webapp`
-
-* **`apps/cybercorps-indexer`** — ponder-based indexer projecting protocol
-  events into a SQL store for fast cap-table queries.
-* **`apps/notifier`** — event-driven notifications (round close, deal
-  ready, registration approval needed).
-* **`apps/snapshot-executor`** — executes Snapshot governance outcomes
-  onchain where they affect a cyberCORP's authority.
-* **`apps/landing`** — the marketing landing page.
+The monorepo also contains the landing page (`apps/landing`) and the
+supporting services these apps run on. Those services are operational
+infrastructure for the apps; the contracts do not depend on them.
 
 ## Build your own
 

@@ -34,6 +34,13 @@ deployed:
 | Company officer (`CompanyOfficer.eoa`) | `200` | Set by `CyberCorp.addOfficer` / `updateOfficer` / by the factory (never downgrading a higher custom level; removal only zeroes an exact `200`). `200 ≥ 99`, so officers also satisfy `onlyOwner`. |
 | `CyberCorp` contract | `200` | So the corp can act on its own auth. |
 | `IssuanceManager`, `DealManager`, `RoundManager` | `99` (`OWNER_ROLE`) | So the manager contracts can call owner-gated functions on the suite. |
+| The deploying factory (`CyberCorpFactory`, or the specialised factory used) | `99` (`OWNER_ROLE`) | The BorgAuth constructor makes its deployer the owner. The factory code on `develop` does not renounce the level after deployment. |
+
+The factory's level is a standing owner grant from the company to a
+MetaLeX-upgradeable contract. Live reads on October 2, 2026 found it in
+place on some companies, including ones created after the v5 release, and
+absent on others. Check `userRoles(<factory address>)` on your company's
+BorgAuth; an owner can remove it with `updateRole(factory, 0)`.
 
 > There are **no named roles** such as `ISSUER_AUTHORITY` or
 > `OFFICER_AUTHORITY`. Authority is the numeric level a contract requires at
@@ -87,20 +94,31 @@ officer (level 200) can call it; most other `CyberCorp` functions are
 
 ## A note on `onlyIssuanceManager`
 
-`CyberScrip` and `CyberShares` gate their mutating functions with
-`onlyIssuanceManager` — a check that `msg.sender` *is* the IssuanceManager
+`onlyIssuanceManager` is a check that `msg.sender` *is* the IssuanceManager
 contract, **not** a BorgAuth role check. End users act through the
-IssuanceManager, which itself is authorised via BorgAuth.
+IssuanceManager, which itself is authorised via BorgAuth. `CyberShares`
+gates its mint, burn and configuration functions this way.
 
-`LedgerEntryToken` (formerly `CyberCertPrinter`) has **two** surfaces:
+`CyberScrip` has **two** surfaces:
 
-* **Strictly `onlyIssuanceManager`** — minting and assignment
-  (`createCert*` / `safeMintAndAssign`), `updateCertificateDetails`,
-  `setExtension`, and `updateIssuanceManager`.
-* **`onlyIssuanceManagerOrAdmin`** — the administrative surface, callable
+* **Strictly `onlyIssuanceManager`:** `mint`, `burnFrom` and `forceBurn`
+  (force burn also moves vault backing, so admins use
+  `IssuanceManager.forceScripBurn`).
+* **`onlyIssuanceManagerOrAdmin`:** `setRestrictionHook`, `setFrozen`,
+  `forceTransfer`, `setMaxHolderCount` and the three one-way `disable*`
+  switches, callable directly by a BorgAuth `ADMIN_ROLE` (98) holder.
+
+`LedgerEntryToken` (formerly `CyberCertPrinter`) also has **two** surfaces:
+
+* **Strictly `onlyIssuanceManager`:** minting and assignment
+  (`safeMint`, both `safeMintAndAssign` overloads, `safeMintFromAndAssign`,
+  `assignCert`), `updateCertificateDetails`, `setExtension`, and
+  `updateIssuanceManager`.
+* **`onlyIssuanceManagerOrAdmin`:** the administrative surface, callable
   directly on the printer by a BorgAuth `ADMIN_ROLE` (98) holder (the
   modifier resolves the IssuanceManager's `AUTH()` and checks the role):
-  restriction hooks, transferability toggles, default/per-cert legends,
-  `voidCert`/`unvoidCert`, `addIssuerSignature` and `endorseCertificate`,
-  issue/acquisition timestamps (and the tacking anchor), reserved units,
-  `setSeriesData`, and the look-through badge.
+  restriction hooks, the delivery and registration transferability
+  switches, default/per-cert legends, `voidCert`/`unvoidCert`,
+  `addIssuerSignature` and `endorseCertificate`, issue/acquisition
+  timestamps (and the tacking anchor), reserved units, `setSeriesData`, the
+  look-through badge, and `initializeHolderCount`.

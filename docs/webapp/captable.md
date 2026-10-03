@@ -1,17 +1,16 @@
 ---
-description: One cap table for tokenized and untokenized positions, with AI-assisted import
+description: One cap table for tokenized and untokenized positions, with AI-assisted import, versioned legal terms, partial tokenization and LLC records
 ---
 
 # The cap table
 
 The **cap table** is the cyberCORPs app's unified register of who owns what
 in your company. Its strapline says it plainly: *one table, onchain and
-offchain*. Positions you have tokenized as cyberCERTs, positions that exist
-only as ledger records, and beneficial holdings derived from cyberSCRIP
-balances all appear in the same view, with the same math.
+offchain*. Positions you have tokenized as cyberCERTs, positions recorded
+only in the app, and beneficial holdings derived from cyberSCRIP balances
+all appear in the same view, with the same math.
 
-You reach it from the **capTable** item in the app sidebar, from the
-"Manage your capTable" card on the mainFrame dashboard, or from the
+You reach it from the **capTable** item in the app sidebar or from the
 Tokenization Hub's "Cap Table" button.
 
 > **The cap table is in beta.** The feature is complete and validated
@@ -27,6 +26,13 @@ must be connected with a wallet that is an owner of the cyberCORP and
 complete the free **Authenticate** signature. Holders don't see this
 screen; they get their own scoped view, covered in
 [For holders: your securities](holders.md).
+
+Which cap table you get follows the company's legal type as recorded on
+its cyberCORP. A corporation gets the stock cap table this page
+describes. An LLC gets a unit-based register instead (see
+[LLC cap tables](#llc-cap-tables)). Any other type is refused with
+"Cap table workflows require an explicitly identified corporation or
+LLC. Review the company's legal type in its profile."
 
 Holder identities on certificates are encrypted when that choice was
 made at issuance (it is optional; see
@@ -97,6 +103,18 @@ invariants live: fully-diluted shares accounted for, SAFE ownership under
 100%, every position attached to a stakeholder, scrip pools conserving
 units, plan reserves backed by their certificates, and more. A failing
 check is a prompt to investigate before relying on the numbers.
+
+The onchain half of the table is read from an indexer. When the app
+can't establish a complete source for the registered view (the indexer
+read is incomplete or hasn't reached the block it needs, a tokenization
+allocation is unreconciled, or a class line carries conflicting legal
+identities), it stops presenting partial numbers as totals. A caution
+banner reads "Some certificate records are incomplete. Registered
+exports are unavailable." and lists what it found, the summary cards
+switch to **Known issued subtotal** and **Known amount raised**, the
+capitalization donut is hidden, and **Model a round** and **Exit
+waterfall** show "Analysis requires complete source quantities and
+terms." until the source is complete again.
 
 ## Stakeholders
 
@@ -218,16 +236,29 @@ while the table holds formation-managed positions with issued history,
 and clearing formation-managed *drafts* consumes them permanently — the
 one-time formation setup cannot be re-staged.
 
+Reset also refuses once the cap table carries append-only legal or
+tokenization evidence: a class line with an attached
+[legal identity](#legal-classes-series-and-versioned-terms), or a
+position with an approved tokenization source. Correct those entries
+through their own flows (void, terminate or re-record) instead.
+
 ## Tokenizing a position
 
+There are two paths. **Tokenize →** on a cap table row mints one
+certificate for the whole position and works on v4 and v5 companies.
+**Tokenize units** in the Tokenization Hub mints a certificate for part
+or all of a position against the class's activated legal terms, and
+needs a v5 company (see
+[Tokenizing part of a position](#tokenizing-part-of-a-position-v5-companies)).
+
 **Tokenize →** on an offchain position mints an onchain certificate for
-it and links the ledger entry to the cert; the row mirrors the cert from
-then on (and where the company's governing documents designate the
+it and links the cap table entry to the cert; the row mirrors the cert
+from then on (and where the company's governing documents designate the
 onchain system as its official register, the cert *is* the registered
-entry). The dialog pre-fills the certificate form from the
-ledger (investor, units, amounts, terms), lets you pick the recipient
-wallet if the holder has several, and warns you which ledger details do
-*not* carry onchain (vesting schedule, exercise price, discount, notes,
+entry). The dialog pre-fills the certificate form from the cap table
+entry (investor, units, amounts, terms), lets you pick the recipient
+wallet if the holder has several, and warns you which cap table details
+do *not* carry onchain (vesting schedule, exercise price, discount, notes,
 and similar record-keeping fields).
 
 Minting is one onchain transaction, preceded by a board-consent check
@@ -275,6 +306,63 @@ create-class flow first. If *several* printers match the class and the
 line isn't linked to one, the action becomes **Choose cert printer →**,
 asking which cert printer mints this class's certs.
 
+### Tokenizing part of a position (v5 companies)
+
+Partial tokenization runs from the Tokenization Hub, not from the cap
+table row. Expand a class panel's details and find **Tokenize cap table
+units** ("Mints on this line's pinned printer, against its activated
+terms."). It lists the untokenized positions whose class line is linked
+to that printer, each with its split, for example "1,000 units · 250
+tokenized · 750 untokenized". A position qualifies when it is an active
+offchain position, not an equity award (awards go through
+[grants](grants.md)), not already linked whole to a certificate, and not
+in a vesting escrow. Two things must be in place first: the class line
+must be linked to the printer (the cap table's **Review cert printer
+links** banner does that), and the line must have activated legal terms
+(see [Legal classes, series and versioned terms](#legal-classes-series-and-versioned-terms)).
+Without activated terms the attempt is refused with a message naming the
+line and pointing you to the Tokenization Hub.
+
+**Tokenize units** opens a dialog that states how many units remain
+untokenized and that "The position keeps one cap table row; only its
+tokenized and untokenized split changes." The certificate form is
+prefilled with every remaining unit; enter fewer in **Number of units
+represented by certificate** to tokenize part of the position. The
+holder is fixed to their linked wallet (with a **Registered owner**
+choice if they have several), and **Tokenize these units** sends one
+transaction from a corp owner wallet. On a v4 company the request is
+refused: "This cyberCORP reports contract version 4; tokenization
+allocations require the cyberCORPs v5 protocol."
+
+The units are reserved before the wallet request, so the same units
+cannot be minted twice. The app then confirms the mint against the chain
+and reports one of three outcomes:
+
+* **Units tokenized**: the certificate carries the units, and the
+  position's split updates once the indexer reaches the mint's block.
+* **Units not tokenized**: nothing was minted (the request never reached
+  your wallet, or the transaction reverted), so the units are released
+  and available again.
+* **Units held**: the app could not establish that nothing was minted,
+  for example because you declined the wallet request after the units
+  were reserved, or the transaction's outcome could not be read. Held
+  units are not tokenized and are not released automatically. The panel
+  shows them as "· N held", the cap table's integrity checks fail on the
+  unresolved allocation, and registered exports are unavailable until it
+  reconciles.
+
+The dialog warns you about held units before you confirm. The first
+attempt also records an approved source for the position that ties it to
+the printer, the activated terms and the holder's wallet; that record is
+permanent, so the position can no longer be deleted afterwards. Void or
+Terminate remain available.
+
+On the cap table a partially tokenized position stays one row, with its
+certificates folded into it, and the exports carry the split in
+`tokenized_units`, `untokenized_units` and `unresolved_units` columns.
+Use one path per position: don't also run **Tokenize →** on a position
+you have started tokenizing from the Hub.
+
 ## Keeping classes and certs reconciled
 
 Three review worklists keep the two halves of the table honest. Each
@@ -287,9 +375,10 @@ surfaces as a banner above the table when it has findings:
   link is set, the line and its certs count as two classes) and groups
   of class lines that look like one class recorded twice — same
   class/series, matching name — offering a journaled **merge** into a
-  survivor whose terms win. Class display labels derive from the
-  class/series, so renaming a line's stored legal name (via Class
-  terms) is safe.
+  survivor whose terms win. A line with an attached legal identity can
+  only be the survivor, never the line merged away. Class display labels
+  derive from the class/series, so renaming a line's stored legal name
+  (via Class terms) is safe.
 * **Review cert double counts** — pairs where a counting onchain cert
   sits beside a counting live offchain entry for the same holder,
   class, and size (the state an unlink or a declined import link leaves
@@ -304,6 +393,86 @@ surfaces as a banner above the table when it has findings:
   **⚠ unregistered** chip, and the review can stage a *draft* position
   prefilled from the onchain evidence — never an active row.
 
+## Legal classes, series and versioned terms
+
+A class line carries the app's working terms for a class, but the
+company's charter or other governing document is what defines the
+class. Legal identity and versioned terms connect the two. You record
+which legal class (and series) a line is, record the exact terms text
+from the governing document as a numbered version, have a current
+officer approve that exact version, and activate it. From then on the
+cap table, its exports and the v5 tokenization paths read the activated
+terms instead of the line's own stored values.
+
+The workflow lives in the Tokenization Hub: expand a class panel and
+open **Legal class and terms**. It needs the printer to be linked to a
+cap table line; until then it says "This printer is not linked to a cap
+table class or series line, so it has no legal identity yet." and links
+to the cap table, where the **Review cert printer links** banner sets
+the link. Reading needs a signed-in owner wallet; attaching, proposing,
+approving and activating also need that wallet to be a current officer
+of the cyberCORP. None of it is a transaction. Identities, versions and
+approvals are app records, and the wallet approval is a free signature.
+
+1. **Attach a legal identity.** Choose the **Parent legal class** (an
+   existing one or **New legal class…**), say whether **This line is**
+   one series of the parent class or the class itself, name the series,
+   and give the **Source reference (document and clause)** and the
+   **Exact source text**, then **Attach legal identity**. The app first
+   verifies the line's history in the cap table journal (created or
+   imported in the app, never changed outside it) and shows it as **Line
+   history**; if it doesn't verify, the button stays disabled with "A
+   legal identity cannot be attached until the history verifies." A plan
+   pool is not a security class and can't take an identity, and a line
+   takes only one.
+2. **Propose a terms version.** **Propose terms version** asks for the
+   **Document reference**, the **Document version**, the **Exact terms
+   text from the document**, the conversion ratio as a numerator and
+   denominator (blank means unknown, never 1:1), an optional proposed
+   effective date ("Leave blank to take effect on approval.") and
+   optional **Scoped rights and voting rules**, which the app records
+   verbatim and does not evaluate. **Propose version** saves an
+   immutable record in state **Proposed**.
+3. **Approve it.** One approval from a current officer is enough.
+   **Approve with wallet** signs the exact version (document, version,
+   text digest, class and series) with the connected officer wallet; the
+   app verifies the signature, including from a Safe or other contract
+   wallet, and checks onchain that the signer is a current officer.
+   **Record external approval** instead records approvals obtained
+   outside the app, such as a board or stockholder consent: the eligible
+   groups, an optional stated effective date, the consent PDF and each
+   approval obtained, with the recording officer as approver. The
+   version becomes **Approved, not active**.
+4. **Activate.** **Activate** makes the version govern from the latest
+   of the approval time, the approval's stated effective date and the
+   proposed effective date, so a version can show **Activated, effective
+   later** before it is **Active**.
+
+To amend, propose a new version, then approve and activate it; the
+previous version becomes **Superseded**. An older version can't be
+activated over a newer active one, and a proposal that changed after it
+was approved needs a new approval.
+
+Activated terms show up in several places:
+
+* **Class terms** locks the line's conversion ratio and names the
+  version, effective date and document it came from. Without an
+  identity, or with no active version, the line's own stored terms
+  govern and the form says which case applies.
+* **Cap table math** uses the active version's exact conversion ratio.
+* **Exports** record where each class's terms came from. The `.csv`
+  carries `class_terms_source` (`legal_version` or `app_line`), the
+  reason when the app line governs, and the version id and digest; the
+  `.xlsx` adds a **Class terms** sheet; the OCF bundle carries the same
+  facts. A line with no active version still exports.
+* **Tokenization and conversion**:
+  [partial tokenization](#tokenizing-part-of-a-position-v5-companies)
+  mints against the activated terms, and converting a holder's scrip
+  back into a certificate is checked against them (see
+  [De-scripify](holders.md#de-scripify-back-to-the-register)).
+* **Imports** that would set a conversion ratio contradicting the active
+  terms are refused.
+
 ## Positions seeded by formation
 
 For a company formed through the app, the cap table starts with the
@@ -311,14 +480,15 @@ formation journey's output: a requested **Common Stock** class awaiting
 review, and a **Proposed initial ownership** section holding the draft
 positions from your private setup plan — badged *Proposed · not issued*
 and excluded from every issued, outstanding, diluted, and stakeholder
-total until each is recorded. A **Start your cap table** card on the
-mainFrame dashboard points here until real positions exist.
+total until each is recorded. A formed company with no saved ownership
+proposal gets a **Start your cap table** card in the Incorporation Hub
+instead, which points here.
 
 ## Securities status
 
 **Securities status** (linked from the cap-table header, with a live
 draft count) is the officer's worklist over the issuance loop, four
-queues derived live from the ledger and the chain:
+queues derived live from the cap table and the chain:
 
 1. **Drafts** — staged positions; issue (as active or as "promised"),
    edit, or delete them here. **Formation-managed drafts** work
@@ -340,7 +510,28 @@ queues derived live from the ledger and the chain:
 ## Exports
 
 The toolbar exports the full table as `.csv`, `.xlsx`, or an OCF
-bundle, at any time, including history. Records-and-compliance tooling —
+bundle, including history. Each export carries a provenance record:
+when it was generated, the record date if it has one, and the indexer
+block its onchain rows were read at and whether that block was final.
+
+The `.csv` and `.xlsx` exports always work and state any gaps beside
+their rows. The OCF bundle and the record-date stockholder list are
+*registered* exports, which the app refuses rather than produce from an
+incomplete source. The refusal starts "Registered export unavailable:"
+and names the cause: the indexer hasn't reached the record date's block
+or that block isn't final yet, a tokenization allocation is unreconciled,
+or a class line's legal terms evidence is unresolved. A cap table built
+from an earlier indexer must be regenerated first.
+
+Single positions export as PDFs too. A current untokenized row offers
+**Download statement**, a position statement that says on its face that
+it is not a cyberCERT or a stock certificate and does not by itself
+determine which record is the company's securities ledger. A row
+mirroring a cyberCERT offers **Download certificate**, a rendering of
+the indexed certificate that tells the reader to verify its current
+status onchain.
+
+Records-and-compliance tooling —
 the DGCL §219 stockholder list, 409A/FMV records, Rule 701 and Form 3921
 monitors, 83(b) tracking, and the round-modeling and exit-waterfall
 calculators — is covered in
@@ -354,9 +545,79 @@ calculators — is covered in
 > escrows are MetaVesT allocations. Quantities are exact decimal strings
 > end to end (onchain values are 18-decimal fixed point), which is why
 > forms reject a 19th decimal place: a silently rounded value would let
-> the escrow and the ledger drift apart. Why one security has a
+> the escrow and the cap table drift apart. Why one security has a
 > registered and a fungible form is
 > [The dual-token model](../explanation/dual-token-model.md).
+
+## LLC cap tables
+
+For an LLC the **capTable** item opens the **LLC cap table**: ordinary
+capital-interest units grouped by legal class. It has its own records
+and workflows and none of the stock tooling. There is no §219 list, no
+409A, Rule 701, 3921 or 83(b) panel, no round or waterfall model, no
+Token cap table, and no import. Tabs show **Classes**, **Positions** (the
+default), **Holders**, **Members** and **History**, with search, class
+and status filters.
+
+Three kinds of record make up the register:
+
+* **Classes**: a **Class name**, the **Operating agreement reference**,
+  and a **Rights summary (ordinary capital interests)**.
+* **Positions**: units of a class held by a stakeholder, up to 18
+  decimal places. A position is a draft, a recorded holding, or
+  cancelled, and only recorded holdings count. The one percentage shown
+  is "% of recorded class units", within a class; the page states that
+  class-unit percentages do not determine voting or distribution rights.
+* **Memberships**: admission and cessation dates with an evidence
+  reference. Membership is recorded separately from units, so holding
+  units does not make someone a member, and recording an admission
+  issues no units.
+
+Changes to positions go through workflows that record a completed event
+together with its approval evidence. **Add draft position** stages a
+draft; **Record issuance** turns it into a recorded holding;
+**Record transfer** and **Record cancellation** act on a recorded
+holding; **Record admission** and **Record cessation** handle
+memberships. Each workflow asks for the event's effective date, the
+operating agreement version, the authority and restrictions relied on,
+the approvers and their capacities, the executed approval or consent
+reference and its date, and the executed instrument reference. These
+are text references, not uploads. You confirm that the event occurred
+and the required approvals were obtained, review, then **Confirm and
+record**. Recording documents an event that already happened; it does
+not issue units, admit a member or execute a transfer. An approval dated
+after the event is refused, as is a future-dated event. A transfer
+closes the source position and records the recipient, and any units
+left over, as linked positions in the same class.
+
+**Plan a unit allocation** is a planning worksheet: a class name,
+proposed holders and units, each holder's resulting percentage of the
+class, and a JSON download. "Planning only. Nothing is saved to your cap
+table."
+
+**Tokenize LLC units** mints a certificate for a whole active position
+through an existing v5 CommonStock printer with no certificate extension,
+used as a compatibility container. First map the class to the printer
+with the approval reference for that encoding and its public terms
+(**Save class mapping**). Then pick the position, confirm the recipient
+wallet recorded on the stakeholder, **Reserve whole position**, and
+**Sign, simulate and submit**. The app refuses printers outside a
+verified v5 company, manager and printer. Before you map, note what goes
+onchain: the governing references, rights summaries and approval
+evidence become public; holder names are left out; USD amount fields
+are zero; and the contract-generated metadata still says "CommonStock /
+Shares". The certificate stays part of the same LLC position, and a
+reserved or tokenized position can't be changed offchain until its
+tokenization is reconciled. A reverted transaction releases the
+reservation; an unsent one can be released with **Release unsent
+reservation**.
+
+Exports are **Export this view (CSV)**, with rounded percentages, and
+**Export all records (JSON)**, which keeps exact quantities and every
+record and history entry regardless of filters. If the LLC had imported
+stock records or onchain positions before these native records existed,
+**View legacy cap table** shows them read-only. Bulk reset is not
+available once native LLC records exist.
 
 ## Good to know
 
@@ -366,5 +627,12 @@ calculators — is covered in
 * **Every offchain change is journaled.** An append-only audit trail
   backs as-of reconstruction, which is what makes dated stockholder
   lists possible.
+* **Most of the cap table works for v4 and v5 companies alike.** The
+  app reads each company's contract version and refuses visibly where a
+  feature needs v5: partial tokenization from the Tokenization Hub, LLC
+  tokenization, converting a holder's scrip back into a certificate,
+  and private certificate sales (see
+  [For holders](holders.md#prepare-a-private-sale-v5-companies)). A
+  company keeps its deployed version until its owners upgrade it.
 * **Export regularly while the feature is in beta.** The app's own
   advice, and good practice regardless.

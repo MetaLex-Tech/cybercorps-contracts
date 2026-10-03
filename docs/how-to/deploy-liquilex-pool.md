@@ -10,7 +10,9 @@ MetaLeX and the issuer.
   liquid (see [Tutorial 3](../tutorials/scripify-and-settle.md)).
 * A chosen compliance model:
   * **Whitelisted pool** — a `WhitelistTransferHook` on the cyberSCRIP, with
-    the pool address whitelisted; full credential checks at the swap layer.
+    the pool's custody addresses whitelisted; only whitelisted addresses can send or
+    receive the scrip, so credential checks happen when an address is
+    added to the whitelist.
   * **Open pool** — no transfer hook; compliance enforced at the
     de-scripification boundary, optionally with a zkPassport check at swap.
 
@@ -29,7 +31,12 @@ MetaLeX and the issuer.
    issuerFeeBps, enabled)` — both fees in basis points, combined at most
    `10_000`.
 4. Seed liquidity. If the cyberSCRIP has a `WhitelistTransferHook`,
-   whitelist the pool address.
+   whitelist the addresses the scrip passes through: in Uniswap v4 that is
+   the singleton `PoolManager`, which holds every v4 pool's balances, plus
+   any router or position manager that takes custody of the scrip in your
+   flow. Scrip hooks also run when scrip is minted,
+   so every address that receives scrip from `scripifyCert` must be
+   whitelisted as well.
 
 ## Related
 

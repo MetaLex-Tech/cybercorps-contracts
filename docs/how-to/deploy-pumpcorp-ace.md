@@ -16,12 +16,30 @@ tokens and leave holding ACE SAFEs.
 
 `PumpCorpFactory` builds on the same primitives as `CyberCorpFactory`:
 it deploys a cyberCORP suite configured for an ACE offering and creates the
-round. Its main entry points are `deployCyberCorp` (suite only),
-`deployCyberCorpAndCreateOffer`, and `deployCyberCorpAndCreateRoundFor`,
-which deploys the suite **and** creates the round in one transaction —
-validating that the round's party values match the officer and verifying
-the officer's escrowed EIP-712 signature over the round parameters. The
-flow then mirrors a standard cyberRAISE round:
+round. Its entry points are `deployCyberCorp` (suite only) and
+`deployCyberCorpAndCreateRoundFor`, which deploys the suite **and** creates
+the round in one transaction. (`deployCyberCorpAndCreateOffer` is also in
+the source but is marked work in progress and not in use.)
+`deployCyberCorpAndCreateRoundFor` checks that the round's first two party
+values are the officer's name and address, and verifies two officer
+signatures:
+
+* the escrowed EIP-712 signature over the round economics (domain
+  `"RoundManager"`, checked by the new RoundManager), and
+* `metadataSignature`, an EIP-712 signature under the domain
+  `"PumpCorpFactory"` over the deployment details the escrowed signature
+  does not cover: the corp salt, payout address, round flags, officer,
+  company details, extension data, round party values, legal details,
+  certificate data, and condition addresses (`InvalidMetadataSignature`
+  otherwise).
+
+Deployment addresses are bound to the configuration: the factory hashes the
+caller's salt with the company details, payout address, and officer
+(`computeDeploymentSalt`) before deploying, and each component factory
+namespaces the salt by its caller, so another deployer cannot occupy the
+predicted addresses with different terms.
+
+The flow then mirrors a standard cyberRAISE round:
 
 1. Deploy the PumpCorp through `PumpCorpFactory`, supplying the offering
    parameters (pricing, cap, the agreement template, and a non-US /
@@ -42,4 +60,4 @@ flow then mirrors a standard cyberRAISE round:
 
 * [Factories](../reference/factories.md),
   [Security types](../reference/security-types.md).
-* Explanation: [Application stack — ACE](../explanation/application-stack.md#ace).
+* Explanation: [Application stack — ACE](../explanation/application-stack.md#ace-asset-conversion-to-equity).
