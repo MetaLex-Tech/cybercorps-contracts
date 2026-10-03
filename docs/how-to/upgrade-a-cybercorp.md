@@ -141,18 +141,20 @@ company once it opens:
 `allocate` in the same transaction, which mints a LET to the investor.
 A new LET also reaches a legacy holder indirectly: if the LET contract
 is `transferable`, the wallet that received it can transfer possession
-to a legacy holder without an endorsement. Seed the counters
-in the same transaction as the beacon upgrade, as the app's Safe batch
-does. If the upgrade runs from a wallet instead, close every FCFS round
-that has not ended, including one that has not started, with
-`closeRoundNow(roundId)`, and clear every outstanding
-approval with `clearRecertificationApproval(certAddress, investor)`,
-before the upgrade. `closeRoundNow` sets `endTime` to the current
+to a legacy holder without an endorsement. Seed the counters in the
+same transaction as the beacon upgrade where you can, as the app's Safe
+batch does. A batch is built when it is proposed, so a lot minted while
+it waits for signatures is not in it. So for a wallet upgrade and for a
+Safe batch, close every FCFS round that has not ended, including one
+that has not started, with `closeRoundNow(roundId)`, and clear every
+outstanding approval with
+`clearRecertificationApproval(certAddress, investor)`, before the
+upgrade. `closeRoundNow` sets `endTime` to the current
 block's timestamp, and `submitEOI` reverts `RoundNotOpen` only when
 `block.timestamp > endTime`. So wait for a block with a later timestamp
 before the beacon upgrade. `closeRoundNow` reverts
 `EndTimeReductionRestricted` for a round that restricts it; for such a
-round, use a Safe batch or wait until the round ends. Set the approvals
+round, wait until the round ends. Set the approvals
 again only after the counters are seeded
 and the legal-owner enumeration is backfilled (see below), because
 until then a conversion with an approval also draws on the shared

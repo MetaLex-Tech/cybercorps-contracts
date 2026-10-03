@@ -356,22 +356,31 @@ Closing a round early, refunds, rejections and recalls are not refused.
 {% endhint %}
 
 {% hint style="danger" %}
-**From a wallet, close FCFS rounds and clear recertification approvals first.**
+**Close FCFS rounds and clear recertification approvals before you upgrade.**
 After the LET contract beacon upgrade, each wallet that holds a
-pre-upgrade LET has a holder counter of zero until the checklist seeds
-it. If a LET is minted or transferred to that wallet first, its
-counter stays below its balance. The deployed contracts cannot correct this, because
+pre-upgrade LET has a holder counter of zero until it is seeded. If a
+LET is minted or transferred to that wallet first, its counter stays
+below its balance. The deployed contracts cannot correct this, because
 `initializeHolderCount` accepts only a zero counter.
 
-The app refuses issuance in this period. But a holder can still call
-`convertScripToCert` on the Issuance Manager directly. If the company
-has a recertification approval on file for that holder, the call mints
-a new LET to the holder's wallet. A first-come, first-served (FCFS)
-round that has not ended has the same effect once it opens: an
-investor can call `submitEOI` on the Round Manager directly, and the
-round allocates and mints a LET in the same call. If the LET contract allows transfers, a wallet that
-receives a new LET can also pass it to a wallet that holds a
-pre-upgrade LET. So before you upgrade from a wallet:
+In this period the app refuses issuance, and it refuses a new
+recertification approval on a LET contract with pending migrations.
+But two calls do not need the company:
+
+* A holder can call `convertScripToCert` on the Issuance Manager. With
+  a recertification approval on file, it mints a new LET to the
+  holder's wallet.
+* An investor can call `submitEOI` on the Round Manager. In a
+  first-come, first-served (FCFS) round that has not ended, the round
+  allocates and mints a LET in the same call once the round opens.
+
+If the LET contract allows transfers, a wallet that receives a new LET
+can also pass it to a wallet that holds a pre-upgrade LET.
+
+From a wallet, the migrations run after the upgrade. A Safe batch runs
+them in the same transaction, but the page builds the batch when you
+propose it, so a lot minted while it waits for signatures is not in it.
+So both ways need the same preparation:
 
 * Clear every recertification approval on the company's LET
   contracts. The contracts cannot list their approvals. So the Upgrade
@@ -380,35 +389,35 @@ pre-upgrade LET. So before you upgrade from a wallet:
   `RecertificationApprovalSet` events after that block, up to the
   latest block. It confirms each one onchain and shows a **Revoke**
   button for each. The next wallet step shows
-  **Revoke approvals first** until none is on file.
+  **Revoke approvals first**, and the Safe batch cannot be proposed,
+  until none is on file.
 * Close every FCFS round that has not ended, including a round that
   has not started yet, with **Close round now** (`closeRoundNow`). The
   Upgrade page finds these rounds the same way, from the index and the
   Round Manager's `RoundCreated` events, and shows that button for
-  each. The next wallet step shows **Close FCFS rounds first** until
-  none is left. Closing
-  sets the round's end time to the time of that block, and the round
-  refuses an EOI only after that time. So the page counts the round as
-  open until a later block, and the next step stays disabled until then.
-  A round that restricts the reduction of its end time cannot be closed
-  early. If you have one, use a Safe, or wait until the round ends.
-* Do not mint or transfer LETs outside the app.
+  each. Both ways stay disabled until none is left. Closing sets the
+  round's end time to the time of that block, and the round refuses an
+  EOI only after that time, so the page counts the round as open until
+  a later block. A round that restricts the reduction of its end time
+  cannot be closed early. If you have one, wait until the round ends.
+* Do not mint or transfer LETs outside the app. Do not sign a queued
+  Safe batch unless the Upgrade page shows it as waiting: the page
+  rebuilds the batch from the chain and marks a queued batch that no
+  longer matches as out of date.
 
 If the index reports no progress, or is more than 10,000 blocks behind
-the chain, the page cannot confirm that its lists are complete, and the
-wallet steps stay disabled. The lists are complete only if the index
+the chain, the page cannot confirm that its lists are complete, and
+both ways stay disabled. The lists are complete only if the index
 processed its blocks correctly.
 
 Set the cleared approvals again only after the checklist shows every
 required migration done, so that the app no longer pauses the LET
 contract. The holder counters are not enough: until the legal-owner
 index is backfilled, a conversion with an approval also takes its units
-from the shared scrip vault instead of the holder's own positions. A
-Safe does not have this problem: the Safe batch seeds the counters and
-runs the backfills in the same transaction as the upgrade. If a
-counter does go wrong, the checklist reports a mismatched holder counter, and the
-app keeps issuance, deal settlement and scrip conversion paused on that
-LET contract. Contact MetaLeX in that case.
+from the shared scrip vault instead of the holder's own positions. If a
+counter does go wrong, the checklist reports a mismatched holder
+counter, and the app keeps issuance, deal settlement and scrip
+conversion paused on that LET contract. Contact MetaLeX in that case.
 {% endhint %}
 
 ### Finish the LET contract migrations
