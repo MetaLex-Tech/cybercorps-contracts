@@ -71,12 +71,23 @@ Run the six as one transaction where you can; for a Safe-owned company,
 that is one Safe batch. Each version calls functions the other version
 lacks, so a company left part-way (a v5 IssuanceManager next to a v4
 DealManager, for example) can see deal, round and issuance calls revert
-until the rest land. The app's Upgrade page sends each upgrade as its own
-transaction, so finish all six there before running deals, rounds or
-issuance. The contracts repository's `script/upgrade-v5.s.sol` builds this
-batch for one company (`corpUpgradeCalls`, and `printCorpUpgradeSafeBatch`,
-which prints Safe Transaction Builder JSON) and refuses a company that has
-no RoundManager.
+until the rest land. The contracts repository's `script/upgrade-v5.s.sol`
+builds this batch for one company (`corpUpgradeCalls`, and
+`printCorpUpgradeSafeBatch`, which prints Safe Transaction Builder JSON)
+and refuses a company that has no RoundManager.
+
+The app's **Upgrade** page runs the same calls in the same order. If a
+Safe that the connected wallet owns holds the owner role, it proposes
+every call that is not done as one Safe transaction, followed by the LET
+migrations of step 3 that need no dates. Otherwise it sends one call at
+a time from a wallet with the owner role, and only the next call is
+available. It starts the sequence only for a company with all contracts
+on v4 (4 or 4.1), UUPS proxies, an IssuanceManager and a DealManager, and
+v5 references for every call. A v4 company without a RoundManager
+takes the five other calls; a fork test of a deal and an issuance after
+those five calls passed before the app allowed it. While a company runs
+v5 and older contracts side by side, the app refuses new deals, rounds
+and issuance. See [Run your company](../webapp/company.md#upgrade-an-existing-company-to-v5).
 
 ## 3. Prepare the upgraded LET contracts
 
@@ -85,6 +96,16 @@ empty, zero or closed. Work through the steps below on each LET contract as
 soon as the upgrade lands, because holders can call `convertScripToCert` at
 any time. [LedgerEntryToken](../reference/contracts/LedgerEntryToken.md)
 documents each function and the holder-counting rules.
+
+The app's Upgrade page runs these steps from a checklist for each LET
+contract once the company runs v5. It reads which lots and holders still
+need each step from the contract's storage. It sends the required calls
+in this order: holder counters, legal-owner backfill, the badge when the
+company has a `HolderCapCondition` configuration, tally backfill. It
+refuses issuance, deal settlement and scrip conversion on a LET contract
+until its holder counters, legal-owner index and holder tally are
+complete. It proposes dates from onchain and company records, and sends
+them only after the owner confirms them.
 
 Existing LET contracts keep the certificate extension they were created
 with. New LET contracts can bind the [V3 extensions](../reference/extensions.md),

@@ -97,8 +97,18 @@ the **Tasks and reminders** card, which collects what needs action:
   task reads **Contract upgrade available** (or **N contract upgrades
   available**), names the contracts and opens the Upgrade page. This is
   how an existing company's owners learn that a newer protocol release,
-  such as v5, is available to them. See
+  such as v5, is available to them. If the company runs v5 and older
+  contracts side by side, the task reads **Finish the v5 upgrade** and
+  shows as a blocking task, because deals, rounds and issuance are
+  paused until the upgrade is complete. If the app cannot run the
+  upgrade for the company, the task reads **Contract upgrade needs
+  MetaLeX** and gives the reason. See
   [Upgrade an existing company to v5](#upgrade-an-existing-company-to-v5).
+* **LET contract migrations.** After the upgrade, **Migrate N LET
+  contracts after the v5 upgrade** stays open until each upgraded LET
+  contract has its holder counters, legal-owner index and holder tally,
+  and **Set acquisition and issue dates of pre-upgrade lots** stays open
+  until those dates are set. Both open the Upgrade page.
 * **Formation steps.** A formation in progress surfaces here (payment,
   filing, signatures, replacement company names, officer publishing and
   setup steps) until it is complete. See [Form a company](formation.md).
@@ -280,70 +290,117 @@ its first task, which opens the **Upgrade** page. The scripify form also
 sends you there when the Issuance Manager is out of date. You upgrade
 only when you choose to.
 
-The **Upgrade** page lists the company's contracts (CyberCorp, Deal
-Manager, Issuance Manager and Round Manager) and, under **Issuance
-Upgrades**, the **CyberCertPrinter** and **CyberScrip** rows: the shared
-implementations behind all of the company's LET contracts and scrip
-tokens. Each row shows the contract, the factory it is bound to, its
-current implementation and the reference that factory publishes, the
-current and latest versions, and a status:
+The **Upgrade** page lists the six steps of the v5 upgrade in the order
+the v5 release uses: **CyberCorp**, **Issuance Manager**, **Deal
+Manager**, **Round Manager**, then the two beacons the Issuance Manager
+owns, **LET contracts (CyberCertPrinter)** and **CyberScrip**. Upgrading
+a beacon moves every LET contract or scrip token of the company at once.
+Each step shows the contract, the factory it is bound to, its current
+implementation and the reference that factory publishes, the current
+and latest versions, and a status:
 
 * **Up to date**: the contract runs the factory's reference.
-* **Upgrade available**: a newer version is published, and **Upgrade**
-  sends the transaction. **Switch available** means the implementation
-  differs from the reference at the same version number.
+* **Upgrade available**: a newer version is published. **Switch
+  available** means the implementation differs from the reference at
+  the same version number.
 * **Shared beacon**: the contract runs shared code that the company
-  cannot upgrade from here, and it is not counted as an upgrade. The
-  oldest cyberCORPs run their core contracts on MetaLeX-owned beacons
-  and cannot upgrade those contracts themselves.
+  cannot upgrade from here. The oldest cyberCORPs run their core
+  contracts on MetaLeX-owned beacons and cannot upgrade those contracts
+  themselves.
 * **Not deployed**, **Implementation unknown** or **Reference
   unavailable**: nothing can be sent until the reads succeed.
+
+The page starts a v4 to v5 upgrade only if every step can finish at
+that time. It refuses, with the reason, a company that has a contract
+older than v4, a shared-beacon contract, no Issuance Manager or Deal
+Manager, or a factory reference below v5. Mission control then shows
+**Contract upgrade needs MetaLeX**. A v4 company without a Round
+Manager upgrades in five steps.
 
 To upgrade:
 
 1. Open the **Contract upgrade available** task in mission control, or
-   the Upgrade page.
-2. Review the versions.
-3. Choose **Upgrade** on each row that offers it. Each contract upgrades
-   in its own transaction, one at a time.
+   the Upgrade page, and review the versions.
+2. If a Safe that your wallet owns holds the owner role on the company,
+   choose **Propose to Safe**. The Safe receives one transaction with
+   every step that is not done, followed by the LET contract
+   migrations below that need no dates. The steps run in order and
+   revert together, so the company never runs v5 and older contracts
+   side by side. Collect the Safe signatures and execute it in the Safe
+   app. If the same batch already waits in the Safe queue, the page
+   shows its signature count instead of proposing it again.
+3. Otherwise, send the steps from a wallet that holds the owner role.
+   Only the next step's **Upgrade** button is active. Each step is its
+   own transaction, and the page reads the chain again before each one.
 4. Choose **Refresh versions** to reread the versions afterwards.
 
 {% hint style="warning" %}
-**Finish every row before you run deals, rounds or issuance.** Contracts
-on different versions call functions the other version does not have, so
-a company left part-way (a new Issuance Manager next to an old Deal
-Manager, for example) can see those actions fail until the rest are
-upgraded.
+**Finish every step in one sitting.** Contracts on different versions
+call functions the other version does not have. While the company runs
+v5 and older contracts side by side, mission control shows **Finish the
+v5 upgrade**, and the app refuses deals, rounds and issuance, both for
+officers and for investors, with a message that names the Upgrade page.
+Closing a round early, refunds, rejections and recalls are not refused.
 {% endhint %}
 
-After the upgrade, each class panel in the Tokenization Hub shows
-**Registered-owner transfer permission (v5)**, which starts off on an
-upgraded LET contract. Until it is on, changing a LET's registered owner
-and settling secondary trades on that class fail. Turn it on for the
+### Finish the LET contract migrations
+
+v5 adds records to each LET contract that start empty for every LET
+minted before the upgrade. Once the company runs v5, the Upgrade page
+shows a checklist for each LET contract, read directly from the
+contract:
+
+* **Holder counters.** A wallet whose possession counter reads zero
+  cannot transfer a pre-upgrade LET out, and a LET minted to it first
+  leaves its counter wrong for good. **Run next call** seeds each
+  counter (an owner call).
+* **Legal-owner index.** Until it is backfilled, a holder-cap check can
+  undercount existing holders, and converting scrip back to a LET can
+  fail or draw on the shared scrip vault instead of the holder's own
+  positions.
+* **LeXcheX badge.** If the company has a holder cap configured, the
+  badge is wired before the holders are counted, so the tally counts
+  beneficial owners. Otherwise wiring it is optional; after a late
+  wiring, **Recount** counts the holders again.
+* **Holder tally.** The count a holder-cap check reads.
+
+Until the holder counters, legal-owner index and holder tally of a LET
+contract are complete, the app refuses issuance, deal settlement and
+scrip conversion on it, and mission control shows **Migrate N LET
+contracts after the v5 upgrade**. Anyone can send the index and tally
+backfills; the counters and the badge need the owner or admin role.
+Holders can still call the contract directly, which is why the Safe
+batch carries these calls in the same transaction as the upgrade.
+
+The checklist also handles the dates, which block nothing in the app:
+
+* **Acquisition dates (Rule 144 and Reg S).** Each pre-upgrade LET's
+  acquisition date reads zero, and Rule 144 and Reg S trades refuse it.
+  The page proposes the time the current holder of record took the LET
+  onchain, which is usually the same as or later than the real
+  acquisition. On a LET contract whose extension records fund-interest
+  acquisition dates, **Copy recorded dates** copies them first.
+* **Issue dates (certificate image).** The certificate image shows a
+  blank **Issue Date**. The page proposes the company's cap table issue
+  date for a tokenized position, else the issuance endorsement, else
+  the mint.
+
+Review each date against the company's records, change any that are
+wrong, and confirm the table before you send. A date earlier than the
+onchain record is allowed, but the page flags it, because it shortens
+the holding period the trading conditions enforce. From a wallet, each
+date is its own transaction; a Safe sends them as one. Mission control
+shows **Set acquisition and issue dates of pre-upgrade lots** until
+they are set.
+
+Each class panel in the Tokenization Hub shows **Registered-owner
+transfer permission (v5)**, which starts off on an upgraded LET
+contract. Until it is on, changing a LET's registered owner and
+settling secondary trades on that class fail. Turn it on for the
 classes that should allow them (see
-[Transfer permissions](tokenization-hub.md#transfer-permissions)), but
-only after the upgraded LET contract's new records are filled in.
-
-{% hint style="warning" %}
-**The app does not run these post-upgrade steps.** Have them done as
-soon as the upgrade lands.
-[Upgrade a cyberCORP](../how-to/upgrade-a-cybercorp.md) lists the calls.
-
-* **Holder counters.** On a LET contract whose LETs were minted before it
-  kept a per-wallet possession counter, a holder's counter reads zero
-  and a transfer out of that wallet fails until an admin seeds it.
-* **Legal-owner index and holder tally.** Both start empty on an
-  upgraded LET contract. Until they are backfilled, a holder-cap check
-  can undercount existing holders, and converting scrip back to a LET
-  can fail or draw on the shared scrip vault instead of the holder's own
-  positions. Holders can start that conversion at any time.
-* **Acquisition dates.** Each pre-upgrade LET's acquisition date reads
-  zero, and Rule 144 and Reg S trades are refused until it is set. Take
-  the dates from the company's records.
-* **Issue dates.** Pre-upgrade LETs have no stored issue date, so their
-  certificate image shows a blank **Issue Date** until an admin sets
-  each one from the company's records. This blocks no transfer or trade.
-{% endhint %}
+[Transfer permissions](tokenization-hub.md#transfer-permissions)), after
+the checklist's migrations are done. The checklist shows its state and
+links there.
 
 > **Under the hood.** Upgrades use a co-approval model: MetaLeX
 > publishes a new implementation, and your company opts in, so neither
