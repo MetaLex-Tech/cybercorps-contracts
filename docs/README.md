@@ -32,9 +32,12 @@ contracts. It runs on Ethereum, Base and Arbitrum.
   back into a LET. The rights scrip carries come from the company's governing
   documents and the scrip's terms: under MetaLeX-form bylaws, scrip is not
   stock and gives no stockholder rights on its own.
-* **cyberSign** records agreements in the `CyberAgreementRegistry`, where
-  every party's signature is checked onchain. Rounds, deals and trades are
-  signed there.
+* **cyberSign** records agreements in the `CyberAgreementRegistry`. When a
+  party signs directly (`signContract`, `signContractFor`), the registry
+  verifies the party's EIP-712 signature. When an agreement's finalizer, such
+  as a DealManager, submits a signature it holds in escrow
+  (`signContractWithEscrow`), the registry checks only that the finalizer
+  sent the call. Rounds, deals and trades are signed there.
 
 [Ledger Entry Tokens and scrip](explanation/lets-and-scrip.md) explains how
 the two forms relate, and the [glossary](reference/glossary.md) defines the
