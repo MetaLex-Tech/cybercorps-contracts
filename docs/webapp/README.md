@@ -1,159 +1,155 @@
 ---
-description: What the cyberCORPs apps do and which one you need
+description: Who the MetaLeX apps are for, how to sign in, which app does what, and what it costs
 ---
 
-# Using the cyberCORPs apps
+# Getting started
 
-This part of the documentation is for the people who **use** the MetaLeX
-apps — founders, officers, and investors. No code: just what each app is for
-and how to use it.
+These guides are for the people who use the MetaLeX apps: founders,
+officers and directors running a company, investors in its rounds,
+employees and other holders of its securities, and token projects forming
+an entity through a launchpad. They describe what you click and what each
+step does, with no code.
 
-If you want to understand the machinery beneath the apps — what a cyberCORP,
-a cyberCERT, or a cyberSCRIP actually *is*, and why the design works the way
-it does — that is **Part 1, Protocol**. Each guide here links into it at the
-relevant points; see [How the apps relate to the protocol](#how-the-apps-relate-to-the-protocol)
-below.
+The apps run on the cyberCORPs protocol. To learn how the protocol works,
+read [How cyberCORPs works](../explanation/README.md); to build on it, start
+with the [guides](../how-to/README.md) and the
+[reference](../reference/README.md).
 
-## The apps, and where they live
+## Which app does what
 
-The products run as **separate apps, each on its own subdomain**. Your
-company and the securities it issues are shared across them — set things up
-once and they appear everywhere.
+The apps run on separate subdomains and share one MetaLeX account. A
+company and the securities it issues appear in every app once they exist.
 
 | App | Address | What you do there |
 |---|---|---|
-| [**cyberCORPs app**](mainframe.md) | `cybercorps.metalex.tech` | Form a new LLC or C-Corp, or bring your existing company onchain; run its cap table, board, grants, and register of holders; issue and manage its securities and scrip. Home of the **Tokenization Hub**. |
-| [**cyberRAISE**](cyberraise.md) | `cyberraise.metalex.tech` | Run fundraising rounds, and invest in them. **Rounds are created and configured here.** |
-| [**ACE**](ace.md) | inside cyberRAISE | Token-community fundraising — raises denominated in a community token. (Old `ace.metalex.tech` links redirect to cyberRAISE.) |
-| [**cyberSign**](cybersign.md) | `app.metalex.tech` | Propose, review, sign and countersign agreements. The cyberCORPs app's **cyberSign** sidebar item opens it. |
-| [**LeXcheX**](lexchex.md) | `lexchex.metalex.tech` | Prove accredited-investor status. |
-| [**Your profile**](profile.md) | `profile.metalex.tech` | Your MetaLeX identity, accreditation status, and signing delegation. |
+| [**cyberCORPs app**](company.md) | `cybercorps.metalex.tech` | Form a new LLC or C-Corp, or bring an existing company onchain. Run its cap table, board, grants and documents, and issue its securities from the **Tokenization Hub**. |
+| [**cyberRAISE**](cyberraise.md) | `cyberraise.metalex.tech` | Create and run fundraising rounds, and invest in them. |
+| [**ACE**](ace.md) | inside cyberRAISE | Raise from a token community with a SAFE priced in the community token. Links to `ace.metalex.tech` redirect to cyberRAISE. |
+| [**cyberSign**](cybersign.md) | `app.metalex.tech/cybersign` | Propose, review, sign and countersign agreements. The cyberCORPs app's **cyberSign** sidebar item opens it. |
+| [**LeXcheX**](lexchex.md) | `lexchex.metalex.tech` | Prove accredited-investor status and hold the credential in your wallet. |
+| [**Profile**](profile.md) | `profile.metalex.tech` | Edit your MetaLeX identity, manage linked wallets, turn on notifications and delegate signing for a Safe. |
 
-The cyberCORPs app is big enough that its largest areas get their own
-guides:
+## Find the right guide
 
-* [**The cap table**](captable.md) — the unified cap table of tokenized
-  and untokenized positions, importing (including the AI-assisted
-  import), and tokenizing.
-* [**Cap-table records, modeling and compliance**](captable-tools.md) —
-  §219 stockholder lists, 409A / Rule 701 / 3921 / 83(b) records, round
-  modeling, and the exit waterfall.
-* [**Token grants and onchain vesting**](grants.md) — options, RSUs, and
-  restricted stock escrowed onchain via MetaVesT.
-* [**The boardRoom and Incorporation Hub**](boardroom.md) — officers,
-  directors, board consents, and the formation record.
-* [**For holders: your securities**](holders.md) — the stakeholder and
-  investor side: My holdings, certificates, transfers, scrip.
+| Guide | Read it to |
+|---|---|
+| [Form a company](formation.md) | Form an LLC or C-Corp through the app, pay for it, and follow the filing to completion. |
+| [Run your company](company.md) | Bring an existing company onchain, use mission control, the Incorporation Hub and Documents, read the public company page, and upgrade to v5. |
+| [Tokenization Hub](tokenization-hub.md) | Set up classes and series, issue Ledger Entry Tokens (LETs), and enable scrip. |
+| [The cap table](captable.md) | See tokenized and untokenized positions together, import a cap table and tokenize positions. |
+| [Cap-table records, modeling and compliance](captable-tools.md) | Export §219 stockholder lists, keep 409A, Rule 701, 3921 and 83(b) records, model a round and run an exit waterfall. |
+| [Grants](grants.md) | Award options, RSUs and restricted stock that vest onchain. |
+| [boardRoom](boardroom.md) | Manage officers and directors, governance documents and board consents. |
+| [cyberSign](cybersign.md) | Propose and sign agreements, and find them in your Contract Library. |
+| [cyberRAISE](cyberraise.md) | Run a raise as an issuer, or invest in one. |
+| [ACE](ace.md) | Run or join a token-community raise, and bridge tokens between Solana and Base. |
+| [For holders](holders.md) | See what you hold, transfer it, and convert between LETs and scrip. |
+| [Profile](profile.md) | Set up your identity, link wallets and delegate signing. |
+| [LeXcheX](lexchex.md) | Get accredited. |
+| [Launchpads](launchpads.md) | Form the entity a MetaDAO or Umia launch prescribes. |
 
-One more surface is covered separately:
+## Sign in and set up your account
 
-* [**Launchpads: MetaDAO and Umia**](metadao.md) — one-step
-  entity-formation pages for tokens launched via MetaDAO or Umia, plus
-  the public company pages and the launchpad directory.
+Signing in the first time creates your MetaLeX account and its profile
+record, and links the wallet you signed in with. There is no separate
+registration. Your profile belongs to the account, so it follows you across
+every wallet you link; you add, switch and unlink wallets in **Wallet
+Settings** (see [Profile](profile.md)). If you sign in without a wallet of
+your own, the account gets an embedded wallet that MetaLeX creates as part
+of your profile.
 
-> **Which app do I need?**
-> Forming a new company, or setting up or running one → the **cyberCORPs
-> app**.
-> Managing who owns what → [the cap table](captable.md).
-> Vesting stock to your team → [grants](grants.md).
-> Signing or sending an agreement → [**cyberSign**](cybersign.md).
-> Raising money, or investing in a raise → **cyberRAISE**.
-> A token community converting to equity → **ACE**.
-> Getting accredited → **LeXcheX**.
-> Holding securities someone issued you → [For holders](holders.md).
-> Editing your identity → **your profile**.
+Signing in is a free Sign-In With Ethereum message and costs no gas.
+Screens that show private data, such as a company workspace or your
+holdings, ask you to **Authenticate** when you are not signed in.
 
-## Before you start: what you need
+You also need:
 
-1. **A web3 wallet** — a browser wallet such as MetaMask or Rabby. The apps
-   connect to it to read your holdings and ask you to sign. A **Safe
-   multisig** is supported and recommended for company treasuries.
-2. **A little ETH for gas** — actions that change onchain state are
-   transactions and cost a small network fee. cyberCORPs run on **Ethereum,
-   Arbitrum, and Base**; you need gas on whichever network the entity uses.
-   (A company formed through the in-app formation flow gets its onchain
-   record on the payment chain — Ethereum mainnet.)
-3. **A desktop browser is recommended** for company setup and other
-   heavier flows, though the apps work on mobile.
-4. **No separate account setup** — your first wallet sign-in creates a
-   MetaLeX account and its profile record, and links that wallet to the
-   account. Your profile follows the account across all linked wallets;
-   add or switch wallets later in **Wallet Settings**.
+* **A wallet.** A browser wallet such as MetaMask or Rabby works. A Safe
+  multisig is supported and recommended for a company's treasury, and a
+  Safe can delegate its agreement signing to one wallet (see
+  [Profile](profile.md)).
+* **ETH for gas** on the company's network. cyberCORPs run on Ethereum,
+  Arbitrum and Base. A company formed through the app gets its onchain
+  record on Ethereum mainnet, the chain the formation fee is paid on.
+* **A desktop browser** for company setup and the longer flows. The apps
+  also work on a phone.
 
-On cost: signing with cyberSign, setting up an **existing** company on
-MetaLeX, and manual securities issuance and management in the Tokenization
-Hub are free (gas aside). **Forming a new company** through the app is a
-flat **\$1,000 fee, paid in USDC** — state filing, formation documents,
-initial tax filings, and a lawyer consultation included. Filing a later
-annual report for a company formed this way costs only the state's fee.
-MetaLeX charges a **0.3% fee on funds an issuer claims from a cyberRAISE
-round** — investors pay nothing.
+A company's pages open for any signed-in profile that has one of the
+company's owner wallets linked, whichever wallet you are browsing with.
+Signing for the company still needs an owner wallet connected on the
+company's network, and the app tells you which wallet to switch to (see
+[Run your company](company.md)).
 
-## Signing in
+## Signatures and transactions
 
-The apps connect to your wallet automatically. For actions that need a
-verified session — managing a company, editing your profile, encrypting
-data — you complete a one-time **Authenticate** step: you sign a short
-Sign-In With Ethereum message. This signature is **free** — not a
-transaction, no gas.
+Your wallet asks you to approve two kinds of action, and it shows which
+kind before you approve:
 
-Access to a company follows your profile: its pages open for a signed-in
-profile that has one of the company's owner wallets linked, whichever
-wallet you are browsing with. Signing for the company still needs an
-owner wallet connected on the company's network, and the app tells you
-which wallet to switch to.
+* **A message signature** is free and instant. Signing in, agreeing to a
+  legal document and expressing interest in a round are signatures.
+* **A transaction** costs gas and confirms in a few seconds. Deploying a
+  company, issuing a security, funding a round and closing a round are
+  transactions.
 
-> MetaLeX never takes custody of your funds or your securities. Money in
-> transit during a raise or deal sits in an onchain escrow that no one can
-> override.
+Each guide says which steps are which.
 
-## Two kinds of “sign”
+## What it costs
 
-You'll be asked to sign two different things:
+* **Forming a new company** through the app is a flat **\$1,000, paid in
+  USDC**. It covers the state filing, the formation documents, the initial
+  tax filings and a lawyer consultation (see [Form a company](formation.md)).
+  A later annual report for that company costs the state's fee only.
+* **Bringing an existing company onchain** is free apart from gas.
+* **Issuing and managing securities** by hand in the Tokenization Hub is
+  free apart from gas.
+* **Signing with cyberSign** is free apart from gas.
+* **cyberRAISE** charges the issuer **0.3% of the funds it claims** from a
+  round. Investors pay nothing, and rejected bids are never charged.
+* **Launchpad formation** costs the founder nothing: MetaLeX submits the
+  transaction and pays its gas.
 
-* **A message signature** — free, instant, no gas. Authenticating, agreeing
-  to a legal document, expressing interest in a round.
-* **A transaction** — costs gas, confirms in a few seconds. Deploying a
-  company, issuing a security, funding a round, closing a round.
+MetaLeX never takes custody of your funds or your securities. Money in
+transit during a raise or a deal sits in an onchain escrow that no one can
+override (see [Upgrades and control](../explanation/upgrades-and-control.md)).
 
-Your wallet always tells you which one it is before you approve. Each app
-guide notes which steps are which.
+## Terms used in these guides
 
-## A note on terms
-
-* A **cyberCORP** is your company, represented onchain.
-* A **cyberCERT** is a certificate — one entry on the company's register of
-  holders (a share position, a SAFE, an option, etc.).
-* A **cyberSCRIP** is the tradable, fungible form of a security.
-* An **EOI** (Expression of Interest) is an investor's signed offer to
+* A **cyberCORP** is your company's onchain record and the contracts that
+  run it.
+* A **Ledger Entry Token (LET)** is an ERC-721 token for one ledger entry:
+  a share position, a SAFE, an option. Each class or series has its own
+  **LET contract** that mints its LETs.
+* **Scrip** is a fungible ERC-20 token that tracks a class's LET units,
+  which holders can trade. Its rights come from the company's governing
+  documents; under MetaLeX-form bylaws, scrip is not stock on its own.
+* The **cap table** is the record the app assembles from LETs, scrip and
+  the positions you record offchain.
+* The **securities ledger** is the company's legally definitive record.
+  The company's governing documents, such as its bylaws, decide which
+  record that is; tokenizing a class does not decide it.
+* An **EOI** (expression of interest) is an investor's signed offer to
   invest in a round.
 
-The full [Glossary](../reference/glossary.md) has the rest.
+The [Glossary](../reference/glossary.md) defines the rest.
 
-## How the apps relate to the protocol
+## How the apps use the protocol
 
-The apps are **front ends over the cyberCORPs smart-contract protocol**.
-Creating a company, issuing and transferring securities, and signing
-agreements are contract calls. The app also keeps offchain records
-(untokenized cap table positions, drafts, formation details, legal terms
-versions), and each guide says which actions are which.
+The apps are front ends over the cyberCORPs smart contracts. Creating a
+company, issuing and transferring securities, and signing agreements are
+contract calls. The app also keeps offchain records, such as untokenized
+cap table positions, drafts, formation details and versions of legal
+terms, and each guide says which actions are which.
 
-* When you **deploy a cyberCORP**, the app calls the protocol's factory,
-  which deploys your company's contracts. When the company's governing
-  documents designate it, the chain is the company's *official register*,
-  not a copy of one. This is the core idea of the protocol: see
-  [Constitutive vs. pointer tokenization](../explanation/constitutive-vs-pointer.md).
-* When you **issue a security**, the app mints a **cyberCERT** — an entry on
-  that register.
-* When you **scripify**, the app deploys a **cyberSCRIP** — the same
-  security in fungible form. Why two forms exist is explained in
-  [The dual-token model](../explanation/dual-token-model.md).
+* **Deploying a cyberCORP** calls the protocol's factory, which deploys the
+  company's contracts. When the company's governing documents designate the
+  onchain record as its securities ledger, the chain is that ledger (see
+  [Constitutive vs. pointer tokenization](../explanation/constitutive-vs-pointer.md)).
+* **Issuing a security** mints a LET from the class's LET contract.
+* **Enabling scrip** for a class deploys its scrip token, and holders can
+  then convert LETs to scrip and back (see
+  [LETs and scrip](../explanation/lets-and-scrip.md)).
 
-Throughout these guides, **“Under the hood”** boxes link the action you're
-taking to the protocol contract behind it. You never need to read Part 1 to
-use the apps — but if you want to know exactly what you are signing, it is
-all there.
-
-A good starting point for the protocol side is the
-[Protocol welcome / overview](../README.md) and the tutorial
-[Incorporate a cyberCORP](../tutorials/incorporate-a-cybercorp.md).
+**Under the hood** boxes in each guide name the contract behind the action
+you are taking. You can use the apps without reading them. To see the whole
+path at the contract level, follow
+[Incorporate a cyberCORP](../how-to/incorporate-a-cybercorp.md).

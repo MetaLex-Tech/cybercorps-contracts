@@ -1,8 +1,8 @@
 # CyberAgreementRegistry
 
 An onchain registry of legal-agreement **templates** and executed,
-multi-party-signed **contracts**. Deals and rounds reference it for their
-underlying agreements.
+multi-party-signed **contracts**. Deals and rounds record their agreements
+in it.
 
 * **Source:** [`src/CyberAgreementRegistry.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberAgreementRegistry.sol)
   / interface [`ICyberAgreementRegistry.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ICyberAgreementRegistry.sol)
@@ -56,33 +56,34 @@ bytes32 public VOIDSIGNATUREDATA_TYPEHASH; // keccak256("VoidSignatureData(bytes
 ```
 
 The `contractId` is `keccak256(abi.encode(templateId, salt, globalValues,
-parties, secretHash, finalizer))` — `secretHash` and `finalizer` are
-deliberately bound into the id so a front-runner cannot seize the same id
-with hostile terms; `expiry` is deliberately **not** bound so presigned
-offchain signatures stay verifiable.
+parties, secretHash, finalizer))`. `secretHash` and `finalizer` are bound
+into the id so a front-runner cannot seize the same id with hostile terms.
+`expiry` is left out so presigned offchain signatures stay verifiable.
 
 The `signer` field binds a signature to one party. A delegate can hold
 delegations from several parties, and without the field one delegate
-signature over the same agreement would verify for each of them. The
-string fields are hashed as EIP-712 requires: `legalContractUri` as
-`keccak256(bytes(uri))`, each `string[]` as the `keccak256` of the
+signature over an agreement would verify for each of them. The string
+fields are hashed as EIP-712 requires: `legalContractUri` as
+`keccak256(bytes(uri))`, and each `string[]` as the `keccak256` of the
 concatenated `keccak256` of its elements.
 
 {% hint style="warning" %}
-**Registry versions on live chains.** Checked onchain on 2026-10-02: the
-registry proxy `0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134` on Ethereum,
-Base and Arbitrum runs this implementation. `SIGNATUREDATA_TYPEHASH()`
-returns `0xe37d17c3…6f05`, and a simulated `createContract` returns the
-six-field id above. The separate zkSync Era registry
-(`0x07E0a0BeC742f90f7879830bC917E783dA6a6357`) still returns
+**Two registry implementations run in production.** The registry proxy
+`0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134` on Ethereum, Base and
+Arbitrum runs this implementation: `SIGNATUREDATA_TYPEHASH()` returns
+`0xe37d17c3…6f05`, and `createContract` derives the six-field id above.
+The separate zkSync Era registry
+(`0x07E0a0BeC742f90f7879830bC917E783dA6a6357`) returns
 `0x49ba7af1fd9b42077b5e2bf090b7deb0f443e9ae99b46ce66b4859e28d670da4`, the
-older type without `signer`, and derives ids from four fields:
+type without `signer`, and derives ids from four fields:
 `keccak256(abi.encode(templateId, salt, globalValues, parties))`. Both
-report `version()` `"1"`. Read `SIGNATUREDATA_TYPEHASH()` on the registry you
-are about to sign against before choosing the typed data or the id
-formula, and prefer the id from the `ContractCreated` event or an
-`eth_call` of `createContract` where the flow allows it. Agreements created
-before an upgrade keep the ids they were created with.
+report `version()` `"1"`.
+
+Read `SIGNATUREDATA_TYPEHASH()` on the registry you are about to sign
+against before choosing the typed data or the id formula. Where the flow
+allows, take the id from the `ContractCreated` event or an `eth_call` of
+`createContract`. An agreement keeps the id it was created with, so read an
+existing agreement's id instead of recomputing it.
 {% endhint %}
 
 ## Functions
@@ -127,56 +128,57 @@ function finalizeContract(bytes32 contractId) external; // onlyFinalizerIfSet
 ## How signing works
 
 * `createTemplate` registers a reusable template (id, title, legal URI,
-  field schema). Template creation is **permissionless** — anyone can
-  register a template, and duplicate ids revert `TemplateAlreadyExists`.
-* `createContract` instantiates an executable contract from a template, with
-  its global values, parties, and per-party values; `finalizer` and `expiry`
-  bound it. Parties left as `address(0)` are open slots a later signer can
-  claim with `fillUnallocated` (gated by `secretHash` if set).
-* `createStandaloneContractAndSign(For)` prepares, templates (just-in-time,
-  if the derived template doesn't exist yet), creates, and signs an
-  agreement in one transaction — for single-party agreements that is one
-  transaction and done. Standalone contracts always have
-  `finalizer = address(0)`.
+  field schema). Anyone can register a template; a duplicate id reverts
+  `TemplateAlreadyExists`.
+* `createContract` instantiates an agreement from a template with its
+  global values, parties and per-party values, bounded by `finalizer` and
+  `expiry`. Parties left as `address(0)` are open slots that a later
+  signer can claim with `fillUnallocated`, gated by `secretHash` if one is
+  set.
+* `createStandaloneContractAndSign(For)` derives the template (registering
+  it on first use), creates the agreement and signs it in one transaction,
+  so a single-party agreement takes one transaction. Standalone contracts
+  always have `finalizer = address(0)`.
 * Each party signs an EIP-712 `SignatureData` payload (contract id, the
   party's own address as `signer`, legal URI, field schema, global values,
-  and their party values) —
-  `signContract` (self), `signContractFor` (relayed), or
-  `signContractWithEscrow` (a pre-escrowed signature, submittable only by
-  the contract's defined finalizer, e.g. a RoundManager holding an
-  officer's escrowed signature). `signContract` / `signContractFor` verify
-  the signature onchain — and when a finalizer is set, only the finalizer
-  or the signer themself may submit. `signContractWithEscrow` does not
-  re-verify; it requires a defined finalizer and relies on that (vetted
-  contract) finalizer for access control.
-* A party may standing-delegate signing to another address
-  (`setDelegation` / `revokeDelegation`, with optional expiry): signature
-  verification accepts a valid, unexpired delegate's EIP-712 signature in
-  place of the party's own. Delegation affects signature recovery only — a
-  delegate is not treated as the party itself. The delegate signs with
-  `signer` set to the delegating party, so the signature counts for that
-  party alone. `setDelegation` reverts `DelegateZeroAddress`,
-  `DelegateIsSelf`, or `ExpiryNotInFuture` (a nonzero expiry at or before
-  the current block); `expiry == 0` means the delegation does not expire.
-  The same delegate check applies to `VoidSignatureData` signatures.
+  and their party values) and submits it through `signContract` (self),
+  `signContractFor` (relayed) or `signContractWithEscrow`.
+  `signContractWithEscrow` takes a pre-escrowed signature that only the
+  agreement's defined finalizer can submit, such as a RoundManager holding
+  an officer's escrowed signature. `signContract` and `signContractFor`
+  verify the signature onchain, and when a finalizer is set, only the
+  finalizer or the signer can submit. `signContractWithEscrow` does not
+  re-verify: it requires a defined finalizer and relies on that vetted
+  finalizer contract for access control.
+* A party can give another address standing authority to sign for it
+  (`setDelegation` / `revokeDelegation`, with optional expiry). Signature
+  verification then accepts a valid, unexpired delegate's EIP-712
+  signature in place of the party's own. Delegation affects signature
+  recovery only, and the registry does not treat the delegate as the
+  party. The delegate signs with `signer` set to the delegating party, so
+  the signature counts for that party alone. `setDelegation` reverts
+  `DelegateZeroAddress`, `DelegateIsSelf` or `ExpiryNotInFuture` (a
+  nonzero expiry at or before the current block); `expiry == 0` means the
+  delegation does not expire. The same delegate check applies to
+  `VoidSignatureData` signatures.
 * When all parties have signed, the registry emits `ContractFullySigned`.
-  With no finalizer set, the contract auto-finalizes at that point;
+  With no finalizer, the agreement finalizes automatically at that point;
   otherwise the finalizer calls `finalizeContract`.
-* `voidContractFor` records a party's void request (event `VoidRequested`).
-  The contract becomes voided when every **allocated** party has requested
-  (unfilled `address(0)` slots in an open agreement cannot request, so they
-  don't count toward unanimity — though a party who fills a slot must then
-  also request), when its nonzero expiry has passed, or when the proposing
-  party (index 0) voids while still the only signer. The finalizer may
-  submit void requests without a signature; anyone else needs the party's
-  EIP-712 `VoidSignatureData` signature. Finalized contracts cannot be
-  voided.
+* `voidContractFor` records a party's void request (event
+  `VoidRequested`). The agreement is voided when every **allocated** party
+  has requested, when its nonzero expiry has passed, or when the proposing
+  party (index 0) voids while still the only signer. Unfilled `address(0)`
+  slots in an open agreement cannot request and do not count toward
+  unanimity, but a party who fills a slot must then also request. The
+  finalizer can submit void requests without a signature; anyone else
+  needs the party's EIP-712 `VoidSignatureData` signature. A finalized
+  agreement cannot be voided.
 
 {% hint style="info" %}
-`expiry == 0` means **no deadline**, in the void path just as in signing and
-finalization: the expired branch never applies, so a zero-expiry agreement
-voids only by unanimous request of its allocated parties (or by the
-proposer while sole signer).
+`expiry == 0` means **no deadline** in the void path, as in signing and
+finalization. The expired branch never applies, so a zero-expiry
+agreement voids only by unanimous request of its allocated parties, or by
+the proposer while sole signer.
 {% endhint %}
 
 `getContractJson(contractId)` returns the agreement as a JSON string
@@ -187,8 +189,8 @@ quote or backslash typed into a field cannot break the document.
 
 ## Events
 
-`TemplateCreated`, `ContractCreated`, `AgreementSigned`, and
+`TemplateCreated`, `ContractCreated`, `AgreementSigned` and
 `ContractFullySigned` are declared in `ICyberAgreementRegistry`;
-`ContractFinalized`, `VoidRequested`, `ContractVoided`, `DelegationSet`,
-and `DelegationRevoked` in the contract. All are emitted by the registry
-proxy.
+`ContractFinalized`, `VoidRequested`, `ContractVoided`, `DelegationSet`
+and `DelegationRevoked` in the contract. The registry proxy emits all of
+them.

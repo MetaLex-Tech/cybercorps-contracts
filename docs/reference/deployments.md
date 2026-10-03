@@ -10,10 +10,9 @@ Canonical contract addresses, by chain.
 > [`script/libs/DeploymentConstants.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/script/libs/DeploymentConstants.sol)
 > library (and the raw deploy logs in `script/res/deployment-addresses.md`)
 > in the contracts repository, plus MetaLeX release notes on
-> [Substack](https://metalex.substack.com/). Every address below was checked
-> for deployed code on each chain listed with a live read on October 2, 2026.
-> Most entries are proxies, so their implementations differ by chain; read
-> the EIP-1967 implementation slot rather than assuming one.
+> [Substack](https://metalex.substack.com/). Most entries are proxies whose
+> implementations differ by chain, so read the EIP-1967 implementation slot
+> instead of assuming one.
 
 ## Production chains (Ethereum, Base, Arbitrum)
 
@@ -42,19 +41,22 @@ and Arbitrum One (`DeploymentConstants.coreV2`):
 | `PumpCorpFactory`                        | `0xe73Ea052c2891cE1668742142a6634Df09c88512` | Base |
 | `MetaDAOFactory`                         | _see latest deployment script_               | |
 
-The certificate image builder is a separate contract per chain; read its
-address from `CertificateUriBuilder.imageBuilder()`. ACE production
-deployment runs on Base (see [ace.metalex.tech](https://ace.metalex.tech)),
+The certificate image builder is a separate contract on each chain; read
+its address from `CertificateUriBuilder.imageBuilder()`. ACE runs in
+production on Base (see [ace.metalex.tech](https://ace.metalex.tech)),
 with its own pump stack beside the core suite.
 
-zkSync Era is not part of these tables: none of the shared addresses has
-code there, and the v5 release did not include it.
+zkSync Era is not in these tables: none of the shared addresses has code
+there, and v5 is not deployed there. Its agreement registry,
+`0x07E0a0BeC742f90f7879830bC917E783dA6a6357`, uses the signature type
+without `signer` and the four-field agreement id (see
+[CyberAgreementRegistry](contracts/CyberAgreementRegistry.md#data-model)).
 
 ## Test environments
 
-Base Sepolia and Ethereum Sepolia are the canonical test environments (some
-tests fork them: `forge test --via-ir --fork-url <rpc>`). The testnet
-suites share the production addresses **except**:
+Base Sepolia and Ethereum Sepolia are the test environments (some tests
+fork them: `forge test --via-ir --fork-url <rpc>`). The testnet suites
+share the production addresses **except**:
 
 | Contract                    | Ethereum Sepolia                             | Base Sepolia                                 |
 |-----------------------------|----------------------------------------------|----------------------------------------------|
@@ -67,9 +69,9 @@ suites share the production addresses **except**:
 ## Certificate extensions
 
 The extension proxies have the same addresses on every chain above. A v5
-company points its new printers at the V3 extensions, which render the
-whole certificate; existing printers stay on the V1 or V2 proxy they were
-created with. See [Certificate extensions](extensions.md).
+company points its new LET contracts at the V3 extensions, which render
+the whole certificate; an existing LET contract stays on the V1 or V2
+proxy it was created with. See [Certificate extensions](extensions.md).
 
 | Contract                    | Address                                      | Chains |
 |-----------------------------|----------------------------------------------|--------|
@@ -128,16 +130,16 @@ and `TimeSettlementPeriodCondition` are plain (non-upgradeable) contracts.
 
 ## Deploy versions
 
-Version-tracking constants (`DEPLOY_VERSION`) in the current source:
-`CyberCorp`, `IssuanceManager`, `DealManager`, `RoundManager`, `CyberScrip`
-and `LedgerEntryToken` at `"5"`. On all five chains the factories publish v5
-reference implementations, so new companies are v5. An existing company
-keeps its version (`"3"`, `"4"`, or `"4.1"` for the IssuanceManager) until
-its owner runs the [upgrade](../how-to/upgrade-a-cybercorp.md).
+`CyberCorp`, `IssuanceManager`, `DealManager`, `RoundManager`,
+`CyberScrip` and `LedgerEntryToken` report `DEPLOY_VERSION` `"5"` in the
+source. On all five chains the factories publish v5 reference
+implementations, so new companies are v5. An existing company keeps its
+version (`"3"`, `"4"`, or `"4.1"` for the IssuanceManager) until its owner
+runs the [upgrade](../how-to/upgrade-a-cybercorp.md).
 
 The v5 reference implementations on the production chains (each factory's
-`getRefImplementation()`, and the IssuanceManagerFactory's printer and
-scrip references):
+`getRefImplementation()`, and the IssuanceManagerFactory's
+`LedgerEntryToken` and `CyberScrip` references):
 
 | Contract           | Ethereum                                     | Base                                         | Arbitrum                                     |
 |--------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------|
@@ -148,12 +150,12 @@ scrip references):
 | `DealManager`      | `0x37aa6934e735f3984D4885545A080233DBc9BB75` | `0x820d6D00A90185d702B2d45840690DC96F9DAEb4` | `0xb87742F0743949EA1cBe0d2427CB8D41101EEBAD` |
 | `RoundManager`     | `0xc4099c6212cc28EA28c9dAD8F3dAc613372f6e34` | `0xE463CFF49e2be5c4A4820939f8243daE480c6537` | `0x511C9A7c13076f37659F15202781D802EcaeEDBb` |
 
-The same address can hold different contracts on different chains (for
-example `0x511C…` is the CyberCorp reference on Ethereum and the
-RoundManager reference on Arbitrum), so always pair an address with its
+The same address can hold different contracts on different chains
+(`0x511C…` is the CyberCorp reference on Ethereum and the RoundManager
+reference on Arbitrum, for example), so always pair an address with its
 chain.
 
-## Reference cyberCORPs
+## MetaLeX's own cyberCORP
 
-MetaLeX dogfoods the protocol with its own Delaware C-corp; MetaLeX's stock
-ledger is maintained natively onchain via this contract suite.
+MetaLeX runs its own Delaware C-corp on the protocol and keeps its stock
+ledger natively onchain in this contract suite.

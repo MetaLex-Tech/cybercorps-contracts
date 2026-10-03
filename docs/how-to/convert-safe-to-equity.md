@@ -1,37 +1,44 @@
+---
+description: The intended SafeCertificateConverter flow for converting SAFE LETs into equity in a priced round; the converter is a stub
+---
+
 # Convert SAFEs to equity
 
-When a cyberCORP runs a priced round, outstanding SAFEs convert to equity.
-The `SafeCertificateConverter` computes the conversion plan from round data.
+When a cyberCORP runs a priced round, its outstanding SAFEs convert to
+equity. Each SAFE is recorded as a Ledger Entry Token (LET) on the
+company's SAFE LET contract, and `SafeCertificateConverter` is meant to
+compute each one's conversion plan from the round's data.
 
-> **The `SafeCertificateConverter` is currently a stub** — the body of
-> `computeConversion` is commented out in the source and the function
-> returns an empty plan. This guide describes the intended use; do not rely
-> on it for live conversions until the implementation lands. See
-> [SafeCertificateConverter](../reference/contracts/SafeCertificateConverter.md).
+{% hint style="warning" %}
+`SafeCertificateConverter` is a stub. The body of `computeConversion` is
+commented out in the source, and the function returns an empty plan. Do
+not rely on it for live conversions. This guide describes the intended use;
+see [SafeCertificateConverter](../reference/contracts/SafeCertificateConverter.md).
+{% endhint %}
 
-## Intended usage
+## Compute the conversion plan
 
 ```solidity
 import {ICertificateConverter} from "src/interfaces/ICertificateConverter.sol";
 
 ConversionPlan memory plan = ICertificateConverter(CONVERTER).computeConversion(
     roundManager,   // the RoundManager running the priced round
-    roundId,        // bytes32 — the priced round
-    certPrinter,    // the SAFE cert printer
-    tokenId         // the SAFE cyberCERT to convert
+    roundId,        // bytes32, the priced round
+    certPrinter,    // the SAFE LET contract
+    tokenId         // the SAFE LET to convert
 );
 ```
 
-The converter reads the SAFE cert's `investmentAmountUSD` and
-`issuerUSDValuationAtTimeOfInvestment`, the round's price and cap-table
-snapshot, and applies the round's rounding policy to produce a share count
-and target class/series.
+The converter is designed to read the SAFE LET's `investmentAmountUSD` and `issuerUSDValuationAtTimeOfInvestment`, the
+round's price and cap table snapshot, and apply the round's rounding policy
+to produce a share count and a target class and series.
 
-The resulting plan is then executed by issuing the new equity cyberCERTs
-through the IssuanceManager (see [Issue a cyberCERT](issue-a-cybercert.md))
-and voiding the SAFE certs.
+## Execute the plan
 
-## Related
+Issue the new equity LETs through the IssuanceManager (see [Issue a
+LET](issue-a-let.md)) and void the SAFE LETs with `voidCert` on the SAFE LET
+contract.
 
-* [SafeCertificateConverter](../reference/contracts/SafeCertificateConverter.md),
-  [RoundManager](../reference/contracts/RoundManager.md).
+Function-level detail is in
+[SafeCertificateConverter](../reference/contracts/SafeCertificateConverter.md)
+and [RoundManager](../reference/contracts/RoundManager.md).
