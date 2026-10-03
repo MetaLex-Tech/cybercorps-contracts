@@ -358,8 +358,9 @@ contract:
   to a LET can fail or draw on the shared scrip vault instead of the
   holder's own positions.
 * **LeXcheX badge.** If the company has a holder cap configured, the
-  badge is wired before the holders are counted, so the tally counts
-  beneficial owners. Otherwise wiring it is optional; after a late
+  badge is wired before the holders are counted. The tally then reads
+  each holder's beneficial-owner count, U.S. status and credential
+  expiry from the badge. Otherwise wiring it is optional; after a late
   wiring, **Recount** counts the holders again.
 * **Holder tally.** The count a holder-cap check reads, including
   whether a buyer already holds the class. Until it is backfilled, the
@@ -369,8 +370,10 @@ contract:
 Until the holder counters, legal-owner index and holder tally of a LET
 contract are complete, the app refuses issuance, deal settlement and
 scrip conversion on it, and mission control shows **Migrate N LET
-contracts after the v5 upgrade**. Anyone can send the index and tally
-backfills; the counters and the badge need the owner or admin role.
+contracts after the v5 upgrade**. With a holder cap, the tally is
+complete only when it agrees with the badge for every counted holder.
+Anyone can send the index and tally backfills; the counters and the
+badge need the owner or admin role.
 Holders can still call the contract directly, which is why the Safe
 batch carries these calls in the same transaction as the upgrade.
 
