@@ -171,8 +171,9 @@ certificate's type, series, legal document and payment token. If none
 matches, as on a company's first ticket, the offer creates the LET
 contracts in the same transaction as the offer. The company, its deal and
 issuance managers and each reused LET contract must all report the same
-version. If one of them reports another version, the app stops before you
-sign.
+major version, 3 or 4. A v4 company can report "4" while a manager reports
+"4.1". If one of them reports another major version, the app stops before
+you sign.
 
 **On a v5 company**, each security in the offer needs a class identity and
 active class terms before the ticket can be signed:
