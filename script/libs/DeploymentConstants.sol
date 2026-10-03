@@ -240,8 +240,6 @@ library DeploymentConstants {
     }
 
     /// @notice Shared secondary-trading condition singletons.
-    /// @dev One instance per chain, configured per SPV. The last six addresses are
-    ///      parameterizations of LexChexBadgeKindCondition: one proxy per fact-key.
     function secondaryConditions(uint256 chainId)
         internal
         pure
@@ -249,7 +247,7 @@ library DeploymentConstants {
     {
         if (chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == BASE || chainId == ETH) {
             // deployed with salt "CyberCorpV5-SecondaryConditionsV1.0.0"
-            deployment = SecondaryConditionDeployment({
+            return SecondaryConditionDeployment({
                 eligibility: 0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B,
                 usStateOfResidence: 0x1d4918a83E1F971317f0DD529f088B208Ec24d8C,
                 legionSoulbound: 0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04,
@@ -270,9 +268,6 @@ library DeploymentConstants {
                 killSwitch: 0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435,
                 timeSettlementPeriod: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
             });
-            // KillSwitchCondition exists on the testnets only.
-            if (chainId == ETH_SEPOLIA || chainId == BASE_SEPOLIA) deployment.killSwitch = 0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435;
-            return deployment;
         } else {
             revert UnsupportedChain(chainId);
         }
