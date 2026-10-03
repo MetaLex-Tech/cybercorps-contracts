@@ -42,6 +42,8 @@ contract BaseScript is Script {
             stable = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; // Sepolia
         }else if (currentChainId == 421614) {
             stable = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; // Sepolia
+        } else if (currentChainId == 4663) {
+            stable = 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168; // Robinhood Chain USDG
         } else {
             revert("Unsupported chain ID"); // Handle unsupported chains
         }
