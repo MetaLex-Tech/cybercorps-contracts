@@ -116,12 +116,17 @@ residence, so a U.S. citizen who lives abroad is generally not a U.S.
 person.
 
 Investor status is not the only Regulation S condition. Each sale must also
-be an offshore transaction: the investor is outside the United States when
-they place the order, or the company reasonably believes so. The company
-must also make no directed selling efforts in the United States
-([Rule 903](https://www.law.cornell.edu/cfr/text/17/230.903)). An order that
-an investor places from inside the United States is not an offshore
-transaction, even if the investor is not a U.S. person.
+be an offshore transaction
+([Rule 902(h)](https://www.law.cornell.edu/cfr/text/17/230.902)):
+
+* The offer is not made to a person in the United States.
+* When the investor places the order, the investor is outside the United
+  States, or the company and anyone acting for it reasonably believe so.
+
+The company and anyone acting for it must also make no directed selling
+efforts in the United States
+([Rule 903](https://www.law.cornell.edu/cfr/text/17/230.903)). Some offerings
+have more Regulation S conditions.
 
 The round type from step 1 can settle the variant for you:
 
