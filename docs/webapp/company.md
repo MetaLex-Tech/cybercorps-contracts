@@ -396,8 +396,9 @@ So both ways need the same preparation:
   (`setTokenTransferable`). The Upgrade page lists each one that is on,
   with a **Turn off** button, and holds both ways until all are off.
   Turn transfers on again only after the checklist shows every holder
-  counter seeded; until then, the checklist does not send the next
-  counter call while transfers are on. Transfers out of the Deal and
+  counter seeded. Until then, the checklist does not send the next
+  counter call while transfers are on, and the app refuses to turn
+  holder transfers on for a LET contract with pending migrations. Transfers out of the Deal and
   Round Managers settle deals and allocations, and the contract allows
   them either way.
 * Clear every recertification approval on the company's LET
@@ -420,10 +421,20 @@ So both ways need the same preparation:
   EOI only after that time, so the page counts the round as open until
   a later block. A round that restricts the reduction of its end time
   cannot be closed early. If you have one, wait until the round ends.
-* Do not mint or transfer LETs outside the app. Do not sign a queued
-  Safe batch unless the Upgrade page shows it as waiting: the page
-  rebuilds the batch from the chain and marks a queued batch that no
-  longer matches as out of date.
+* Settle or void every pending deal and secondary offer whose lots the
+  Deal Manager holds. Anyone can settle a signed and paid deal or accept
+  an offer, and the Deal Manager delivers even with transfers off. A
+  delivery to a new holder after a Safe batch was built leaves that
+  holder out of the batch, and a later delivery to it would leave its
+  counter wrong. The page lists the escrowed lots and holds both ways
+  until there are none.
+* Do not mint or transfer LETs outside the app, and do not issue or
+  propose deals while a Safe batch waits for signatures. Do not sign a
+  queued Safe batch unless the Upgrade page shows it as waiting: the
+  page rebuilds the batch from the chain and marks a queued batch that
+  no longer matches as out of date. Execute the batch promptly after
+  that check. The page cannot see changes between its last check and
+  the execution.
 
 If the index reports no progress, or is more than 10,000 blocks behind
 the chain, the page cannot confirm that its lists are complete, and
