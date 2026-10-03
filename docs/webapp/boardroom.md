@@ -33,8 +33,9 @@ Before it sends a resignation, the app checks both, and that no
 owner-role adapter is set that could keep authorizing the wallet. If a
 check fails, it explains why and sends nothing. If an owner changes your
 role or the adapter while the transaction is pending, you can keep
-authority. The app checks again after the transaction and tells you if
-any authority remains.
+authority. After the transaction, the app reads your role and the
+owner-role adapter again and tells you if you still hold a role or owner
+authority. It does not check adapters set for other roles.
 
 Removing an owner whose wallet holds the company's
 [grants authority](grants.md) does not move that authority. Removal,
