@@ -129,15 +129,17 @@ counter. A holder can cause this without the company:
 `convertScripToCert` looks up the holder's lot through the legal-owner
 enumeration, which is empty until the backfill below. With a
 recertification approval on file, it then mints a new LET to the
-holder. An open FCFS round does the same without the company:
+holder. An FCFS round that has not ended does the same without the
+company once it opens:
 `RoundManager.submitEOI` is public, and for an FCFS round it calls
 `allocate` in the same transaction, which mints a LET to the investor.
 A new LET also reaches a legacy holder indirectly: if the LET contract
 is `transferable`, the wallet that received it can transfer possession
 to a legacy holder without an endorsement. Seed the counters
 in the same transaction as the beacon upgrade, as the app's Safe batch
-does. If the upgrade runs from a wallet instead, close every open FCFS
-round with `closeRoundNow(roundId)`, and clear every outstanding
+does. If the upgrade runs from a wallet instead, close every FCFS round
+that has not ended, including one that has not started, with
+`closeRoundNow(roundId)`, and clear every outstanding
 approval with `clearRecertificationApproval(certAddress, investor)`,
 before the upgrade. `closeRoundNow` sets `endTime` to the current
 block's timestamp, and `submitEOI` reverts `RoundNotOpen` only when

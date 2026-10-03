@@ -349,33 +349,34 @@ Closing a round early, refunds, rejections and recalls are not refused.
 **From a wallet, close FCFS rounds and clear recertification approvals first.**
 After the LET contract beacon upgrade, each wallet that holds a
 pre-upgrade LET has a holder counter of zero until the checklist seeds
-it. If a LET is minted
-or transferred to that wallet first, its counter stays below its
-balance. The deployed contracts cannot correct this, because
+it. If a LET is minted or transferred to that wallet first, its
+counter stays below its balance. The deployed contracts cannot correct this, because
 `initializeHolderCount` accepts only a zero counter.
 
 The app refuses issuance in this period. But a holder can still call
 `convertScripToCert` on the Issuance Manager directly. If the company
 has a recertification approval on file for that holder, the call mints
-a new LET to the holder's wallet. An open first-come, first-served
-(FCFS) round has the same effect: an investor can call `submitEOI` on
-the Round Manager directly, and the round allocates and mints a LET in
-the same call. If the LET contract allows transfers, a wallet that
+a new LET to the holder's wallet. A first-come, first-served (FCFS)
+round that has not ended has the same effect once it opens: an
+investor can call `submitEOI` on the Round Manager directly, and the
+round allocates and mints a LET in the same call. If the LET contract allows transfers, a wallet that
 receives a new LET can also pass it to a wallet that holds a
 pre-upgrade LET. So before you upgrade from a wallet:
 
 * Clear every recertification approval on the company's LET
-  contracts. The Upgrade page lists the approvals that the app's index
-  recorded, confirms each one onchain, and shows a **Revoke** button
-  for each. Until they are revoked, the next wallet step shows
-  **Revoke approvals first** and cannot be sent. The page does not list
-  an approval that the index did not record. An admin checks a wallet
-  with `getRecertificationApproval` and clears it with
-  `clearRecertificationApproval` on the Issuance Manager.
-* Close every open FCFS round with **Close round now**
-  (`closeRoundNow`). The Upgrade page lists the company's FCFS rounds
-  that have not ended, with that button for each, and the next wallet
-  step shows **Close FCFS rounds first** until none is open. Closing
+  contracts. The contracts cannot list their approvals. So the Upgrade
+  page takes them from the app's index, up to the last block the index
+  processed, and from the Issuance Manager's
+  `RecertificationApprovalSet` events after that block, up to the
+  latest block. It confirms each one onchain and shows a **Revoke**
+  button for each. The next wallet step shows
+  **Revoke approvals first** until none is on file.
+* Close every FCFS round that has not ended, including a round that
+  has not started yet, with **Close round now** (`closeRoundNow`). The
+  Upgrade page finds these rounds the same way, from the index and the
+  Round Manager's `RoundCreated` events, and shows that button for
+  each. The next wallet step shows **Close FCFS rounds first** until
+  none is left. Closing
   sets the round's end time to the time of that block, and the round
   refuses an EOI only after that time. So the page counts the round as
   open until a later block, and the next step stays disabled until then.
@@ -383,14 +384,19 @@ pre-upgrade LET. So before you upgrade from a wallet:
   early. If you have one, use a Safe, or wait until the round ends.
 * Do not mint or transfer LETs outside the app.
 
+If the index reports no progress, or is more than 10,000 blocks behind
+the chain, the page cannot confirm that its lists are complete, and the
+wallet steps stay disabled. The lists are complete only if the index
+processed its blocks correctly.
+
 Set the cleared approvals again only after the checklist shows every
 required migration done, so that the app no longer pauses the LET
 contract. The holder counters are not enough: until the legal-owner
 index is backfilled, a conversion with an approval also takes its units
 from the shared scrip vault instead of the holder's own positions. A
 Safe does not have this problem: the Safe batch seeds the counters and
-runs the backfills in the same transaction as the upgrade. If a counter does
-go wrong, the checklist reports a mismatched holder counter, and the
+runs the backfills in the same transaction as the upgrade. If a
+counter does go wrong, the checklist reports a mismatched holder counter, and the
 app keeps issuance, deal settlement and scrip conversion paused on that
 LET contract. Contact MetaLeX in that case.
 {% endhint %}
