@@ -139,7 +139,10 @@ in the same transaction as the beacon upgrade, as the app's Safe batch
 does. If the upgrade runs from a wallet instead, close every open FCFS
 round with `closeRoundNow(roundId)`, and clear every outstanding
 approval with `clearRecertificationApproval(certAddress, investor)`,
-before the upgrade. `closeRoundNow` reverts
+before the upgrade. `closeRoundNow` sets `endTime` to the current
+block's timestamp, and `submitEOI` reverts `RoundNotOpen` only when
+`block.timestamp > endTime`. So wait for a block with a later timestamp
+before the beacon upgrade. `closeRoundNow` reverts
 `EndTimeReductionRestricted` for a round that restricts it; for such a
 round, use a Safe batch or wait until the round ends. Set the approvals
 again only after the counters are seeded

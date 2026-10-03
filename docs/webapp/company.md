@@ -375,9 +375,12 @@ pre-upgrade LET. So before you upgrade from a wallet:
 * Close every open FCFS round with **Close round now**
   (`closeRoundNow`). The Upgrade page lists the company's FCFS rounds
   that have not ended, with that button for each, and the next wallet
-  step shows **Close FCFS rounds first** until none is open. A round
-  that restricts the reduction of its end time cannot be closed early.
-  If you have one, use a Safe, or wait until the round ends.
+  step shows **Close FCFS rounds first** until none is open. Closing
+  sets the round's end time to the time of that block, and the round
+  refuses an EOI only after that time. So the page counts the round as
+  open until a later block, and the next step stays disabled until then.
+  A round that restricts the reduction of its end time cannot be closed
+  early. If you have one, use a Safe, or wait until the round ends.
 * Do not mint or transfer LETs outside the app.
 
 Set the cleared approvals again only after the checklist shows every
