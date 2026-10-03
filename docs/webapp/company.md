@@ -332,6 +332,8 @@ To upgrade:
 3. Otherwise, send the steps from a wallet that holds the owner role.
    Only the next step's **Upgrade** button is active. Each step is its
    own transaction, and the page reads the chain again before each one.
+   The LET contract migrations follow in later transactions, so read
+   the warning about scrip conversion below before you start.
 4. Choose **Refresh versions** to reread the versions afterwards.
 
 {% hint style="warning" %}
@@ -341,6 +343,38 @@ v5 and older contracts side by side, mission control shows **Finish the
 v5 upgrade**, and the app refuses deals, rounds and issuance, both for
 officers and for investors, with a message that names the Upgrade page.
 Closing a round early, refunds, rejections and recalls are not refused.
+{% endhint %}
+
+{% hint style="danger" %}
+**From a wallet, clear the risky recertification approvals first.**
+After the LET contract beacon upgrade, each wallet that holds a
+pre-upgrade LET has a holder counter of zero until the checklist seeds
+it. If a LET is minted
+or transferred to that wallet first, its counter stays below its
+balance. The deployed contracts cannot correct this, because
+`initializeHolderCount` accepts only a zero counter.
+
+The app refuses issuance in this period. But a holder can still call
+`convertScripToCert` on the Issuance Manager directly. If the company
+has a recertification approval on file for that holder, the call mints
+a new LET to the holder's wallet. So before you upgrade from a wallet:
+
+* Clear the recertification approval of each wallet that holds a
+  pre-upgrade LET of the company. The **Scrips** table shows these
+  investors as **Auto-approved** and has no **Revoke** for them, but an
+  approval set earlier can still be on file. An admin checks it with
+  `getRecertificationApproval` and clears it with
+  `clearRecertificationApproval` on the Issuance Manager. An approval
+  for a wallet that holds no LET is safe: the new LET gives that wallet
+  a counter that matches its balance.
+* Do not mint or transfer LETs outside the app.
+
+Set the cleared approvals again after the checklist shows the holder
+counters done. A Safe does not have this problem: the Safe batch seeds
+the counters in the same transaction as the upgrade. If a counter does
+go wrong, the checklist reports a mismatched holder counter, and the
+app keeps issuance, deal settlement and scrip conversion paused on that
+LET contract. Contact MetaLeX in that case.
 {% endhint %}
 
 ### Finish the LET contract migrations

@@ -81,8 +81,10 @@ Safe that the connected wallet owns holds the owner role, it proposes
 every call that is not done as one Safe transaction, followed by the LET
 migrations of step 3 that need no dates. Otherwise it sends one call at
 a time from a wallet with the owner role, and only the next call is
-available. It starts the sequence only for a company with all contracts
-on a v4 release (any 4.x `DEPLOY_VERSION`, such as `"4"`, `"4.0.1"` or
+available. From a wallet, the LET migrations follow in later
+transactions, so read the scrip conversion risk in step 3 first. It
+starts the sequence only for a company with all contracts on a v4
+release (any 4.x `DEPLOY_VERSION`, such as `"4"`, `"4.0.1"` or
 `"4.1"`), UUPS proxies, an IssuanceManager and a DealManager, and
 v5 references for every call. A v4 company without a RoundManager
 takes the five other calls; a fork test of a deal and an issuance after
@@ -119,6 +121,21 @@ possession counter, a holder's counter reads zero and a transfer out of
 that wallet reverts. An admin seeds each such holder with
 `initializeHolderCount(holder)` before anything is minted or transferred to
 or from it.
+
+A mint or transfer that reaches a holder first sets the counter to 1,
+below the holder's balance. `initializeHolderCount` then reverts
+`HolderCountAlreadyInitialized`, and no deployed function corrects the
+counter. A holder can cause this without the company:
+`convertScripToCert` looks up the holder's lot through the legal-owner
+enumeration, which is empty until the backfill below. With a
+recertification approval on file, it then mints a new LET to the
+holder. Seed the counters in the same transaction as the beacon upgrade,
+as the app's Safe batch does. If the upgrade runs from a wallet instead,
+clear the approval of each wallet that holds a pre-upgrade LET with
+`clearRecertificationApproval(certAddress, investor)` before the
+upgrade, and set it again after the counters are seeded. An approval
+for a wallet that holds no LET is safe, because the new LET gives that
+wallet a counter equal to its balance.
 
 ### Backfill legal owners and the look-through tally
 
