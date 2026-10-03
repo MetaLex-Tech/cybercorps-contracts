@@ -82,7 +82,8 @@ every call that is not done as one Safe transaction, followed by the LET
 migrations of step 3 that need no dates. Otherwise it sends one call at
 a time from a wallet with the owner role, and only the next call is
 available. It starts the sequence only for a company with all contracts
-on v4 (4 or 4.1), UUPS proxies, an IssuanceManager and a DealManager, and
+on a v4 release (any 4.x `DEPLOY_VERSION`, such as `"4"`, `"4.0.1"` or
+`"4.1"`), UUPS proxies, an IssuanceManager and a DealManager, and
 v5 references for every call. A v4 company without a RoundManager
 takes the five other calls; a fork test of a deal and an issuance after
 those five calls passed before the app allowed it. While a company runs
