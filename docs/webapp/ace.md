@@ -60,8 +60,8 @@ not.
 
 ACE tickets use the same ticket form as other cyberRAISE tickets. A new ACE
 raise creates a v5 company, where the ticket form first has you choose each
-security's class and set up its terms and LET contract. On a v4 company the
-offer reuses or creates its LET contracts itself.
+security's class and set up its terms and LET contract. On a v3 or v4
+company the offer reuses or creates its LET contracts itself.
 [Set up a ticket for an existing company](cyberraise.md#set-up-a-ticket-for-an-existing-company)
 gives the steps and what happens on other versions.
 
