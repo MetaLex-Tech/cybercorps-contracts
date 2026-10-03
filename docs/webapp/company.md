@@ -362,11 +362,12 @@ a wallet that receives a new LET can also pass it to a wallet that
 holds a pre-upgrade LET. So before you upgrade from a wallet:
 
 * Clear every recertification approval on the company's LET
-  contracts. The **Scrips** table shows **Revoke** for approved
-  investors who hold no LET. For an investor who already holds a LET,
-  the table shows **Auto-approved** and has no **Revoke**, but an
-  approval set earlier can still be on file. An admin checks it with
-  `getRecertificationApproval` and clears it with
+  contracts. The Upgrade page lists the approvals that the app's index
+  recorded, confirms each one onchain, and shows a **Revoke** button
+  for each. Until they are revoked, the next wallet step shows
+  **Revoke approvals first** and cannot be sent. The page does not list
+  an approval that the index did not record. An admin checks a wallet
+  with `getRecertificationApproval` and clears it with
   `clearRecertificationApproval` on the Issuance Manager.
 * Do not mint or transfer LETs outside the app.
 
