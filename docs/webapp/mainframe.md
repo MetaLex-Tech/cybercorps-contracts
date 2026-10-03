@@ -676,9 +676,10 @@ upgraded printer. Until it is on, changing a certificate's registered
 owner and settling secondary trades on that class fail; turn it on for
 the classes that should allow them (see
 [Classes and series](#classes-and-series)). Before you do, the upgraded
-printer's legal-owner index and holder tally need a one-time backfill,
-which the app does not run; until then a holder-cap check can undercount
-existing holders. See
+printer's legal-owner index, holder tally and lot acquisition dates need a
+one-time backfill, which the app does not run. Until then a holder-cap
+check can undercount existing holders, and Rule 144 and Reg S trades are
+refused. See
 [Upgrade a cyberCORP](../how-to/upgrade-a-cybercorp.md#3-after-the-upgrade).
 
 > **Under the hood.** Upgrades use a **co-approval** model: MetaLeX

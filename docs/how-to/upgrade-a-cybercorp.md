@@ -107,6 +107,20 @@ Transaction Builder JSON) and refuses a company that has no RoundManager.
      batch can be re-run safely.
 
   See [Holder counts](../reference/contracts/LedgerEntryToken.md#holder-counts).
+* Each lot's `acquisitionTimestamp` is also new and reads zero for lots
+  minted before the upgrade. `HoldingPeriodCondition` (Rule 144) and
+  `RegSDistributionComplianceCondition` fail closed on a zero timestamp, so
+  secondary trades on those pathways stay refused until it is set. Before
+  enabling them:
+  1. On a printer whose extension supports the fund-interest type, run
+     `backfillAcquisitionTimestamps(start, count)` in batches. It copies
+     each lot's recorded acquisition date, and does nothing on other
+     printers.
+  2. For the remaining lots, an admin sets each known date with
+     `setAcquisitionTimestamp(tokenId, ts)`. The date anchors the holding
+     period, so take it from the company's records.
+
+  See [LedgerEntryToken](../reference/contracts/LedgerEntryToken.md).
 
 ## What you can and cannot do
 
