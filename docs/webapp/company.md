@@ -389,8 +389,10 @@ The checklist also handles the dates, which block nothing in the app:
 
 Review each date against the company's records, change any that are
 wrong, and confirm the table before you send. A date earlier than the
-onchain record is allowed, but the page flags it, because it shortens
-the holding period the trading conditions enforce. From a wallet, each
+onchain record is allowed, but the page flags it. The Rule 144 and Reg
+S conditions add their fixed period to this date, so an earlier date
+makes more of that period count as served, and the LET can trade
+sooner. From a wallet, each
 date is its own transaction; a Safe sends them as one. Mission control
 shows **Set acquisition and issue dates of pre-upgrade lots** until
 they are set.
