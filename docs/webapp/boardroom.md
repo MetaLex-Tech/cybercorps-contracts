@@ -27,10 +27,10 @@ MetaLeX profile, using only fields they have made public.
 The app refuses to remove the last officer or let them resign, because
 the last officer is the company's last owner and the company would be
 left with no one able to manage it, permanently. Add a successor first.
-On a v5 company, resigning your own officer entry is disabled: the
-dialog says the company "uses separate board and officer authority" and
-that the boardRoom needs v5's own self-resignation path before it can
-submit the action.
+On a v5 company, the contract revokes a resigning officer's authority
+only when the wallet has one roster entry and the standard officer role.
+Before it sends a resignation, the app checks both. If either fails, it
+explains why and sends nothing.
 
 Removing an owner whose wallet holds the company's
 [grants authority](grants.md) does not move that authority. Removal,
@@ -62,13 +62,15 @@ one:
   The app rejects "&" in titles, so use commas or "and". Promoting another
   officer takes two transactions, a remove followed by a re-add. If the
   first mines and the second fails, the app tells you the person is
-  temporarily off the roster and offers a one-click retry. You can't
-  re-title yourself this way, so another officer must do it.
+  temporarily off the roster and offers a one-click retry. On a v5
+  company, you can also re-title yourself, in one transaction. On older
+  companies you can't, so another officer must do it.
 * **Add a different wallet** adds a new officer with a director title.
 
-On a v5 company, **Promote an officer** shows "This cyberCORP's contract
-version does not use this title-based board promotion flow" and sends
-nothing. **Add a different wallet** is not subject to that check.
+**Promote an officer** and **keep as officer** (below) run only on
+contract implementations MetaLeX has reviewed. If the app cannot verify
+the company's implementation, it says so and sends nothing. **Add a
+different wallet** is not subject to that check.
 
 **Remove from board** offers two outcomes. **keep as officer** strips
 the board words from the title ("CEO, Director" back to "CEO"), and
@@ -224,9 +226,10 @@ deployed for your company.
 > [`CyberCorp`](../reference/contracts/CyberCorp.md) contract, and
 > officer authority is a role in [BorgAuth](../reference/access-control.md).
 > The app sends CyberCorp's in-place `updateOfficer` only for your own
-> entry and only on contract implementations MetaLeX has reviewed for it.
-> No deployed cyberCORP runs such an implementation, so a re-title is a
-> remove and a re-add. CyberCorp has no separate onchain director tier,
+> entry and only on contract implementations MetaLeX has reviewed for it,
+> which are the v5 reference implementations. A re-title of another
+> officer, and any re-title on an older company, is a remove and a
+> re-add. CyberCorp has no separate onchain director tier,
 > so the boardRoom reads its director roster from officer titles. Consents are agreements in the
 > [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md),
 > created and signed in one transaction.
