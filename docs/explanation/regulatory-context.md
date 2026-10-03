@@ -1,89 +1,83 @@
+---
+description: >-
+  The US exemptions and SEC staff statements the protocol is built around,
+  and what lies outside it. Not legal advice.
+---
+
 # Regulatory context
 
-This page is a brief, non-exhaustive map of the regulatory backdrop the
+This page maps, briefly and incompletely, the regulatory backdrop the
 protocol is designed for. It is **not legal advice**. Issuers must consult
 their own counsel.
 
-## US securities laws
+## Reg D private placements
 
-### Reg D (private placements to US investors)
+Reg D is the standard exemption for unregistered private placements to US
+investors, with accreditation requirements under Rule 506(b) and 506(c) and
+limits on general solicitation. A company running a Reg D offering on the
+protocol checks LeXcheX accreditation credentials with `LexChexCondition`
+(`hasValidLexCheX`) at issuance, at deal close and when scrip converts into
+a Ledger Entry Token (LET). It signs from Reg D agreement templates such as
+`MetaLeX cyberSAFE US style Reg D`. For holder limits it can gate secondary
+trades with `HolderCapCondition`, which counts holders on a look-through
+basis, watch the onchain holder-count views for the 12(g) threshold, and, on
+a v5 company, cap scrip holders on the scrip itself (see
+[Restrict scrip transfers](../how-to/restrict-transfers.md)).
 
-The standard exemption for unregistered US private placements. Imposes
-accreditation requirements (Rule 506(b)/(c)) and limits on general
-solicitation. The protocol supports Reg D via:
+## Reg S offerings
 
-* `LexChexCondition` accreditation-credential checks (`hasValidLexCheX`) at
-  issuance, deal close, and de-scripification.
-* Reg D agreement templates (`MetaLeX cyberSAFE US style Reg D`, etc.).
-* Holder-cap tooling: `HolderCapCondition` gates secondary trades against
-  look-through holder limits, and onchain holder-count views support 12(g)
-  threshold monitoring. (`CyberScrip` also carries a transfer-enforced
-  `maxHolderCount`, but its setter is not currently reachable in
-  production — see
-  [Restrict cyberSCRIP transfers](../how-to/restrict-transfers.md).)
+Reg S covers offers and sales made outside the United States. The protocol
+supports
+it through `NonUSNationalityCondition`, which checks a zkPassport proof of
+non-US nationality, through Reg S agreement templates, and through LiquiLeX
+pools run either whitelisted or open with the matching gate.
 
-### Reg S (offers to non-US persons)
+## Secondary resales
 
-The extraterritorial-offering exemption. The protocol supports Reg S via:
+On a v5 company, a secondary trade settles under an exemption pathway the
+buyer elects on accepting the offer: Rule 144, §4(a)(7), §4(a)(1½), Rule
+144A or Reg S. Each
+pathway has its own conditions for holding periods, disclosure, distribution
+compliance, buyer eligibility and jurisdictional screens. Issuers enable only
+the pathways they support, and an unconfigured pathway blocks trades.
+[Compliance architecture](compliance-architecture.md) describes the
+condition sets.
 
-* `NonUSNationalityCondition` (zkPassport).
-* Reg S agreement templates.
-* Optional whitelisted-pool or open-pool LiquiLeX models with the
-  appropriate gate.
-
-### Secondary resales
-
-Secondary trades settle under an exemption pathway elected by the buyer at
-acceptance — Rule 144, §4(a)(7), §4(a)(1½), Rule 144A, or Reg S — each
-wired to its own condition set (holding periods, disclosure, distribution
-compliance, buyer eligibility, and jurisdictional screens). Issuers enable
-only the pathways they support; an unconfigured pathway blocks trades.
-
-### Tokenized securities — SEC January 2026 Joint Staff Statement
+## SEC staff statements
 
 In January 2026 the SEC's Division of Corporation Finance issued a joint
-staff statement clarifying that the agency's traditional analytical
-framework for securities laws applies to tokenized securities. The cyberCORPs
-protocol is designed to be compatible with that framework: a tokenized
-security is a security, treated as such, and the chain is the medium not
-the escape.
+staff statement confirming that the agency's existing framework for
+analyzing securities applies to tokenized securities
+([statement](https://www.sec.gov/newsroom/speeches-statements/corp-fin-statement-tokenized-securities-012826)).
+The protocol is built for that framework, in which a security recorded
+onchain is still a security.
 
-See:
-[corp-fin-statement-tokenized-securities-012826](https://www.sec.gov/newsroom/speeches-statements/corp-fin-statement-tokenized-securities-012826).
+In April 2026 SEC staff issued guidance on covered user interface providers
+(File No. 4-894), creating a safe harbor for front-end operators that meet
+its conditions. It bears on anyone operating a front end that helps
+investors find issuers or trade, such as cyberRAISE, cyberTRADE, LiquiLeX or
+ACE front ends. The contracts behave the same whichever safe harbor a
+front-end operator relies on.
 
-### Covered User Interface Providers — SEC April 2026 Staff Statement
+## Corporate law
 
-In April 2026 the SEC issued staff guidance on "covered user interface
-providers" (File No. 4-894). The statement creates a safe harbour for
-front-end operators that meet specified conditions, relevant to operators of
-cyberTRADE and LiquiLeX front ends. The contract architecture stays neutral
-to front-end legal status: whichever harbour a UI operator chooses to
-rely on, the chain-side primitives do not change.
+The protocol depends on corporate and entity law for the designation that
+makes the onchain register the legal record. The Delaware General
+Corporation Law is the most fully worked-out case. Delaware LLC law, Cayman
+corporate and SPC regimes, BVI corporate law, English company law
+(Companies Act 2006) and partnership and fund statutes also accommodate the
+designation. [Legal mappings](legal-mappings.md) sets out the provisions.
 
-## Delaware General Corporation Law
+## Outside the protocol's scope
 
-The most fully worked-out statutory reference for the protocol. See
-[Legal mappings](legal-mappings.md) for the field-by-field hooks (DGCL §§
-151, 155, 158, 202, 219, 224).
-
-## Other jurisdictions
-
-Delaware LLC law, Cayman corporate / SPC regimes, BVI corporate law,
-English corporate law (Companies Act 2006), and various partnership /
-fund statutes all accommodate the protocol's constitutional designation
-pattern. See [Legal mappings](legal-mappings.md).
-
-## What is *not* in scope
-
-* Broker-dealer registration analysis for any specific front end. (See SEC
-  April 2026 Staff Statement for the UI-provider safe harbour conditions.)
-* AIFMD / EU MiCA / specific national private-placement regimes. The
-  protocol does not encode these; issuers under those regimes configure
-  conditions and agreements to comply.
-* Tax. The protocol records what happens; tax treatment of each event is
-  an issuer/holder question.
+Whether a particular front end needs broker-dealer registration is a
+question for its operator, and the April 2026 staff statement sets out the
+conditions of its safe harbor. AIFMD, MiCA and national private-placement
+regimes are not encoded in the contracts, so issuers subject to them
+configure conditions and agreements to comply. Tax treatment is for the
+issuer and the holder to work out from the events the protocol records.
 
 ## See also
 
-* [MetaLeX Substack](https://metalex.substack.com/) for the running
-  commentary on regulatory developments.
+* [MetaLeX on Substack](https://metalex.substack.com/), for commentary on
+  regulatory developments.

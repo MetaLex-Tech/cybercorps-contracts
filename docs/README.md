@@ -1,76 +1,68 @@
 ---
 description: >-
-  Natively tokenized private securities on Ethereum, anchored in each issuer's
-  governing law — and how to use the apps built on them.
+  Private securities recorded as Ledger Entry Tokens, anchored in each
+  issuer's governing law, and the MetaLeX apps that run on them.
 ---
 
 # Welcome to cyberCORPs
 
-**cyberCORPs** is MetaLeX's smart-contract protocol for turning a legal entity
-(a Delaware C-corp or LLC, a Cayman LLC or SPC, a BVI fund, an English company,
-or any analogous structure) into an *onchain entity* that issues legally
-constitutive digital securities, maintains its register of holders, conducts
-fundraising rounds, and settles deals through a composable system of contracts.
+cyberCORPs is MetaLeX's smart-contract protocol for keeping a company's
+securities onchain, together with the apps built on it. A company joins as a
+**cyberCORP**: its governing documents designate the protocol's contracts as
+the register for the shares they tokenize, and those contracts issue its
+securities, record transfers, run fundraising rounds and settle trades. For
+those shares the onchain record is the register itself, and the tokens do not
+point at a register kept somewhere else.
 
-In a cyberCORP, **the blockchain IS the official register** — not a pointer to
-one.
+The protocol works for any entity type and jurisdiction. Delaware C-corp
+stock is the most complete implementation, and LLC membership interests, LP
+interests, segregated portfolio company shares and non-US equity use the same
+contracts. It runs on Ethereum, Base and Arbitrum.
 
-The protocol is entity-type and jurisdiction agnostic. Delaware C-corp stock is
-the most fully worked-out reference implementation. LLC membership interests,
-LP interests, segregated-portfolio-company shares, and non-US equity all flow
-through the same primitives.
+## Core terms
 
-Live on **Ethereum mainnet**, **Arbitrum**, and **Base**.
+* A **cyberCORP** is the company's onchain presence: its `CyberCorp` contract
+  plus the managers that issue its securities, run its rounds and settle its
+  deals.
+* A **Ledger Entry Token (LET)** is an ERC-721 token that records one entry
+  on the register: who holds how many units of which class or series, on what
+  terms and restrictions. Each class or series has its own **LET contract**.
+* **Scrip** is a fungible ERC-20 token that tracks a LET's units in a fixed
+  ratio. A holder moves units from a LET into scrip and can convert scrip
+  back into a LET. The rights scrip carries come from the company's governing
+  documents and the scrip's terms: under MetaLeX-form bylaws, scrip is not
+  stock and gives no stockholder rights on its own.
+* **cyberSign** records agreements in the `CyberAgreementRegistry`, where
+  every party's signature is checked onchain. Rounds, deals and trades are
+  signed there.
 
-## How this documentation is organised
+[Ledger Entry Tokens and scrip](explanation/lets-and-scrip.md) explains how
+the two forms relate, and the [glossary](reference/glossary.md) defines the
+rest.
 
-This book has two parts.
+## How this book is organized
 
-**Part 1 — Protocol** documents the smart contracts
-([`cybercorps-contracts`](https://github.com/MetaLex-Tech/cybercorps-contracts)).
-It follows the [Diátaxis](https://diataxis.fr/) framework:
+| Part | Written for | Start with |
+|---|---|---|
+| **Using the apps** | Founders, officers, investors and holders using the MetaLeX apps. No code. | [Getting started](webapp/README.md) |
+| **How cyberCORPs works** | Anyone evaluating the model: lawyers, investors, integrators. | [Constitutive vs. pointer tokenization](explanation/constitutive-vs-pointer.md) |
+| **Building on the protocol** | Developers integrating with or extending the contracts. | [Guides](how-to/README.md), then the [reference](reference/README.md) |
 
-| Section | When to read it |
-|---|---|
-| [**Tutorials**](tutorials/README.md) | You're new and want to *learn by doing*. Start here. |
-| [**How-to Guides**](how-to/README.md) | You have a specific goal and want a recipe. |
-| [**Reference**](reference/README.md) | You need the dry technical facts (contract APIs, roles, events). |
-| [**Explanation**](explanation/README.md) | You want to *understand why* the protocol is the way it is. |
+## What runs on the protocol
 
-**Part 2 — Web App** is for people *using* the cyberCORPs apps — issuers,
-investors, and token communities. No code, no setup: just what each app does
-and how to use it.
+| Product | What it does | Guide |
+|---|---|---|
+| **cyberCORPs app** | Form a company or bring an existing one onchain, then run its cap table, board, grants and securities. | [Run your company](webapp/company.md) |
+| **cyberRAISE** | Primary fundraising rounds: SAFEs, SAFTs, SAFTEs, token warrants and priced equity. | [cyberRAISE](webapp/cyberraise.md) |
+| **ACE** | Rounds paid in a token community's own token. | [ACE](webapp/ace.md) |
+| **cyberSign** | Propose and sign agreements, each signature recorded onchain. | [cyberSign](webapp/cybersign.md) |
+| **LeXcheX** | Accredited-investor and compliance credentials attached to a wallet. | [LeXcheX](webapp/lexchex.md) |
+| **cyberTRADE** | Settlement of negotiated secondary trades under an elected exemption pathway. | [Run a secondary trade](how-to/run-a-secondary-trade.md) |
+| **LiquiLeX** | Uniswap v4 liquidity pools for scrip. | [Deploy a LiquiLeX pool](how-to/deploy-liquilex-pool.md) |
 
-| Guide | For |
-|---|---|
-| [Using the cyberCORPs apps](webapp/README.md) | Everyone — start here. |
-| [The cyberCORPs app](webapp/mainframe.md) | Issuers managing their cyberCORP. |
-| [The cap table](webapp/captable.md) | Issuers running the register — tokenized and offchain positions, AI-assisted import. |
-| [Cap-table records, modeling and compliance](webapp/captable-tools.md) | Issuers — §219 lists, 409A / 701 / 3921 / 83(b), round and exit modeling. |
-| [Token grants and onchain vesting](webapp/grants.md) | Issuers granting equity awards; recipients vesting them. |
-| [The boardRoom and Incorporation Hub](webapp/boardroom.md) | Officers and directors — consents, authority, formation record. |
-| [For holders: your securities](webapp/holders.md) | Stakeholders and investors holding MetaLeX-issued securities. |
-| [cyberRAISE](webapp/cyberraise.md) | Issuers raising capital; investors funding rounds. |
-| [ACE](webapp/ace.md) | Token communities converting to equity; investors. |
-| [cyberSign](webapp/cybersign.md) | Anyone proposing, signing or countersigning an onchain agreement. |
-| [LeXcheX](webapp/lexchex.md) | Anyone who needs to prove accredited-investor status. |
-| [Your profile](webapp/profile.md) | Everyone — identity, wallets, and entities. |
-| [Launchpads: MetaDAO and Umia](webapp/metadao.md) | Projects forming the entity a launchpad prescribes; anyone reading a company's public page. |
+## Source code
 
-## The two-minute version
-
-1. A **cyberCORP** is an onchain entity whose constitutional documents
-   designate the onchain contract system as the entity's official register of
-   holders.
-2. A **cyberCERT** (ERC-721) is a *Ledger Entry Token* — a single entry on that
-   register.
-3. A **cyberSCRIP** (ERC-20) is the *fungible* form of that same security,
-   minted from a cyberCERT and convertible back.
-4. A growing **application stack** runs on this single contract suite —
-   **cyberRAISE**, **cyberTRADE**, **ACE**, **LiquiLeX**, **cyberSign** — all
-   surfaced through the **cyberCORPs app**. Part 2 explains how to use
-   them.
-
-## Protocol repository
-
-[github.com/MetaLex-Tech/cybercorps-contracts](https://github.com/MetaLex-Tech/cybercorps-contracts)
+The contracts are in
+[MetaLex-Tech/cybercorps-contracts](https://github.com/MetaLex-Tech/cybercorps-contracts),
+and the apps in
+[MetaLex-Tech/metalex-webapp](https://github.com/MetaLex-Tech/metalex-webapp).

@@ -1,13 +1,13 @@
 ---
-description: Attach condition contracts to issuance, deals, rounds, and secondary settlement
+description: Attach condition contracts to scripification, rounds, deals and secondary settlement, and write a custom condition
 ---
 
 # Gate state transitions with conditions
 
-A **condition** is a contract implementing `ICondition`. Conditions gate
-state transitions on arbitrary onchain checks.
-
-## The interface
+A condition is a contract implementing `ICondition`. Attaching conditions
+lets a company require any onchain check before scrip is minted or
+redeemed, an investor joins a round, a deal proceeds or a secondary trade
+settles.
 
 ```solidity
 interface ICondition {
@@ -19,20 +19,24 @@ interface ICondition {
 }
 ```
 
-See [Conditions](../reference/conditions.md) for the built-in conditions
+[Conditions](../reference/conditions.md) documents the built-in conditions
 (`lexchexCondition`, `NonUSNationalityCondition`,
-`IssuerApprovalRecertificationCondition`, `OrCondition`), plus the
-secondary-trading condition family in
+`IssuerApprovalRecertificationCondition`, `OrCondition`). The
+secondary-trading conditions live in
 [`src/libs/conditions/secondary/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/libs/conditions/secondary)
-(eligibility, holding period, holder cap, Reg S distribution compliance,
-Rule 144 / Section 4(a)(7) disclosure, CFIUS, kill switch, and more).
+and cover eligibility, holding periods, holder caps, Reg S distribution
+compliance, Rule 144 and Section 4(a)(7) disclosure, CFIUS, a kill switch
+and more.
 
-## Where conditions are attached
+## Attach conditions where the protocol accepts them
 
-Conditions are passed as `address[]` (or `ICondition[]`) into the call that
-creates the gated thing:
+Pass conditions as an `address[]` (or `ICondition[]`) to the call that
+creates the gated thing. Secondary trades are the exception: the
+DealManager keeps their conditions as standing lists.
 
-**Scripification / de-scripification** — set when the scrip is deployed:
+### Scripification and de-scripification
+
+Set both lists when you deploy the scrip:
 
 ```solidity
 IIssuanceManager(issuanceManager).deployCyberScrip(
@@ -44,14 +48,20 @@ IIssuanceManager(issuanceManager).deployCyberScrip(
 );
 ```
 
-**A fundraising round** — in the `Round` built via `RoundLib.setAgreement`
-(`roundConditions`), and per-EOI in `submitEOI(..., conditions, ...)`.
+### Fundraising rounds
 
-**A deal** — the `conditions` argument of `DealManager.proposeDeal`.
+Round-wide conditions go in the `Round` built with `RoundLib.setAgreement`
+(`roundConditions`). Per-EOI conditions go in
+`submitEOI(..., conditions, ...)`.
 
-**Secondary trades** — configured on the DealManager as standing lists
-rather than per-call arguments, and evaluated at post, accept, *and*
-finalize:
+### Deals
+
+Pass them as the `conditions` argument of `DealManager.proposeDeal`.
+
+### Secondary trades
+
+The company sets these lists once on the DealManager, and the DealManager
+evaluates them at post, accept and finalize:
 
 ```solidity
 // exemption-pathway conditions (also enables/disables the pathway)
@@ -62,16 +72,14 @@ dealManager.setSpvThresholdConditions(conditions);
 dealManager.setClosingConditions(conditions);
 ```
 
-These lists take contracts implementing the typed
-`ISecondaryTradingCondition` (checked through ERC-165 when you set them),
-not the generic `ICondition`. See
-[Run a secondary trade](run-a-secondary-trade.md).
+These lists accept only contracts implementing the typed
+`ISecondaryTradingCondition`, and the setters check for it through ERC-165.
+[Run a secondary trade](run-a-secondary-trade.md) shows the lists in use.
 
-## Writing a custom condition
+## Write a custom condition
 
-Implement `ICondition`. Because `checkCondition` receives the calling
-contract, the selector, and arbitrary `data`, you can encode any onchain
-check:
+`checkCondition` receives the calling contract, the function selector and
+arbitrary `data`, so a condition can encode any onchain check:
 
 ```solidity
 contract MinBalanceCondition is ICondition {
@@ -88,9 +96,4 @@ contract MinBalanceCondition is ICondition {
 }
 ```
 
-Deploy it and pass its address wherever the protocol accepts a condition
-list.
-
-## Related
-
-* [Conditions reference](../reference/conditions.md)
+Deploy it and pass its address in any `ICondition` list on this page.

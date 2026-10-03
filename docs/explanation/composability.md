@@ -1,63 +1,68 @@
+---
+description: >-
+  What scrip can do in AMMs, lending markets and vesting contracts, and what
+  its transfer restrictions and compliance powers cost in integrations.
+---
+
 # Composability and DeFi
 
-A tokenised security is only as useful as the protocols it can interact
-with. cyberSCRIP is the layer where that interaction happens.
+A Ledger Entry Token (LET) names its holder and carries restriction legends,
+so DeFi protocols built for interchangeable ERC-20 units cannot use it. Scrip
+is the form they can use.
 
-## What cyberSCRIP unlocks
+## Scrip can sit in pools, lending markets and vesting contracts
 
-* **AMM liquidity.** A LiquiLeX Uniswap v4 pool can quote a cyberSCRIP
-  against USDC continuously. The `MetalexIssuerFeeHook` routes a portion of
-  swap fees to the issuer (and a portion to MetaLeX), turning the cyberCORP
-  into a tiny perpetual fee-receiver on its own scrip.
-* **Lending and money markets.** A cyberSCRIP, like USDC, is an ERC-20 with
-  optional compliance powers. It can be listed as collateral on lending
-  protocols that accept ERC-20s with admin extensions.
-* **Vesting and streaming.** Any standard ERC-20 vesting contract works.
-* **Programmable distributions.** Dividends, buybacks, or other holder-
-  facing flows can be paid in or settled against cyberSCRIP.
+A LiquiLeX pool on Uniswap v4 quotes scrip against USDC continuously, and
+its `MetalexIssuerFeeHook` splits swap fees between the issuer and MetaLeX,
+so the company earns a share of every swap in its own scrip. Like USDC,
+scrip is an ERC-20 with optional compliance powers, so lending protocols
+that accept such tokens can list it as collateral. A standard ERC-20
+vesting or streaming contract handles scrip as long as the scrip's transfer
+hooks admit it, and buybacks
+and other payments to holders can be made in scrip or settled against it.
+What a scrip holder is owed on the shares behind the scrip, dividends
+included, depends on the scrip's terms (see
+[Ledger Entry Tokens and scrip](lets-and-scrip.md)).
 
-## What you trade off
+## Each compliance choice narrows where scrip can go
 
-### Restricted ERC-20
+### A transfer hook limits the venues
 
-A cyberSCRIP with a `WhitelistTransferHook` is not a free-floating ERC-20.
-Some integrations (especially permissionless ones) will reject it. Operators
-should either pick an open compliance model (no transfer hook, compliance at
-the de-scripification boundary) or accept that their scrip will only flow
-through whitelisted venues.
+Scrip with a `WhitelistTransferHook` moves only between whitelisted
+addresses, and many integrations, permissionless ones especially, reject
+it. A company chooses between an open model (no transfer hook, compliance at
+conversion into a LET) and accepting that its scrip flows only through
+whitelisted venues.
 
-### Compliance powers are visible
+### Compliance powers show even when unused
 
-Force transfer, force burn, and per-account freeze are opt-in powers chosen
-when the scrip is deployed. Force burn runs only through the issuer's
-`IssuanceManager`; force transfer and freeze can also be called by the
-issuer's admins directly on the scrip. Even when never invoked, their
-presence is visible, and some lending protocols will decline to list any
-ERC-20 with these powers. The **one-way disable** functions on the scrip
-(`disableForceTransfer`, `disableForceBurn`, `disableFreeze`) exist for
-exactly this reason: an issuer can credibly and irreversibly commit to an
+Force transfer, force burn and per-account freeze are opt-in powers chosen
+when the scrip is deployed, and the company's admins exercise them. Their
+presence is visible onchain whether or not anyone uses them, and some
+lending protocols decline to list any ERC-20 that has them. The scrip's
+one-way switches (`disableForceTransfer`, `disableForceBurn`,
+`disableFreeze`) let a company commit, irreversibly and verifiably, to an
 open posture.
 
-### Token possession ≠ registered ownership
+### Registered ownership lives on the LET
 
-This is by design (see [the dual-token model](dual-token-model.md)) but it
-means naive integrations may make wrong assumptions. The cyberSCRIP holder
-is not the holder of record. The cyberCERT holder is. Anywhere registered
-ownership matters (voting, dividends to record holders, §219 lists), reads
-must go through the cert layer.
+A LET's holder of record is the registered owner of its units, and holding
+scrip registers no one. An integration that needs registered ownership, for
+voting, dividends to record holders or a DGCL §219 stockholder list, has to
+read the LET layer.
 
-## The two LiquiLeX models, side-by-side
+## Whitelisted and open LiquiLeX pools
 
-| Aspect | Whitelisted pool | Open pool |
+| | Whitelisted pool | Open pool |
 |---|---|---|
-| Per-swap check | Transfer-hook whitelist (credentialed addresses only) | Optional zkPassport (sanctions / Reg S) |
-| Pool address | Only whitelisted addresses can hold LP | Anyone can hold LP |
-| Holder of record | Same regardless of trades | Same regardless of trades |
-| De-scripification gate | Standard | Standard (this is where compliance lives) |
-| Best for | High-touch private credits, Reg D names | Reg S issuances, public-style scrip |
+| Check on each swap | Transfer-hook whitelist (credentialed addresses only) | Optional zkPassport (sanctions, Reg S) |
+| Who can hold LP positions | Whitelisted addresses only | Anyone |
+| Effect of trades on the register | None | None |
+| Gate at conversion into a LET | Standard | Standard, and the main compliance point |
+| Suited to | High-touch private credit and Reg D issuers | Reg S issuances and widely traded scrip |
 
 ## See also
 
-* [How-to: Deploy a LiquiLeX pool](../how-to/deploy-liquilex-pool.md)
+* [Deploy a LiquiLeX pool](../how-to/deploy-liquilex-pool.md)
 * [Compliance architecture](compliance-architecture.md)
 * [Hooks](../reference/hooks.md)

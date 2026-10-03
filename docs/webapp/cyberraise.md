@@ -1,435 +1,401 @@
 ---
-description: Raise capital or invest in rounds, from draft to settlement
+description: Run a raise as an issuer or invest in one, from the first draft to the issued security
 ---
 
-# cyberRAISE — raising and investing
+# cyberRAISE
 
-**cyberRAISE** (`cyberraise.metalex.tech`) is the fundraising app. Companies
-run rounds here; investors invest here. It is separate from the
-[cyberCORPs app](mainframe.md) — **rounds are created and configured in
-cyberRAISE.**
-
-This page has two halves: issuers first, then investors.
+**cyberRAISE** (`cyberraise.metalex.tech`) is the fundraising app:
+companies create and run their rounds here, and investors invest. The
+cyberCORPs app's **cyberRaise** sidebar item opens it.
 
 ![cyberRAISE](../.gitbook/assets/webapp/cyberraise-home.png)
 
----
+## Run a raise
 
-## For issuers: running a raise
+A new raise first asks **how would you like to structure your raise?**
+Without a cyberCORP, the flow creates one first, with the same Network,
+Legal Identity and Public Profile steps as the cyberCORPs app, and deploys
+the company and the round together at the end. A raise needs a legally
+formed company; the cyberCORPs app can [form an LLC or C-Corp](formation.md)
+for you.
 
-Starting a raise begins with one choice: **how would you like to
-structure your raise?**
+A setup you resume, or open from a saved draft link, keeps the company it
+was started for. If a saved draft lacks the company, the round or the
+template, the form shows **Complete your raise setup**, and **Continue
+setup** returns you to that step with your other answers kept.
 
-If you don't have a cyberCORP yet, the flow first walks you through
-creating one (the same Network → Legal Identity → Public Profile wizard as
-the cyberCORPs app) and then straight into the raise — company and round
-are deployed together at the end. You need a legally formed company to
-launch a raise; if you don't have one yet, the cyberCORPs app can
-[form an LLC or C-Corp for you](mainframe.md#forming-a-new-company-llc-or-c-corp)
-first.
+### Plan the financing first (optional)
 
-A raise setup you resume, or open from a saved draft link, keeps the
-company it was started for. If a saved draft is missing something a
-later step needs (the company, the round or the template), the form
-shows **Complete your raise setup** with a **Continue setup** button
-that takes you back to that step; your other answers are kept.
+Above the two structure choices, **Want help choosing your financing?**
+links to **Open my financing plans**. A financing plan (*Your financing
+plan*) is a guided questionnaire in four parts (*Issuer and financing
+direction*, *Existing commitments and token plans*, *Investors and deal
+process*, *Terms and preparation*) that ends with a preliminary financing
+direction and the items still open **Before detailed setup** and **Before
+execution**. GAIBE, MetaLeX's AI agent, can walk you through each part
+(**Discuss with GAIBE**); a change it proposes to your answers applies only
+when you accept it. Plans are private to your account, need you signed in,
+and resume on any device. **Save and continue my financing plan** in the
+entity guide of the formation flow carries its relevant answers over for
+you to confirm.
 
-### Planning the financing first (optional)
+**Save and prepare a fresh financing draft** opens a new raise setup, where
+you choose the company (*Which company will use this financing plan?*) and
+confirm it is the issuer the plan describes. **Use reviewed round
+structure** copies one answer, ticket by ticket or structured round, into
+the setup; you set everything else in the normal steps. The plan is
+guidance and gives no legal clearance.
 
-Above the two structure choices, a **Want help choosing your
-financing?** box links to **Open my financing plans**. A financing plan
-(*Your financing plan*) is a guided questionnaire in four parts:
-*Issuer and financing direction*, *Existing commitments and token
-plans*, *Investors and deal process*, and *Terms and preparation*. At
-the end it gives a preliminary financing direction and lists what is
-still open **Before detailed setup** and **Before execution**. GAIBE,
-MetaLeX's AI agent, can walk you through each part (**Discuss with
-GAIBE**). When GAIBE proposes a change to your answers, nothing changes
-until you accept it.
+### Choose ticket by ticket or a structured round
 
-Plans are private to your account. You sign in to create one, and you
-can pick it up again from another device. If you used the entity guide
-while forming a company in the cyberCORPs app, **Save and continue my
-financing plan** there carries the relevant answers over for you to
-confirm. **Save and prepare a fresh financing draft** opens a new raise
-setup. There you choose which company the plan is for (*Which company
-will use this financing plan?*), confirm it is the issuer the plan
-describes, and **Use reviewed round structure** copies one answer into
-the setup: ticket-by-ticket or structured round. Everything else you
-set in the normal setup steps. The plan is guidance, not legal
-clearance.
-
-### Ticket-by-Ticket vs. Structured Round
-
-* **Ticket by Ticket** — you sell securities to investors **one at a time**,
-  each on its own terms. There is no shared target or min/max; each “ticket”
-  is an individually configured deal. Suited to privately advertised raises
-  or geographically restricted (Regulation S) raises.
-* **Structured Round** — an automated round with **standardized terms for
-  all investors**: a target raise, min/max ticket sizes, and escrowed
-  investor bids. Can be public or private.
+* **Ticket by Ticket** sells securities to investors one at a time, each on
+  its own terms. There is no shared target and no minimum or maximum; each
+  ticket is an individually configured deal. It suits privately advertised
+  raises and geographically restricted (Regulation S) raises.
+* **Structured Round** runs an automated round on the same terms for every
+  investor, with a target raise, minimum and maximum ticket sizes, and
+  escrowed investor bids. It can be public or private.
 
 ![The raise-structure choice](../.gitbook/assets/webapp/start-raise.png)
 
-### Configuring a structured round
+### Configure a structured round
 
-A structured round is a three-step wizard. Progress saves as you go, and
-the header icons let you **save your progress** locally or **save to the
-cloud** for a shareable link.
+The wizard has three steps. Progress saves as you go, and the header icons
+**save your progress** locally or **save to the cloud** for a shareable
+link.
 
-**Step 1 — Initialize the round.** The form collects, in order:
+**Step 1, initialize the round.** The form asks, in order, for:
 
-* **Round stage** — the security series (e.g. Pre-Seed), auto-incrementing
+* **Round stage**, the security series (e.g. Pre-Seed), which increments
   from your last round.
-* **Round type** — **Privately Advertised** (invite-only), **Publicly
-  Advertised** (listed on the public-rounds Marketplace; investors must be
-  accredited via [LeXcheX](lexchex.md)), or **Publicly or Privately
-  Advertised — U.S. Excluded** (a Regulation S round: participants prove
-  non-U.S.-person status with a passport scan in the zkPassport mobile app,
-  unless you manually approve them as an exception — the how-to, and a
-  caution about override scope, is
-  [zkPassport overrides](ace.md#zkpassport-overrides)). The Reg S option is
-  not available on every network.
-* **Admission mode** — **First-Come, First-Served** (offers are accepted
-  automatically in order, funds escrowed immediately, until the round
-  fills) or **Investors Bid / Founders Approve** (you review each bidder —
-  their profile, socials, reputation — and choose who gets in and for how
-  much).
-* **Ticket size** — the minimum and maximum any one investor can invest.
-* **Funding target/cap** — a hard cap; the round ends automatically when
-  hit.
-* **Start and end dates** — or tick **Open ended** to run without an end
-  date. (An open-ended founder-approval round automatically makes all
-  offers exploding.)
-* **Exploding offers** (founder-approval rounds only) — optionally let
-  investors send time-limited offers.
-* **Closing conditions** — **Allow early close** lets you close the round
-  before its scheduled end date or once fully funded. Investors see a
-  “may close early” note on the round.
-* **Pitch deck** — an optional description and up to three uploaded files.
+* **Round type**:
+  * **Privately Advertised - U.S.** keeps the round invite-only.
+  * **Publicly Advertised - U.S.** lists the round on the public-rounds
+    Marketplace, and every investor must be accredited through
+    [LeXcheX](lexchex.md).
+  * **Publicly or Privately Advertised - U.S. Excluded** is a Regulation S
+    round. Participants prove they are not U.S. persons with a passport
+    scan in the zkPassport mobile app, unless you approve one manually as
+    an exception (see [zkPassport overrides](ace.md#zkpassport-overrides),
+    which also explains how far an override reaches). This type is offered
+    on Ethereum and Base and is marked unsupported on Arbitrum.
+* **Admission mode**:
+  * **First-Come, First-Served** accepts offers automatically, in order,
+    and escrows the funds at once until the round fills.
+  * **Investors Bid / Founders Approve** lets you review each bidder
+    (profile, socials, reputation) and choose who gets in and for how
+    much.
+* **Ticket size**, the minimum and maximum one investor can invest.
+* **Funding target/cap**, a hard cap. The round ends when it is reached.
+* **Start and end dates**, or **Open ended** for no end date. An open-ended
+  founder-approval round makes every offer exploding.
+* **Exploding offers** (founder-approval rounds only), which lets investors
+  send time-limited offers.
+* **Closing conditions**. **Allow early close** lets you close the round
+  before its end date or once it is fully funded, and investors see a "may
+  close early" note on the round.
+* **Pitch deck**, an optional description and up to three files.
 
-**Step 2 — Choose the ticket type.** Pick the deal paper: SAFE, SAFT,
-SAFTE, or SAFE + Token Warrant, each in Reg D and Reg S variants. Custom
-templates approved in the MetaLeX console appear as extra cards, in
-structured rounds and ticket-by-ticket raises alike; each card says
-whether the template was registered for your company or approved by
-MetaLeX for any company. There is also a *Custom* option where you
-enter a template name or registry ID agreed with MetaLeX (checked against
-the onchain registry). If the series already has an existing line, you
-add a **sub-series label** (e.g. “2” to run Series A-2) so the new
-round's onchain identifiers stay unique. If the company already has a
-cert printer matching the series and deal type, the step says it will be
-reused for this round.
+**Step 2, choose the ticket type.** Pick the deal paper: SAFE, SAFT, SAFTE,
+or SAFE + Token Warrant, each in a Reg D and a Reg S variant. Custom
+templates approved in the MetaLeX console appear as extra cards here and in
+ticket-by-ticket raises, and each card says whether the template was
+registered for your company or approved by MetaLeX for any company. The
+*Custom* option takes a template name or registry ID agreed with MetaLeX,
+which the app checks against the onchain registry. If the series already
+has a line, you add a **sub-series label** (e.g. "2" to run Series A-2) so
+the new round's onchain identifiers stay unique. If the company already has
+a LET contract for the series and deal type, an **Existing cert printer**
+field shows it and the round reuses it.
 
-**Step 3 — Set up the agreement.** Configure the standard agreement
-investors will sign. Submitting opens a **round summary** — network, round
+**Step 3, set up the agreement.** Configure the standard agreement
+investors will sign. Submitting opens a **round summary** (network, round
 type, admission mode, ticket size, funding cap, valuation, dates, dispute
-resolution — and **Confirm & Submit** deploys the round onchain.
+resolution), and **Confirm & Submit** deploys the round onchain.
 
-Signing the round agreement is a free signature. If the company is being
-created in the same flow, your wallet asks for a second free signature
-that approves the company's deployment details, which the agreement
-signature does not cover. For an existing company, the app reads which
-round manager the company uses now and that contract's version, before
-you sign and again before the transaction is sent. If the wallet, the
-round or the contract changed in between, it stops with “The wallet,
-round or contract changed. Review and sign again.” A round manager
-reporting a version the app doesn't support is refused rather than
-sent.
+Signing the round agreement is a free signature. When the company is
+created in the same flow, your wallet asks for a second free signature that
+approves the company's deployment details, which the agreement signature
+does not cover. For an existing company, the app reads which round manager
+the company uses, and that contract's version, before you sign and again
+before it sends the transaction. If the wallet, the round or the contract
+changed in between, it stops with "The wallet, round or contract changed.
+Review and sign again." It refuses to send to a round manager that reports
+a version the app does not support.
 
-Filling the forms is free. MetaLeX applies a **0.3% fee to funds claimed by
-the issuer**; investors pay nothing, and no fees are charged on rejected
-bids. (Forming a new legal entity is a separate, flat-fee product of the
-cyberCORPs app — see [the costs overview](README.md#before-you-start-what-you-need).)
+Filling in the forms is free. MetaLeX takes **0.3% of the funds the issuer
+claims**; investors pay nothing, and rejected bids are never charged (see
+[What it costs](README.md#what-it-costs)).
 
 > **Under the hood.** A round is created on your cyberCORP's
-> [`RoundManager`](../reference/contracts/RoundManager.md). The contract-
-> level walkthrough — building the round, taking EOIs, allocating, and
-> closing — is the tutorial
-> [Run a cyberRAISE round](../tutorials/run-a-cyberraise-round.md).
+> [`RoundManager`](../reference/contracts/RoundManager.md). The
+> contract-level walkthrough (building the round, taking EOIs, allocating
+> and closing) is
+> [Run a cyberRAISE round](../how-to/run-a-cyberraise-round.md).
 
-### Managing your rounds
+### Manage your rounds
 
-The **rounds list** for your company shows active and closed rounds, each
-with its series, public/private label, structure, raised-vs-target progress,
+The company's **rounds list** shows its active and closed rounds, each with
+its series, public or private label, structure, progress against target,
 and a flag when EOIs are waiting for you.
 
-Opening a round shows the **management view** — three summary cards (Round,
-Offer, Raised) and, for founder-approval rounds, tables of:
+Opening a round shows its **management view**: three summary cards (Round,
+Offer, Raised) and, for a founder-approval round, tables of **Pending
+Offers** (EOIs awaiting your decision), **Exploding Offers** (time-limited
+ones), **Completed Offers** (EOIs you have allocated) and **Issued
+Certificates** (the LETs the round has issued), with a checkbox that
+reveals expired and rejected offers. A first-come round needs no review, so
+it shows completed tickets and issued certificates.
 
-* **Pending Offers** — EOIs awaiting your decision,
-* **Exploding Offers** — time-limited offers,
-* **Completed Offers** — EOIs you've allocated,
-* **Issued Certificates** — the round's issued cyberCERTs, and
-* a checkbox to reveal **expired and rejected offers**.
+The view also offers **Investor view**, **Edit Pitchdeck** (once you are
+signed in) and, if you allowed early close, **Close Round**. A round that
+has raised nothing can be **hidden**, which removes it from public view
+permanently.
 
-(First-come rounds need no review, so they show completed tickets and
-certificates.)
+A **ticket-by-ticket** round lists its pending and completed tickets, and
+**Set up a Ticket** starts a new individually configured deal, with a
+dropdown when the round has more than one agreement template. Ticket tables
+name each ticket's template, custom templates included.
 
-From here you can switch to the **Investor view**, **Edit Pitchdeck**
-(requires Authenticating), and — if you enabled early close — **Close
-Round**. A round that hasn't raised anything yet can also be **hidden**,
-which permanently removes it from public view.
+The rounds list and the management view link to the company's
+[public company page](company.md), which anyone can read without a wallet.
 
-On a **ticket-by-ticket** round, the management view lists pending and
-completed tickets, and **Set up a Ticket** starts a new individually
-configured deal (a dropdown, if your round has more than one agreement
-template). Ticket tables show each ticket's template by name, custom
-templates included.
+### Set up a ticket for an existing company
 
-The rounds list and management view end with a link to the company's
-**public company page**, which anyone can read without a wallet (see
-[Public company pages](metadao.md#public-company-pages)).
+A ticket for an existing company mints its securities from the company's
+LET contracts. How the offer gets those contracts depends on the company's
+version (see [v4 and v5 companies](#v4-and-v5-companies)).
 
-### Setting up a ticket for an existing company
+**On a v4 company**, the app reuses the LET contract that matches each
+certificate's type, series, legal document and payment token. If none
+matches, as on a company's first ticket, the offer creates the LET
+contracts in the same transaction as the offer.
 
-A ticket for a company that already exists mints its securities from the
-company's cert printers. How the offer gets those printers depends on
-the company's contract version (see
-[v4 and v5 companies](#v4-and-v5-companies)):
+**On a v5 company**, each security in the offer needs a class identity and
+active class terms before the ticket can be signed:
 
-* **v4 companies.** The app reuses the printer that matches each
-  certificate's type, series, legal document and payment token. If
-  there is none, as with a company's first ticket, the offer creates the
-  printers in the same transaction as the offer itself.
-* **v5 companies.** Each security in the offer needs a class identity
-  and active class terms before the ticket can be signed. The form
-  opens **Set up the security for this offer** (or use **Review security
-  class setup** to open it yourself). For each certificate, pick the
-  **Cap table class or series** it belongs to, or create one (**New
-  class name**, **Series name**, **Governing document reference**, then
-  **Save class identity**). Then save, approve and activate the class
-  terms; these steps need a current officer wallet of the company, and
-  **Approve class terms with wallet** is a free signature. Finally link
-  a printer: choose a compatible existing one and **Link selected
-  printer**, or **Prepare a new printer** and **Deploy reviewed
-  printer**, which is a transaction. If the deployment is interrupted,
-  paste its transaction hash and **Check transaction and finish
-  linking** instead of deploying again. **Return to ticket and sign**
-  takes you back to the ticket with your entries intact. Saving the
-  class records no position and issues no units; it ties tokenized and
-  untokenized positions of that class together in the
-  [cap table](captable.md#legal-classes-series-and-versioned-terms).
+1. The form opens **Set up the security for this offer**; **Review security
+   class setup** opens it on demand.
+2. For each certificate, pick the **Cap table class or series** it belongs
+   to, or create one with **New class name**, **Series name** and
+   **Governing document reference**, then **Save class identity**.
+3. Save, approve and activate the class terms. These steps need a current
+   officer wallet of the company, and **Approve class terms with wallet** is
+   a free signature.
+4. Link a LET contract. Either choose a compatible existing one and **Link
+   selected printer**, or **Prepare a new printer** and **Deploy reviewed
+   printer**, which is a transaction. If the deployment is interrupted,
+   paste its transaction hash and **Check transaction and finish linking**
+   instead of deploying again.
+5. **Return to ticket and sign** takes you back to the ticket with your
+   entries intact.
 
-For a company on any other contract version, the ticket form stays
-blocked with “This company's contract version is unknown or
-unsupported.” The same rules apply to ACE tickets. Once you have signed
-a ticket, a change to its template, the company, the network, the class
-terms, the printer or your wallet invalidates the signature and asks you
-to review and sign again.
+Saving the class records no position and issues no units. It ties the
+tokenized and untokenized positions of that class together in the
+[cap table](captable.md).
 
-### Reviewing an EOI
+On any other version the ticket form stays blocked with "This company's
+contract version is unknown or unsupported." ACE tickets follow the same
+rules. After you sign a ticket, a change to its template, the company, the
+network, the class terms, the LET contract or your wallet invalidates the
+signature, and the app asks you to review and sign again.
 
-**Review** on a pending offer opens the EOI: the investor's profile, bio,
-the offer (min–max amount, their message, any expiry), the agreement
-details, their trading activity, and their LeXcheX accreditation status.
-You then either:
+### Allocate or reject an EOI
 
-* **Allocate** — for a min–max offer, enter an amount within the range —
-  and confirm the onchain transaction that accepts them, or
-* **Reject** — confirm the onchain transaction that declines the offer.
+**Review** on a pending offer opens the EOI: the investor's profile and bio,
+the offer (minimum and maximum amount, their message, any expiry), the
+agreement details, their trading activity and their LeXcheX accreditation
+status. You then either:
 
-An agreement stays with the round manager that finalized it, so
-allocation goes to that manager even if the company has since switched
-to a new one. Before you confirm, the app checks onchain that this
-manager still holds the investor's escrow, unallocated, and that its
-contract version is one it supports. When a check fails (the offer is
-already allocated, the escrow belongs to another investor, the version
-is unsupported) it tells you before you sign, rather than sending a
-transaction that would revert.
+* **Allocate**, entering an amount within the range for a minimum-maximum
+  offer, and confirm the onchain transaction that accepts them; or
+* **Reject**, and confirm the onchain transaction that declines the offer.
+
+An agreement stays with the round manager that finalized it, so allocation
+goes to that manager even if the company has since switched to another one.
+Before you confirm, the app checks onchain that the manager still holds the
+investor's escrow unallocated and runs a version the app supports. If a
+check fails (the offer is already allocated, the escrow belongs to another
+investor, the version is unsupported), it tells you before you sign and
+sends no transaction that would revert.
 
 > **Under the hood.** Allocating an EOI releases the investor's escrowed
-> funds to the company and mints their security as a cyberCERT through the
-> [`IssuanceManager`](../reference/contracts/IssuanceManager.md). The legal
-> agreement each party signs is anchored in the
+> funds to the company and mints their security as a LET through the
+> [`IssuanceManager`](../reference/contracts/IssuanceManager.md). Each
+> party's legal agreement is anchored in the
 > [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md).
 
-### Closing a round
+### Close a round
 
-**Close Round** is a single transaction. It stops new EOIs immediately; you
-can still review and allocate any EOIs already submitted. When a round hits
+**Close Round** is a single transaction. It stops new EOIs at once, and you
+can still review and allocate the EOIs already submitted. When a round hits
 its cap, the app prompts you to **initialize the next round**.
 
-### Reviewing a term sheet with GAIBE
+### Review a term sheet with GAIBE
 
-**Term sheet** in the sidebar, or **Review a term sheet** on the
-cyberRAISE home page, opens *Term sheet review*. Upload one financing
-term sheet as a PDF (up to about 3 MB) and GAIBE, MetaLeX's AI agent,
-reads it and returns a report:
+**Term sheet** in the sidebar, or **Review a term sheet** on the cyberRAISE
+home page, opens *Term sheet review*. Upload one financing term sheet as a
+PDF of up to about 3 MB, and GAIBE reads it and returns a report:
 
 * counts of **Terms identified**, terms that **Need review**, terms
   **Outside / partial** the cap table model, and **Pages cited**;
 * **Core terms**: valuation, liquidation preference, participation,
   anti-dilution, board composition and protective provisions. Each is
   marked *Identified*, *Ambiguous* or *Not found*, with what GAIBE
-  extracted, quoted evidence with its page number, and a **MetaLeX
-  fit** label saying how far the cap table can record it (*Cap table
-  supported*, *Partially represented* or *Outside cap table model*);
+  extracted, quoted evidence with its page number, and a **MetaLeX fit**
+  label for how far the cap table can record it (*Cap table supported*,
+  *Partially represented* or *Outside cap table model*);
 * **Additional material terms** it found, such as the option pool,
-  dividends, pro rata rights or redemption, each with the same fit
-  label.
+  dividends, pro rata rights or redemption, each with the same fit label.
 
-You can copy the report or download it as Markdown. A review can take a
-few minutes. Any signed-in user can run one, up to a daily limit per
-account. The PDF and the report are not kept and are not added to a
-cyberCORP or cap table. The page is marked “AI review — not legal
-advice.”: a term GAIBE reports as absent is not necessarily favorable,
-and it can miss or misread text, so use the report to focus your review
-with counsel.
+You can copy the report or download it as Markdown. A review can take a few
+minutes. Any signed-in user can run one, up to a daily limit per account.
+The PDF and the report are not stored and are not added to a cyberCORP or a
+cap table. The page labels the result an AI review that is not legal
+advice. A term GAIBE reports as absent may still be unfavorable, and GAIBE
+can miss or misread text, so use the report to focus your review with
+counsel.
 
----
-
-## For investors: investing in a round
+## Invest in a round
 
 ### Find a round
 
-Browse **Public Rounds** (the marketplace) — searchable, split into **Open
-Rounds** and **Past Rounds**. Only publicly advertised rounds appear here.
-Private rounds are reached through a link the issuer shares with you.
+**Public Rounds**, the Marketplace, is searchable and split into **Open
+Rounds** and **Past Rounds**. Only publicly advertised rounds appear there;
+you reach a private round through a link the issuer gives you.
 
 ![The public-rounds marketplace](../.gitbook/assets/webapp/public-rounds.png)
 
-Opening a round shows its detail page: the company, the security and
-series, the round's terms and progress, its eligibility badges, and the
-**Invest** or **Express Interest** call to action. The terms panel is
-headed by the round's security class, for example *SAFE Details* (or
-*Round Details* when the class can't be read). Links to a public round
-page and to its express-interest page carry a preview image, so they
-show a card when pasted into apps that build link previews.
+A round's detail page shows the company, the security and series, the
+round's terms and progress, its eligibility badges, and the **Invest** or
+**Express Interest** button. The terms panel is headed by the round's
+security class, for example *SAFE Details*, or *Round Details* when the
+class can't be read. Links to a public round page and its express-interest
+page carry a preview image, so apps that build link previews show a card.
 
 ![A round's public detail page](../.gitbook/assets/webapp/round-detail.png)
 
-If you don't hold a valid [LeXcheX](lexchex.md) accreditation, the list
-shows an **“I am investing as:”** card — toggle between *an individual* and
-*a legal entity* — explaining the paths to accreditation: LeXcheX
-verification, investing above a threshold (\$200k+ individual / \$1M+
-entity), or manual verification by a MetaLeX attorney. You'll need one of
-these for public U.S. rounds; **Regulation S rounds** instead require a
-non-U.S. passport scan via zkPassport.
+If you hold no valid [LeXcheX](lexchex.md) accreditation, the list shows an
+**"I am investing as:"** card. Toggle between *an individual* and *a legal
+entity* to see the routes to accreditation: LeXcheX verification, investing
+above a threshold (\$200k+ for an individual, \$1M+ for an entity), or
+manual verification by a MetaLeX attorney. A public U.S. round needs one of
+them. A Regulation S round instead needs a non-U.S. passport scan through
+zkPassport.
 
 ### Express interest
 
 The *Express Interest* screen (titled *Invest in …* on first-come rounds)
-has the form and the legal agreement side by side on desktop; on a phone
-you swipe between the two panels. On first visit it opens with a
-plain-language notice that this is a legally binding investment, issued
-as a tokenized security and countersigned by the company.
+puts the form and the legal agreement side by side on a desktop; on a phone
+you swipe between the two panels. Your first visit opens with a
+plain-language notice that this is a legally binding investment, issued as
+a tokenized security and countersigned by the company.
 
 ![The invest screen, with the deal notice and the agreement alongside](../.gitbook/assets/webapp/express-interest.png)
 
 You provide:
 
-* **Your investor details** — name, contact, investor type, and (if not an
-  individual) jurisdiction of formation. These pre-fill from your
-  [profile](profile.md) and can be encrypted — the first time you submit,
-  a **privacy settings** dialog opens so you choose what is encrypted.
-* **Investment amount** — a fixed amount or (in founder-approval rounds
-  with a range) a min/max range, within the round's ticket limits and your
-  wallet balance.
-* an optional **message** to the founder (founder-approval rounds), and
-  optionally your own **exploding offer** expiry (24/48/72 hours or a
+* **your investor details**: name, contact, investor type and, for anyone
+  other than an individual, jurisdiction of formation. They prefill from
+  your [profile](profile.md) and can be encrypted; the first time you
+  submit, a **privacy settings** dialog asks what to encrypt;
+* **the investment amount**: a fixed amount or, in a founder-approval round
+  that allows a range, a minimum and maximum, within the round's ticket
+  limits and your wallet balance;
+* in a founder-approval round, an optional **message** to the founder and
+  your own optional **exploding offer** expiry (24, 48 or 72 hours, or a
   custom date).
 
-If the round requires accreditation, you either confirm an existing LeXcheX
-credential or mint one here; a Reg S round asks for zkPassport verification
-instead.
+If the round requires accreditation, you confirm an existing LeXcheX
+credential or mint one here. A Regulation S round asks for zkPassport
+verification instead.
 
 Then:
 
-1. **Sign the agreement** — a free signature.
-2. **Approve the payment token** if needed — an onchain transaction.
-3. **Submit** — the onchain transaction that places your EOI.
+1. **Sign the agreement**, a free signature.
+2. **Approve the payment token** if needed, an onchain transaction.
+3. **Submit**, the onchain transaction that places your EOI.
 
-In a founder-approval round your maximum amount is held in escrow until the
-founder accepts your offer or the round closes — any unused remainder is
-returned. In a first-come round, accepted investments mint the certificate
-without delay. If the issuer enabled early close, the round may end before
-its scheduled end date.
+In a founder-approval round, your maximum amount stays in escrow until the
+founder accepts your offer or the round closes, and any unused remainder
+comes back to you. In a first-come round, an accepted investment mints the
+LET at once. If the issuer allowed early close, the round may end before
+its scheduled date.
 
-Your signature covers the round's terms as they stand when you sign.
-Before the token approval and again before submitting, the app reads the
-round's company, round manager and terms onchain and simulates the exact
-transaction. If the terms changed, the company now uses a different
-round manager, or that manager was upgraded to a new major version (v4
-to v5, for example) since you signed, it stops with a message such as
-“Round terms changed. Review and sign again.” and you sign the current
-agreement. An upgrade within the same major version doesn't ask you to
-sign again. A round whose manager reports a version the app doesn't
-support is refused rather than submitted.
+Your signature covers the round's terms as they stand when you sign. Before
+the token approval and again before submitting, the app reads the round's
+company, round manager and terms onchain and simulates the exact
+transaction. It stops with a message such as "Round terms changed. Review
+and sign again." when, since you signed, the terms changed, the company
+moved to a different round manager, or that manager was upgraded to a new
+major version (v4 to v5, for example). You then sign the current agreement.
+An upgrade within the same major version keeps your signature valid. The
+app refuses to submit to a round whose manager reports a version it does
+not support.
 
 > **Under the hood.** Your EOI is an EIP-712-signed offer recorded on the
-> [`RoundManager`](../reference/contracts/RoundManager.md); your funds sit
-> in an onchain escrow until the round resolves. The security you receive is
-> a **cyberCERT** — a real entry on the company's register, not a receipt.
-> See [The dual-token model](../explanation/dual-token-model.md).
+> [`RoundManager`](../reference/contracts/RoundManager.md). Until the round
+> resolves, your funds sit in an onchain escrow that MetaLeX does not hold
+> and no one can override (see
+> [Upgrades and control](../explanation/upgrades-and-control.md)). The
+> security you receive is a Ledger Entry Token (LET) minted by the class's
+> LET contract; where the company's governing documents make the onchain
+> record its securities ledger, that LET is your ledger entry. See
+> [LETs and scrip](../explanation/lets-and-scrip.md).
 
-### Track it in your Portfolio
+### Track your investments in the portfolio
 
 **My Portfolio** shows your **pending investments** (EOIs awaiting a
 decision, with their expiry), your **closed investments**, the securities
-you hold (**Owned Securities**), and any scrip (**Owned Scrips**) —
-checkboxes reveal voided, expired, and rejected entries. If an EOI
-expires unanswered, **Recall** returns your escrowed funds. From the
-portfolio you can also scripify a certificate, transfer certificates and
-scrip, request re-certification — those actions are walked through in
-[For holders: your securities](holders.md) — and bridge ACE-round tokens
-to Solana (see [ACE](ace.md#the-solana-bridge)).
+you hold (**Owned Securities**) and any scrip (**Owned Scrips**).
+Checkboxes reveal voided, expired and rejected entries. If an EOI expires
+unanswered, **Recall** returns your escrowed funds.
+
+The portfolio is also where you scripify a LET, transfer LETs and scrip,
+and request re-certification ([For holders](holders.md) walks through
+each), and where you bridge ACE-round tokens to Solana (see
+[the Solana bridge](ace.md#the-solana-bridge)).
 
 ## v4 and v5 companies
 
-Version 5 of the cyberCORPs protocol is live on Ethereum, Base and
-Arbitrum, so a company created now, including one created inside a
-cyberRAISE flow, is a v5 company. A company created before the upgrade
-keeps the version it was deployed with until its owners upgrade it from
-the cyberCORPs app's [Upgrade](mainframe.md#upgrade) area. cyberRAISE
-supports both, and it reads the version of the specific company and
-contract it is about to use instead of assuming one for the whole chain.
-An unknown version, or one newer than the app supports, is refused
-visibly.
+On Ethereum, Base and Arbitrum, a new company is a v5 company, including
+one created inside a cyberRAISE flow. An existing company keeps the version
+it was deployed with until its owners upgrade it from the cyberCORPs app
+(see [Run your company](company.md)). cyberRAISE supports both. It reads
+the version of the specific company and contract it is about to use, never
+assumes one for the whole chain, and refuses an unknown version, or one
+newer than it supports, with a visible message.
 
-What differs in practice:
+* **Structured rounds** are set up, signed, funded and allocated the same
+  way on v4 and v5 companies.
+* **Tickets for an existing company** differ, as described in
+  [Set up a ticket for an existing company](#set-up-a-ticket-for-an-existing-company).
+* **A signature is tied to the major version** of the manager it was given
+  for, whether the founder's or an investor's. If the company upgrades that
+  manager from v4 to v5 before the transaction is sent, the app asks for a
+  fresh review and signature and never sends the old one.
 
-* **Structured rounds** are set up, signed, funded and allocated the
-  same way on v4 and v5 companies.
-* **Tickets for an existing company** differ: on a v4 company the app
-  reuses or creates the cert printers as part of the offer, while on a
-  v5 company you first choose each security's class and set up its
-  terms and printer, as described in
-  [Setting up a ticket for an existing company](#setting-up-a-ticket-for-an-existing-company).
-* **Upgrades in the middle of a raise.** A signature, the founder's or
-  an investor's, is tied to the major version of the manager it was
-  given for. If the company upgrades that manager from v4 to v5 before
-  the transaction is sent, the app asks for a fresh review and signature
-  rather than sending the old one.
-
-To see which version a company runs, open its
-[public company page](metadao.md#public-company-pages): *Contracts and
-deployed versions* reads each contract's version live and says whether
-it matches the reference its factory currently publishes.
+The *Contracts and deployed versions* section of a company's
+[public company page](company.md) reads each contract's version live and
+says whether it matches the reference its factory publishes.
 
 ## The MetaLeX console (staff)
 
-MetaLeX staff operate a read-only **console** (at `/console` on any of the
-app subdomains, gated to an admin allowlist). Its **Raises** explorer lists
-every raise on the platform — structured rounds and ticket-by-ticket deals,
-across every cyberCORP and chain — with search, filters, and sortable
-columns (cyberCORP, round, type, chain, created, participations, progress,
-status). Opening a raise shows its full terms, documents, and
-participations, including each participation's **signed legal document**
-with its parties and signature status. A **cyberCERTs** explorer lists
-every issued certificate across the platform, grouped by company. A
-**Round templates** page is where staff register and approve custom
-templates, for one company or for all, that then appear in the
-ticket-type step of structured rounds and ticket-by-ticket raises.
+MetaLeX staff have an admin console at `/console` on any of the app
+subdomains, open only to an allowlist of admin wallets. The parts that
+touch cyberRAISE:
 
-Nothing in the console mutates a raise — it is an inspection surface.
-
-## Good to know
-
-* **MetaLeX never holds your money.** Funds in flight are in an onchain
-  escrow with no override — see
-  [The role of MetaLeX](../explanation/role-of-metalex.md).
-* **Signing the agreement is free; approving the token and submitting are
-  transactions.**
-* **Your security is real and onchain** — a cyberCERT is the actual register
-  entry for your stake.
+* **Raises** is a read-only explorer of every raise on the platform,
+  structured rounds and ticket-by-ticket deals, across every cyberCORP and
+  chain. It has search, filters and sortable columns (cyberCORP, round,
+  type, chain, created, participations, progress, status). A raise opens to
+  its full terms, documents and participations, including each
+  participation's **signed legal document** with its parties and signature
+  status.
+* **cyberCERTs** is a read-only list of every LET issued on the platform,
+  grouped by company.
+* **Templates** is where staff register and approve custom templates, for
+  one company or for all, which then appear in the ticket-type step of
+  structured rounds and ticket-by-ticket raises.
+* **Curation** is where staff blacklist cyberCORPs and hide spam rounds
+  from the public Marketplace.

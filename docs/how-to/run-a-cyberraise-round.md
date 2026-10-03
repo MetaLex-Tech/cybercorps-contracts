@@ -1,17 +1,14 @@
 ---
-description: Create a SAFE round, take an investor EOI, allocate it, and close the round
+description: Create a SAFE round on a cyberCORP, take an investor's Expression of Interest, allocate it and close the round
 ---
 
-# Tutorial: Run a cyberRAISE round
+# Run a cyberRAISE round
 
-In this tutorial you create a SAFE round on a cyberCORP's `RoundManager`,
-take an investor's Expression of Interest, allocate it, and close the round.
-
-> Code here is **illustrative of the flow**, using the real signatures and
-> structs from `cybercorps-contracts` (`develop`). The `Round` and `EOI`
-> structs are large — check the source for every field.
-
-The flow at a glance:
+This guide creates a SAFE round on a cyberCORP's `RoundManager`, takes an
+investor's Expression of Interest (EOI), allocates it and closes the round.
+Allocation issues the investor's SAFE as a Ledger Entry Token (LET). The
+`Round` and `EOI` structs are large, and the snippets show only the fields
+this flow sets, so check the source for every field.
 
 ```mermaid
 flowchart TD
@@ -19,24 +16,22 @@ flowchart TD
     B --> C["Round live"]
     C --> D["Investor submits EOI<br/>payment escrowed (not yet gated)"]
     D --> E{Round type}
-    E -- "FCFS — automatic,<br/>same transaction" --> G["Allocation<br/>conditions checked here · cyberCERT issued ·<br/>agreement executed with the escrowed officer signature ·<br/>escrow finalized — payment released to the issuer"]
-    E -- "FounderApproved —<br/>officer calls allocate" --> G
+    E -- "FCFS, automatic in<br/>the same transaction" --> G["Allocation<br/>conditions checked here · LET issued ·<br/>agreement executed with the escrowed officer signature ·<br/>escrow finalized and payment released to the issuer"]
+    E -- "FounderApproved,<br/>officer calls allocate" --> G
     D -. "officer rejects<br/>(any time before allocation)" .-> R["Refund to investor"]
     D -. "investor recalls<br/>(after EOI expiry or round end)" .-> R
     G --> I["Round closes<br/>closeRoundNow or endTime"]
 ```
 
-## Prerequisites
-
-A cyberCORP from [Tutorial 1](incorporate-a-cybercorp.md). You need its
-`roundManager` address and an officer key.
+You need a cyberCORP from [Incorporate a cyberCORP](incorporate-a-cybercorp.md):
+its `roundManager` address and an officer key.
 
 ## 1. Build the round
 
 A round is a `Round` struct
 ([`RoundLib.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/libs/RoundLib.sol)).
-Build it with the `RoundLib` builder — `draft()`, then `setTickets`, then
-`setAgreement`:
+Build it by chaining the `RoundLib` builder's `draft()`, `setTickets` and
+`setAgreement`.
 
 ```solidity
 import {RoundLib, Round, RoundType} from "src/libs/RoundLib.sol";
@@ -64,15 +59,15 @@ Round memory round = RoundLib.draft()
         officer,                  // authorityOfficer
         "Jane Founder",           // officerName
         "Chief Executive Officer",// officerTitle
-        legalDetails,             // string[] (per cert printer)
+        legalDetails,             // string[] (one per LET contract)
         roundPartyValues,         // string[]
-        extensionData,            // bytes[]  (per cert printer)
+        extensionData,            // bytes[]  (one per LET contract)
         conditions,               // address[] of ICondition gates
-        escrowedSignature         // bytes — officer's escrowed signature
+        escrowedSignature         // bytes, the officer's escrowed signature
     );
 ```
 
-`RoundType.FCFS` accepts EOIs first-come; `RoundType.FounderApproved`
+`RoundType.FCFS` accepts EOIs first-come. `RoundType.FounderApproved`
 requires the officer to allocate each one.
 
 The `escrowedSignature` is the `authorityOfficer`'s EIP-712 signature over
@@ -80,11 +75,11 @@ the round's economic parameters (the `EscrowedSignatureData` struct in
 [`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)),
 under the domain `"RoundManager"`, version `"1"`, with the RoundManager as
 verifying contract. `createRound` recomputes the hash from the draft and
-reverts `InvalidEscrowedSignature` if it does not verify.
+reverts `InvalidEscrowedSignature` if the signature does not verify.
 
 ## 2. Create the round
 
-`createRound` also creates a cert printer (`LedgerEntryToken`) for each
+`createRound` also creates a LET contract for each
 `CyberCertData` entry you pass.
 
 ```solidity
@@ -105,17 +100,18 @@ certData[0] = CyberCertData({
 bytes32 roundId = IRoundManager(roundManager).createRound(round, certData);
 ```
 
-## 3. Investor submits an EOI
+## 3. Submit the investor's EOI
 
-The investor signs the round's agreement offchain and submits an
-`EOI` struct ([`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)).
+The investor signs the round's agreement offchain and submits an `EOI`
+struct
+([`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)).
 The signature is the agreement registry's EIP-712 `SignatureData` for the
-EOI agreement that `submitEOI` creates (template from the round, the
-investor's `salt` and `secretHash`, the RoundManager as finalizer), with
-the investor as `signer`; see
-[Sign a cyberAgreement](../how-to/sign-a-cyberagreement.md) (step 3)
-for the typed data. The registry verifies it inside `submitEOI`, so a
-signature over the wrong id or type reverts the whole call.
+EOI agreement that `submitEOI` creates (the round's template, the investor's
+`salt` and `secretHash`, and the RoundManager as finalizer), with the
+investor as `signer`. [Sign a cyberAgreement](sign-a-cyberagreement.md)
+gives the typed data. The registry verifies the signature inside
+`submitEOI`, so a signature over the wrong id or type reverts the whole
+call.
 
 ```solidity
 import {EOI} from "src/storage/RoundManagerStorage.sol";
@@ -146,9 +142,11 @@ EOI memory eoi = EOI({
 
 ## 4. Allocate the EOI
 
-The officer allocates an accepted EOI. `allocate` prices the ticket, mints a
-SAFE cyberCERT per printer, attaches the officer's escrowed signature and an
-endorsement, and refunds any rounding dust.
+In a founder-approved round the officer allocates each accepted EOI. An
+FCFS round allocates inside `submitEOI`, so it skips this step. `allocate`
+prices the ticket, mints a SAFE LET from each of the round's LET contracts,
+attaches the officer's escrowed signature and an endorsement, and refunds
+any rounding dust.
 
 ```solidity
 uint256 certTokenId = IRoundManager(roundManager).allocate(
@@ -159,17 +157,14 @@ uint256 certTokenId = IRoundManager(roundManager).allocate(
 
 ## 5. Close the round
 
+`closeRoundNow` closes the round before its `endTime`. Without it, the round
+closes at `endTime`.
+
 ```solidity
 IRoundManager(roundManager).closeRoundNow(roundId);
 ```
 
-## What you just did
-
-* Built and created a SAFE round, which also created its cert printer.
-* Took a signed EOI, allocated it, and minted the investor's SAFE cyberCERT.
-* Closed the round.
-
-## Next
-
-* [Scripify and settle a secondary trade](scripify-and-settle.md).
-* Reference: [RoundManager](../reference/contracts/RoundManager.md).
+The investor now holds a SAFE LET. To trade it, [run a secondary
+trade](run-a-secondary-trade.md) through the DealManager or [scripify it and
+settle in scrip](scripify-and-settle.md). Function-level detail is in
+[RoundManager](../reference/contracts/RoundManager.md).

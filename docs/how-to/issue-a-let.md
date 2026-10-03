@@ -1,19 +1,18 @@
 ---
-description: Create a security-class printer and issue certificates under it
+description: Create a LET contract for a security class and series and issue Ledger Entry Tokens from it
 ---
 
-# Issue a cyberCERT
+# Issue a LET
 
-This is how you mint a new register entry on a cyberCORP — stock, a SAFE, an
-option, or any [supported security type](../reference/security-types.md).
+A Ledger Entry Token (LET) records one lot of a cyberCORP security: stock, a
+SAFE, an option or any other [supported security type](../reference/security-types.md).
+This guide issues LETs through the company's `IssuanceManager`.
 
-## Prerequisites
+You need the company's `issuanceManager` address and a LET contract (a
+`LedgerEntryToken` deployment) for the security's class and series. Step 1
+creates one if the series has none.
 
-* A cyberCORP and its `issuanceManager` address.
-* A cert printer (a `LedgerEntryToken` instance, formerly `CyberCertPrinter`)
-  for the security class (create one with `createCertPrinter` if needed).
-
-## 1. (If needed) create the certificate printer
+## 1. Create the LET contract, if the series has none
 
 ```solidity
 import {SecurityClass, SecuritySeries} from "src/CyberCorpConstants.sol";
@@ -26,22 +25,23 @@ address printer = IIssuanceManager(issuanceManager).createCertPrinter(
     SecurityClass.PreferredStock,
     SecuritySeries.SeriesA,
     SHARE_EXTENSION_ADDR,          // certificate extension
-    ""                             // seriesData — extension-encoded
+    ""                             // seriesData, the extension-encoded
                                    // series-scope payload; "" if none
 );
 ```
 
-The new printer is filed under its `SecurityClass`'s class on the
-IssuanceManager (an empty class is created if none exists). Its transfer
-switches all start closed: certificates issue freely, but holders cannot
-move them and the holder of record cannot change until an admin opens the
-printer (`setGlobalTransferable`, `setGlobalLegalTransferable`, or the
-per-lot equivalents). See
-[LedgerEntryToken](../reference/contracts/LedgerEntryToken.md#delivery-and-registration-gates).
+The IssuanceManager files the new LET contract under its `SecurityClass`,
+creating an empty class if none exists. Its transfer switches all start
+closed: LETs issue freely, but holders cannot move them and the holder of
+record cannot change until an admin opens the contract with
+`setGlobalTransferable`, `setGlobalLegalTransferable` or the per-lot
+equivalents. [LedgerEntryToken](../reference/contracts/LedgerEntryToken.md)
+documents the delivery and registration gates.
 
 ## 2. Build the `CertificateDetails`
 
-From [`ILedgerEntryToken.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ILedgerEntryToken.sol):
+The struct is defined in
+[`ILedgerEntryToken.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ILedgerEntryToken.sol).
 
 ```solidity
 import {CertificateDetails} from "src/interfaces/ILedgerEntryToken.sol";
@@ -58,15 +58,15 @@ CertificateDetails memory details = CertificateDetails({
 ```
 
 {% hint style="warning" %}
-`unitsRepresented`, `investmentAmountUSD`, and
+`unitsRepresented`, `investmentAmountUSD` and
 `issuerUSDValuationAtTimeOfInvestment` are all **18-decimal fixed point**:
-one share (or one dollar) = `1e18`.
+one share (or one dollar) is `1e18`.
 {% endhint %}
 
-## 3. Mint
+## 3. Mint the LET
 
-Every variant registers a holder of record; they differ in what else they
-write.
+Every mint function registers a holder of record. They differ in what else
+they write.
 
 | Function | Use when |
 |---|---|
@@ -75,30 +75,28 @@ write.
 | `createCertAndAssignWithName(certAddress, investor, details, investorName, endorsementSignature, timestamp)` | As above, plus the holder's legal name, an officer signature, and an endorsement date you choose (a reissue keeps the original date). |
 | `createCertSignAndAssign(certAddress, investor, details, endorsementSignature, registry, agreementId, investorName)` | As above, but the endorsement points at an agreement in a registry and is dated now. |
 
-To move an existing lot to a different holder of record (a correction, not
-a trade), use `assignCert(certAddress, from, tokenId, investor, details,
-investorName)`, where `from` is the current holder of record. It needs the
-printer's register to be open.
-
 ```solidity
 uint256 tokenId = IIssuanceManager(issuanceManager).createCertAndAssign(
     printer, investor, details
 );
 ```
 
-## Other operations
+To correct the holder of record on an existing lot outside a trade, call
+`assignCert(certAddress, from, tokenId, investor, details, investorName)`,
+where `from` is the current holder of record. The LET contract's
+registration gate must be open.
 
-Cert-level operations were moved off the IssuanceManager onto the cert
-printer itself (`LedgerEntryToken`), callable by the IssuanceManager or a
-BorgAuth admin:
+## 4. Endorse, sign or void an existing LET
+
+These operations live on the LET contract itself, and the IssuanceManager
+or a BorgAuth admin can call them:
 
 * **Endorse:** `endorseCertificate(tokenId, endorser, signature, agreementId)`
-  on the printer (assembles the endorsement onchain); the registered owner
-  can also call `addEndorsement(tokenId, endorsement)` directly.
+  assembles the endorsement onchain. The registered owner can also call
+  `addEndorsement(tokenId, endorsement)` directly.
 * **Issuer signature:** `addIssuerSignature(tokenId, signature)`.
-* **Void / unvoid:** `voidCert(tokenId)` / `unvoidCert(tokenId)`.
+* **Void or unvoid:** `voidCert(tokenId)` and `unvoidCert(tokenId)`.
 
-## Related
-
-* [IssuanceManager](../reference/contracts/IssuanceManager.md),
-  [LedgerEntryToken](../reference/contracts/LedgerEntryToken.md).
+Function-level detail is in
+[IssuanceManager](../reference/contracts/IssuanceManager.md) and
+[LedgerEntryToken](../reference/contracts/LedgerEntryToken.md).

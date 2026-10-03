@@ -6,3 +6,14 @@ structure:
 
 redirects:
   reference/contracts/CyberCertPrinter: reference/contracts/LedgerEntryToken.md
+  webapp/mainframe: webapp/company.md
+  webapp/metadao: webapp/launchpads.md
+  explanation/dual-token-model: explanation/lets-and-scrip.md
+  explanation/co-approval-upgradeability: explanation/upgrades-and-control.md
+  explanation/role-of-metalex: explanation/upgrades-and-control.md
+  explanation/application-stack: how-to/README.md
+  how-to/issue-a-cybercert: how-to/issue-a-let.md
+  tutorials: how-to/README.md
+  tutorials/incorporate-a-cybercorp: how-to/incorporate-a-cybercorp.md
+  tutorials/run-a-cyberraise-round: how-to/run-a-cyberraise-round.md
+  tutorials/scripify-and-settle: how-to/scripify-and-settle.md
