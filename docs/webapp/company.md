@@ -377,6 +377,13 @@ But two calls do not need the company:
 If the LET contract allows transfers, a wallet that receives a new LET
 can also pass it to a wallet that holds a pre-upgrade LET.
 
+A pending deal or allocation settles by a transfer out of the Deal
+Manager or Round Manager, which anyone can trigger once it is signed and
+paid. A transfer out of a holder whose counter is still zero reverts.
+So the checklist seeds those two managers last: a settlement cannot
+succeed until every other holder is seeded. Keep that order if you send
+the calls yourself.
+
 From a wallet, the migrations run after the upgrade. A Safe batch runs
 them in the same transaction, but the page builds the batch when you
 propose it, so a lot minted while it waits for signatures is not in it.
@@ -395,7 +402,9 @@ So both ways need the same preparation:
   has not started yet, with **Close round now** (`closeRoundNow`). The
   Upgrade page finds these rounds the same way, from the index and the
   Round Manager's `RoundCreated` events, and shows that button for
-  each. Both ways stay disabled until none is left. Closing sets the
+  each. If an FCFS round that has not ended runs on a Round Manager the
+  company replaced, the page cannot check or close it there, and it
+  holds the upgrade: contact MetaLeX. Both ways stay disabled until none is left. Closing sets the
   round's end time to the time of that block, and the round refuses an
   EOI only after that time, so the page counts the round as open until
   a later block. A round that restricts the reduction of its end time

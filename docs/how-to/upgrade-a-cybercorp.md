@@ -126,7 +126,11 @@ On a LET contract whose lots were minted before it kept a per-wallet
 possession counter, a holder's counter reads zero and a transfer out of
 that wallet reverts. An admin seeds each such holder with
 `initializeHolderCount(holder)` before anything is minted or transferred to
-or from it.
+or from it. Seed the DealManager and RoundManager last when they hold
+lots in escrow: a pending deal or allocation settles by a transfer out
+of them, which reverts while their counter is zero, so no settlement
+can reach a holder that is not seeded yet. The app's checklist uses this
+order.
 
 A mint or transfer that reaches a holder first sets the counter to 1,
 below the holder's balance. `initializeHolderCount` then reverts
