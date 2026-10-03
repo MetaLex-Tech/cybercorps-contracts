@@ -213,11 +213,12 @@ explorer so you can check it yourself:
   deployed (the legal formation date may differ), the chain and the
   formation factory.
 * **Contracts and deployed versions**: the CyberCorp, Issuance Manager,
-  Deal Manager, Round Manager and BorgAuth contracts. Each version is
-  read live when the page loads and compared with the reference
-  implementation its factory publishes (*Matches factory reference* or
-  *Differs from factory reference*), which also shows whether the
-  company runs v4 or v5.
+  Deal Manager, Round Manager and BorgAuth contracts. For the CyberCorp
+  and the three managers, the page reads each version live when it loads
+  and compares it with the reference implementation its factory
+  publishes (*Matches factory reference* or *Differs from factory
+  reference*), which also shows whether the company runs v4 or v5.
+  BorgAuth shows its address only, with *Version not read by this page*.
 * **Officers**: the officer roster kept in the company's contract, with
   the names and titles the company recorded.
 * **Security classes onchain**: each LET contract the company deployed,
