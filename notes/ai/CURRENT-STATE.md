@@ -20,6 +20,7 @@ have one. Do not assume another checkout's files are present here.
 ## Shared tasks
 
 - [Shared-state setup](tasks/shared-project-state.md): this documentation change.
+- [GitBook register paragraph and LeXcheXBadge deployment claims](tasks/gitbook-register-and-badge-corrections.md): docs-only correction, 2026-10-04.
 
 This seed is not a complete inventory of ongoing tasks. Existing work, PR owners,
 review monitors and audit ledgers retain ownership. No protocol task is reassigned
