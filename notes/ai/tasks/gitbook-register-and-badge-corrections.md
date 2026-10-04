@@ -78,10 +78,13 @@ external review is established by this record.
 
 ## Review and blockers
 
-PR: filled in by the owner session after `gh pr create`; monitor switches
-`auto_fix` and `address_comments` requested on; auto-merge not requested.
-Independent review: the repository's normal PR review. Unresolved findings:
-none at creation.
+PR: [#172](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/172),
+open, non-draft, against `develop`, opened 2026-10-04 02:32 UTC from the
+content commit `5437430`. The Claude desktop app monitor is on with
+`auto_fix` and `address_comments`; auto-merge is off. Independent review:
+the repository's normal PR review (Codex bot plus the owner). Codex's first
+round on `5437430` returned one P2 finding, that this section did not name
+the PR; fixed in the record. No other unresolved findings.
 
 ## Next action and handoff
 
