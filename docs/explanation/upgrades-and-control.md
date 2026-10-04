@@ -111,11 +111,15 @@ roles belong to its officers, its governance addresses (board or officer
 multisigs) and its own contracts, and no MetaLeX wallet holds one. The only
 MetaLeX-controlled entry is the deploying factory described above.
 
-Where a company's governing documents designate the onchain register,
-MetaLeX keeps no offchain copy of it to reconcile. The cyberCORPs app's cap
-table can also hold offchain entries for
-untokenized units. Those are app records, and which record is the company's
-securities ledger is a question for its governing documents (see
+MetaLeX keeps no register that overrides or competes with the chain. For
+tokenized units, the register of holders is the company's Ledger Entry
+Token (LET) contracts onchain. The cyberCORPs app's
+[cap table](../webapp/captable.md) is the company's own working record. It
+mirrors the LETs and can also hold untokenized positions recorded offchain.
+The company's officers keep it in the app, and it exports to CSV, Excel and
+OCF. Which record is the company's legally definitive securities ledger
+depends on its governing documents. MetaLeX-form bylaws designate the
+onchain LETs for tokenized shares (see
 [Constitutive vs. pointer tokenization](constitutive-vs-pointer.md)).
 
 ## See also
