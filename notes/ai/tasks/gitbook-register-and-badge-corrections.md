@@ -8,9 +8,9 @@
 - **Out of scope:** Contract or script changes; the webapp; the GAIBE mirror import in MetaLex-Tech/metalex-webapp; the ownership of the badge BorgAuth (reported to the owner, not published).
 - **Canonical plan / sources:** metalex-webapp `notes/guidelines/terminology.md`; the "Terms for tokenized securities" section of metalex-webapp `packages/gaibe/src/knowledge/00-metalex-overview.md` on that repository's `develop`; `script/libs/DeploymentConstants.sol`; [Constitutive vs. pointer tokenization](../../../docs/explanation/constitutive-vs-pointer.md).
 - **Repository / branch:** MetaLex-Tech/cybercorps-contracts; base `develop`, working branch `claude/relaxed-raman-c1ded3`.
-- **Verified base / code head:** base `39ca18f282100097f449e25c1f1210ef5f8c7488` (tip of `develop` on 2026-10-03). The content commit is the child of that base; see the PR.
+- **Verified base / code head:** base `39ca18f282100097f449e25c1f1210ef5f8c7488` (tip of `develop` on 2026-10-03); content commit `5437430c28e422446ea5c60a969bc9f89572b6d9`. Later commits on the branch change only this record.
 - **Worktree locator:** shared at handoff; not committed.
-- **PR / artifact:** see the "Review and blockers" section.
+- **PR / artifact:** [#172](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/172), non-draft, against `develop`; app monitor on with `auto_fix` and `address_comments`; auto-merge off.
 
 ## Acceptance and current state
 
