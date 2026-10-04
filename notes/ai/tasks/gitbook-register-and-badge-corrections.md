@@ -68,10 +68,10 @@
 | Badge is a live ERC-1967 proxy | `cast storage <badge> 0x3608...bbc` on the same five chains | Passed: implementation `0xf2fed468afa26a9c11ba8ce5995543eb9e3b308b` on every chain; implementation holds 19885 bytes of code on every chain |
 | Badge version | `cast call <badge> "VERSION()(uint256)"` on the five chains | Passed: returns 2 everywhere, matching `docs/reference/contracts/LexChex.md` |
 | Badge BorgAuth has code | `cast code 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d` on the five chains | Passed: 2188 bytes on every chain; implementation slot is zero, as expected for a plain `BorgAuth` |
-| Diff scope | `git diff --stat` at the content commit | Only `docs/explanation/upgrades-and-control.md` and this record |
+| Diff scope | `git show --stat 5437430` | Three files: `docs/explanation/upgrades-and-control.md` (the rewritten paragraph), `notes/ai/CURRENT-STATE.md` (one pointer line) and this record. No other `docs/` file, no Solidity, scripts or webapp |
 | Line endings | CR count equals line count before and after the edit | Passed; the diff shows only the rewritten paragraph |
 | Terminology | Grep of the edited page for `on-chain`, `off-chain`, `cyberCERT`, `un-tokenized` | Clean |
-| Relative links | Script over every `.md` under `docs/` resolving relative `.md` targets | See the PR body for the result |
+| Relative links | Script over every `.md` under `docs/` resolving relative `.md` targets, run at `5437430` | Passed: 65 files, 0 broken links |
 
 No contract or runtime tests apply. No deployment, integration acceptance or
 external review is established by this record.
