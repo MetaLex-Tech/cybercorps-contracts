@@ -1,18 +1,17 @@
 # CyberCorp
 
-The root contract of a cyberCORP — the onchain representation of the legal
-entity.
+The root contract of a cyberCORP: the onchain record of the legal entity.
 
 * **Source:** [`src/CyberCorp.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberCorp.sol)
-* **Inherits:** `Initializable`, `BorgAuthACL`, `UUPSUpgradeable`
-* **`DEPLOY_VERSION`:** `"4"`
+* **Inherits:** `Initializable`, `BorgAuthACL`, `UUPSUpgradeable`, `ICyberCorp`
+* **`DEPLOY_VERSION`:** `"5"`; a company that has not upgraded reports `"3"` or `"4"`
 
 ## State
 
 | Variable | Type | Meaning |
 |---|---|---|
 | `cyberCORPName` | `string` | Legal name, including designation ("Inc.", "LLC"). |
-| `cyberCORPType` | `string` | Entity type, as free-form text (e.g. "corporation"). **Not an enum.** |
+| `cyberCORPType` | `string` | Entity type as free-form text (e.g. "corporation"). **Not an enum.** |
 | `cyberCORPJurisdiction` | `string` | Jurisdiction of formation. |
 | `cyberCORPContactDetails` | `string` | Contact information. |
 | `defaultDisputeResolution` | `string` | Default dispute-resolution mechanism for agreements. |
@@ -21,8 +20,9 @@ entity.
 | `dealManager` | `address` | The cyberCORP's DealManager. |
 | `roundManager` | `address` | The cyberCORP's RoundManager. |
 | `upgradeFactory` | `address` | Factory whose reference implementation gates upgrades. |
+| `cyberCertPrinterImplementation` | `address` | Unused. Holds its slot in the storage layout. |
 | `companyOfficers` | `CompanyOfficer[]` | Officers (`{eoa, name, contact, title}`). |
-| `escrowedOfficerSignatures` | `bytes[]` | Reusable pre-authorised officer signatures. |
+| `escrowedOfficerSignatures` | `bytes[]` | Reusable pre-authorized officer signatures. |
 | `extension` | `address` | Optional corp-level extension contract that interprets `extensionData`. |
 | `extensionType` | `bytes32` | Type selector for the active extension schema. |
 | `extensionData` | `bytes` | Raw extension payload interpreted by the active extension contract. |
@@ -58,37 +58,41 @@ function clearExtension() external;                                         // o
 function getExtensionURI() external view returns (string);
 ```
 
-Officer lifecycle and BorgAuth roles: `addOfficer` rejects an `eoa` already
-listed (`DuplicateOfficer`) and grants it role `200` — unless it already
-holds a *higher* custom role, which is left untouched. `updateOfficer`
-replaces the record at an index; when the `eoa` changes, it grants the new
-address under the same rules and revokes the old one — but only if no
-other index still lists that `eoa` (legacy state may hold duplicates), and
-only an exact `200`. `removeOfficer`
-/ `removeOfficerAt` revoke the role only when it is exactly `200` (a custom
-role granted outside the officer lifecycle survives) and only when the
-address is not still listed at another index.
-`isCyberCORPOfficer` reports whether an address holds a role at or above
-`OWNER_ROLE` (99). See [Access control](../access-control.md).
+## Officers and BorgAuth roles
+
+* `addOfficer` reverts `DuplicateOfficer` for an `eoa` already listed. It
+  grants the new officer role `200` unless the address already holds a
+  higher custom role, which it leaves untouched.
+* `updateOfficer` replaces the record at an index. When the `eoa` changes,
+  it grants the new address under the same rule and revokes the old one,
+  but only when the old role is exactly `200` and no other index still
+  lists that `eoa` (an older company's officer list can hold duplicates).
+* `removeOfficer` and `removeOfficerAt` revoke the role only when it is
+  exactly `200` (a custom role granted outside the officer lifecycle
+  survives) and the address is not listed at another index.
+* `isCyberCORPOfficer` reports whether an address holds a role at or above
+  `OWNER_ROLE` (99). See [Access control](../access-control.md).
 
 ## Corp-level extension
 
 `setExtension` installs an `ICyberCorpExtension` contract plus a schema
-selector; the contract must report `supportsExtensionType(_extensionType)` or
-the call reverts `ExtensionTypeNotSupported`. Setting or replacing the
+selector. The contract must report `supportsExtensionType(_extensionType)`,
+or the call reverts `ExtensionTypeNotSupported`. Setting or replacing the
 extension clears any stored `extensionData`; `setExtensionData` then stores
-the payload (reverting `ExtensionNotConfigured` if no extension is set).
+the payload, reverting `ExtensionNotConfigured` if no extension is set.
 `getExtensionURI` returns the extension-rendered JSON fragment for the
-current payload — the
-[CertificateUriBuilder](CertificateUriBuilder.md) appends it to every
-cyberCERT's metadata.
+current payload, and the [CertificateUriBuilder](CertificateUriBuilder.md)
+appends it to the metadata of every Ledger Entry Token (LET) the company
+issues.
 
 ## Events
 
 `CyberCORPDetailsUpdated`, `OfficerAdded`, `OfficerUpdated`,
 `OfficerRemoved`, `CompanyPayableUpdated`, `EscrowedOfficerSignatureAdded`,
 `EscrowedOfficerSignatureUpdated`, `CyberCORPExtensionSet`,
-`CyberCORPExtensionDataUpdated`.
+`CyberCORPExtensionDataUpdated`, and `IssuanceManagerUpdated` /
+`DealManagerUpdated` / `RoundManagerUpdated` (new address, old address),
+which the three manager setters emit.
 
 ## Errors
 
@@ -98,8 +102,20 @@ cyberCERT's metadata.
 
 ## Upgrades
 
-`_authorizeUpgrade` is `onlyOwner` **and** requires the new implementation to
-equal `ICyberCorpSingleFactory(upgradeFactory).getRefImplementation()` —
+`_authorizeUpgrade` is `onlyOwner` **and** requires the new implementation
+to equal `ICyberCorpSingleFactory(upgradeFactory).getRefImplementation()`;
 otherwise it reverts `NotRefImplementation`. The constructor calls
-`_disableInitializers()`, so the implementation contract itself can never be
-initialised. See [Upgrade model](../upgrade-model.md).
+`_disableInitializers()`, so the implementation contract itself can never
+be initialized.
+
+This call upgrades the CyberCorp proxy only. Moving a company to v5 takes
+six calls: this one, `upgradeToAndCall` on the IssuanceManager, DealManager
+and RoundManager, and the IssuanceManager's two beacon upgrades.
+`corpUpgradeCalls` in `script/upgrade-v5.s.sol` builds the batch. A company
+left part-way through can see deal, round and issuance calls revert; see
+[Upgrade a cyberCORP](../../how-to/upgrade-a-cybercorp.md).
+
+This path needs the CyberCorp to sit behind its own ERC-1967 proxy. The
+oldest cyberCORPs are beacon proxies on MetaLeX-owned beacons, and for them
+`upgradeToAndCall` reverts `UUPSUnauthorizedCallContext`. See
+[Upgrade model](../upgrade-model.md).

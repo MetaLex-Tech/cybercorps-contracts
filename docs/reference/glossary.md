@@ -1,90 +1,43 @@
 # Glossary
 
-**ACE (Asset Conversion to Equity)** — MetaLeX's product for converting a
-token community into equity stakeholders. Live at
-[ace.metalex.tech](https://ace.metalex.tech). Powered by `PumpCorpFactory`
-and `ACESAFEExtension`.
-
-**BorgAuth** — MetaLeX's role-based access control framework. See
-[borg-core](https://github.com/MetaLex-Tech/borg-core).
-
-**cyberCERT** — A *Ledger Entry Token* (ERC-721), minted by the
-`LedgerEntryToken` contract (formerly `CyberCertPrinter`). One token = one
-entry on a cyberCORP's register of holders.
-
-**cyberCORP** — An onchain legal entity that issues legally constitutive
-digital securities through this protocol.
-
-**cyberRAISE** — Onchain primary fundraising. Implemented via `RoundManager`,
-`DealManager`, and the LeXscroW escrow subsystem (`LexScrowStorage`).
-
-**cyberSCRIP** — The ERC-20 fungible form of a cyberCORP security, minted
-from a cyberCERT via `scripifyCert` and convertible back. Itself a security
-in scrip form (e.g., DGCL §155).
-
-**cyberSign** — Cybernetic legal-agreement execution layer. Implemented via
-`CyberAgreementRegistry`.
-
-**cyberTRADE** — Post-negotiation settlement for secondary trades of private
-securities. Settles via the `DealManager` offer/acceptance flow (with an
-elected exemption pathway) and the LeXscroW escrow subsystem.
-
-**Constitutive tokenization** — Token issuance where the chain *is* the
-official register, not a pointer to one. Contrast with pointer tokenization.
-
-**DGCL** — Delaware General Corporation Law. The most fully worked-out
-statutory reference for the protocol.
-
-**Endorsement** — A record appended to a cyberCERT documenting a state-
-changing event (transfer, conversion, restriction change).
-
-**EOI (Expression of Interest)** — An EIP-712-signed message in which an
-investor declares intent to participate in a cyberRAISE round on stated
-terms.
-
-**Exemption pathway** — The securities-law exemption a secondary trade
-settles under (`RULE_144`, `SECTION_4A7`, `SECTION_4A1HALF`, `RULE_144A`,
-or `REGULATION_S`), elected per trade and enforced by
-per-pathway [condition](conditions.md) sets on the `DealManager`.
-
-**LeXcheX** — MetaLeX's onchain accreditation / KYC-AML credential system.
-Soulbound, wallet-bound NFT credentials.
-
-**LeXcheXBadge** — The unified soulbound credential registry (LeXcheX v2,
-`src/creds/lexchexBadge.sol`): fact-keyed credential attributes with
-expiries, read by the badge-scoped secondary-trading
-[conditions](conditions.md).
-
-**LeXscroWLite** — The atomic deal-closing escrow subsystem. Now implemented
-as the `LexScrowStorage` library linked into `DealManager` (formerly a
-standalone contract).
-
-**LiquiLeX** — AMM-native secondary liquidity for cyberSCRIPs, using
-Uniswap v4 pools and the `MetalexIssuerFeeHook`.
-
-**MetaDAO** — A futarchy-governed Cayman SPC structure deployed via
-`MetaDAOFactory`.
-
-**Pointer tokenization** — Token issuance where the chain is a notification
-layer; the official register lives offchain. Contrast with constitutive
-tokenization.
-
-**PumpCorp** — A cyberCORP variant deployed by `PumpCorpFactory` for ACE.
-
-**Reg D / Reg S** — Two exemption frameworks for private securities under
-the US Securities Act of 1933. Reg D is the US-investor framework
-(accreditation-driven); Reg S is the non-US-investor framework.
-
-**Scripification** — Minting cyberSCRIP from a cyberCERT.
-
-**SegCo** — Segregated Portfolio Company portfolio (Cayman SPC structure).
-
-**Tokenization Hub** — The securities console of the cyberCORPs app
-(formerly called the *Mainframe*): configure, issue, and manage tokenized
-securities. The cyberCORPs app's dashboard is separately named
-**mainFrame**. Reference UI at
-[`apps/cybercorps-web`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web).
-Used by MetaDAO.
-
-**zkPassport** — Privacy-preserving passport credential used by
-`NonUSNationalityCondition`.
+| Term | Meaning |
+|---|---|
+| **ACE (Asset Conversion to Equity)** | MetaLeX's product for converting a token community into equity stakeholders, at [ace.metalex.tech](https://ace.metalex.tech). Built on `PumpCorpFactory` and `ACESAFEExtension`. See [ACE](../webapp/ace.md). |
+| **Agreement id** | The `bytes32` id of an agreement in `CyberAgreementRegistry`: a deal, an EOI, a secondary settlement, or a standalone cyberSign agreement. On Ethereum, Base and Arbitrum the registry derives it from the template id, salt, global values, parties, secret hash and finalizer; the zkSync Era registry uses only the first four. See [CyberAgreementRegistry](contracts/CyberAgreementRegistry.md). |
+| **BorgAuth** | MetaLeX's role-based access control framework. Each cyberCORP has its own BorgAuth with numeric role levels. See [Access control](access-control.md) and [borg-core](https://github.com/MetaLex-Tech/borg-core). |
+| **Cap table** | The ownership record the cyberCORPs app assembles, displays and exports: every position from every source (offchain entries, LETs, scrip) in one view. It is an app record. Whether it, the chain or another record is the company's *securities ledger* depends on the company's governing documents. See [The cap table](../webapp/captable.md). |
+| **Constitutive tokenization** | Token issuance where the entity's governing documents designate the onchain record as the official register, so the chain *is* the register. Contrast with pointer tokenization. |
+| **cyberCORP** | An onchain legal entity that issues legally constitutive digital securities through this protocol. |
+| **cyberCORPs app** | MetaLeX's issuer-facing app at `cybercorps.metalex.tech`. A company's sidebar sections are **mission control**, **Incorporation Hub**, **Documents**, **boardRoom**, **capTable**, **grants**, **cyberRaise**, **Tokenization Hub** and **cyberSign**. See [Run your company](../webapp/company.md). |
+| **cyberRAISE** | Onchain primary fundraising, built on `RoundManager`, `DealManager` and the LeXscroWLite escrow (`LexScrowStorage`). The cyberCORPs app's sidebar entry for it reads **cyberRaise**. See [cyberRAISE](../webapp/cyberraise.md). |
+| **cyberSign** | MetaLeX's app for signing and executing legal agreements, built on `CyberAgreementRegistry`. See [cyberSign](../webapp/cybersign.md). |
+| **cyberTRADE** | Settlement for negotiated secondary trades of private securities, through the `DealManager` offer and acceptance flow (with an elected exemption pathway) and the LeXscroWLite escrow. |
+| **DGCL** | Delaware General Corporation Law, the most fully worked-out statutory reference for the protocol. |
+| **Documents** | The cyberCORPs app section that collects a company's formation mail, notices and filings, with links to the boardRoom's governance documents and to cyberSign. See [Run your company](../webapp/company.md). |
+| **Endorsement** | A signed record on a LET naming an endorser and an endorsee, optionally bound to an agreement registry and agreement id. An issuance endorsement names the first holder. Title moves to a new holder of record only on delivery to the endorsee of the latest live endorsement. See [LedgerEntryToken](contracts/LedgerEntryToken.md). |
+| **EOI (Expression of Interest)** | An EIP-712-signed message in which an investor declares intent to take part in a cyberRAISE round on stated terms. |
+| **Exemption pathway** | The securities-law exemption a secondary trade settles under (`RULE_144`, `SECTION_4A7`, `SECTION_4A1HALF`, `RULE_144A` or `REGULATION_S`), elected per trade and enforced by per-pathway [condition](conditions.md) sets on the `DealManager`. |
+| **Holder of record** | The address registered as a LET's legal owner (`legalOwnerOf`). It can differ from the wallet in possession of the token (`ownerOf`). |
+| **Incorporation Hub** | The cyberCORPs app section that holds a company's onchain formation record and founding documents, plus the private state formation record for a company formed through the app. See [Run your company](../webapp/company.md). |
+| **Ledger Entry Token (LET)** | An ERC-721 token minted by a LET contract. Each LET is one entry on a cyberCORP's register of holders, recording the holder of record, units and details of one position. Its onchain image renders the certificate. See [LedgerEntryToken](contracts/LedgerEntryToken.md) and [LETs and scrip](../explanation/lets-and-scrip.md). |
+| **Legal terms** | The legal class, series and versioned terms recorded behind a security class in the cyberCORPs app. One current officer wallet approves an exact version before it activates, and the cap table and its exports read the activated version. See [The cap table](../webapp/captable.md). |
+| **LET contract** | The `LedgerEntryToken` deployment that mints a class's or series' LETs. Each class or series has its own LET contract, created by the company's IssuanceManager (`createCertPrinter`). |
+| **LeXcheX** | MetaLeX's onchain accreditation and KYC/AML credential system: soulbound, wallet-bound NFT credentials. See [LeXcheX](../webapp/lexchex.md). |
+| **LeXcheXBadge** | The unified soulbound credential registry (LeXcheX v2, `src/creds/lexchexBadge.sol`): fact-keyed credential attributes with expiries, read by the badge-scoped secondary-trading [conditions](conditions.md). |
+| **LeXscroWLite** | The atomic deal-closing escrow, implemented as the `LexScrowStorage` library linked into `DealManager` and `RoundManager`. See [LeXscroWLite](contracts/LeXscroWLite.md). |
+| **LiquiLeX** | AMM-native secondary liquidity for scrip, using Uniswap v4 pools and the `MetalexIssuerFeeHook`. See [Deploy a LiquiLeX pool](../how-to/deploy-liquilex-pool.md). |
+| **MetaDAO** | A futarchy-governed token launchpad that prescribes the legal entity a project uses: a segregated portfolio of a Cayman Islands segregated portfolio company. `MetaDAOFactory` deploys the structure, and the cyberCORPs app has a formation page for it. See [Launchpads](../webapp/launchpads.md). |
+| **mission control** | The cyberCORPs app's company dashboard. It shows what is true about the company now and what needs action, such as contract upgrades, formation steps, annual reports and cap table checks. See [Run your company](../webapp/company.md). |
+| **Pointer tokenization** | Token issuance where the chain is a notification layer and the official register lives offchain. Contrast with constitutive tokenization. |
+| **Public company page** | A wallet-free page for every cyberCORP at `cybercorps.metalex.tech/company/{chainId}/{address}`, showing what the chain and the public indexer record about it. See [Run your company](../webapp/company.md). |
+| **PumpCorp** | A cyberCORP variant deployed by `PumpCorpFactory` for ACE. |
+| **Reg D / Reg S** | Two exemption frameworks for private securities under the US Securities Act of 1933. Reg D is the US-investor framework (accreditation-driven); Reg S is the non-US-investor framework. |
+| **Scrip** | A fungible ERC-20 token that tracks a LET's units in a fixed ratio; a holder converts LET units into scrip and back. Its rights come from the company's governing documents and the scrip's terms; under MetaLeX-form bylaws scrip is not stock and confers no stockholder rights on its own. Each LET contract has at most one `CyberScrip` contract. See [Tokenization Hub](../webapp/tokenization-hub.md) and [CyberScrip](contracts/CyberScrip.md). |
+| **Scripification** | Converting units of a LET into scrip (`scripifyCert`). De-scripification converts scrip back into a LET (`convertScripToCert`). |
+| **Securities ledger** | The company's legally definitive record of its securities. Which record that is (the chain, the app's cap table, or something else) depends on the company's governing documents, such as its bylaws; it never follows from tokenization or from where data is stored. |
+| **SegCo** | A segregated portfolio of a Cayman Islands segregated portfolio company (SPC). |
+| **Tokenization Hub** | The cyberCORPs app section that configures, issues and manages the company's LETs and scrip. Reference UI at [`apps/cybercorps-web`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web). See [Tokenization Hub](../webapp/tokenization-hub.md). |
+| **Tokenized / untokenized** | Whether units have a token onchain (a LET or scrip). Says nothing about where a record is stored or which record is definitive. |
+| **Umia** | A token launchpad that, like MetaDAO, prescribes the legal entity a project uses: a segregated portfolio of Umia Launcher SPC. The cyberCORPs app has a password-protected formation page for it. See [Launchpads](../webapp/launchpads.md). |
+| **Unregistered scrip** | Scrip in a holder's wallet beyond what recorded grants' withdrawals explain: beneficial units with no registered position accounting for them. The cyberCORPs app flags it for review. |
+| **zkPassport** | Privacy-preserving passport credential used by `NonUSNationalityCondition`. |

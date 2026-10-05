@@ -1,20 +1,24 @@
 ---
-description: Install transfer-restriction hooks and compliance powers on cyberSCRIP
+description: Install transfer-restriction hooks on scrip and LETs, use or permanently disable scrip compliance powers, and cap scrip holders
 ---
 
-# Restrict cyberSCRIP transfers
+# Restrict scrip and LET transfers
 
-cyberSCRIP is an ERC-20. You can restrict it with transfer-restriction hooks,
-and a cyberCORP can hold (and later renounce) compliance powers.
+Scrip is an ERC-20 (`CyberScrip`). You restrict it with transfer-restriction
+hooks, and the company can hold compliance powers over it and later give
+them up. Ledger Entry Tokens (LETs) have their own switches for delivery
+and registration.
 
-## Transfer-restriction hooks
+## Install transfer-restriction hooks on scrip
 
-Hooks implement `ITransferRestrictionHook`; CyberScrip runs every installed
-hook on each transfer. See [Hooks](../reference/hooks.md).
+Hooks implement `ITransferRestrictionHook`. CyberScrip runs every installed
+hook's `checkTransferRestriction` on each transfer and on each mint (any
+move to a nonzero address), so a scripify to a recipient the hooks reject
+fails. Burns skip the hooks. See [Hooks](../reference/hooks.md).
 
-Hooks are set initially when the scrip is deployed (`typeRestrictionHooks`
-argument of `deployCyberScrip`) and can be replaced afterward through the
-IssuanceManager:
+You set the hooks when you deploy the scrip (the `typeRestrictionHooks`
+argument of `deployCyberScrip`), and a BorgAuth admin can replace them
+later on the scrip itself:
 
 ```solidity
 // at deploy time
@@ -24,55 +28,71 @@ address cyberScrip = IIssuanceManager(issuanceManager).deployCyberScrip(
     /* ...remaining args... */
 );
 
-// later (BorgAuth admin) — replaces the whole hook set
-IIssuanceManager(issuanceManager).setScripRestrictionHooks(certAddress, newHooks);
+// later, as a BorgAuth admin; replaces the whole hook set
+ICyberScrip(cyberScrip).setRestrictionHook(newHooks);
 ```
 
-The cert printer (`LedgerEntryToken`) has its own hooks for cyberCERT
-transfers, set on the printer itself by the IssuanceManager or a BorgAuth
-admin: `setRestrictionHook(id, hook)` (per token) and
-`setGlobalRestrictionHook(hook)`.
+The repository's hook implementation is `WhitelistTransferHook` in
+[`src/hooks/transfer/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/transfer).
+It allows a transfer when both sender and recipient are whitelisted, and a
+mint when the recipient is. Its source lists its admin functions.
 
-Implementations in
-[`src/hooks/transfer/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/transfer):
-`WhitelistTransferHook` (allow only whitelisted addresses) and
-`ToggleTransferHook` (per-token on/off). Consult each contract's source for
-its admin functions.
+## Open and close a LET contract's gates
 
-## Compliance powers
+A LET contract (`LedgerEntryToken`) restricts two events separately. The
+IssuanceManager or a BorgAuth admin sets both on the LET contract:
 
-A CyberScrip is deployed with three optional powers — the last three
-booleans of `deployCyberScrip`:
+* **Delivery** (the token moves between wallets): the contract-wide
+  `setGlobalTransferable` and per-lot `setTokenTransferable` switches, plus
+  each hook's `checkTransferRestriction`.
+* **Registration** (the holder of record changes): the contract-wide
+  `setGlobalLegalTransferable` and per-lot `setTokenLegalTransferable`
+  switches, plus each hook's `checkLegalTransferRestriction`.
+
+Install hooks with `setRestrictionHook(id, hook)` for one token and
+`setGlobalRestrictionHook(hook)` for the whole contract. All four switches
+start `false` on a new LET contract, so LETs issue freely but cannot move,
+and the holder of record cannot change, until an admin opens them. The
+gates are documented in [LedgerEntryToken](../reference/contracts/LedgerEntryToken.md).
+
+## Use the scrip compliance powers
+
+A CyberScrip is deployed with up to three compliance powers, chosen by the
+last three booleans of `deployCyberScrip`:
 
 ```solidity
     /* ... */ true /*enableForceTransfer*/, true /*enableForceBurn*/, true /*enableFreeze*/
 ```
 
-There is **no blocklist** — only force transfer, force burn, and freeze.
+The scrip has no blocklist. Force transfer, force burn and freeze are the
+only powers.
 
-| Power          | Exercised via (on CyberScrip)     |
-|----------------|-----------------------------------|
-| Force transfer | `forceTransfer(from, to, amount)` |
-| Force burn     | `forceBurn(account, amount)`      |
-| Freeze         | `setFrozen(account, isFrozen)`    |
+| Power          | Exercised via                                       |
+|----------------|-----------------------------------------------------|
+| Force transfer | `CyberScrip.forceTransfer(from, to, amount)`        |
+| Force burn     | `IssuanceManager.forceScripBurn(certAddress, account, amount)` |
+| Freeze         | `CyberScrip.setFrozen(account, isFrozen)`           |
 
-An admin calls the scrip directly — the compliance functions are
-`onlyIssuanceManagerOrAdmin`. Force burn is the exception: it also withdraws
-the matching backing units from the cert's vault, so it is managed by IssuanceManager.
+An admin calls force transfer and freeze on the scrip directly, since those
+functions are `onlyIssuanceManagerOrAdmin`. Force burn runs through the
+IssuanceManager because it also withdraws the matching backing units from
+the scrip pool. A frozen account cannot move scrip, scripify, or convert
+scrip back into a LET.
 
-## Permanently disabling a power
+## Disable a power permanently
 
-Each power has a one-way disable on CyberScrip — `disableForceTransfer()`,
-`disableForceBurn()`, `disableFreeze()`. Once disabled, a power cannot be
-re-enabled; exercising it afterward reverts `ComplianceFeatureDisabled`.
-Like the other controls, the disables are `onlyIssuanceManagerOrAdmin`.
+Each power has a one-way disable on CyberScrip (`disableForceTransfer()`,
+`disableForceBurn()`, `disableFreeze()`). A disabled power cannot be
+re-enabled, and exercising it reverts `ComplianceFeatureDisabled`. The
+disables are `onlyIssuanceManagerOrAdmin`, like the other controls.
 
-## Holder cap
+## Cap the number of scrip holders
 
-`CyberScrip.setMaxHolderCount(n)` caps the holder count (`0` = unlimited);
-transfers that would exceed it revert `HolderLimitExceeded`. Like the other
-reversible controls it is `onlyIssuanceManagerOrAdmin`.
+`CyberScrip.setMaxHolderCount(n)` caps the holder count (`0` means
+unlimited), and a transfer that would exceed the cap reverts
+`HolderLimitExceeded`. The cap is `onlyIssuanceManagerOrAdmin` and can be
+changed at any time.
 
-## Related
-
-* [CyberScrip](../reference/contracts/CyberScrip.md), [Hooks](../reference/hooks.md).
+Function-level detail is in
+[CyberScrip](../reference/contracts/CyberScrip.md) and
+[Hooks](../reference/hooks.md).

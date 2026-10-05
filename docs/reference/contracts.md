@@ -4,11 +4,15 @@ description: What each core contract does and how the suite fits together
 
 # Core contracts
 
-Contract roles, as implemented in
+Each company-owned contract carries a `DEPLOY_VERSION` constant. In the
+`develop` source of
 [`cybercorps-contracts`](https://github.com/MetaLex-Tech/cybercorps-contracts)
-(`develop`). Each core contract carries its own `DEPLOY_VERSION` constant
-(currently `"4"` for most, `"4.1"` for IssuanceManager, `"4.0.1"` for
-DealManager) — see the individual pages.
+all six (CyberCorp, IssuanceManager, DealManager, RoundManager,
+LedgerEntryToken, CyberScrip) report `"5"`, the version deployed on
+Ethereum, Base and Arbitrum. New companies are created on v5. An existing
+company runs the version it was created with (`"3"`, `"4"` or `"4.1"`)
+until its owner upgrades it, so read `DEPLOY_VERSION()` on the instance
+before choosing an ABI. See [Upgrade model](upgrade-model.md).
 
 ```mermaid
 flowchart TD
@@ -17,30 +21,30 @@ flowchart TD
     F --> IM["IssuanceManager"]
     F --> DM["DealManager<br/>(deals + secondary offers)"]
     F --> RM["RoundManager<br/>(fundraising rounds)"]
-    IM -- "each printer represents<br/>a security class / series" --> LET["LedgerEntryToken printers<br/>(cyberCERTs, ERC-721)"]
-    IM -. "optional — deployCyberScrip,<br/>at most one per printer" .-> SCRIP["CyberScrip<br/>(ERC-20 scrip)"]
+    IM -- "one LET contract<br/>per security series" --> LET["LedgerEntryToken<br/>(LET contracts, ERC-721 LETs)"]
+    IM -. "optional: deployCyberScrip,<br/>at most one per LET contract" .-> SCRIP["CyberScrip<br/>(ERC-20 scrip)"]
     DM --- REG["CyberAgreementRegistry<br/>(templates + signed agreements)"]
     RM --- REG
-    AUTH -. "authorises" .-> IM
-    AUTH -. "authorises" .-> DM
-    AUTH -. "authorises" .-> RM
+    AUTH -. "authorizes" .-> IM
+    AUTH -. "authorizes" .-> DM
+    AUTH -. "authorizes" .-> RM
 ```
 
 | Contract | Role |
 |---|---|
-| [**CyberCorp**](contracts/CyberCorp.md) | The onchain entity. Stores the company name, type, jurisdiction, contact details, dispute-resolution default, officers, escrowed officer signatures, an optional corp-level extension, and the addresses of the IssuanceManager / DealManager / RoundManager. UUPS-upgradeable. |
-| [**CyberCorpFactory**](factories.md) | Deploys a cyberCORP and its full suite (BorgAuth, IssuanceManager, DealManager, RoundManager) in one call. |
-| [**IssuanceManager**](contracts/IssuanceManager.md) | Issuance authority. Creates LedgerEntryToken printers, mints/assigns cyberCERTs, registers security-class designations, deploys CyberScrip, runs scripification and de-scripification, manages recertification approvals, and effectuates secondary-trade ownership changes. |
-| [**LedgerEntryToken**](contracts/LedgerEntryToken.md) | ERC-721 of cyberCERTs (Ledger Entry Tokens). Formerly named CyberCertPrinter; one printer per security series. Mutated by its IssuanceManager (or BorgAuth admins for administrative functions). |
-| [**CyberScrip**](contracts/CyberScrip.md) | ERC-20 fungible form of a security, deployed per LedgerEntryToken printer. USDC-style compliance powers (force transfer, force burn, freeze) with one-way disable toggles. |
-| [**CyberShares**](contracts/CyberShares.md) | An ERC-20 share token with certificate-formation logic. Partly in-progress — see the page. |
-| [**DealManager**](contracts/DealManager.md) | Deal lifecycle: propose, sign, finalise, void/revoke — plus the secondary-trading venue (post/accept/cancel offers, settlement escrows, exemption pathways). Built on the agreement registry. |
-| [**RoundManager**](contracts/RoundManager.md) | Multi-investor fundraising rounds: create, submit EOIs, allocate, reject/recall, close. |
-| [**LeXscroWLite**](contracts/LeXscroWLite.md) | The escrow layer used at deal/round close. Implemented as the `LexScrowStorage` library shared by DealManager and RoundManager — see the page. |
-| [**CyberAgreementRegistry**](contracts/CyberAgreementRegistry.md) | Onchain registry of agreement templates and executed, multi-party-signed contracts, with signing delegation and void-request tracking. |
-| [**SafeCertificateConverter**](contracts/SafeCertificateConverter.md) | Computes a SAFE→equity conversion plan from round data. **Currently a stub.** |
-| [**LexChex / LeXcheXBadge**](contracts/LexChex.md) | ERC-5484 soulbound credentials: the legacy LeXcheX accreditation NFT and the unified LeXcheXBadge credential registry. |
-| [**CertificateUriBuilder**](contracts/CertificateUriBuilder.md) | Builds the onchain JSON + SVG token URI for cyberCERTs. |
+| [**CyberCorp**](contracts/CyberCorp.md) | The onchain entity. Stores the company's name, type, jurisdiction, contact details, default dispute resolution, officers, escrowed officer signatures, an optional corp-level extension, and the addresses of its IssuanceManager, DealManager and RoundManager. UUPS-upgradeable. |
+| [**CyberCorpFactory**](factories.md) | Deploys a cyberCORP and its suite (BorgAuth, IssuanceManager, DealManager, RoundManager) in one call. |
+| [**IssuanceManager**](contracts/IssuanceManager.md) | The issuance authority. Creates LET contracts, mints and assigns Ledger Entry Tokens (LETs), registers security classes, deploys CyberScrip, runs scripification and de-scripification, manages recertification approvals, settles the ownership change of secondary trades, and voids emptied LETs. |
+| [**LedgerEntryToken**](contracts/LedgerEntryToken.md) | The LET contract: an ERC-721 that mints the LETs of one security series. Tracks possession and the holder of record separately, with a transfer gate for each. Its IssuanceManager mutates it, and BorgAuth admins call its administrative functions directly. |
+| [**CyberScrip**](contracts/CyberScrip.md) | The ERC-20 scrip of one LET contract. USDC-style compliance powers (force transfer, force burn, freeze), each with a one-way disable switch. |
+| [**CyberShares**](contracts/CyberShares.md) | An ERC-20 share token with certificate-formation logic. Partly implemented; see its page. |
+| [**DealManager**](contracts/DealManager.md) | Primary deals (propose, sign, finalize, void, revoke) and the secondary-trading venue (post, accept and cancel offers, settlement escrows, exemption pathways). Built on the agreement registry. |
+| [**RoundManager**](contracts/RoundManager.md) | Multi-investor fundraising rounds: create, submit EOIs, allocate, reject or recall, close. |
+| [**LeXscroWLite**](contracts/LeXscroWLite.md) | The escrow used when deals and rounds close: the `LexScrowStorage` library that DealManager and RoundManager share. |
+| [**CyberAgreementRegistry**](contracts/CyberAgreementRegistry.md) | Onchain registry of agreement templates and executed multi-party agreements, with signing delegation and void-request tracking. |
+| [**SafeCertificateConverter**](contracts/SafeCertificateConverter.md) | Computes a SAFE-to-equity conversion plan from round data. A stub that returns an empty plan. |
+| [**LexChex / LeXcheXBadge**](contracts/LexChex.md) | ERC-5484 soulbound credentials: the LeXcheX accreditation NFT and the LeXcheXBadge fact-keyed credential registry. |
+| [**CertificateUriBuilder**](contracts/CertificateUriBuilder.md) | Builds the onchain JSON and SVG token URI of every LET, with the SVG drawn by a separate image-builder contract. |
 
-See [Factories](factories.md) for the specialised factories (PumpCorp,
+[Factories](factories.md) covers the specialised factories (PumpCorp,
 MetaDAO, ParentCo).

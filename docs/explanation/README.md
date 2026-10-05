@@ -1,33 +1,37 @@
 ---
-description: Why the protocol is designed the way it is
+description: >-
+  Why the protocol is designed as it is, what it relies on in law, and how
+  far MetaLeX's control over a deployed company reaches.
 ---
 
-# Explanation
+# How cyberCORPs works
 
-Explanation is understanding-oriented. The other three quadrants tell you
-*what* and *how*; explanation tells you *why*. Read these when you want
-to know the design rationale, the legal grounding, and the trade-offs the
-protocol makes.
+These pages explain the design and its legal grounding for lawyers,
+investors and integrators deciding whether the model fits. They argue why a
+company's onchain records can be its legal record, why each security has two
+token forms, where compliance runs, and what MetaLeX can and cannot do once a
+company is deployed. To build on the protocol, start with the
+[guides](../how-to/README.md), which also list the contracts each product
+uses, and the [reference](../reference/README.md).
 
-## Contents
-
-* [Constitutive vs. pointer tokenization](constitutive-vs-pointer.md) — the
-  thesis on which the protocol rests.
-* [The dual-token model](dual-token-model.md) — why cyberCERT (ERC-721) and
-  cyberSCRIP (ERC-20) coexist, and how they relate.
-* [Legal mappings across jurisdictions](legal-mappings.md) — how Delaware,
-  LLC, Cayman, BVI, and English law map onto the same primitives.
-* [Co-approval upgradeability](co-approval-upgradeability.md) — why neither
-  MetaLeX nor any single issuer can unilaterally upgrade.
-* [Composability and DeFi](composability.md) — what scripification enables
-  and where its boundaries are.
-* [Compliance architecture](compliance-architecture.md) — conditions,
-  credentials, zkPassport, Reg D vs. Reg S, and the de-scripification
-  boundary.
-* [The role of MetaLeX](role-of-metalex.md) — protocol developer and
-  steward, not securities intermediary.
-* [Regulatory context](regulatory-context.md) — SEC statements, statutory
-  grounding, UI-provider safe harbour.
-* [The cyberCORPs application stack](application-stack.md) — cyberRAISE,
-  cyberTRADE, ACE, LiquiLeX, cyberSign, the cyberCORPs app, and how the
-  illustrative apps in `metalex-webapp` realise them.
+* [Constitutive vs. pointer tokenization](constitutive-vs-pointer.md) is the
+  thesis: where a company's governing documents designate the onchain
+  records as its securities ledger, changing onchain state is the legal
+  change.
+* [Ledger Entry Tokens and scrip](lets-and-scrip.md) shows how a Ledger
+  Entry Token (LET) records a holding on the register while scrip, its
+  fungible counterpart, trades without moving it.
+* [Legal mappings across jurisdictions](legal-mappings.md) sets out the
+  statutes and governing documents that anchor the register for Delaware
+  corporations and LLCs, Cayman and BVI entities, English companies and
+  funds.
+* [Compliance architecture](compliance-architecture.md) covers condition
+  contracts, credentials, and the choice of where in the scrip lifecycle the
+  strictest gate sits.
+* [Composability and DeFi](composability.md) weighs what scrip can do in AMMs
+  and lending markets against what its restrictions cost.
+* [Upgrades and what MetaLeX controls](upgrades-and-control.md) explains
+  opt-in upgrades, fees and templates, and the owner role the deploying
+  factory keeps.
+* [Regulatory context](regulatory-context.md) maps the US exemptions and SEC
+  staff statements the protocol is built around.

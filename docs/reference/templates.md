@@ -2,7 +2,12 @@
 
 Reusable legal-instrument templates live in the
 [`/templates`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/templates)
-directory and are pre-registered in `CyberAgreementRegistry`.
+directory. Registration in `CyberAgreementRegistry` is per chain, so a
+template can exist on one chain and not another: the cyberSTOCK template
+below is registered on Ethereum and Base Sepolia but not on Base or
+Arbitrum. Call `getTemplateDetails(templateId)` on the target chain before
+relying on a template; it reverts `TemplateDoesNotExist` for an
+unregistered id.
 
 ## cyberSAFE
 
@@ -24,13 +29,13 @@ directory and are pre-registered in `CyberAgreementRegistry`.
 
 ## cyberSAFTE
 
-* `mlx_safte_reg_d_v1_3.md` — Reg D, v1.3.
+* `mlx_safte_reg_d_v1_3.md`: Reg D, v1.3.
 
 ## cyberSTOCK
 
-* `mlx_cyberstock_reg_d_v1_0.md` — tokenized-share subscription agreement,
-  Reg D, v1.0 (template id
-  `bytes32(bytes("metalex_cyberstock_reg_d_v1_0"))`).
+* `mlx_cyberstock_reg_d_v1_0.md`: a tokenized-share subscription
+  agreement, Reg D, v1.0, with template id
+  `bytes32(bytes("metalex_cyberstock_reg_d_v1_0"))`.
 
 ## cyberTokenWarrant
 
@@ -49,23 +54,29 @@ directory and are pre-registered in `CyberAgreementRegistry`.
 
 ## LeXcheX agreement
 
-* `MetaLeX LeXCheX Agreement.md` — countersigned by a credential subject when
-  receiving a LeXcheX credential.
+* `MetaLeX LeXCheX Agreement.md`, which a credential subject countersigns
+  on receiving a LeXcheX credential.
 
 ## Custom templates
 
-Template creation is **permissionless**: anyone can register a template
-with `CyberAgreementRegistry.createTemplate(templateId, title,
+Anyone can register a template with
+`CyberAgreementRegistry.createTemplate(templateId, title,
 legalContractUri, globalFields, partyFields)`. Template ids are
 caller-chosen `bytes32` values (by convention, `bytes32(bytes("<name>"))`)
-and must be unused; a template's fields cannot be overwritten once created.
-For example, the `Three Prime Custom cyberSAFE and cyberTokenWarrant.md`
-template demonstrates a custom variant.
+and must be unused, and a template's fields cannot be overwritten once
+created. The directory also holds a combined cyberSAFE and
+cyberTokenWarrant template prepared for one issuer, as an example of a
+custom variant.
 
-Two `DEPRECATED-*` templates (`SAFE-version-0-1`, `SAFEplusT-version-0-1`)
-remain in the directory for historical reference only.
+Standalone agreements (`createStandaloneContractAndSign`) skip this step.
+The registry derives the template id from
+`keccak256(abi.encode(title, legalContractUri, globalFields, partyFields))`
+and registers the template on first use.
+
+The two `DEPRECATED-*` files in the directory (`SAFE-version-0-1`,
+`SAFEplusT-version-0-1`) are not for new agreements.
 
 ## See also
 
-* [How-to: Sign a cyberAgreement](../how-to/sign-a-cyberagreement.md)
+* [Sign a cyberAgreement](../how-to/sign-a-cyberagreement.md)
 * [`CyberAgreementRegistry`](contracts/CyberAgreementRegistry.md)

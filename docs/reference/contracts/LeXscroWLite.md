@@ -1,37 +1,38 @@
 # LeXscroWLite
 
-> **There is no standalone `LeXscroWLite.sol` contract in this repository's
-> `src/` tree.** The escrow layer is implemented as the **`LexScrowStorage`
-> library**, embedded in the deal and round managers.
+LeXscroWLite is the atomic deal-closing escrow. It is implemented as the
+**`LexScrowStorage` library**, linked into the deal and round managers;
+the repository has no standalone `LeXscroWLite.sol` contract.
 
-MetaLeX protocol materials refer to *LeXscroWLite* as the atomic
-deal-closing escrow. In `cybercorps-contracts` it lives in:
-
-* [`src/storage/LexScrowStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/LexScrowStorage.sol) —
-  the escrow library: `Escrow` / `Token` structs, `EscrowStatus`
+* [`src/storage/LexScrowStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/LexScrowStorage.sol)
+  is the escrow library: `Escrow` and `Token` structs, `EscrowStatus`
   (`PENDING → PAID → FINALIZED`, or `VOIDED`), per-escrow `ICondition`
   lists, payment intake (`handleCounterPartyPayment`, with exact-amount
   checks against fee-on-transfer tokens), `finalizeEscrow` (asset delivery
   plus platform-fee distribution), `voidAndRefund`, and `conditionCheck`.
-* [`src/interfaces/ILexScrowStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ILexScrowStorage.sol) —
-  the shared interface both managers implement so the library's events
-  (`DealPaidAt`, `DealVoidedAt`, `DealFinalizedAt`, `FeeDistributed`) and
-  errors appear in their ABIs.
+  The library declares the escrow events (`DealPaidAt`, `DealVoidedAt`,
+  `DealFinalizedAt`, `FeeDistributed`). Linked library functions run in the
+  manager's context by `DELEGATECALL`, so those logs come from the
+  manager's address.
+* [`src/interfaces/ILexScrowStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ILexScrowStorage.sol)
+  is the interface both managers implement: the escrow views
+  (`getEscrowDetails`, `conditionCheck`), the fee hooks each manager
+  supplies (`computeFee`, `getPlatformPayable`), and the shared
+  `AgreementConditionsNotMet` error.
 
-Both managers expose the escrow surface on their own proxies:
+Both managers expose the escrow on their own proxies:
 
-* [`DealManager`](DealManager.md) escrows payment and certificate effects
-  across a deal's `proposeDeal` → `signDealAndPay` → `finalizeDeal`
-  lifecycle (with `voidExpiredDeal` / `refundVoidedDeal` for stale or
-  voided deals), and runs a parallel `SecondaryEscrow` machinery for
-  secondary-trade settlements.
-* [`RoundManager`](RoundManager.md) does the equivalent across
-  `submitEOI` → `allocate` / `reject` / `recallEOI`.
+* [`DealManager`](DealManager.md) escrows payment and Ledger Entry Token
+  (LET) effects across a deal's `proposeDeal` → `signDealAndPay` →
+  `finalizeDeal` lifecycle, with `signToVoid`, `revokeDeal`,
+  `voidExpiredDeal` and `refundVoidedDeal` for stale or voided deals. It
+  runs a parallel `SecondaryEscrow` for secondary-trade settlements.
+  Primary escrows pay the DealManager's primary fee; secondary settlements
+  pay its separate secondary fee.
+* [`RoundManager`](RoundManager.md) does the same across `submitEOI` →
+  `allocate` / `reject` / `recallEOI`.
 
 On each, `getEscrowDetails(agreementId)` returns the `Escrow` struct and
-`conditionCheck(agreementId)` evaluates the attached conditions; both also
-implement the `onERC721Received` / `onERC1155Received` hooks so assets can
-be safe-transferred into escrow.
-
-This page will be replaced with a full contract reference if and when a
-standalone escrow contract lands in `src/`.
+`conditionCheck(agreementId)` evaluates the attached conditions. Both
+managers also implement `onERC721Received` / `onERC1155Received`, so assets
+can be safe-transferred into escrow.
