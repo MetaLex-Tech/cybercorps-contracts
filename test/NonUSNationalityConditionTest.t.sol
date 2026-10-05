@@ -13,8 +13,11 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {
     BoundData,
     DisclosedData,
+    FaceMatchMode,
     IZKPassportHelper,
     IZKPassportVerifier,
+    NullifierType,
+    OS,
     ProofVerificationData,
     ProofVerificationParams,
     ServiceConfig
@@ -45,6 +48,16 @@ contract MockEscrowSource {
 contract MockZKPassportHelper is IZKPassportHelper {
     bool public shouldRevertSanctions;
     bool public shouldRejectNationality;
+    NullifierType public nullifierType = NullifierType.SALTED_NULLIFIER;
+    FaceMatchMode public faceMatchMode = FaceMatchMode.STRICT;
+
+    function setNullifierType(NullifierType _type) external {
+        nullifierType = _type;
+    }
+
+    function setFaceMatchMode(FaceMatchMode _mode) external {
+        faceMatchMode = _mode;
+    }
 
     error SanctionsCheckFailed();
 
@@ -78,6 +91,14 @@ contract MockZKPassportHelper is IZKPassportHelper {
 
     function enforceSanctionsRoot(uint256, bool, bytes calldata) external view {
         if (shouldRevertSanctions) revert SanctionsCheckFailed();
+    }
+
+    function enforceNullifierType(NullifierType expected, bytes32[] calldata) external view {
+        if (expected != nullifierType) revert("Invalid nullifier type");
+    }
+
+    function isFaceMatchVerified(FaceMatchMode mode, OS, bytes calldata) external view returns (bool) {
+        return mode == faceMatchMode;
     }
 }
 

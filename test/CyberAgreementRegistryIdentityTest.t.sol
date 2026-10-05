@@ -9,8 +9,11 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {MockZKPassportHelper} from "./NonUSNationalityConditionTest.t.sol";
 import {
     BoundData,
+    FaceMatchMode,
     IZKPassportHelper,
     IZKPassportVerifier,
+    NullifierType,
+    OS,
     ProofVerificationData,
     ProofVerificationParams,
     ServiceConfig
@@ -347,6 +350,31 @@ contract CyberAgreementRegistryIdentityTest is Test {
         );
     }
 
+    /// @notice The registry asks for a SALTED identifier, a strict face match, and a sanctions
+    /// list that is valid at signing time (not at proof time)
+    function test_identityProofChecksSaltedFaceMatchAndSanctionsAtSigning() public {
+        bytes32 contractId = _create(_parties(2), _uints(1), _ids(CAROL_ID), address(0), bytes32(0));
+        ProofVerificationParams memory proof = _proof(carolWallet, contractId);
+        vm.warp(block.timestamp + 1 hours);
+
+        vm.expectCall(
+            address(helper),
+            abi.encodeCall(
+                IZKPassportHelper.enforceNullifierType,
+                (NullifierType.SALTED_NULLIFIER, proof.proofVerificationData.publicInputs)
+            )
+        );
+        vm.expectCall(
+            address(helper),
+            abi.encodeCall(IZKPassportHelper.isFaceMatchVerified, (FaceMatchMode.STRICT, OS.ANY, proof.committedInputs))
+        );
+        vm.expectCall(
+            address(helper),
+            abi.encodeCall(IZKPassportHelper.enforceSanctionsRoot, (block.timestamp, true, proof.committedInputs))
+        );
+        _signWithIdentity(contractId, proof);
+    }
+
     // ─── Sign: proof refusals ───────────────────────────────────────────────
 
     function test_RevertIf_proofNotVerified() public {
@@ -443,6 +471,32 @@ contract CyberAgreementRegistryIdentityTest is Test {
         }
     }
 
+    function test_RevertIf_nullifierTypeNotSalted() public {
+        bytes32 contractId = _create(_parties(2), _uints(1), _ids(CAROL_ID), address(0), bytes32(0));
+        helper.setNullifierType(NullifierType.NON_SALTED_NULLIFIER);
+        bytes memory signature = _sig(contractId, carolValues, carolWalletPrivateKey);
+        ProofVerificationParams memory proof = _proof(carolWallet, contractId);
+        vm.expectRevert("Invalid nullifier type");
+        vm.prank(carolWallet);
+        registry.signContractWithIdentityFor(carolWallet, contractId, 1, carolValues, signature, "", proof);
+    }
+
+    function test_RevertIf_faceMatchNotStrict() public {
+        bytes32 contractId = _create(_parties(2), _uints(1), _ids(CAROL_ID), address(0), bytes32(0));
+        helper.setFaceMatchMode(FaceMatchMode.REGULAR);
+        _expectIdentitySignRevert(
+            contractId, _proof(carolWallet, contractId), CyberAgreementRegistry.FaceMatchNotVerified.selector
+        );
+    }
+
+    function test_RevertIf_sanctionsRootInvalid() public {
+        bytes32 contractId = _create(_parties(2), _uints(1), _ids(CAROL_ID), address(0), bytes32(0));
+        helper.setShouldRevertSanctions(true);
+        _expectIdentitySignRevert(
+            contractId, _proof(carolWallet, contractId), MockZKPassportHelper.SanctionsCheckFailed.selector
+        );
+    }
+
     function test_RevertIf_devModeProof() public {
         bytes32 contractId = _create(_parties(2), _uints(1), _ids(CAROL_ID), address(0), bytes32(0));
         ProofVerificationParams memory proof = _proof(carolWallet, contractId);
@@ -463,13 +517,6 @@ contract CyberAgreementRegistryIdentityTest is Test {
         proof.serviceConfig.devMode = true;
         _signWithIdentity(contractId, proof);
         assertTrue(registry.hasSigned(contractId, carolWallet));
-    }
-
-    function test_RevertIf_proofExpired() public {
-        bytes32 contractId = _create(_parties(2), _uints(1), _ids(CAROL_ID), address(0), bytes32(0));
-        ProofVerificationParams memory proof = _proof(carolWallet, contractId);
-        vm.warp(block.timestamp + VALIDITY + 1);
-        _expectIdentitySignRevert(contractId, proof, CyberAgreementRegistry.ProofExpired.selector);
     }
 
     // ─── Sign: slot and agreement refusals ──────────────────────────────────

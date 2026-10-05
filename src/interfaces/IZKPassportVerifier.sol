@@ -38,6 +38,27 @@ struct ServiceConfig {
     bool devMode;
 }
 
+// The enums below must keep ZKPassport's member order. The helper reads them as numbers.
+enum NullifierType {
+    NON_SALTED_NULLIFIER,
+    SALTED_NULLIFIER,
+    NON_SALTED_MOCK_NULLIFIER,
+    SALTED_MOCK_NULLIFIER,
+    NONE_NULLIFIER
+}
+
+enum FaceMatchMode {
+    NONE,
+    REGULAR,
+    STRICT
+}
+
+enum OS {
+    ANY,
+    IOS,
+    ANDROID
+}
+
 interface IZKPassportVerifier {
     function verify(ProofVerificationParams calldata params)
         external
@@ -69,4 +90,16 @@ interface IZKPassportHelper {
         bool isStrict,
         bytes calldata committedInputs
     ) external view;
+
+    // Reverts unless the proof has this nullifier type. A mock type counts as its real type.
+    function enforceNullifierType(
+        NullifierType expectedNullifierType,
+        bytes32[] calldata publicInputs
+    ) external view;
+
+    function isFaceMatchVerified(
+        FaceMatchMode faceMatchMode,
+        OS os,
+        bytes calldata committedInputs
+    ) external view returns (bool);
 }

@@ -4,9 +4,9 @@
 - **Updated:** 2026-10-01.
 - **Owner:** detoo, with Claude Code on this branch.
 - **Collaborators / boundaries:** Do not change DealManager, RoundManager, SecondaryTradeStorage or the factories in v1.
-- **Objective:** A creator can make an agreement in which an open slot is reserved for one ZKPassport `uniqueIdentifier`. The person with that passport signs from any wallet and sends a ZKPassport proof with the signature. On chain, observers see only the wallet and an opaque identifier. An auditor can check the link with the passport chip data and the `domain`/`scope` that MetaLex discloses.
+- **Objective:** A creator can make an agreement in which an open slot is reserved for one ZKPassport `uniqueIdentifier`. The person with that passport signs from any wallet and sends a ZKPassport proof with the signature. On chain, observers see only the wallet and an opaque identifier. An auditor confirms the person by asking the user for a new proof that discloses the name, and compares its identifier with the on-chain record. A copy of the chip data is not enough.
 - **Out of scope:** DealManager integration (follow-up task). Identity on the `signContractWithEscrow` path. Replacing a constraint after creation. Sybil resistance.
-- **Canonical plan / sources:** This record. `src/CyberAgreementRegistry.sol`, `src/interfaces/IZKPassportVerifier.sol`, `src/libs/conditions/NonUSNationalityCondition.sol` (reference for the proof checks).
+- **Canonical plan / sources:** App spec "Passport-bound agreements" (`zkpassport-hello-world/tmp/zkpassport-agreement-registry.md`, outside this repo). This record. `src/CyberAgreementRegistry.sol`, `src/interfaces/IZKPassportVerifier.sol`, `src/libs/conditions/NonUSNationalityCondition.sol` (reference for the proof checks).
 - **Repository / branch:** MetaLex-Tech/cybercorps-contracts; base `develop`; working branch `feat/zkpassport-cyberagreement`.
 - **Verified base / code head:** `d2e06908` (clean).
 - **PR / artifact:** Not yet created.
@@ -15,7 +15,7 @@
 
 All decisions are from the user, 2026-10-01.
 
-1. The creator derives Alice's `uniqueIdentifier` for each agreement with a different salt off chain. The identifiers do not repeat across agreements, so observers cannot link the agreements. The registry does not know or check the salt. It compares the identifier that the verifier returns with the stored constraint, and it checks the proof's `domain`/`scope`.
+1. SUPERSEDED 2026-10-05 by the app spec. The identifier is ZKPassport's SALTED identifier. ZKPassport's OPRF nodes supply the salt from one global key, so an app cannot choose a salt per agreement. With one domain and scope, the identifier is the same in all agreements, and observers can link one person's agreements (the spec lists this as an open point). The registry does not know or check the salt. It compares the identifier that the verifier returns with the stored constraint, and it checks the proof's `domain`/`scope`.
 2. `domain` and `scope` are global admin config. Each agreement stores a copy (as a hash) at creation, so a later admin change does not affect it.
 3. A renewed passport gives a new identifier, and the old constraint then cannot be met. This design does not resist sybil attacks. We accept both limits and state them in NatSpec.
 4. v1 changes only the registry. The new sign path lets the finalizer submit with the same rule as `signContractFor`. DealManager integration is a later task. The escrow path has no open-slot caller, so it gets only the skip rule (invariant I1).
@@ -24,6 +24,7 @@ All decisions are from the user, 2026-10-01.
 7. `ZKP_DEV_MODE` immutable, set in the constructor (user, 2026-10-01). True accepts dev-mode proofs. `upgrade-core` and `deploy-cyber-agreement-registry` set it from `DeploymentConstants.isTestnet`. Older one-off scripts and tests pass `false`.
 8. Standalone variant `createStandaloneContractWithIdentitySlotsAndSign(For)` added (user, 2026-10-01). It changes no other contract.
 9. Keep the I2 `customData` check for extra security (user, 2026-10-01). The app must bind `custom_data` = contractId as `0x` + 64 lowercase hex chars. Empty or other formats revert (tests). A Sepolia fork run showed the real verifier rejects a proof whose bound sender was changed (`Invalid commitment`); a change to `customData` itself was not tested, because the sample proof has empty `customData`.
+10. Review against the app spec (2026-10-05): added I11–I13. `signContractWithEscrow`, `_recordSignature` and `getContractDetails` now read the template through a storage pointer, not a memory copy, to stay under EIP-170. Behavior does not change.
 
 ## Design
 
@@ -51,11 +52,14 @@ All decisions are from the user, 2026-10-01.
 - **I3:** The proof's `keccak256(domain, scope)` equals the agreement's stored copy. `helper.verifyScopes` passes with those strings.
 - **I4:** The verifier's returned identifier equals `slotIdentityConstraints[contractId][slotIndex]`.
 - **I5:** A registry with `ZKP_DEV_MODE == false` rejects a proof with `serviceConfig.devMode == true`. A dev-mode proof can come from a mock passport. A mock passport with Alice's data could give her identifier.
-- **I6:** The proof has not expired: `proofTimestamp + validityPeriodInSeconds >= block.timestamp`.
+- **I6:** The proof has not expired. ZKPassport's verifier enforces this ("The proof was generated outside the validity period"). The registry does not check it again (user, 2026-10-05).
 - **I7:** A front-runner cannot take the id with other constraints. The constraints and the scope hash are in `contractId`.
 - **I8:** Agreements with no constraints keep the same ids and the same behavior, and all existing tests pass unchanged.
 - **I9:** The upgrade keeps the storage layout. Only appended slots change, and the gap shrinks by the same count.
 - **I10:** After the slot is filled, the wallet is a normal party for void, finalize and the views.
+- **I11:** The proof's nullifier type is SALTED (`helper.enforceNullifierType`). A SALTED mock type passes only in dev mode, which the verifier and `ZKP_DEV_MODE` gate.
+- **I12:** The proof has a strict face match (`helper.isFaceMatchVerified(STRICT, ANY)`).
+- **I13:** The proof's sanctions root is valid at signing time (`helper.enforceSanctionsRoot(block.timestamp, true)`).
 
 ## Test matrix
 
@@ -86,7 +90,7 @@ Unit tests go in a new contract in `test/CyberAgreementRegistryIdentityTest.t.so
 | R6 | Wrong bound chainId | revert | I2 |
 | R7 | Bound customData for another contractId | revert | I2 |
 | R8 | `devMode == true` | revert | I5 |
-| R9 | Expired proof | revert | I6 |
+| R9 | Expired proof | revert in the ZKPassport verifier (fork test only; the unit mock does not check) | I6 |
 | R10 | Slot has no constraint / slot already filled / named slot | revert | I1 |
 | R11 | Wrong EIP-712 signature with a valid proof | revert `SignatureVerificationFailed` | — |
 | R12 | Secret set and wrong | revert `InvalidSecret` | — |
@@ -105,9 +109,9 @@ F1 and F2 need a new sample proof whose `customData` is a known contractId, and 
 
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
-| Unit tests | full unit suite on `d2e06908` + uncommitted changes | 1,454 passed (48 identity tests) |
-| Fork tests | full fork suite, same tree | 202 passed. F1/F2 not written |
-| Size (`forge build --sizes`) | same tree | registry 24,164 B (412 B margin; base 24,366 B). `CyberAgreementJsonLib` 5,856 B |
+| Unit tests | full unit suite on `60fa3e88` + uncommitted changes | 1,463 passed |
+| Fork tests | full fork suite, same tree | 202 passed. F1/F2 not written: they need a SALTED proof with `custom_data` = a contractId |
+| Size (`forge build --sizes`) | same tree | registry 24,203 B (373 B margin) |
 | Storage layout | `forge inspect storageLayout` before/after | slots 0–9 unchanged; new slots 10–13; gap 36; storage still ends at slot 50 |
 | JSON parity | one-off test against base runtime code (deleted after the run) | byte-identical |
 

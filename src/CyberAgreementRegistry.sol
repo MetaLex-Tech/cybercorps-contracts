@@ -210,7 +210,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     error BoundSenderMismatch();
     error BoundChainIdMismatch();
     error BoundCustomDataMismatch();
-    error ProofExpired();
+    error FaceMatchNotVerified();
     error NotIdentitySlot();
 
     /// @custom:oz-upgrades-unsafe-allow constructor state-variable-immutable
@@ -322,10 +322,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     }
 
     /// @notice Create an agreement in which some open slots are reserved for one person.
-    /// Each reserved slot holds a ZKPassport unique identifier. Only a signer with a proof for
-    /// that identifier can fill the slot, from any wallet. The creator gets the identifier from
-    /// the person off chain. The person uses a new ZKPassport salt for each agreement, so each
-    /// identifier is different and observers cannot link the agreements to each other.
+    /// Each reserved slot holds the person's ZKPassport SALTED unique identifier. Only a signer
+    /// with a proof for that identifier can fill the slot, from any wallet. The creator gets the
+    /// identifier from the person off chain. No name goes on chain. The identifier is the same
+    /// in all agreements with the same domain and scope, so observers can see that one person
+    /// signed many agreements.
     /// A renewed passport gives a new identifier and cannot fill the slot. One person with two
     /// passports has two identifiers, so this does not stop sybil attacks.
     function createContractWithIdentitySlots(
@@ -716,10 +717,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     }
 
     /// @notice Sign for an open slot that is reserved for one ZKPassport unique identifier.
-    /// `proof` must be a valid ZKPassport proof for that identifier, made with the agreement's
-    /// domain and scope. The proof must bind the signer wallet, this chain, and the contractId
-    /// (as a 0x lowercase hex string) in its custom data. Then nobody can use it for another
-    /// wallet or another agreement.
+    /// `proof` must be a new ZKPassport proof for that SALTED identifier, made with the
+    /// agreement's domain and scope. It must include a strict face match and a sanctions check
+    /// that is valid at signing time. The proof must bind the signer wallet, this chain, and
+    /// the contractId (as a 0x lowercase hex string) in its custom data. Then nobody can use it
+    /// for another wallet or another agreement.
     function signContractWithIdentityFor(
         address signer,
         bytes32 contractId,
@@ -786,15 +788,20 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         bytes32[] calldata publicInputs = proof.proofVerificationData.publicInputs;
         if (!helper.verifyScopes(publicInputs, config.domain, config.scope))
             revert IdentityScopeMismatch();
+        // Only a SALTED identifier needs a face match to compute, so a copy of the chip data
+        // cannot make it. A passport has a different identifier for each type.
+        helper.enforceNullifierType(NullifierType.SALTED_NULLIFIER, publicInputs);
+        // The signer must pass a strict face match against the passport photo
+        if (!helper.isFaceMatchVerified(FaceMatchMode.STRICT, OS.ANY, proof.committedInputs))
+            revert FaceMatchNotVerified();
+        // The proof must screen against a sanctions list that is valid at signing time
+        helper.enforceSanctionsRoot(block.timestamp, true, proof.committedInputs);
 
         BoundData memory boundData = helper.getBoundData(proof.committedInputs);
         if (boundData.senderAddress != signer) revert BoundSenderMismatch();
         if (boundData.chainId != block.chainid) revert BoundChainIdMismatch();
         if (keccak256(bytes(boundData.customData)) != keccak256(bytes(_bytes32ToString(contractId))))
             revert BoundCustomDataMismatch();
-
-        if (helper.getProofTimestamp(publicInputs) + config.validityPeriodInSeconds < block.timestamp)
-            revert ProofExpired();
     }
 
     /// @dev Records `signer`'s signature after the caller has put `signer` in a party slot
@@ -805,7 +812,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         bytes calldata signature
     ) internal {
         AgreementData storage agreementData = agreements[contractId];
-        Template memory template = templates[agreementData.templateId];
+        Template storage template = templates[agreementData.templateId];
 
         //verify if the contract is closed
         if (agreementData.partyValues[signer].length > 0) {
@@ -877,7 +884,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         string memory secret
     ) onlyDefinedFinalizer(contractId) external {
         AgreementData storage agreementData = agreements[contractId];
-        Template memory template = templates[agreementData.templateId];
+        Template storage template = templates[agreementData.templateId];
         _checkSignable(contractId, escrowSigner);
 
         if (!isParty(contractId, escrowSigner)) {
@@ -1040,7 +1047,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         )
     {
         AgreementData storage agreementData = agreements[contractId];
-        Template memory template = templates[agreementData.templateId];
+        Template storage template = templates[agreementData.templateId];
 
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
 
