@@ -20,6 +20,13 @@ clients disabled until the complete v5 rollout has been accepted.
   Base Sepolia issuance/round factory addresses.
 - Replays LeXcheX AUTH, NFT and minter, and the four V1/V2 extension proxies used
   by the current v5 runner (SAFE, SAFT V2, SAFTE V2 and TokenWarrant V2).
+- Provisions a fresh deterministic badge proxy at
+  `0xe1B94940a1926D3A836820F054b071815Aae964f`, with a separate auth at
+  `0x8e50f5409f1DF3af22C68A1c63927a5585005DB7` owned by the Safe from construction.
+  These two addresses differ from the other chains. The bootstrap grants the
+  minter its three credential issuer keys in the Safe batch. This supplies the
+  nonzero badge/auth addresses expected by the unchanged v5 runner, whose badge
+  helper keeps this proxy and may upgrade its implementation.
 - Prepares an atomic Safe batch to upgrade CyberCorpFactory to the historical
   intermediate implementation `0x424ab1B1DA8b7B2FE13cA0A7ABC346b22efa9191`,
   wire all four factories and LeXcheX auth, whitelist the explicitly supplied
@@ -47,6 +54,20 @@ The three source broadcasts are:
 - `broadcast/deploy-lexchex.s.sol/1/run-latest.json`
 - `broadcast/deploy-extensions-v2.s.sol/1/run-latest.json`
 
+Four additional CREATE2 payloads freeze the new badge auth, renderer library,
+implementation and initialized proxy. Their `sourceTx` is zero: they are new,
+not historical deployments. The `badgeBuild` record captures source revision,
+compiler/settings and salt. The badge implementation is linked to the frozen
+renderer address; the auth uses the historical BorgAuth creation code with its
+owner constructor argument replaced by the Safe. All 36 deployment payloads are
+checked and replayed in order. No public proxy is left uninitialized.
+
+The separate `originals` array contains the 13 original CREATE2 payloads from
+`broadcast/warrant-deploy.s.sol/1/run-latest.json`, for reproducing the actual
+old deployment in tests. The bootstrap does **not** deploy those entries; it
+requires the original deployment to have completed first. Tests read this same
+pinned manifest and do not depend on a separate original-deployment fixture.
+
 The committed manifest replaces those ignored/local dependencies. Its exact SHA-256
 is pinned in Solidity; `.gitattributes` preserves its LF line endings. Changing a
 payload requires a reviewed manifest/hash update, not an environment override.
@@ -55,7 +76,7 @@ code before any broadcast is recorded. Saved receipts and offline reproduction
 are not independent verification of the source-chain transactions; verify source
 provenance and target-chain code during release review.
 
-V3 extensions, badge and secondary conditions are **new CREATE3 deployments** on
+V3 extensions and secondary conditions are **new CREATE3 deployments** on
 Robinhood in v5. No matching historical replay payloads are included for them.
 Their configuration fields start at zero. Record the addresses logged by v5 in
 `DeploymentConstants` after the first broadcast, **before rerunning v5**, including
@@ -111,7 +132,9 @@ is provisioned or represented as deployed by this bridge.
 ## Required acceptance before deployment
 
 Local tests exercise historical bytecode, address/state preservation, reruns,
-authority and mismatch refusal. They do not establish target-chain Safe ownership,
+authority and mismatch refusal, v5 core formation, and v5 badge upgrade/handoff
+while retaining the Safe's authority and the minter's issuer grant.
+They do not establish target-chain Safe ownership,
 source-chain provenance, payment-token suitability, or an absence of existing corps.
 Independent external-model review remains pending. Before deploying, run the full
 sequence on a Robinhood fork and in the test environment with real test Safe signing,

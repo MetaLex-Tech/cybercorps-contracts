@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
+import {K_ACCREDITED, K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE} from "../src/interfaces/ILexChexBadge.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {GnosisTransaction} from "./libs/safe.sol";
@@ -24,6 +25,10 @@ interface IRobinhoodComponent {
     function isWhitelistedToken(address token) external view returns (bool);
 }
 
+interface IRobinhoodBadge {
+    function issuerKeys(address issuer) external view returns (uint256);
+}
+
 /// @notice Fresh-chain bridge from feat/new-chain-deploy to upgrade-v5.s.sol.
 /// @dev Deploys frozen historical CREATE2 payloads, then emits an atomic Safe configuration batch.
 ///      Execute that batch before v5. This is not a migration for chains with existing corps.
@@ -34,7 +39,8 @@ contract BootstrapRobinhoodScript is Script {
     address public constant ORIGINAL_FACTORY_IMPL = 0xa150525deD1aA387E160FDF4b45e975acD02E156;
     address public constant BRIDGE_FACTORY_IMPL = 0x424ab1B1DA8b7B2FE13cA0A7ABC346b22efa9191;
     bytes32 internal constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-    bytes32 public constant MANIFEST_SHA256 = 0x3fe0f9b53fdfd089154e34cd81912231cbae4fa6a7ed0b665121cde5594ccd23;
+    bytes32 public constant MANIFEST_SHA256 = 0x0e08923887062963553ad3d8a36e911c0e68cb05c46de075bbf304856d24f82a;
+    uint256 public constant MINTER_ISSUER_KEYS = K_ACCREDITED | K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
     string internal constant MANIFEST = "script/res/robinhood-bootstrap.json";
 
     // Canonical Arachnid deterministic deployment proxy runtime (not an interchangeable factory).
@@ -115,6 +121,9 @@ contract BootstrapRobinhoodScript is Script {
         _auth(core.lexchex, core.lexchexAuth);
         _auth(core.lexchexMinter, core.lexchexAuth);
         _validateManifestProxies(entries);
+        if (!_owner(BorgAuth(core.lexchexBadgeAuth), core.metalexSafe)) {
+            revert MissingOwner(core.lexchexBadgeAuth, core.metalexSafe);
+        }
 
         // This historical intermediate has the necessary setters, but not the v5 namespace guard.
         // Never substitute today's creation code: that would change the historical factory addresses.
@@ -149,6 +158,10 @@ contract BootstrapRobinhoodScript is Script {
         _queue(core.dealManagerFactory, abi.encodeWithSignature("setPlatformPayable(address)", config.feeRecipient));
         _queue(core.lexchexAuth, abi.encodeCall(BorgAuth.updateRole, (core.cyberCorpFactory, lexAuth.OWNER_ROLE())));
         _queue(core.lexchexAuth, abi.encodeCall(BorgAuth.updateRole, (core.lexchexMinter, lexAuth.ADMIN_ROLE())));
+        _queue(
+            core.lexchexBadge,
+            abi.encodeWithSignature("setIssuerKeys(address,uint256)", core.lexchexMinter, MINTER_ISSUER_KEYS)
+        );
         return calls;
     }
 
@@ -188,6 +201,9 @@ contract BootstrapRobinhoodScript is Script {
         BorgAuth lexAuth = BorgAuth(core.lexchexAuth);
         if (!_owner(lexAuth, core.cyberCorpFactory) || lexAuth.userRoles(core.lexchexMinter) != lexAuth.ADMIN_ROLE()) {
             revert WrongState(core.lexchexAuth);
+        }
+        if (IRobinhoodBadge(core.lexchexBadge).issuerKeys(core.lexchexMinter) != MINTER_ISSUER_KEYS) {
+            revert WrongState(core.lexchexBadge);
         }
     }
 
@@ -282,7 +298,7 @@ contract BootstrapRobinhoodScript is Script {
         bool matches = keccak256(_normalized(entry.addr)) == keccak256(_normalized(sample));
         require(vm.revertToState(snapshot), "snapshot rollback failed");
         if (!matches) revert WrongCode(entry.addr);
-        console2.log("[historical deployment]", entry.addr);
+        console2.log("[pinned deployment]", entry.addr);
     }
 
     function _validateManifestProxies(Creation[] memory entries) internal view {
@@ -291,10 +307,12 @@ contract BootstrapRobinhoodScript is Script {
             if (entries[i].implementation == address(0)) continue;
             address impl = _implementation(entries[i].addr);
             if (impl != entries[i].implementation) revert WrongImplementation(entries[i].addr, impl);
-            _auth(
-                entries[i].addr,
-                entries[i].addr == core.lexchex || entries[i].addr == core.lexchexMinter ? core.lexchexAuth : core.auth
-            );
+            address expectedAuth = core.auth;
+            if (entries[i].addr == core.lexchex || entries[i].addr == core.lexchexMinter) {
+                expectedAuth = core.lexchexAuth;
+            }
+            if (entries[i].addr == core.lexchexBadge) expectedAuth = core.lexchexBadgeAuth;
+            _auth(entries[i].addr, expectedAuth);
         }
     }
 

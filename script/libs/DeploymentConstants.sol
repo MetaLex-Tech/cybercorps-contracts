@@ -21,6 +21,33 @@ library DeploymentConstants {
         revert UnsupportedChain(chainId);
     }
 
+    /// @notice Original deployment, before the Robinhood bootstrap replaces factory references.
+    struct OriginalDeployment {
+        address auth;
+        address issuanceManagerFactory;
+        address cyberCorpSingleFactory;
+        address dealManagerFactory;
+        address uriBuilder;
+        address cyberCertPrinterImplementation;
+        address cyberAgreementRegistry;
+        address cyberCorpFactory;
+    }
+
+    /// @notice Robinhood mainnet addresses reported by the original deploy.s.sol run.
+    /// @dev These legacy component factories must not be used as coreV2 upgrade targets.
+    function robinhoodOriginal() internal pure returns (OriginalDeployment memory) {
+        return OriginalDeployment({
+            auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
+            issuanceManagerFactory: 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf,
+            cyberCorpSingleFactory: 0xc8e084D3f8B3b326FCc894C7afD28F4904196406,
+            dealManagerFactory: 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3,
+            uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
+            cyberCertPrinterImplementation: 0x016C3a68C3a82179B4e63871c7730aaA272c9638,
+            cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
+            cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2
+        });
+    }
+
     struct CoreDeployment {
         address metalexSafe;
         address auth;
@@ -104,11 +131,14 @@ library DeploymentConstants {
         returns (CoreDeployment memory deployment)
     {
         if (chainId == ROBINHOOD || chainId == ROBINHOOD_TESTNET) {
+            // Original mainnet deployment is recorded separately in robinhoodOriginal().
+            // Keep these post-bootstrap targets: the legacy factories are not upgradeable proxies.
             // Historical proxies reproduced by bootstrap-robinhood.s.sol. This is a target
             // manifest, not evidence of deployment. No verifier/legacy condition is assumed.
             deployment = coreV2(ETH);
-            deployment.lexchexBadgeAuth = address(0);
-            deployment.lexchexBadge = address(0);
+            // Fresh pinned CREATE2 badge; historical badge payloads are not available.
+            deployment.lexchexBadgeAuth = 0x8e50f5409f1DF3af22C68A1c63927a5585005DB7;
+            deployment.lexchexBadge = 0xe1B94940a1926D3A836820F054b071815Aae964f;
             deployment.lexchexCondition = address(0);
             deployment.zkpassportCondition = address(0);
             return deployment;

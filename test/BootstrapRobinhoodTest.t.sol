@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {BootstrapRobinhoodScript, IRobinhoodFactory} from "../script/bootstrap-robinhood.s.sol";
+import {BootstrapRobinhoodScript, IRobinhoodBadge, IRobinhoodFactory} from "../script/bootstrap-robinhood.s.sol";
+import {DeploySecondaryConditionsScript} from "../script/deploy-secondary-conditions.s.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
 
@@ -15,6 +16,12 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import "forge-std/Test.sol";
 
 contract BootstrapHarness is BootstrapRobinhoodScript {
+    function originals() external view returns (Creation[] memory) {
+        string memory json = vm.readFile(MANIFEST);
+        require(sha256(bytes(json)) == MANIFEST_SHA256, "manifest hash");
+        return abi.decode(vm.parseJson(json, ".originals"), (Creation[]));
+    }
+
     function manifest() external view returns (Creation[] memory) {
         return _manifest();
     }
@@ -26,6 +33,16 @@ contract BootstrapHarness is BootstrapRobinhoodScript {
     function replay(Creation memory entry, address sender) external {
         _checkAddress(entry);
         _replay(entry, sender);
+    }
+}
+
+contract BadgeUpgradeHarness is DeploySecondaryConditionsScript {
+    function upgradeBadge(uint256 key) external returns (GnosisTransaction[] memory) {
+        DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
+        initDeployment("[test badge]", block.chainid, key, core.metalexSafe);
+        require(_badge(core, block.chainid, "CyberCorpV5-SecondaryConditionsV1.0.0") == core.lexchexBadge);
+        handOffAuthOwner("[test handoff]", core.lexchexBadgeAuth, "badge");
+        return safeTxs;
     }
 }
 
@@ -42,11 +59,6 @@ contract BootstrapToken {
 }
 
 contract BootstrapRobinhoodTest is Test {
-    struct OriginalCreation {
-        address addr;
-        bytes data;
-    }
-
     bytes32 constant IMPL_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
     BootstrapHarness internal script;
     DeploymentConstants.CoreDeployment internal core;
@@ -64,9 +76,9 @@ contract BootstrapRobinhoodTest is Test {
             hex"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3"
         );
         // Actual historical init code, not current mocks of the original proxy/storage layout.
-        OriginalCreation[] memory entries =
-            abi.decode(vm.parseJson(vm.readFile("test/res/robinhood-original-deployment.json")), (OriginalCreation[]));
+        BootstrapRobinhoodScript.Creation[] memory entries = script.originals();
         for (uint256 i; i < entries.length; ++i) {
+            script.checkAddress(entries[i]);
             (bool ok,) = script.REPLAY_FACTORY().call(entries[i].data);
             assertTrue(ok, "original deployment failed");
             assertGt(entries[i].addr.code.length, 0);
@@ -91,7 +103,7 @@ contract BootstrapRobinhoodTest is Test {
         bytes32 registryImpl = vm.load(core.cyberAgreementRegistry, IMPL_SLOT);
         bytes32 uriImpl = vm.load(core.uriBuilder, IMPL_SLOT);
         GnosisTransaction[] memory batch = script.runWithArgs(historicalOwner, config);
-        assertEq(batch.length, 14);
+        assertEq(batch.length, 15);
         string memory json = script.safeBatchJson();
         assertEq(vm.parseJsonString(json, ".chainId"), "46630");
         assertEq(vm.parseJsonAddress(json, ".meta.createdFromSafeAddress"), core.metalexSafe);
@@ -172,7 +184,7 @@ contract BootstrapRobinhoodTest is Test {
         uint64 nonce = vm.getNonce(historicalOwner);
         GnosisTransaction[] memory batch = script.runWithArgs(historicalOwner, config);
         assertEq(vm.getNonce(historicalOwner), nonce);
-        assertEq(batch.length, 13); // No downgrade/repeated upgrade call.
+        assertEq(batch.length, 14); // No downgrade/repeated upgrade call.
         script.simulateSafeBatch(config);
         _assertBridge();
     }
@@ -257,6 +269,28 @@ contract BootstrapRobinhoodTest is Test {
             )
         );
         script.runWithArgs(historicalOwner, config);
+    }
+
+    function test_V5BadgeUpgradeAndMainnetHandoff_PreserveSafeAndIssuer() public {
+        vm.chainId(4663);
+        script.runWithArgs(historicalOwner, config);
+        script.simulateSafeBatch(config);
+        BadgeUpgradeHarness upgrade = new BadgeUpgradeHarness();
+        uint256 key = 0xA11CE;
+        vm.deal(vm.addr(key), 100 ether);
+        GnosisTransaction[] memory batch = upgrade.upgradeBadge(key);
+        for (uint256 i; i < batch.length; ++i) {
+            assertEq(batch[i].to, core.lexchexBadge, "must not remove Safe ownership");
+            vm.prank(core.metalexSafe);
+            (bool ok,) = batch[i].to.call(batch[i].data);
+            assertTrue(ok, "v5 badge upgrade failed");
+        }
+        assertGe(
+            BorgAuth(core.lexchexBadgeAuth).userRoles(core.metalexSafe), BorgAuth(core.lexchexBadgeAuth).OWNER_ROLE()
+        );
+        assertEq(BorgAuth(core.lexchexBadgeAuth).userRoles(vm.addr(key)), 0);
+        assertEq(address(IRobinhoodFactory(core.lexchexBadge).AUTH()), core.lexchexBadgeAuth);
+        assertEq(IRobinhoodBadge(core.lexchexBadge).issuerKeys(core.lexchexMinter), script.MINTER_ISSUER_KEYS());
     }
 
     function _templateHash() internal view returns (bytes32) {
