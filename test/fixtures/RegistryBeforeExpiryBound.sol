@@ -43,12 +43,12 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "./libs/auth.sol";
+import "../../src/libs/auth.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "./libs/AgreementJsonRenderer.sol";
-import "./interfaces/ICyberAgreementRegistry.sol";
+import "../../src/libs/JsonLib.sol";
+import "../../src/interfaces/ICyberAgreementRegistry.sol";
 
-contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
+contract RegistryBeforeExpiryBound is Initializable, UUPSUpgradeable, BorgAuthACL,
     ICyberAgreementRegistry
 {
     using ECDSA for bytes32;
@@ -120,15 +120,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
 
     mapping(address => Delegation) public delegations;
 
-    // Consume one reserved slot after the existing delegation mapping (40 - 1 = 39).
-    // Isolated from public legacy template IDs. A nonempty URI marks the new path.
-    mapping(bytes32 => Template) private expiryBoundAgreementTemplates;
-    uint256[39] private __gap;
-
-    bytes32 public constant STANDALONE_EXPIRY_BOUND_ID_DOMAIN =
-        keccak256("CyberAgreementRegistry.StandaloneExpiryBound.v1");
-
-    event ExpiryBoundContractCreated(bytes32 indexed contractId, bytes32 indexed templateId);
+    // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40)
+    uint256[40] private __gap;
 
 
 
@@ -263,19 +256,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         contractId = keccak256(
             abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
-        _createAgreement(contractId, templateId, globalValues, parties, partyValues,
-            secretHash, finalizer, expiry, templates[templateId]);
-    }
-
-    function _createAgreement(
-        bytes32 contractId, bytes32 templateId, string[] memory globalValues,
-        address[] memory parties, string[][] memory partyValues, bytes32 secretHash,
-        address finalizer, uint256 expiry, Template storage template
-    ) internal {
         if (agreements[contractId].parties.length > 0) {
             revert ContractAlreadyExists();
         }
 
+        Template storage template = templates[templateId];
         if (bytes(template.legalContractUri).length == 0) {
             revert TemplateDoesNotExist();
         }
@@ -322,48 +307,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         // Add to the party's list of agreements
         for (uint256 i = 0; i < parties.length; i++) {
             agreementsForParty[parties[i]].push(contractId);
-        }
-    }
-
-    /// @notice Atomic standalone creation with an expiry- and party-row-bound identity.
-    /// @dev Legacy creation remains unchanged. This namespace has no unsigned creation
-    /// entry point and no externally writable template. Relayers may submit only the
-    /// exact terms authorized by the first party. Read its template via agreement details.
-    function createStandaloneContractAndSignExpiryBoundFor(
-        string memory title, string memory legalContractUri, string[] memory globalFields,
-        string[] memory partyFields, uint256 salt, string[] memory globalValues,
-        address[] memory parties, string[][] memory partyValues, uint256 expiry,
-        address signer, bytes calldata signature
-    ) external returns (bytes32 contractId) {
-        if (bytes(title).length == 0) revert TitleEmpty();
-        if (bytes(legalContractUri).length == 0) revert TemplateDoesNotExist();
-        if (parties.length == 0) revert InvalidPartyCount();
-        if (partyValues.length != parties.length) revert MismatchedPartyValuesLength();
-        if (signer != parties[0]) revert NotAParty();
-        for (uint256 i; i < parties.length; ++i) {
-            if (parties[i] == address(0)) revert FirstPartyZeroAddress();
-            for (uint256 j; j < i; ++j) {
-                if (parties[i] == parties[j]) revert DuplicateParty();
-            }
-        }
-        bytes32 templateId = keccak256(abi.encode(title, legalContractUri, globalFields, partyFields));
-        contractId = keccak256(abi.encode(STANDALONE_EXPIRY_BOUND_ID_DOMAIN, templateId,
-            salt, globalValues, parties, partyValues, expiry));
-        if (agreements[contractId].parties.length > 0) revert ContractAlreadyExists();
-        expiryBoundAgreementTemplates[contractId] = Template({
-            title: title, legalContractUri: legalContractUri,
-            globalFields: globalFields, partyFields: partyFields
-        });
-        _createAgreement(contractId, templateId, globalValues, parties, partyValues,
-            bytes32(0), address(0), expiry, expiryBoundAgreementTemplates[contractId]);
-        signContractFor(signer, contractId, partyValues[0], signature, false, "");
-        emit ExpiryBoundContractCreated(contractId, templateId);
-    }
-
-    function _agreementTemplate(bytes32 contractId) internal view returns (Template storage template) {
-        template = expiryBoundAgreementTemplates[contractId];
-        if (bytes(template.legalContractUri).length == 0) {
-            template = templates[agreements[contractId].templateId];
         }
     }
 
@@ -533,7 +476,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         string memory secret
     ) public {
         AgreementData storage agreementData = agreements[contractId];
-        Template memory template = _agreementTemplate(contractId);
+        Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
         if (agreementData.signedAt[signer] != 0) revert AlreadySigned();
         if (isVoided(contractId)) revert ContractAlreadyVoided();
@@ -627,7 +570,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         string memory secret
     ) onlyDefinedFinalizer(contractId) external {
         AgreementData storage agreementData = agreements[contractId];
-        Template memory template = _agreementTemplate(contractId);
+        Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
         if (agreementData.signedAt[escrowSigner] != 0) revert AlreadySigned();
         if (isVoided(contractId)) revert ContractAlreadyVoided();
@@ -801,7 +744,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         )
     {
         AgreementData storage agreementData = agreements[contractId];
-        Template memory template = _agreementTemplate(contractId);
+        Template memory template = templates[agreementData.templateId];
 
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
 
@@ -911,8 +854,132 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         return agreements[contractId].voidRequestedBy;
     }
 
-    function getContractJson(bytes32 contractId) external view returns (string memory) {
-        return AgreementJsonRenderer.render(agreements[contractId], _agreementTemplate(contractId));
+    function getContractJson(
+        bytes32 contractId
+    ) external view returns (string memory) {
+        AgreementData storage agreementData = agreements[contractId];
+        Template storage template = templates[agreementData.templateId];
+
+        // Start with basic fields
+        string memory json = string(
+            abi.encodePacked(
+                '{"templateId": "',
+                _bytes32ToString(agreementData.templateId), // Corrected to use agreementData.templateId
+                '", "title": "',
+                JsonLib.jsonEscape(template.title),
+                '", "legalContractUri": "',
+                JsonLib.jsonEscape(template.legalContractUri),
+                '", "ContractFields": {'
+            )
+        );
+
+        // Add global fields and values as key-value pairs
+        if (template.globalFields.length > 0) {
+            for (uint256 i = 0; i < template.globalFields.length; i++) {
+                json = string.concat(
+                    json,
+                    '"',
+                    JsonLib.jsonEscape(template.globalFields[i]),
+                    '": "',
+                    JsonLib.jsonEscape(agreementData.globalValues[i]),
+                    '"'
+                );
+                if (i + 1 < template.globalFields.length) {
+                    json = string.concat(json, ",");
+                }
+            }
+        }
+        json = string.concat(json, '}, "parties": {');
+
+        // Add parties and their values as key-value pairs
+        if (agreementData.parties.length > 0) {
+            for (uint256 i = 0; i < agreementData.parties.length; i++) {
+                address party = agreementData.parties[i];
+                json = string.concat(
+                    json,
+                    '"',
+                    _addressToString(party),
+                    '": {'
+                );
+
+                // Add party fields and values
+                if (template.partyFields.length > 0) {
+                    string[] memory values = agreementData.partyValues[party];
+                    for (uint256 j = 0; j < template.partyFields.length; j++) {
+                        json = string.concat(
+                            json,
+                            '"',
+                            JsonLib.jsonEscape(template.partyFields[j]),
+                            '": "'
+                        );
+                        if (values.length > j) {
+                            json = string.concat(json, JsonLib.jsonEscape(values[j]));
+                        }
+                        json = string.concat(json, '"');
+                        if (j + 1 < template.partyFields.length) {
+                            json = string.concat(json, ",");
+                        }
+                    }
+                }
+
+                // Add signature timestamp
+                if (template.partyFields.length > 0) {
+                    json = string.concat(json, ",");
+                }
+                json = string.concat(
+                    json,
+                    '"signedAt": ',
+                    _uint256ToString(agreementData.signedAt[party])
+                );
+                json = string.concat(json, "}");
+
+                if (i + 1 < agreementData.parties.length) {
+                    json = string.concat(json, ",");
+                }
+            }
+        }
+
+        // Add metadata
+        json = string.concat(
+            json,
+            '}, "numSignatures": ',
+            _uint256ToString(agreementData.numSignatures)
+        );
+        json = string.concat(
+            json,
+            ', "isComplete": ',
+            agreementData.numSignatures == agreementData.parties.length
+                ? "true"
+                : "false"
+        );
+        // Add voided status
+        json = string.concat(
+            json,
+            ', "voided": ',
+            agreementData.voided ? "true" : "false"
+        );
+        // loop and add voidRequestedBy
+        json = string.concat(json, ', "voidRequestedBy": [');
+        for (uint256 i = 0; i < agreementData.voidRequestedBy.length; i++) {
+            json = string.concat(
+                json,
+                '"',
+                _addressToString(agreementData.voidRequestedBy[i]),
+                '"'
+            );
+            if (i + 1 < agreementData.voidRequestedBy.length) {
+                json = string.concat(json, ",");
+            }
+        }
+        json = string.concat(json, "]");
+        // add finalized status
+        json = string.concat(
+            json,
+            ', "finalized": ',
+            agreementData.finalized ? "true" : "false"
+        );
+        json = string.concat(json, "}");
+        return json;
     }
 
     function _createTemplate(
@@ -1025,6 +1092,46 @@ function _bytes32ToString(bytes32 _bytes32) public pure returns (string memory) 
     }
     return string(bytesArray);
 }
+
+    // Helper function to convert address to string
+    function _addressToString(
+        address _addr
+    ) internal pure returns (string memory) {
+        bytes memory s = new bytes(40);
+        for (uint256 i = 0; i < 20; i++) {
+            bytes1 b = bytes1(uint8(uint160(_addr) >> (8 * (19 - i))));
+            uint8 hi = uint8(b) >> 4;
+            uint8 lo = uint8(b) & 0x0f;
+            s[2 * i] = bytes1(hi + (hi < 10 ? 48 : 87));
+            s[2 * i + 1] = bytes1(lo + (lo < 10 ? 48 : 87));
+        }
+        return string(abi.encodePacked("0x", s));
+    }
+
+    // Helper function to convert uint256 to string
+    function _uint256ToString(
+        uint256 _i
+    ) internal pure returns (string memory) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint256 j = _i;
+        uint256 len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint256 k = len;
+        while (_i != 0) {
+            k = k - 1;
+            uint8 temp = uint8(48 + (_i % 10));
+            bytes1 b1 = bytes1(temp);
+            bstr[k] = b1;
+            _i /= 10;
+        }
+        return string(bstr);
+    }
 
     function isFinalized(bytes32 contractId) external view returns (bool) {
         return agreements[contractId].finalized;
