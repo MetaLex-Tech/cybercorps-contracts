@@ -3,16 +3,34 @@ pragma solidity 0.8.28;
 
 import {CorporateAuth, IBorgAuthReleaseRegistry} from "./libs/CorporateAuth.sol";
 import {BorgAuth} from "./libs/auth.sol";
+import {BorgAuthV2Storage} from "./storage/BorgAuthV2Storage.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /// @notice New-deployment authority. Legacy numeric APIs are retained but cannot authorize anything.
 contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
-    address public rootAuthority;
-    address public pendingRootAuthority;
-    address public releaseRegistry;
-    address public officerController;
-    bool public setupComplete;
-    mapping(address => uint256) public memberships;
+    function rootAuthority() external view returns (address) {
+        return _s().rootAuthority;
+    }
+
+    function pendingRootAuthority() external view returns (address) {
+        return _s().pendingRootAuthority;
+    }
+
+    function releaseRegistry() external view returns (address) {
+        return _s().releaseRegistry;
+    }
+
+    function officerController() external view returns (address) {
+        return _s().officerController;
+    }
+
+    function setupComplete() external view returns (bool) {
+        return _s().setupComplete;
+    }
+
+    function memberships(address account) external view returns (uint256) {
+        return _s().memberships[account];
+    }
 
     error Unauthorized();
     error ZeroAddress();
@@ -40,12 +58,12 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
         if (bootstrap == address(0)) revert ZeroAddress();
         _requireContract(registry);
         __UUPSUpgradeable_init();
-        rootAuthority = bootstrap;
-        releaseRegistry = registry;
+        _s().rootAuthority = bootstrap;
+        _s().releaseRegistry = registry;
     }
 
     modifier onlyRoot() {
-        if (msg.sender != rootAuthority) revert Unauthorized();
+        if (msg.sender != _s().rootAuthority) revert Unauthorized();
         _;
     }
 
@@ -63,7 +81,7 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
         address deal,
         address round
     ) external onlyRoot {
-        if (setupComplete) revert SetupAlreadyComplete();
+        if (_s().setupComplete) revert SetupAlreadyComplete();
         if (root == address(0) || officer == address(0)) revert ZeroAddress();
         _requireContract(board);
         _requireContract(corp);
@@ -73,39 +91,39 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
         // Root and the board act for the company. They must not be one of its components.
         _requireNotComponent(board, corp, issuance, deal, round);
         _requireNotComponent(root, corp, issuance, deal, round);
-        setupComplete = true;
-        officerController = corp;
+        _s().setupComplete = true;
+        _s().officerController = corp;
         _grant(board, CorporateAuth.BOARD_EXECUTOR);
         _grant(officer, CorporateAuth.OFFICER);
         _grant(issuance, CorporateAuth.ISSUANCE_MANAGER);
         _grant(deal, CorporateAuth.DEAL_MANAGER);
         _grant(round, CorporateAuth.ROUND_MANAGER);
-        rootAuthority = root;
+        _s().rootAuthority = root;
         emit SetupCompleted(root, board, corp);
     }
 
     /// @notice Root administers non-officer memberships. Officer changes go through the company roster.
     function setMembership(address account, uint256 roles) external onlyRoot {
-        if (!setupComplete) revert SetupNotComplete();
+        if (!_s().setupComplete) revert SetupNotComplete();
         if (account == address(0)) revert ZeroAddress();
         if (roles & ~CorporateAuth.ALL_ROLES != 0) revert UnknownRoles(roles);
-        if ((memberships[account] ^ roles) & CorporateAuth.OFFICER != 0) revert OfficerBitMismatch(account);
+        if ((_s().memberships[account] ^ roles) & CorporateAuth.OFFICER != 0) revert OfficerBitMismatch(account);
         if (roles & CorporateAuth.BOARD_EXECUTOR != 0) _requireContract(account);
-        memberships[account] = roles;
+        _s().memberships[account] = roles;
         emit MembershipChanged(account, roles);
     }
 
     function setOfficerMembership(address account, bool enabled) external {
-        if (!setupComplete) revert SetupNotComplete();
-        if (msg.sender != officerController) revert Unauthorized();
+        if (!_s().setupComplete) revert SetupNotComplete();
+        if (msg.sender != _s().officerController) revert Unauthorized();
         if (account == address(0)) revert ZeroAddress();
-        uint256 roles = memberships[account];
-        memberships[account] = enabled ? roles | CorporateAuth.OFFICER : roles & ~CorporateAuth.OFFICER;
-        emit MembershipChanged(account, memberships[account]);
+        uint256 roles = _s().memberships[account];
+        _s().memberships[account] = enabled ? roles | CorporateAuth.OFFICER : roles & ~CorporateAuth.OFFICER;
+        emit MembershipChanged(account, _s().memberships[account]);
     }
 
     function hasRole(address account, uint256 role) public view returns (bool) {
-        return role != 0 && role & ~CorporateAuth.ALL_ROLES == 0 && memberships[account] & role == role;
+        return role != 0 && role & ~CorporateAuth.ALL_ROLES == 0 && _s().memberships[account] & role == role;
     }
 
     /// @notice Permission table. Note this is static until upgrading to a new implementation
@@ -146,11 +164,11 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
     /// After setup, root also holds MANAGE_OFFICERS. All other permissions come from roles.
     function hasPermission(bytes32 permission, address account) public view returns (bool) {
         if (permission == CorporateAuth.CONFIGURE_PROTOCOL || permission == CorporateAuth.APPROVE_UPGRADE) {
-            return account == rootAuthority;
+            return account == _s().rootAuthority;
         }
-        if (!setupComplete) return false;
-        if (permission == CorporateAuth.MANAGE_OFFICERS && account == rootAuthority) return true;
-        return memberships[account] & rolesForPermission(permission) != 0;
+        if (!_s().setupComplete) return false;
+        if (permission == CorporateAuth.MANAGE_OFFICERS && account == _s().rootAuthority) return true;
+        return _s().memberships[account] & rolesForPermission(permission) != 0;
     }
 
     function requirePermission(bytes32 permission, address account) external view {
@@ -159,17 +177,17 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
 
     /// @notice A zero nominee cancels an outstanding proposal; root itself is never set to zero.
     function proposeRootTransfer(address nominee) external onlyRoot {
-        if (!setupComplete) revert SetupNotComplete();
-        if (nominee == rootAuthority) revert NomineeIsRoot();
-        pendingRootAuthority = nominee;
+        if (!_s().setupComplete) revert SetupNotComplete();
+        if (nominee == _s().rootAuthority) revert NomineeIsRoot();
+        _s().pendingRootAuthority = nominee;
         emit RootTransferProposed(nominee);
     }
 
     function acceptRootTransfer() external {
-        if (msg.sender == address(0) || msg.sender != pendingRootAuthority) revert Unauthorized();
-        address oldRoot = rootAuthority;
-        rootAuthority = msg.sender;
-        pendingRootAuthority = address(0);
+        if (msg.sender == address(0) || msg.sender != _s().pendingRootAuthority) revert Unauthorized();
+        address oldRoot = _s().rootAuthority;
+        _s().rootAuthority = msg.sender;
+        _s().pendingRootAuthority = address(0);
         emit RootTransferred(oldRoot, msg.sender);
     }
 
@@ -186,14 +204,18 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
         }
     }
 
+    function _s() private pure returns (BorgAuthV2Storage.BorgAuthV2Data storage) {
+        return BorgAuthV2Storage.borgAuthV2Storage();
+    }
+
     function _grant(address account, uint256 role) private {
-        memberships[account] |= role;
-        emit MembershipChanged(account, memberships[account]);
+        _s().memberships[account] |= role;
+        emit MembershipChanged(account, _s().memberships[account]);
     }
 
     function _authorizeUpgrade(address implementation) internal override onlyRoot {
-        if (!setupComplete) revert SetupNotComplete();
-        address approved = IBorgAuthReleaseRegistry(releaseRegistry).borgAuthImplementation();
+        if (!_s().setupComplete) revert SetupNotComplete();
+        address approved = IBorgAuthReleaseRegistry(_s().releaseRegistry).borgAuthImplementation();
         if (approved != implementation) revert ImplementationMismatch(approved, implementation);
     }
 

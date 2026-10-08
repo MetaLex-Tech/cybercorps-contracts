@@ -207,6 +207,18 @@ contract CorporateAuthTest is Test {
         auth.upgradeToAndCall(replacement, "");
     }
 
+    function testStateLivesInNamespacedSlot() public view {
+        bytes32 base = keccak256("cybercorp.borgauthv2.storage.v1");
+        assertEq(address(uint160(uint256(vm.load(address(auth), base)))), address(this), "rootAuthority");
+        assertEq(address(uint160(uint256(vm.load(address(auth), bytes32(uint256(base) + 3))))), address(corp));
+        bytes32 officerSlot = keccak256(abi.encode(officer, uint256(base) + 4));
+        assertEq(uint256(vm.load(address(auth), officerSlot)), CorporateAuth.OFFICER, "officer membership");
+        // The BorgAuth base keeps slots 0 to 2. No BorgAuthV2 state follows them.
+        for (uint256 slot = 3; slot < 9; ++slot) {
+            assertEq(vm.load(address(auth), bytes32(slot)), bytes32(0), "sequential slot unused");
+        }
+    }
+
     function testBoardManagesRosterAndRemovalPreservesDirector() public {
         CompanyOfficer memory added = CompanyOfficer(director, "Director officer", "contact", "CFO");
         board.execute(address(corp), abi.encodeCall(CyberCorp.addOfficer, (added)));
