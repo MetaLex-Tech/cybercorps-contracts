@@ -99,7 +99,7 @@ contract RoundManager is
     /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers
     modifier onlyOwnerOrSelf() {
         if (msg.sender != address(this)) {
-            AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
+            CorporateAuthCheck.requirePermission(address(AUTH), CorporateAuth.MANAGE_ROUNDS, AUTH.OWNER_ROLE(), msg.sender);
         }
         _;
     }
@@ -143,7 +143,7 @@ contract RoundManager is
     }
 
     /// @notice Sets the LeXcheX AUTH address
-    function setLexChex(address _lexchex) external onlyOwner {
+    function setLexChex(address _lexchex) external onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         if (_lexchex == address(0)) revert ZeroAddress();
         address oldLexChex = RoundManagerStorage.getLexChex();
         RoundManagerStorage.setLexChex(_lexchex);
@@ -162,7 +162,7 @@ contract RoundManager is
     function createRound(
         Round memory roundDraft,
         CyberCertData[] memory certData
-    ) external onlyOwner returns (bytes32) {
+    ) external onlyPermission(CorporateAuth.MANAGE_ROUNDS) returns (bytes32) {
         // Validate lengths of per-cert details
         if (roundDraft.legalDetails.length != certData.length) revert InvalidCert();
         if (roundDraft.extensionData.length != certData.length) revert InvalidCert();
@@ -234,7 +234,7 @@ contract RoundManager is
         bytes32 roundId,
         uint256 price,
         uint8 priceDecimals
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.MANAGE_ROUNDS) {
         Round storage round = RoundManagerStorage.getRound(roundId);
         if (round.id == bytes32(0)) revert InvalidRound();
         round.roundPricePerShare = price;
@@ -245,7 +245,7 @@ contract RoundManager is
         bytes32 roundId,
         SecurityClass cls,
         SecuritySeries series
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.MANAGE_ROUNDS) {
         Round storage round = RoundManagerStorage.getRound(roundId);
         if (round.id == bytes32(0)) revert InvalidRound();
         round.primarySecurityClass = cls;
@@ -255,7 +255,7 @@ contract RoundManager is
     /// @notice Owner can update the endTime of a round
     /// @param roundId The round ID
     /// @param newEndTime The new end timestamp
-    function setRoundEndTime(bytes32 roundId, uint256 newEndTime) external onlyOwner {
+    function setRoundEndTime(bytes32 roundId, uint256 newEndTime) external onlyPermission(CorporateAuth.MANAGE_ROUNDS) {
         Round storage round = RoundManagerStorage.getRound(roundId);
         if (round.id == bytes32(0)) revert InvalidRound();
         if (round.restrictEndTimeReduction && newEndTime < round.endTime) revert EndTimeReductionRestricted();
@@ -266,7 +266,7 @@ contract RoundManager is
 
     /// @notice Owner can close the round immediately by setting endTime to now
     /// @param roundId The round ID
-    function closeRoundNow(bytes32 roundId) external onlyOwner {
+    function closeRoundNow(bytes32 roundId) external onlyPermission(CorporateAuth.MANAGE_ROUNDS) {
         Round storage round = RoundManagerStorage.getRound(roundId);
         if (round.id == bytes32(0)) revert InvalidRound();
         if (round.restrictEndTimeReduction) revert EndTimeReductionRestricted();
@@ -442,7 +442,7 @@ contract RoundManager is
 
     /// @notice Rejects an EOI and voids the deal
     /// @param agreementId The agreement ID
-    function reject(bytes32 agreementId) external onlyOwner {
+    function reject(bytes32 agreementId) external onlyPermission(CorporateAuth.MANAGE_ROUNDS) {
         reject(agreementId, true);
     }
 
@@ -452,7 +452,7 @@ contract RoundManager is
     /// In such case, we want to skip `voidContractFor()` so it does not attempt to void the contract again.
     /// @param agreementId The agreement ID
     /// @param isVoidAgreement True if voiding the deal
-    function reject(bytes32 agreementId, bool isVoidAgreement) public onlyOwner {
+    function reject(bytes32 agreementId, bool isVoidAgreement) public onlyPermission(CorporateAuth.MANAGE_ROUNDS) {
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
@@ -568,7 +568,7 @@ contract RoundManager is
     /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
     function _authorizeUpgrade(
         address newImplementation
-    ) internal override onlyOwner {
+    ) internal override onlyPermission(CorporateAuth.APPROVE_UPGRADE) {
         if(IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();
         }

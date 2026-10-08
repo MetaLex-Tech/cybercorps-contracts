@@ -68,7 +68,7 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable, ILedger
     }
 
     function _requireIssuanceManagerOrAdmin() private view {
-        LedgerEntryTokenStorage.requireManagerOrAdmin();
+        LedgerEntryTokenStorage.requireManagerOrAdmin(msg.sig);
     }
 
     modifier onlyIssuanceManagerOrAdmin() {

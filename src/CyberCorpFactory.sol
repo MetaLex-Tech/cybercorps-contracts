@@ -61,6 +61,8 @@ import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
 import {CorpFactoryMetadataLib} from "./libs/CorpFactoryMetadataLib.sol";
 import {FactoryDeploymentLib} from "./libs/FactoryDeploymentLib.sol";
+import {BorgAuthV2} from "./BorgAuthV2.sol";
+import {CorporateDeploymentLib} from "./libs/CorporateDeploymentLib.sol";
 
 interface IRoundManagerInit {
     function initialize(
@@ -100,7 +102,10 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     address public lexchexAuth;
 
     // Upgrade notes: Reduced gap to account for new variables
-    uint256[38] private __gap;
+    address public borgAuthImplementation;
+    uint256[37] private __gap;
+
+    event BorgAuthImplementationUpdated(address indexed implementation);
 
     event CyberCorpDeployed(
         address indexed cyberCorp,
@@ -227,6 +232,41 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             address roundManagerAddress
         )
     {
+        return _deployCyberCorp(salt, companyName, companyType, companyJurisdiction,
+            companyContactDetails, defaultDisputeResolution, _companyPayable, _officer, address(0), address(0));
+    }
+
+    /// @notice Explicit new-deployment path. Root and board authority are committed into the salt.
+    function deployCyberCorpWithGovernance(
+        bytes32 salt, string memory companyName, string memory companyType,
+        string memory companyJurisdiction, string memory companyContactDetails,
+        string memory defaultDisputeResolution, address companyPayable, CompanyOfficer memory officer,
+        address root, address board
+    ) external returns (address corp, address auth, address issuance, address deal, address round) {
+        if (root == address(0) || root == address(this) || board.code.length == 0 || officer.eoa == address(0)
+            || salt == bytes32(0)) revert DeploymentFailed();
+        return _deployCyberCorp(
+            keccak256(abi.encode("CORPORATE_AUTH", salt, root, board)), companyName, companyType,
+            companyJurisdiction, companyContactDetails, defaultDisputeResolution, companyPayable, officer, root, board
+        );
+    }
+
+    /// @notice Publishes the approved UUPS authority implementation; company root still approves each upgrade.
+    function setBorgAuthImplementation(address implementation) external onlyOwner {
+        CorporateDeploymentLib.validateImplementation(implementation);
+        borgAuthImplementation = implementation;
+        emit BorgAuthImplementationUpdated(implementation);
+    }
+
+    function _deployCyberCorp(
+        bytes32 salt, string memory companyName, string memory companyType,
+        string memory companyJurisdiction, string memory companyContactDetails,
+        string memory defaultDisputeResolution, address _companyPayable, CompanyOfficer memory _officer,
+        address root, address board
+    ) internal returns (
+        address cyberCorpAddress, address authAddress, address issuanceManagerAddress,
+        address dealManagerAddress, address roundManagerAddress
+    ) {
         if (salt == bytes32(0)) revert InvalidSalt();
         FactoryDeploymentLib.requireNamespaces(
             [cyberCorpSingleFactory, issuanceManagerFactory, dealManagerFactory, roundManagerFactory], salt
@@ -237,17 +277,13 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         );
 
         // Deploy BorgAuth with CREATE2 with new param address owner
-        bytes memory authBytecode = type(BorgAuth).creationCode;
         bytes32 authSalt = keccak256(abi.encodePacked("auth", salt));
-        authAddress = Create2.deploy(
-            0,
-            authSalt,
-            abi.encodePacked(authBytecode, abi.encode(address(this)))
-        );
+        if (root != address(0) && borgAuthImplementation == address(0)) revert DeploymentFailed();
+        authAddress = CorporateDeploymentLib.deployAuth(authSalt, root == address(0) ? address(0) : borgAuthImplementation);
 
         // Initialize BorgAuth
         // BorgAuth(authAddress).initialize();
-        BorgAuth(authAddress).updateRole(_officer.eoa, 200);
+        if (root == address(0)) BorgAuth(authAddress).updateRole(_officer.eoa, 200);
 
         issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory)
             .deployIssuanceManager(salt);
@@ -270,7 +306,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             address(0)
         );
 
-        BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
+        if (root == address(0)) BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
         //deploy deal manager
         dealManagerAddress = IDealManagerFactory(dealManagerFactory)
             .deployDealManager(salt);
@@ -303,9 +339,14 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         // Set RoundManager on the corp
         ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
 
-        BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
-        BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
-        BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
+        if (root == address(0)) {
+            BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
+            BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
+            BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
+        } else {
+            CorporateDeploymentLib.completeSetup(authAddress, root, board, _officer.eoa,
+                [cyberCorpAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress]);
+        }
 
         emit CyberCorpDeployed(
             cyberCorpAddress,

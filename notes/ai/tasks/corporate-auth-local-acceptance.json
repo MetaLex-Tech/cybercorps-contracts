@@ -1,0 +1,57 @@
+{
+  "environment": "Disposable loopback Anvil; no production transactions",
+  "chainId": 31337,
+  "verifiedBase": "d28a602d4afb01fbeacaafadc313a611d3473cf7",
+  "codeState": "Uncommitted corporate-auth implementation",
+  "cases": [
+    {
+      "case": "root config succeeds",
+      "signed": true,
+      "simulationSucceeded": true,
+      "submittedSucceeded": true,
+      "transactionHash": "0xb8e73eeca3100761e632956d0571aabf5170264cbdef7c03e0eb123557562ee9"
+    },
+    {
+      "case": "officer config refused",
+      "signed": true,
+      "simulationSucceeded": false,
+      "submittedSucceeded": false,
+      "transactionHash": "0xc438a9e59ce45fbac8b1f00430ee46e94f67a036724aa0cec2c4ce41b2f55302"
+    },
+    {
+      "case": "officer signing succeeds",
+      "signed": true,
+      "simulationSucceeded": true,
+      "submittedSucceeded": true,
+      "transactionHash": "0xba62caf58ce19b7a3ab02494837894f9a4d7dd190ffd7cb5a23c98eba95c4720"
+    },
+    {
+      "case": "root signing refused without officer membership",
+      "signed": true,
+      "simulationSucceeded": false,
+      "submittedSucceeded": false,
+      "transactionHash": "0xbd062d34d831e5c0b8004396c2a37f6c01c9998ccd893561a8c322625de4a2a3"
+    },
+    {
+      "case": "unapproved auth upgrade refused",
+      "signed": true,
+      "simulationSucceeded": false,
+      "submittedSucceeded": false,
+      "transactionHash": "0xa230468d658d03d3de5f47453254c246b8ae1f0bff9fe742cde950752ddcb678"
+    },
+    {
+      "case": "officer auth upgrade refused",
+      "signed": true,
+      "simulationSucceeded": false,
+      "submittedSucceeded": false,
+      "transactionHash": "0x7d39db1cd6140715e854d86de2bf824bf1dbe8dda7843ffb9565066bf8aea5b1"
+    },
+    {
+      "case": "approved root auth upgrade succeeds",
+      "signed": true,
+      "simulationSucceeded": true,
+      "submittedSucceeded": true,
+      "transactionHash": "0x0d5fc3863c0030b4b2dc5e706eb3e15db0701b957c079f36fafb67e2fca53656"
+    }
+  ]
+}

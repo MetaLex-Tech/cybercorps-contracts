@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
+import {CorporateAuth} from "../../CorporateAuth.sol";
+import {CorporateAuthCheck} from "../../CorporateAuthCheck.sol";
 
 import "../BaseSecondaryTradingCondition.sol";
 import "../../auth.sol";
@@ -57,12 +59,12 @@ abstract contract SecondaryTradingConditionBase is BaseSecondaryTradingCondition
     /// Used to gate per-SPV configuration on the SPV's (or its DealManager's) own authority.
     function _requireAuthAdmin(address authProvider) internal view {
         BorgAuth auth = IBorgAuthACL(authProvider).AUTH();
-        auth.onlyRole(auth.ADMIN_ROLE(), msg.sender);
+        CorporateAuthCheck.requirePermission(address(auth), CorporateAuth.TRANSFER_POLICY, auth.ADMIN_ROLE(), msg.sender);
     }
 
     /// @dev Reverts unless msg.sender holds OWNER_ROLE on the target's BorgAuth.
     function _requireAuthOwner(address authProvider) internal view {
         BorgAuth auth = IBorgAuthACL(authProvider).AUTH();
-        auth.onlyRole(auth.OWNER_ROLE(), msg.sender);
+        CorporateAuthCheck.requirePermission(address(auth), CorporateAuth.TRANSFER_POLICY, auth.OWNER_ROLE(), msg.sender);
     }
 }

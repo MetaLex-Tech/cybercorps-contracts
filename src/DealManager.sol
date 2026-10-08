@@ -154,7 +154,7 @@ contract DealManager is
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
-    ) public onlyOwner returns (bytes32 agreementId, uint256[] memory certIds) {
+    ) public onlyPermission(CorporateAuth.MANAGE_DEALS) returns (bytes32 agreementId, uint256[] memory certIds) {
         // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
         return DealManagerStorage.proposeDeal(
             _certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt,
@@ -195,7 +195,7 @@ contract DealManager is
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
-    ) public onlyOwner returns (bytes32 agreementId, uint256[] memory certIds) {
+    ) public onlyPermission(CorporateAuth.MANAGE_DEALS) returns (bytes32 agreementId, uint256[] memory certIds) {
         // Implemented here (not in DealManagerStorage) on purpose: keeping proposeAndSignDeal out of that
         // library stops the via-ir Yul optimizer from inlining proposeDeal into it (which overflows the
         // stack). proposeDeal is reached via a cross-contract delegatecall, so its heavy body stays in the
@@ -316,7 +316,7 @@ contract DealManager is
     /// @dev Can only be called by owner for pending deals
     /// @param agreementId Unique identifier for the agreement
     /// @param condition Address of the condition contract to add
-    function addCondition(bytes32 agreementId, address condition) public onlyOwner {
+    function addCondition(bytes32 agreementId, address condition) public onlyPermission(CorporateAuth.MANAGE_DEALS) {
         //make sure the contract is still pending
         if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert DealNotPending();
         //make sure the condition is not already in the list
@@ -331,7 +331,7 @@ contract DealManager is
     /// @dev Can only be called by owner for pending deals
     /// @param agreementId Unique identifier for the agreement
     /// @param index Index of the condition to remove
-    function removeConditionAt(bytes32 agreementId, uint256 index) public onlyOwner {
+    function removeConditionAt(bytes32 agreementId, uint256 index) public onlyPermission(CorporateAuth.MANAGE_DEALS) {
         //make sure the contract is still pending
         if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert DealNotPending();
         //make sure the condition is in the list
@@ -344,7 +344,7 @@ contract DealManager is
     /// @notice Sets the deal registry address
     /// @dev Can only be called by owner
     /// @param _dealRegistry New deal registry address
-    function setDealRegistry(address _dealRegistry) public onlyOwner {
+    function setDealRegistry(address _dealRegistry) public onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         address oldDealRegistry = LexScrowStorage.getDealRegistry();
         LexScrowStorage.setDealRegistry(_dealRegistry);
         emit DealRegistrySet(_dealRegistry, oldDealRegistry, msg.sender);
@@ -353,7 +353,7 @@ contract DealManager is
     /// @notice Sets the corporation address
     /// @dev Can only be called by owner
     /// @param _corp New corporation address
-    function setCorp(address _corp) public onlyOwner {
+    function setCorp(address _corp) public onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         address oldCorp = LexScrowStorage.getCorp();
         LexScrowStorage.setCorp(_corp);
         emit CorpSet(_corp, oldCorp, msg.sender);
@@ -362,7 +362,7 @@ contract DealManager is
     /// @notice Sets the issuance manager address
     /// @dev Can only be called by owner
     /// @param _issuanceManager New issuance manager address
-    function setIssuanceManager(address _issuanceManager) public onlyOwner {
+    function setIssuanceManager(address _issuanceManager) public onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         address oldIssuanceManager = address(DealManagerStorage.getIssuanceManager());
         DealManagerStorage.setIssuanceManager(_issuanceManager);
         emit IssuanceManagerSet(_issuanceManager, oldIssuanceManager, msg.sender);
@@ -414,7 +414,7 @@ contract DealManager is
         bytes32 secretHash,
         uint256 expiry,
         address stableAddress
-    ) external onlyOwner returns (
+    ) external onlyPermission(CorporateAuth.MANAGE_DEALS) returns (
         address[] memory certPrinterAddress,
         bytes32 id,
         uint256[] memory certIds
@@ -506,19 +506,19 @@ contract DealManager is
     // Secondary trade — threshold setters
     // ─────────────────────────────────────────────────────────────────────────
 
-    function setMinTradeThreshold(uint256 units, uint256 consideration) external onlyAdmin {
+    function setMinTradeThreshold(uint256 units, uint256 consideration) external onlyAdminPermission(CorporateAuth.TRANSFER_POLICY) {
         SecondaryTradeStorage.SecondaryTradeData storage ds = SecondaryTradeStorage.secondaryTradeStorage();
         ds.minTradeUnits = units;
         ds.minTradeConsideration = consideration;
         emit MinTradeThresholdSet(units, consideration, msg.sender);
     }
 
-    function setSettlementWindow(uint256 window) external onlyAdmin {
+    function setSettlementWindow(uint256 window) external onlyAdminPermission(CorporateAuth.TRANSFER_POLICY) {
         SecondaryTradeStorage.secondaryTradeStorage().settlementWindow = window;
         emit SettlementWindowSet(window, msg.sender);
     }
 
-    function setDefaultIntegrator(address integrator) external onlyAdmin {
+    function setDefaultIntegrator(address integrator) external onlyAdminPermission(CorporateAuth.TRANSFER_POLICY) {
         if (integrator != address(0)) {
             if (!IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).isIntegratorWhitelisted(integrator))
                 revert IntegratorNotWhitelisted();
@@ -536,7 +536,7 @@ contract DealManager is
     // Each layer is set as a whole list, so one entry point per layer covers add, remove and reorder.
 
     // Layer 2 — fund-specific (§6) threshold conditions (apply to every offer)
-    function setSpvThresholdConditions(address[] calldata conditions) external onlyAdmin {
+    function setSpvThresholdConditions(address[] calldata conditions) external onlyAdminPermission(CorporateAuth.TRANSFER_POLICY) {
         SecondaryTradeStorage.setSpvThresholdConditions(conditions);
     }
 
@@ -544,13 +544,13 @@ contract DealManager is
     /// it. A pathway that is not enabled can be neither pinned nor elected.
     function setPathwayThresholdConditions(ExemptionPathway pathway, address[] calldata conditions, bool enabled)
         external
-        onlyAdmin
+        onlyAdminPermission(CorporateAuth.TRANSFER_POLICY)
     {
         SecondaryTradeStorage.setPathwayThresholdConditions(pathway, conditions, enabled);
     }
 
     // Closing conditions (apply to every offer; evaluated at finalize)
-    function setClosingConditions(address[] calldata conditions) external onlyAdmin {
+    function setClosingConditions(address[] calldata conditions) external onlyAdminPermission(CorporateAuth.TRANSFER_POLICY) {
         SecondaryTradeStorage.setClosingConditions(conditions);
     }
 
@@ -674,7 +674,7 @@ contract DealManager is
     /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
     function _authorizeUpgrade(
         address newImplementation
-    ) internal override onlyOwner {
+    ) internal override onlyPermission(CorporateAuth.APPROVE_UPGRADE) {
         if(IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();
         }

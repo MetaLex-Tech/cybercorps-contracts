@@ -136,7 +136,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         // Allow explicitly configured upgrade factory OR contract owner
         if (msg.sender != IssuanceManagerStorage.getUpgradeFactory()) {
             // Check owner via BorgAuth
-            try AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender) {
+            try CorporateAuthCheck.requirePermission(address(AUTH), CorporateAuth.APPROVE_UPGRADE, AUTH.OWNER_ROLE(), msg.sender) {
                 _;
                 return;
             } catch {
@@ -150,7 +150,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     /// (not inlined per call site) to keep this contract under the EIP-170 size limit.
     function _requireOwnerOrSelf() private view {
         if (msg.sender != address(this)) {
-            AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
+            CorporateAuthCheck.requirePermission(address(AUTH), CorporateAuth.ISSUE_SECURITIES, AUTH.OWNER_ROLE(), msg.sender);
         }
     }
 
@@ -171,7 +171,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         SecuritySeries _securitySeries,
         address _extension,
         bytes memory _seriesData
-    ) public onlyOwner returns (address) {
+    ) public onlyPermission(CorporateAuth.MANAGE_SECURITY_CLASSES) returns (address) {
         return
             IssuanceManagerStorage.executeCreateCertPrinter(
                 _ledger,
@@ -197,7 +197,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         string memory _documentURI,
         address _dataExtension,
         bytes memory _classData
-    ) external onlyOwner returns (uint256 classId) {
+    ) external onlyPermission(CorporateAuth.MANAGE_SECURITY_CLASSES) returns (uint256 classId) {
         return
             IssuanceManagerStorage.executeDefineSecurityClass(
                 _classType,
@@ -215,7 +215,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         string memory _documentURI,
         address _dataExtension,
         bytes memory _classData
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.MANAGE_SECURITY_CLASSES) {
         IssuanceManagerStorage.executeUpdateSecurityClass(
             _classId,
             _classType,
@@ -227,7 +227,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
 
     /// @notice Assigns a certificate printer (the series scope) to a class; 0 clears the assignment
     /// @dev Only callable by owner; also the backfill path for pre-existing printers
-    function setPrinterClass(address _printer, uint256 _classId) external onlyOwner {
+    function setPrinterClass(address _printer, uint256 _classId) external onlyPermission(CorporateAuth.MANAGE_SECURITY_CLASSES) {
         IssuanceManagerStorage.executeSetPrinterClass(_printer, _classId);
     }
 
@@ -276,7 +276,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         address certAddress,
         address to,
         CertificateDetails memory _details
-    ) public onlyOwner returns (uint256) {
+    ) public onlyPermission(CorporateAuth.ISSUE_SECURITIES) returns (uint256) {
         return IssuanceManagerStorage.executeCreateCert(certAddress, to, _details);
     }
 
@@ -298,7 +298,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         address investor,
         CertificateDetails memory _details,
         string memory investorName
-    ) public onlyOwner {
+    ) public onlyPermission(CorporateAuth.ADMINISTER_CERTIFICATES) {
         IssuanceManagerStorage.executeAssignCert(
             certAddress,
             from,
@@ -400,7 +400,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     /// @notice Effectuates the secondary-trade ownership change at finalization (spec §7.4A / §7.5)
     /// @dev Gated on OWNER_ROLE, which the SPV's DealManager holds. dealMetadata is the abi-encoded tuple
     /// produced by DealManager.finalizeSecondaryTradeAgreement; see IssuanceManagerStorage.executeSecondaryTransfer.
-    function secondaryTransfer(bytes calldata dealMetadata) external onlyOwner {
+    function secondaryTransfer(bytes calldata dealMetadata) external onlyPermission(CorporateAuth.ADMINISTER_CERTIFICATES) {
         IssuanceManagerStorage.executeSecondaryTransfer(dealMetadata);
     }
 
@@ -413,7 +413,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         address certAddress,
         uint256 tokenId,
         CertificateDetails memory _details
-    ) external onlyAdmin {
+    ) external onlyAdminPermission(CorporateAuth.ADMINISTER_CERTIFICATES) {
         ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         certificate.updateCertificateDetails(tokenId, _details);
     }*/
@@ -423,7 +423,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     /// @param _newImplementation Address of the new implementation
     function upgradeCertPrinterBeaconImplementation(
         address _newImplementation
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.APPROVE_UPGRADE) {
         if (
             IIssuanceManagerFactory(IssuanceManagerStorage.getUpgradeFactory())
                 .getCyberCertPrinterRefImplementation() != _newImplementation
@@ -452,7 +452,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     /// @param _newImplementation Address of the new implementation
     function upgradeScripBeaconImplementation(
         address _newImplementation
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.APPROVE_UPGRADE) {
         if (
             IIssuanceManagerFactory(IssuanceManagerStorage.getUpgradeFactory())
                 .getCyberScripRefImplementation() != _newImplementation
@@ -527,7 +527,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     /// @notice Sets the URI builder contract address
     /// @dev Only callable by owner
     /// @param _uriBuilder New URI builder contract address
-    function setUriBuilder(address _uriBuilder) external onlyOwner {
+    function setUriBuilder(address _uriBuilder) external onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         address oldUriBuilder = IssuanceManagerStorage.getUriBuilder();
         IssuanceManagerStorage.setUriBuilder(_uriBuilder);
         emit UriBuilderUpdated(_uriBuilder, oldUriBuilder);
@@ -537,7 +537,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         address certAddress,
         uint256 numerator,
         uint256 denominator
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.MANAGE_SECURITY_CLASSES) {
         IssuanceManagerStorage.executeSetScripRatio(
             certAddress,
             numerator,
@@ -564,7 +564,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     function setScripToCertMinimum(
         address certAddress,
         uint256 minimum
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.TRANSFER_POLICY) {
         IssuanceManagerStorage.executeSetScripToCertMinimum(
             certAddress,
             minimum
@@ -574,7 +574,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     function setScripifyWhitelistEnabled(
         address certAddress,
         bool enabled
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.TRANSFER_POLICY) {
         IssuanceManagerStorage.executeSetScripifyWhitelistEnabled(
             certAddress,
             enabled
@@ -584,7 +584,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     function addScripifyWhitelistIds(
         address certAddress,
         uint256[] memory ids
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.TRANSFER_POLICY) {
         IssuanceManagerStorage.executeSetScripifyWhitelistIds(
             certAddress,
             ids,
@@ -595,7 +595,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     function removeScripifyWhitelistIds(
         address certAddress,
         uint256[] memory ids
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.TRANSFER_POLICY) {
         IssuanceManagerStorage.executeSetScripifyWhitelistIds(
             certAddress,
             ids,
@@ -617,7 +617,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         bool enableForceTransfer,
         bool enableForceBurn,
         bool enableFreeze
-    ) onlyOwner external returns (address) {
+    ) onlyPermission(CorporateAuth.MANAGE_SECURITY_CLASSES) external returns (address) {
         return
             IssuanceManagerStorage.executeDeployCyberScrip(
                 certAddress,
@@ -640,7 +640,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         address certAddress,
         address account,
         uint256 amount
-    ) external onlyAdmin {
+    ) external onlyAdminPermission(CorporateAuth.ADMINISTER_CERTIFICATES) {
         IssuanceManagerStorage.executeForceScripBurn(
             certAddress,
             account,
@@ -681,7 +681,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         string calldata investorName,
         CertificateDetails calldata details,
         bytes calldata officerSignature
-    ) external onlyAdmin {
+    ) external onlyAdminPermission(CorporateAuth.ADMINISTER_CERTIFICATES) {
         IssuanceManagerStorage.executeSetRecertificationApproval(
             certAddress,
             investor,
@@ -694,7 +694,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     function clearRecertificationApproval(
         address certAddress,
         address investor
-    ) external onlyAdmin {
+    ) external onlyAdminPermission(CorporateAuth.ADMINISTER_CERTIFICATES) {
         IssuanceManagerStorage.executeClearRecertificationApproval(
             certAddress,
             investor
@@ -788,7 +788,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     /// lets them void a holder's lot while that holder still holds redeemable scrip.
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenIds IDs of the lots to void
-    function voidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external onlyAdmin {
+    function voidEmptyCerts(address certAddress, uint256[] calldata tokenIds) external onlyAdminPermission(CorporateAuth.ADMINISTER_CERTIFICATES) {
         IssuanceManagerStorage.executeVoidEmptyCerts(certAddress, tokenIds);
     }
 
@@ -806,7 +806,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
     function _authorizeUpgrade(
         address newImplementation
-    ) internal override onlyOwner {
+    ) internal override onlyPermission(CorporateAuth.APPROVE_UPGRADE) {
         if (
             IIssuanceManagerFactory(IssuanceManagerStorage.getUpgradeFactory())
                 .getRefImplementation() != newImplementation

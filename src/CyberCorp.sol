@@ -167,7 +167,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
         string memory _cyberCORPJurisdiction,
         string memory _cyberCORPContactDetails,
         string memory _defaultDisputeResolution
-    ) external onlyOwner() {
+    ) external onlyPermission(CorporateAuth.COMPANY_OPERATIONS) {
         cyberCORPName = _cyberCORPName;
         cyberCORPType = _cyberCORPType;
         cyberCORPJurisdiction = _cyberCORPJurisdiction;
@@ -180,7 +180,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     /// @notice Updates the issuance manager address
     /// @dev Only callable by owner
     /// @param _issuanceManager New issuance manager contract address
-    function setIssuanceManager(address _issuanceManager) external onlyOwner() {
+    function setIssuanceManager(address _issuanceManager) external onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         address oldIssuanceManager = issuanceManager;
         issuanceManager = _issuanceManager;
         emit IssuanceManagerUpdated(issuanceManager, oldIssuanceManager);
@@ -189,7 +189,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     /// @notice Updates the deal manager address
     /// @dev Only callable by owner
     /// @param _dealManager New deal manager contract address
-    function setDealManager(address _dealManager) external onlyOwner() {
+    function setDealManager(address _dealManager) external onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         address oldDealManager = dealManager;
         dealManager = _dealManager;
         emit DealManagerUpdated(dealManager, oldDealManager);
@@ -198,7 +198,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     /// @notice Updates the round manager address
     /// @dev Only callable by owner
     /// @param _roundManager New round manager contract address
-    function setRoundManager(address _roundManager) external onlyOwner() {
+    function setRoundManager(address _roundManager) external onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         address oldRoundManager = roundManager;
         roundManager = _roundManager;
         emit RoundManagerUpdated(roundManager, oldRoundManager);
@@ -208,6 +208,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     /// @param _address Address to check
     /// @return bool True if the address belongs to an officer
     function isCyberCORPOfficer(address _address) external view returns (bool) {
+        if (CorporateAuthCheck.isCorporate(address(AUTH))) return ICorporateAuth(address(AUTH)).hasRole(_address, CorporateAuth.OFFICER);
         return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
     }
 
@@ -222,19 +223,27 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
 
     /// @dev Grants the standard officer role without downgrading a higher custom role
     function _grantOfficerRole(address _eoa) internal {
+        if (CorporateAuthCheck.isCorporate(address(AUTH))) {
+            ICorporateAuth(address(AUTH)).setOfficerMembership(_eoa, true);
+            return;
+        }
         if (AUTH.userRoles(_eoa) < 200) AUTH.updateRole(_eoa, 200);
     }
 
     /// @dev Revokes only the standard officer role; custom roles set outside the
     /// officer lifecycle (anything other than exactly 200) are left untouched
     function _revokeOfficerRole(address _eoa) internal {
+        if (CorporateAuthCheck.isCorporate(address(AUTH))) {
+            ICorporateAuth(address(AUTH)).setOfficerMembership(_eoa, false);
+            return;
+        }
         if (AUTH.userRoles(_eoa) == 200) AUTH.updateRole(_eoa, 0);
     }
 
     /// @notice Adds a new officer to the company
     /// @dev Only callable by owner, sets officer role to 200
     /// @param _officer Officer details including address and role
-    function addOfficer(CompanyOfficer memory _officer) external onlyOwner() {
+    function addOfficer(CompanyOfficer memory _officer) external onlyPermission(CorporateAuth.MANAGE_OFFICERS) {
         if (_isOfficerAtOtherIndex(_officer.eoa, type(uint256).max)) revert DuplicateOfficer();
         companyOfficers.push(_officer);
         _grantOfficerRole(_officer.eoa);
@@ -245,7 +254,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     /// @dev Only callable by owner. If the EOA changes, revokes the old role and grants the new one
     /// @param _index Index of the officer to update
     /// @param _officer Updated officer details including address and role
-    function updateOfficer(uint256 _index, CompanyOfficer memory _officer) external onlyOwner() {
+    function updateOfficer(uint256 _index, CompanyOfficer memory _officer) external onlyPermission(CorporateAuth.MANAGE_OFFICERS) {
         if (_index >= companyOfficers.length) revert InvalidOfficerIndex();
 
         address oldEOA = companyOfficers[_index].eoa;
@@ -263,7 +272,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     /// @notice Removes an officer by their address
     /// @dev Only callable by owner, revokes officer role
     /// @param _address Address of the officer to remove
-    function removeOfficer(address _address) external onlyOwner() {
+    function removeOfficer(address _address) external onlyPermission(CorporateAuth.MANAGE_OFFICERS) {
         for (uint256 i = 0; i < companyOfficers.length; i++) {
             if (companyOfficers[i].eoa == _address) {
                 companyOfficers[i] = companyOfficers[companyOfficers.length - 1];
@@ -278,7 +287,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     /// @notice Removes an officer by their index in the officers array
     /// @dev Only callable by owner, revokes officer role
     /// @param _index Index of the officer to remove
-    function removeOfficerAt(uint256 _index) external onlyOwner() {
+    function removeOfficerAt(uint256 _index) external onlyPermission(CorporateAuth.MANAGE_OFFICERS) {
         require(_index < companyOfficers.length, "Index out of bounds");
         address officerEOA = companyOfficers[_index].eoa;
         companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
@@ -287,7 +296,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
         emit OfficerRemoved(officerEOA, _index);
     }
 
-    function setCompanyPayable(address _companyPayable) external onlyOwner() {
+    function setCompanyPayable(address _companyPayable) external onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         address oldCompanyPayable = companyPayable;
         companyPayable = _companyPayable;
         emit CompanyPayableUpdated(companyPayable, oldCompanyPayable);
@@ -295,7 +304,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
 
     /// @notice Adds a reusable escrowed officer signature
     /// @dev Officer role (200+) required
-    function addEscrowedOfficerSignature(bytes calldata signature) external onlyRole(200) {
+    function addEscrowedOfficerSignature(bytes calldata signature) external onlyOfficerPermission {
         if (signature.length == 0) revert SignatureRequired();
         escrowedOfficerSignatures.push(signature);
         emit EscrowedOfficerSignatureAdded(
@@ -309,7 +318,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     function setEscrowedOfficerSignature(
         uint256 index,
         bytes calldata signature
-    ) external onlyRole(200) {
+    ) external onlyOfficerPermission {
         if (index >= escrowedOfficerSignatures.length) revert InvalidEscrowSignatureIndex();
         if (signature.length == 0) revert SignatureRequired();
         escrowedOfficerSignatures[index] = signature;
@@ -334,7 +343,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     function setExtension(
         address _extension,
         bytes32 _extensionType
-    ) external onlyOwner {
+    ) external onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         if (_extension == address(0)) {
             if (_extensionType != bytes32(0)) revert InvalidExtension();
             extension = address(0);
@@ -358,14 +367,14 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     }
 
     /// @notice Update the raw extension payload for the active CyberCorp extension
-    function setExtensionData(bytes calldata _extensionData) external onlyOwner {
+    function setExtensionData(bytes calldata _extensionData) external onlyPermission(CorporateAuth.COMPANY_OPERATIONS) {
         if (extension == address(0)) revert ExtensionNotConfigured();
         extensionData = _extensionData;
         emit CyberCORPExtensionDataUpdated(extensionType, _extensionData);
     }
 
     /// @notice Clear the active CyberCorp extension and any stored extension data
-    function clearExtension() external onlyOwner {
+    function clearExtension() external onlyPermission(CorporateAuth.CONFIGURE_PROTOCOL) {
         extension = address(0);
         extensionType = bytes32(0);
         delete extensionData;
@@ -388,7 +397,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable, ICyberCorp
     /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
     function _authorizeUpgrade(
         address newImplementation
-    ) internal override onlyOwner {
+    ) internal override onlyPermission(CorporateAuth.APPROVE_UPGRADE) {
         if(
             ICyberCorpSingleFactory(upgradeFactory).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();

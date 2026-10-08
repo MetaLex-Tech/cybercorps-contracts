@@ -43,6 +43,8 @@ pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../interfaces/IAuthAdapter.sol";
+import "./CorporateAuth.sol";
+import "./CorporateAuthCheck.sol";
 
 /// @title  BorgAuth
 /// @author MetaLeX Labs, Inc.
@@ -73,7 +75,7 @@ contract BorgAuth is Initializable {
 
     /// @notice Initializer replacing the constructor - sets the deployer/initializer as owner
     /// @dev Use this instead of constructor when deployed behind a proxy
-    function initialize(address _owner) public initializer {
+    function initialize(address _owner) public virtual initializer {
         _updateRole(_owner, OWNER_ROLE);
     }
 
@@ -83,21 +85,21 @@ contract BorgAuth is Initializable {
     function updateRole(
         address user,
         uint256 role
-    ) external {
+    ) external virtual {
          onlyRole(OWNER_ROLE, msg.sender);
         _updateRole(user, role);
     }
     
     /// @notice initialize ownership transfer
     /// @param newOwner address of new owner
-    function initTransferOwnership(address newOwner) external {
+    function initTransferOwnership(address newOwner) external virtual {
         if (newOwner == address(0) || newOwner == msg.sender) revert BorgAuth_ZeroAddress();
         onlyRole(OWNER_ROLE, msg.sender);
         pendingOwner = newOwner;
     }
 
     /// @notice accept ownership transfer
-    function acceptOwnership() external {
+    function acceptOwnership() external virtual {
         if (msg.sender != pendingOwner) revert BorgAuth_NotAuthorized(OWNER_ROLE, msg.sender);
         _updateRole(pendingOwner, OWNER_ROLE);
         pendingOwner = address(0);
@@ -106,7 +108,7 @@ contract BorgAuth is Initializable {
 
     /// @notice function to purposefully revoke all roles from owner, rendering subsequent role updates impossible
     /// @dev this function is intended for use to remove admin controls from subsequent contracts using this auth
-    function zeroOwner() external {
+    function zeroOwner() external virtual {
         onlyRole(OWNER_ROLE, msg.sender);
         _updateRole(msg.sender, 0);
     }
@@ -114,7 +116,7 @@ contract BorgAuth is Initializable {
     /// @notice set adapter for role
     /// @param _role role to set adapter for
     /// @param _adapter address of adapter
-    function setRoleAdapter(uint256 _role, address _adapter) external {
+    function setRoleAdapter(uint256 _role, address _adapter) external virtual {
         onlyRole(OWNER_ROLE, msg.sender);
         roleAdapters[_role] = _adapter;
         emit AdapterUpdated(_role, _adapter);
@@ -123,7 +125,7 @@ contract BorgAuth is Initializable {
     /// @notice check role for user, revert if not authorized
     /// @param user address of user
     /// @param role of user
-    function onlyRole(uint256 role, address user) public view {
+    function onlyRole(uint256 role, address user) public view virtual {
         uint256 authorized = userRoles[user];
 
         if (authorized < role) {
@@ -138,7 +140,7 @@ contract BorgAuth is Initializable {
     /// @notice check role for user, revert if not authorized
     /// @param user address of user
     /// @param role of user
-    function matchRole(uint256 role, address user) public view {
+    function matchRole(uint256 role, address user) public view virtual {
         uint256 authorized = userRoles[user];
 
         if (authorized != role) {
@@ -193,6 +195,23 @@ abstract contract BorgAuthACL is Initializable, IBorgAuthACL {
     }
 
     //common modifiers and general access control onlyRole
+    function supportsCorporatePermissions() external pure returns (bool) { return true; }
+
+    modifier onlyPermission(bytes32 permission) {
+        CorporateAuthCheck.requirePermission(address(AUTH), permission, AUTH.OWNER_ROLE(), msg.sender);
+        _;
+    }
+
+    modifier onlyAdminPermission(bytes32 permission) {
+        CorporateAuthCheck.requirePermission(address(AUTH), permission, AUTH.ADMIN_ROLE(), msg.sender);
+        _;
+    }
+
+    modifier onlyOfficerPermission() {
+        CorporateAuthCheck.requirePermission(address(AUTH), CorporateAuth.SIGN_AS_OFFICER, 200, msg.sender);
+        _;
+    }
+
     modifier onlyOwner() {
         AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
         _;

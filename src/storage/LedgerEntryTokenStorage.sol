@@ -40,6 +40,8 @@ mechanical, including photocopying, recording, or by any information storage and
 except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
+import {CorporateAuth} from "../libs/CorporateAuth.sol";
+import {CorporateAuthCheck} from "../libs/CorporateAuthCheck.sol";
 
 import "../CyberCorpConstants.sol";
 import {
@@ -727,11 +729,20 @@ library LedgerEntryTokenStorage {
     /// IssuanceManager's AUTH, but the logic lives here instead.
     /// Offchain clients will need to interact with this contract directly instead of through IssuanceManager, but
     /// other than that, all behaviors stay the same as before.
-    function requireManagerOrAdmin() external view {
+    function requireManagerOrAdmin(bytes4 action) external view {
         CyberCertStorage storage s = cyberCertStorage();
         if (msg.sender == s.issuanceManager) return;
         BorgAuth auth = BorgAuth(IIssuanceManager(s.issuanceManager).AUTH());
-        auth.onlyRole(auth.ADMIN_ROLE(), msg.sender);
+        // The printer forwards its external selector before delegatecall changes msg.sig.
+        bytes32 permission = action == ILedgerEntryToken.setRestrictionHook.selector
+            || action == ILedgerEntryToken.setGlobalRestrictionHook.selector
+            || action == ILedgerEntryToken.setGlobalTransferable.selector
+            || action == ILedgerEntryToken.setGlobalLegalTransferable.selector
+            || action == ILedgerEntryToken.setTokenLegalTransferable.selector
+            || action == ILedgerEntryToken.setTokenTransferable.selector
+            || action == ILedgerEntryToken.setLookThroughBadge.selector
+            ? CorporateAuth.TRANSFER_POLICY : CorporateAuth.ADMINISTER_CERTIFICATES;
+        CorporateAuthCheck.requirePermission(address(auth), permission, auth.ADMIN_ROLE(), msg.sender);
     }
 
     /// @dev Writes the cert's details. External so the printer keeps the code out of its own bytecode.

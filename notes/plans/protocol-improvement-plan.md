@@ -19,6 +19,12 @@ the struct but not the storage model, see P2 status note). P3 `INTERIM SHIPPED` 
 
 ## P1 — Board role: governance-correct appointment & removal of officers — `PROPOSED`
 
+_Implementation work 2026-10-07: the scoped [corporate auth plan](corporate-auth-plan.md)
+implements independent memberships, root authority and permission checks for an explicit new-deployment
+path. Legacy migration, stockholder voting and last-officer guards are outside its scope. See the
+[implementation task](../ai/tasks/corporate-auth.md) for exact validation/review status; local changes
+are not evidence of merge or deployment. The July assessment below is historical._
+
 _Status check 2026-07-12: still accurate on `develop` — `addOfficer`/`removeOfficer`/`removeOfficerAt`
 remain `onlyOwner`-gated with no last-officer guard (`src/CyberCorp.sol:191/200/215`), and no Board
 role exists in `src/libs/auth.sol`. Nothing shipped._

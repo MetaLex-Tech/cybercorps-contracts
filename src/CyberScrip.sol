@@ -33,7 +33,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL,
 
     modifier onlyIssuanceManagerOrAdmin() {
         if (msg.sender != CyberScripStorage.getStorageData().issuanceManager) {
-            AUTH.onlyRole(AUTH.ADMIN_ROLE(), msg.sender);
+            CorporateAuthCheck.requirePermission(address(AUTH), CorporateAuth.TRANSFER_POLICY, AUTH.ADMIN_ROLE(), msg.sender);
         }
         _;
     }

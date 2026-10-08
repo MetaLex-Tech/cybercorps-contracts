@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
+import {CorporateAuth} from "../CorporateAuth.sol";
+import {CorporateAuthCheck} from "../CorporateAuthCheck.sol";
 
 import "openzeppelin-contracts/interfaces/IERC165.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -159,7 +161,7 @@ contract NonUSNationalityCondition is BaseCondition, UUPSUpgradeable, BorgAuthAC
 
         // only the manager of the deal/round can set overrides
         BorgAuth auth = IBorgAuthACL(_manager).AUTH();
-        auth.onlyRole(auth.OWNER_ROLE(), msg.sender);
+        CorporateAuthCheck.requirePermission(address(auth), CorporateAuth.TRANSFER_POLICY, auth.OWNER_ROLE(), msg.sender);
 
         founderOverrides[_manager][_investor] = _approved;
         emit FounderOverrideUpdated(_manager, _investor, _approved, msg.sender);

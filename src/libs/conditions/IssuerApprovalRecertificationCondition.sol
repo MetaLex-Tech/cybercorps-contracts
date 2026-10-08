@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
+import {CorporateAuth} from "../CorporateAuth.sol";
+import {CorporateAuthCheck} from "../CorporateAuthCheck.sol";
 
 import "../../interfaces/IIssuanceManager.sol";
 import "../../interfaces/ICyberScrip.sol";
@@ -90,6 +92,6 @@ contract IssuerApprovalRecertificationCondition is BaseCondition {
     function _requireAdmin(address issuanceManager) internal view {
         if (issuanceManager == address(0)) revert InvalidContractAddress();
         BorgAuth auth = BorgAuth(IIssuanceManager(issuanceManager).AUTH());
-        auth.onlyRole(auth.ADMIN_ROLE(), msg.sender);
+        CorporateAuthCheck.requirePermission(address(auth), CorporateAuth.ADMINISTER_CERTIFICATES, auth.ADMIN_ROLE(), msg.sender);
     }
 }
