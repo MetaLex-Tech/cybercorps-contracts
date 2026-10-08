@@ -15,9 +15,16 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
     mapping(address => uint256) public memberships;
 
     error Unauthorized();
-    error InvalidConfiguration();
+    error ZeroAddress();
+    error NotContract(address account);
+    error AddressIsComponent(address account);
+    error SetupNotComplete();
+    error SetupAlreadyComplete();
+    error UnknownRoles(uint256 roles);
+    error OfficerBitMismatch(address account);
+    error NomineeIsRoot();
     error LegacyAPIUnavailable();
-    error UnapprovedImplementation();
+    error ImplementationMismatch(address approved, address implementation);
     error PermissionDenied(bytes32 permission, address account);
 
     event MembershipChanged(address indexed account, uint256 roles);
@@ -30,7 +37,8 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
     }
 
     function initializeCorporate(address bootstrap, address registry) external initializer {
-        if (bootstrap == address(0) || registry.code.length == 0) revert InvalidConfiguration();
+        if (bootstrap == address(0)) revert ZeroAddress();
+        _requireContract(registry);
         __UUPSUpgradeable_init();
         rootAuthority = bootstrap;
         releaseRegistry = registry;
@@ -55,14 +63,16 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
         address deal,
         address round
     ) external onlyRoot {
-        if (
-            setupComplete || root == address(0) || board.code.length == 0 || corp.code.length == 0
-                || officer == address(0) || issuance.code.length == 0 || deal.code.length == 0 || round.code.length == 0
-                || board == corp || board == issuance || board == deal || board == round || root == corp || root == issuance
-                || root == deal || root == round
-        ) {
-            revert InvalidConfiguration();
-        }
+        if (setupComplete) revert SetupAlreadyComplete();
+        if (root == address(0) || officer == address(0)) revert ZeroAddress();
+        _requireContract(board);
+        _requireContract(corp);
+        _requireContract(issuance);
+        _requireContract(deal);
+        _requireContract(round);
+        // Root and the board act for the company. They must not be one of its components.
+        _requireNotComponent(board, corp, issuance, deal, round);
+        _requireNotComponent(root, corp, issuance, deal, round);
         setupComplete = true;
         officerController = corp;
         _grant(board, CorporateAuth.BOARD_EXECUTOR);
@@ -76,19 +86,19 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
 
     /// @notice Root administers non-officer memberships. Officer changes go through the company roster.
     function setMembership(address account, uint256 roles) external onlyRoot {
-        if (
-            !setupComplete || account == address(0) || roles & ~CorporateAuth.ALL_ROLES != 0
-                || (memberships[account] ^ roles) & CorporateAuth.OFFICER != 0
-                || (roles & CorporateAuth.BOARD_EXECUTOR != 0 && account.code.length == 0)
-        ) {
-            revert InvalidConfiguration();
-        }
+        if (!setupComplete) revert SetupNotComplete();
+        if (account == address(0)) revert ZeroAddress();
+        if (roles & ~CorporateAuth.ALL_ROLES != 0) revert UnknownRoles(roles);
+        if ((memberships[account] ^ roles) & CorporateAuth.OFFICER != 0) revert OfficerBitMismatch(account);
+        if (roles & CorporateAuth.BOARD_EXECUTOR != 0) _requireContract(account);
         memberships[account] = roles;
         emit MembershipChanged(account, roles);
     }
 
     function setOfficerMembership(address account, bool enabled) external {
-        if (!setupComplete || msg.sender != officerController || account == address(0)) revert Unauthorized();
+        if (!setupComplete) revert SetupNotComplete();
+        if (msg.sender != officerController) revert Unauthorized();
+        if (account == address(0)) revert ZeroAddress();
         uint256 roles = memberships[account];
         memberships[account] = enabled ? roles | CorporateAuth.OFFICER : roles & ~CorporateAuth.OFFICER;
         emit MembershipChanged(account, memberships[account]);
@@ -149,7 +159,8 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
 
     /// @notice A zero nominee cancels an outstanding proposal; root itself is never set to zero.
     function proposeRootTransfer(address nominee) external onlyRoot {
-        if (!setupComplete || nominee == rootAuthority) revert InvalidConfiguration();
+        if (!setupComplete) revert SetupNotComplete();
+        if (nominee == rootAuthority) revert NomineeIsRoot();
         pendingRootAuthority = nominee;
         emit RootTransferProposed(nominee);
     }
@@ -162,15 +173,28 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
         emit RootTransferred(oldRoot, msg.sender);
     }
 
+    function _requireContract(address account) private view {
+        if (account.code.length == 0) revert NotContract(account);
+    }
+
+    function _requireNotComponent(address account, address corp, address issuance, address deal, address round)
+        private
+        pure
+    {
+        if (account == corp || account == issuance || account == deal || account == round) {
+            revert AddressIsComponent(account);
+        }
+    }
+
     function _grant(address account, uint256 role) private {
         memberships[account] |= role;
         emit MembershipChanged(account, memberships[account]);
     }
 
     function _authorizeUpgrade(address implementation) internal override onlyRoot {
-        if (!setupComplete || IBorgAuthReleaseRegistry(releaseRegistry).borgAuthImplementation() != implementation) {
-            revert UnapprovedImplementation();
-        }
+        if (!setupComplete) revert SetupNotComplete();
+        address approved = IBorgAuthReleaseRegistry(releaseRegistry).borgAuthImplementation();
+        if (approved != implementation) revert ImplementationMismatch(approved, implementation);
     }
 
     function updateRole(address, uint256) external override {

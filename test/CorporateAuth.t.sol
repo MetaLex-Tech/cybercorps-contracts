@@ -130,6 +130,83 @@ contract CorporateAuthTest is Test {
         }
     }
 
+    function testSetupRevertsNameTheCheckedCondition() public {
+        BorgAuthV2 fresh = BorgAuthV2(
+            address(
+                new ERC1967Proxy(
+                    borgAuthImplementation,
+                    abi.encodeCall(BorgAuthV2.initializeCorporate, (address(this), address(this)))
+                )
+            )
+        );
+        address eoa = address(0xE0A);
+        bytes memory notContract = abi.encodeWithSelector(BorgAuthV2.NotContract.selector, eoa);
+        bytes memory boardIsCorp = abi.encodeWithSelector(BorgAuthV2.AddressIsComponent.selector, address(corp));
+        bytes memory rootIsDeal = abi.encodeWithSelector(BorgAuthV2.AddressIsComponent.selector, dealManager);
+
+        vm.expectRevert(BorgAuthV2.ZeroAddress.selector);
+        fresh.completeSetup(
+            address(0), address(board), address(corp), officer, issuanceManager, dealManager, roundManager
+        );
+        vm.expectRevert(BorgAuthV2.ZeroAddress.selector);
+        fresh.completeSetup(
+            address(this), address(board), address(corp), address(0), issuanceManager, dealManager, roundManager
+        );
+        vm.expectRevert(notContract);
+        fresh.completeSetup(address(this), eoa, address(corp), officer, issuanceManager, dealManager, roundManager);
+        vm.expectRevert(boardIsCorp);
+        fresh.completeSetup(
+            address(this), address(corp), address(corp), officer, issuanceManager, dealManager, roundManager
+        );
+        vm.expectRevert(rootIsDeal);
+        fresh.completeSetup(
+            dealManager, address(board), address(corp), officer, issuanceManager, dealManager, roundManager
+        );
+
+        vm.expectRevert(BorgAuthV2.SetupNotComplete.selector);
+        fresh.setMembership(director, CorporateAuth.DIRECTOR);
+        vm.expectRevert(BorgAuthV2.SetupNotComplete.selector);
+        fresh.proposeRootTransfer(officer);
+        vm.expectRevert(BorgAuthV2.SetupNotComplete.selector);
+        fresh.setOfficerMembership(officer, true);
+
+        vm.expectRevert(BorgAuthV2.SetupAlreadyComplete.selector);
+        auth.completeSetup(
+            address(this), address(board), address(corp), officer, issuanceManager, dealManager, roundManager
+        );
+    }
+
+    function testRevertsNameTheCheckedCondition() public {
+        address eoa = address(0xE0A);
+        uint256 unknownRoles = CorporateAuth.ALL_ROLES + 1;
+        bytes memory unknown = abi.encodeWithSelector(BorgAuthV2.UnknownRoles.selector, unknownRoles);
+        bytes memory officerBit = abi.encodeWithSelector(BorgAuthV2.OfficerBitMismatch.selector, officer);
+        bytes memory boardEoa = abi.encodeWithSelector(BorgAuthV2.NotContract.selector, eoa);
+
+        vm.expectRevert(BorgAuthV2.ZeroAddress.selector);
+        auth.setMembership(address(0), CorporateAuth.DIRECTOR);
+        vm.expectRevert(unknown);
+        auth.setMembership(director, unknownRoles);
+        vm.expectRevert(officerBit);
+        auth.setMembership(officer, 0);
+        vm.expectRevert(boardEoa);
+        auth.setMembership(eoa, CorporateAuth.BOARD_EXECUTOR);
+        vm.expectRevert(BorgAuthV2.NomineeIsRoot.selector);
+        auth.proposeRootTransfer(address(this));
+
+        vm.expectRevert(BorgAuthV2.Unauthorized.selector);
+        auth.setOfficerMembership(director, true);
+        vm.prank(address(corp));
+        vm.expectRevert(BorgAuthV2.ZeroAddress.selector);
+        auth.setOfficerMembership(address(0), true);
+
+        address replacement = address(new BorgAuthV2());
+        bytes memory mismatch =
+            abi.encodeWithSelector(BorgAuthV2.ImplementationMismatch.selector, borgAuthImplementation, replacement);
+        vm.expectRevert(mismatch);
+        auth.upgradeToAndCall(replacement, "");
+    }
+
     function testBoardManagesRosterAndRemovalPreservesDirector() public {
         CompanyOfficer memory added = CompanyOfficer(director, "Director officer", "contact", "CFO");
         board.execute(address(corp), abi.encodeCall(CyberCorp.addOfficer, (added)));
