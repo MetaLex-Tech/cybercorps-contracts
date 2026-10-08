@@ -27,6 +27,10 @@ All tests cover the dirty implementation on base d28a602d4afb01fbeacaafadc313a61
 - New Solidity files: `forge fmt --check` passed. `git diff --check` passed.
 - Local script fixture and PowerShell runner on disposable loopback Anvil chain 31337: seven signed/simulated/submitted cases matched expected success/refusal. Root/role state survived an actual implementation-address change. Receipt evidence is in corporate-auth-local-acceptance.json. No real-network funds or transactions used; local node stopped afterward.
 
+## Manager permission tests (2026-10-08, Claude Code)
+
+`test/CorporateAuthManagerFlows.t.sol` runs deal, round and secondary-trade flows on a company from `deployCyberCorpWithGovernance`, plus a full permission matrix and refusals at real gates. Coverage map: `specs/analysis/auth-v2.md`. Result: 9 pass, 1 fails. `DealManager.proposeAndSignNewCertsDeal` reverts with `PermissionDenied(MANAGE_SECURITY_CLASSES, dealManager)` because the DealManager calls `IM.createCertPrinter`. The fix is an open decision for the user. Do not change the table or the test until the user chooses.
+
 ## Remaining gates and handoff
 
 Independent external-model review is required, not performed, and not authorized to start by this request. No release clearance inferred from local tests. Platform release deployment/linking, merge, real deployment, client integration and any future legacy migration remain separate actions. Clients must stop numeric-role inference for new companies; legacy retrofit helpers and combined legacy deployment/offer/round entry points remain legacy-only.

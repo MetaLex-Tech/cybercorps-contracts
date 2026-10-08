@@ -29,6 +29,10 @@ contract CorporateAuthTest is Test {
     CorporateExecutor internal board;
     address internal officer = address(0xA11CE);
     address internal director = address(0xD1);
+    address internal stranger = address(0x5713);
+    address internal issuanceManager;
+    address internal dealManager;
+    address internal roundManager;
     address public borgAuthImplementation;
     address public refImplementation;
 
@@ -71,14 +75,11 @@ contract CorporateAuthTest is Test {
             )
         );
         board = new CorporateExecutor();
+        issuanceManager = address(new CorporateExecutor());
+        dealManager = address(new CorporateExecutor());
+        roundManager = address(new CorporateExecutor());
         auth.completeSetup(
-            address(this),
-            address(board),
-            address(corp),
-            officer,
-            address(new CorporateExecutor()),
-            address(new CorporateExecutor()),
-            address(new CorporateExecutor())
+            address(this), address(board), address(corp), officer, issuanceManager, dealManager, roundManager
         );
         auth.setMembership(director, CorporateAuth.DIRECTOR);
     }
@@ -90,6 +91,43 @@ contract CorporateAuthTest is Test {
         assertFalse(auth.hasPermission(CorporateAuth.SIGN_AS_OFFICER, address(this)));
         assertFalse(auth.hasPermission(CorporateAuth.SIGN_AS_OFFICER, address(board)));
         assertFalse(auth.hasPermission(bytes32(uint256(123)), address(this)));
+    }
+
+    function testPermissionMatrix() public view {
+        // Bit i of an expected mask is actor i: root, board, officer, director, IM, DM, RM, stranger.
+        address[8] memory actors =
+            [address(this), address(board), officer, director, issuanceManager, dealManager, roundManager, stranger];
+        (bytes32[12] memory permissions, uint8[12] memory expected) = _permissionTable();
+
+        for (uint256 p; p < permissions.length; ++p) {
+            for (uint256 a; a < actors.length; ++a) {
+                bool want = expected[p] & (1 << a) != 0;
+                string memory label = string.concat("permission ", vm.toString(p), " actor ", vm.toString(a));
+                assertEq(auth.hasPermission(permissions[p], actors[a]), want, label);
+            }
+        }
+    }
+
+    function testNoPermissionBeforeSetup() public {
+        BorgAuthV2 fresh = BorgAuthV2(
+            address(
+                new ERC1967Proxy(
+                    borgAuthImplementation,
+                    abi.encodeCall(BorgAuthV2.initializeCorporate, (address(this), address(this)))
+                )
+            )
+        );
+        (bytes32[12] memory permissions,) = _permissionTable();
+        address[3] memory others = [officer, address(board), stranger];
+
+        for (uint256 p; p < permissions.length; ++p) {
+            bool rootOnly =
+                permissions[p] == CorporateAuth.CONFIGURE_PROTOCOL || permissions[p] == CorporateAuth.APPROVE_UPGRADE;
+            assertEq(fresh.hasPermission(permissions[p], address(this)), rootOnly, "temporary root");
+            for (uint256 a; a < others.length; ++a) {
+                assertFalse(fresh.hasPermission(permissions[p], others[a]), "non-root before setup");
+            }
+        }
     }
 
     function testBoardManagesRosterAndRemovalPreservesDirector() public {
@@ -234,5 +272,42 @@ contract CorporateAuthTest is Test {
         assertFalse(auth.hasPermission(CorporateAuth.SIGN_AS_OFFICER, account));
         assertFalse(auth.hasPermission(CorporateAuth.APPROVE_UPGRADE, account));
         assertFalse(auth.hasPermission(CorporateAuth.CONFIGURE_PROTOCOL, account));
+    }
+
+    function _permissionTable() internal pure returns (bytes32[12] memory permissions, uint8[12] memory expected) {
+        uint8 rootBit = 1 << 0;
+        uint8 boardBit = 1 << 1;
+        uint8 officerBit = 1 << 2;
+        uint8 dealBit = 1 << 5;
+        uint8 roundBit = 1 << 6;
+
+        permissions = [
+            CorporateAuth.CONFIGURE_PROTOCOL,
+            CorporateAuth.APPROVE_UPGRADE,
+            CorporateAuth.MANAGE_OFFICERS,
+            CorporateAuth.SIGN_AS_OFFICER,
+            CorporateAuth.COMPANY_OPERATIONS,
+            CorporateAuth.MANAGE_DEALS,
+            CorporateAuth.MANAGE_ROUNDS,
+            CorporateAuth.TRANSFER_POLICY,
+            CorporateAuth.MANAGE_SECURITY_CLASSES,
+            CorporateAuth.ISSUE_SECURITIES,
+            CorporateAuth.ADMINISTER_CERTIFICATES,
+            keccak256("UNKNOWN_PERMISSION")
+        ];
+        expected = [
+            rootBit,
+            rootBit,
+            rootBit | boardBit,
+            officerBit,
+            officerBit,
+            officerBit,
+            officerBit,
+            officerBit,
+            officerBit | roundBit,
+            officerBit | dealBit | roundBit,
+            officerBit | dealBit | roundBit,
+            0
+        ];
     }
 }
