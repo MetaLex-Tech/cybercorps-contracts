@@ -132,14 +132,15 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
         return 0;
     }
 
+    /// @notice Root alone holds CONFIGURE_PROTOCOL and APPROVE_UPGRADE, also during setup.
+    /// After setup, root also holds MANAGE_OFFICERS. All other permissions come from roles.
     function hasPermission(bytes32 permission, address account) public view returns (bool) {
-        if (
-            permission == CorporateAuth.CONFIGURE_PROTOCOL || permission == CorporateAuth.APPROVE_UPGRADE
-                || permission == CorporateAuth.MANAGE_OFFICERS && setupComplete && account == rootAuthority
-        ) {
+        if (permission == CorporateAuth.CONFIGURE_PROTOCOL || permission == CorporateAuth.APPROVE_UPGRADE) {
             return account == rootAuthority;
         }
-        return setupComplete && memberships[account] & rolesForPermission(permission) != 0;
+        if (!setupComplete) return false;
+        if (permission == CorporateAuth.MANAGE_OFFICERS && account == rootAuthority) return true;
+        return memberships[account] & rolesForPermission(permission) != 0;
     }
 
     function requirePermission(bytes32 permission, address account) external view {
