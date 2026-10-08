@@ -98,6 +98,24 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
         return role != 0 && role & ~CorporateAuth.ALL_ROLES == 0 && memberships[account] & role == role;
     }
 
+    /// @notice Permission table. Note this is static until upgrading to a new implementation
+    ///
+    /// | Permission              | Root | Board | Officer | Deal Mgr | Round Mgr |
+    /// |-------------------------|------|-------|---------|----------|-----------|
+    /// | CONFIGURE_PROTOCOL      | yes  |       |         |          |           |
+    /// | APPROVE_UPGRADE         | yes  |       |         |          |           |
+    /// | MANAGE_OFFICERS         | yes  | yes   |         |          |           |
+    /// | SIGN_AS_OFFICER         |      |       | yes     |          |           |
+    /// | COMPANY_OPERATIONS      |      |       | yes     |          |           |
+    /// | MANAGE_DEALS            |      |       | yes     |          |           |
+    /// | MANAGE_ROUNDS           |      |       | yes     |          |           |
+    /// | TRANSFER_POLICY         |      |       | yes     |          |           |
+    /// | MANAGE_SECURITY_CLASSES |      |       | yes     |          | yes       |
+    /// | ISSUE_SECURITIES        |      |       | yes     | yes      | yes       |
+    /// | ADMINISTER_CERTIFICATES |      |       | yes     | yes      | yes       |
+    ///
+    /// - The Root column is in hasPermission, not here. Root is an address, not a real role.
+    /// - DIRECTOR and ISSUANCE_MANAGER give no permission.
     function rolesForPermission(bytes32 permission) public pure returns (uint256) {
         if (permission == CorporateAuth.MANAGE_OFFICERS) return CorporateAuth.BOARD_EXECUTOR;
         if (

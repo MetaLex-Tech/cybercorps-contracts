@@ -236,7 +236,9 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             companyContactDetails, defaultDisputeResolution, _companyPayable, _officer, address(0), address(0));
     }
 
-    /// @notice Explicit new-deployment path. Root and board authority are committed into the salt.
+    /// @notice Deploys a new company on the v2 auth model.
+    /// @dev The salt includes the root and the board. A different root or board gives different addresses.
+    // TODO: State who is the expected root: MetaLeX, the founder, a company multisig, or else?
     function deployCyberCorpWithGovernance(
         bytes32 salt, string memory companyName, string memory companyType,
         string memory companyJurisdiction, string memory companyContactDetails,
