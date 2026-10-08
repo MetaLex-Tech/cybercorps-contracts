@@ -109,7 +109,7 @@ contract CorporateFactoryTest is Test {
         assertFalse(auth.hasPermission(CorporateAuth.CONFIGURE_PROTOCOL, address(factory)));
         assertFalse(auth.hasPermission(CorporateAuth.MANAGE_OFFICERS, address(factory)));
         assertFalse(auth.hasPermission(CorporateAuth.APPROVE_UPGRADE, address(dealManager)));
-        assertFalse(auth.hasPermission(CorporateAuth.MANAGE_SECURITY_CLASSES, address(dealManager)));
+        assertTrue(auth.hasPermission(CorporateAuth.MANAGE_SECURITY_CLASSES, address(dealManager)));
         assertTrue(auth.hasPermission(CorporateAuth.ISSUE_SECURITIES, address(dealManager)));
         assertTrue(auth.hasPermission(CorporateAuth.MANAGE_SECURITY_CLASSES, address(round)));
     }

@@ -304,7 +304,7 @@ contract CorporateAuthTest is Test {
             officerBit,
             officerBit,
             officerBit,
-            officerBit | roundBit,
+            officerBit | dealBit | roundBit,
             officerBit | dealBit | roundBit,
             officerBit | dealBit | roundBit,
             0

@@ -13,7 +13,7 @@ CyberCorp is the sole narrow controller of officer membership. Root and board ap
 - MANAGE_OFFICERS: board executor, with root as an explicit governance override.
 - SIGN_AS_OFFICER and company operations: officer membership.
 - CONFIGURE_PROTOCOL and APPROVE_UPGRADE: root only.
-- MANAGE_SECURITY_CLASSES: officers and round manager (round creation creates printers).
+- MANAGE_SECURITY_CLASSES: officers, deal manager and round manager (new-certs deals and round creation create printers).
 - ISSUE_SECURITIES: officers, deal manager and round manager.
 - ADMINISTER_CERTIFICATES: officers, deal manager and round manager (settlement locks and register operations).
 - MANAGE_DEALS and MANAGE_ROUNDS: officers.

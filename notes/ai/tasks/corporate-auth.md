@@ -29,7 +29,7 @@ All tests cover the dirty implementation on base d28a602d4afb01fbeacaafadc313a61
 
 ## Manager permission tests (2026-10-08, Claude Code)
 
-`test/CorporateAuthManagerFlows.t.sol` runs deal, round and secondary-trade flows on a company from `deployCyberCorpWithGovernance`, plus a full permission matrix and refusals at real gates. Coverage map: `specs/analysis/auth-v2.md`. Result: 9 pass, 1 fails. `DealManager.proposeAndSignNewCertsDeal` reverts with `PermissionDenied(MANAGE_SECURITY_CLASSES, dealManager)` because the DealManager calls `IM.createCertPrinter`. The fix is an open decision for the user. Do not change the table or the test until the user chooses.
+`test/CorporateAuthManagerFlows.t.sol` runs deal, round and secondary-trade flows on a company from `deployCyberCorpWithGovernance`, plus a full permission matrix and refusals at real gates. Coverage map: `specs/analysis/auth-v2.md`. First result: `DealManager.proposeAndSignNewCertsDeal` reverted with `PermissionDenied(MANAGE_SECURITY_CLASSES, dealManager)` because the DealManager calls `IM.createCertPrinter`. The user chose to add `DEAL_MANAGER` to `MANAGE_SECURITY_CLASSES` in `BorgAuthV2.rolesForPermission`. The permission matrix and the factory assertion now expect that grant. `testPermissionMatrix` and `testNoPermissionBeforeSetup` live in `test/CorporateAuth.t.sol`.
 
 ## Remaining gates and handoff
 

@@ -110,7 +110,7 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
     /// | MANAGE_DEALS            |      |       | yes     |          |           |
     /// | MANAGE_ROUNDS           |      |       | yes     |          |           |
     /// | TRANSFER_POLICY         |      |       | yes     |          |           |
-    /// | MANAGE_SECURITY_CLASSES |      |       | yes     |          | yes       |
+    /// | MANAGE_SECURITY_CLASSES |      |       | yes     | yes      | yes       |
     /// | ISSUE_SECURITIES        |      |       | yes     | yes      | yes       |
     /// | ADMINISTER_CERTIFICATES |      |       | yes     | yes      | yes       |
     ///
@@ -123,10 +123,10 @@ contract BorgAuthV2 is BorgAuth, UUPSUpgradeable {
                 || permission == CorporateAuth.MANAGE_DEALS || permission == CorporateAuth.MANAGE_ROUNDS
                 || permission == CorporateAuth.TRANSFER_POLICY
         ) return CorporateAuth.OFFICER;
-        if (permission == CorporateAuth.MANAGE_SECURITY_CLASSES) {
-            return CorporateAuth.OFFICER | CorporateAuth.ROUND_MANAGER;
-        }
-        if (permission == CorporateAuth.ISSUE_SECURITIES || permission == CorporateAuth.ADMINISTER_CERTIFICATES) {
+        if (
+            permission == CorporateAuth.MANAGE_SECURITY_CLASSES || permission == CorporateAuth.ISSUE_SECURITIES
+                || permission == CorporateAuth.ADMINISTER_CERTIFICATES
+        ) {
             return CorporateAuth.OFFICER | CorporateAuth.DEAL_MANAGER | CorporateAuth.ROUND_MANAGER;
         }
         return 0;
