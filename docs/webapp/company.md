@@ -479,11 +479,20 @@ contract:
 * **Legal-owner index.** Until it is backfilled, converting scrip back
   to a LET can fail or draw on the shared scrip vault instead of the
   holder's own positions.
-* **LeXcheX badge.** If the company has a holder cap configured, the
-  badge is wired before the holders are counted. The tally then reads
-  each holder's beneficial-owner count, U.S. status and credential
-  expiry from the badge. Otherwise wiring it is optional; after a late
-  wiring, **Recount** counts the holders again.
+* **LeXcheX credential registry (funds and SPVs only).** This step
+  matters only for a fund or SPV that relies on an Investment Company
+  Act exclusion, such as §3(c)(1) with its limit of 100 beneficial
+  owners (250 for a qualifying venture capital fund). An operating
+  company does not rely on these exclusions and can skip it. Until the
+  LET contract is connected to the LeXcheX credential registry, the
+  holder tally counts every holder of record as one U.S. owner. Once it
+  is connected, the tally reads each holder's number of beneficial
+  owners, U.S. status and credential expiry from the holder's LeXcheX
+  credentials. If the company has a holder cap configured, the
+  checklist lists this step as required and runs it before the holders
+  are counted. Otherwise it sits, collapsed, under **Funds and SPVs
+  only** with a **Connect LeXcheX registry** button. If you connect it
+  after the holders were counted, **Recount** counts them again.
 * **Holder tally.** The count a holder-cap check reads, including
   whether a buyer already holds the class. Until it is backfilled, the
   check undercounts existing holders and can admit a buyer although the
@@ -493,9 +502,9 @@ Until the holder counters, legal-owner index and holder tally of a LET
 contract are complete, the app refuses issuance, deal settlement and
 scrip conversion on it, and mission control shows **Migrate N LET
 contracts after the v5 upgrade**. With a holder cap, the tally is
-complete only when it agrees with the badge for every counted holder.
-Anyone can send the index and tally backfills; the counters and the
-badge need the owner or admin role.
+complete only when it agrees with the LeXcheX credentials of every
+counted holder. Anyone can send the index and tally backfills; the
+counters and the registry connection need the owner or admin role.
 Holders can still call the contract directly, which is why the Safe
 batch carries these calls in the same transaction as the upgrade.
 
