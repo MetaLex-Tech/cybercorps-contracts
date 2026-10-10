@@ -28,7 +28,7 @@ larger areas have their own guides: [the boardRoom](boardroom.md),
 [cyberRAISE](cyberraise.md).
 
 Stakeholders join through invitation links from the cap table's
-**Invitations** panel. Claiming one attaches the stakeholder's wallet to
+**More → Invitations** panel. Claiming one attaches the stakeholder's wallet to
 their record and opens **My holdings**, where they see their own
 positions, Ledger Entry Tokens (LETs), documents and grants.
 [For holders](holders.md) covers that side of the app.

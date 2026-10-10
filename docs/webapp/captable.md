@@ -123,19 +123,36 @@ each with its own review dialog.
   only be the survivor. Display labels derive from the class/series, so
   renaming a line's stored legal name in **Class terms** is safe.
 
+## The header controls
+
+The cap table header has one lime button, **+ Add position**, and four
+muted menus beside the **Securities status** link:
+
+| Control | What it opens |
+| --- | --- |
+| **+ Add position** | The position form in one click. Its arrow (▾) opens a menu with **Stakeholder** and **Position**. |
+| **Import** | **Import file (.csv / .xlsx / OCF)**, **Blank template (.csv)**, **Blank template (.xlsx)** |
+| **Compliance** | **409A / FMV**, **Rule 701**, **Option exercises (Form 3921)**, **83(b) elections**, **§219 stockholder list** (see [Cap table records, modeling and compliance](captable-tools.md)) |
+| **Export** | **CSV (.csv)**, **Excel (.xlsx)**, **OCF package (.zip)** |
+| **More** | **Link wallets**, **Invitations**, **Token config**, **Reset ledger** |
+
+**Export** is disabled until the table has loaded. Each item opens its
+panel below the header, and the panel has its own close control.
+
 ## Stakeholders
 
 A **stakeholder** has a name, an optional email and mailing address, a
 relationship (founder, investor, employee and so on) and any number of
-linked wallets. Wallets join the two halves of the table: a LET whose
-holder wallet a stakeholder has linked appears under that stakeholder. A
-LET that matches no one shows an **unmatched wallet** badge with a
-one-click path to a new stakeholder, and the **Link Wallets** panel
-matches in bulk. A wallet belongs to one stakeholder at most.
+linked wallets. **+ Add position ▾ → Stakeholder** records one. Wallets
+join the two halves of the table: a LET whose holder wallet a stakeholder
+has linked appears under that stakeholder. A LET that matches no one
+shows an **unmatched wallet** badge with a one-click path to a new
+stakeholder, and **More → Link wallets** matches in bulk. A wallet
+belongs to one stakeholder at most.
 
 ### Invite a stakeholder to the holder portal
 
-The **Invitations** panel generates a private onboarding link per
+**More → Invitations** generates a private onboarding link per
 stakeholder. The app never emails it, so you send it through a channel
 you trust. The invitee connects a wallet and signs in with SIWE, which
 attaches the wallet to their record and opens their
@@ -148,7 +165,7 @@ prices. Both are off until you turn them on.
 
 ## Record a position
 
-**+ Add Position** records an untokenized position offchain, with no
+**+ Add position** records an untokenized position offchain, with no
 transaction. The form takes:
 
 * the **class**, with inline creation of classes and series. A new class
@@ -181,9 +198,10 @@ holding, and removes it for good.
 
 ## Import a cap table
 
-The **Import** panel takes `.csv` and `.xlsx` sheets (blank templates
-are on the toolbar) and OCF (Open Cap Table Format) as a `.json` bundle
-or the `.zip` that Carta or Pulley export. You give each row an action
+**Import → Import file** opens the import panel. It takes `.csv` and
+`.xlsx` sheets (**Import → Blank template (.csv)** and **Blank template
+(.xlsx)** download empty ones) and OCF (Open Cap Table Format) as a
+`.json` bundle or the `.zip` that Carta or Pulley export. You give each row an action
 before anything is written: create an offchain record, update an
 existing position (rows exported from this app carry a `position_id`),
 link to an existing LET instead of duplicating it, or skip.
@@ -210,7 +228,7 @@ commit.
 
 ## Reset the offchain records
 
-**Reset Ledger** opens *Clear offchain cap-table records?*, which clears
+**More → Reset ledger** opens *Clear offchain cap-table records?*, which clears
 the removable offchain positions, stakeholders, classes and plans so you
 can re-import. Tokenized positions, positions tied to a live MetaVesT
 escrow, and the audit journal (which dated stockholder lists use) are
@@ -421,8 +439,8 @@ derived live from the cap table and the chain:
 
 ## Exports
 
-The toolbar exports the full table, history included, as `.csv`,
-`.xlsx` or an OCF bundle. Each export records when it was generated, its
+The **Export** menu (**CSV (.csv)**, **Excel (.xlsx)** and **OCF package
+(.zip)**) exports the full table, history included. Each export records when it was generated, its
 record date if any, and the indexer block its onchain rows were read at
 and whether that block was final.
 
@@ -442,8 +460,9 @@ which record is the company's securities ledger. A row mirroring a LET
 offers **Download certificate**, a PDF rendering of the indexed LET that
 tells the reader to verify its status onchain.
 
-The §219 stockholder list, 409A and FMV records, the Rule 701 and Form
-3921 monitors, 83(b) tracking and the scenario calculators are in
+The **Compliance** menu's panels (the §219 stockholder list, 409A and FMV
+records, the Rule 701 and Form 3921 monitors and 83(b) tracking) and the
+scenario calculators are in
 [Cap table records, modeling and compliance](captable-tools.md).
 
 > **Under the hood.** Tokenized rows are

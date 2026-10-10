@@ -4,8 +4,9 @@ description: Stockholder lists, 409A and Rule 701 records, tax trackers, token c
 
 # Cap table records, modeling and compliance
 
-A corporation's [cap table](captable.md) has toolbar panels and tabs for
-records and analysis. They are offchain and free. Each one records what
+A corporation's [cap table](captable.md) has a **Compliance** menu in its
+header, a **Token config** item under **More**, and tabs for records and
+analysis. They are offchain and free. Each one records what
 you enter and does the arithmetic. None is a valuation, a filing or
 legal advice, and each panel says so where a legal judgment is
 involved. The
@@ -16,7 +17,8 @@ these tools (see [LLC cap tables](captable.md#llc-cap-tables)).
 
 ## DGCL §219 stockholder list
 
-**§219 List** reconstructs the registered record holders of issued and
+**Compliance → §219 stockholder list** reconstructs the registered record
+holders of issued and
 outstanding stock as of any record date, from offchain cap table changes
 and the onchain history of Ledger Entry Tokens (LETs) through that date.
 Scrip holders are left out because scrip is not stock until it is
@@ -43,21 +45,22 @@ list was read at.
 
 ## 409A and FMV records
 
-**409A / FMV** records fair-market-value evidence the issuer provides:
+**Compliance → 409A / FMV** records fair-market-value evidence the issuer
+provides:
 the provider, the FMV per common share, effective and expiration dates,
 and a privately stored PDF of the valuation report. Records are
 append-only, so a replaced valuation is marked superseded instead of
 edited.
 
-The current FMV feeds option grants. The Add Position form shows a green
+The current FMV feeds option grants. The **+ Add position** form shows a green
 banner when a current 409A covers a new option grant and an amber one
 when none does.
 
 ## Rule 701 disclosure monitor
 
-Awards tagged with the **Rule 701** federal exemption feed a rolling
-monitor of the trailing and peak 12-month totals against the $10M
-federal disclosure threshold. Options are valued at exercise price and
+**Compliance → Rule 701** is a rolling monitor of the trailing and peak
+12-month totals of awards tagged with the **Rule 701** federal exemption,
+against the $10M federal disclosure threshold. Options are valued at exercise price and
 other awards at the issuer-recorded FMV covering the grant date. Missing
 data is never inferred: a "resolve before relying on the total" list
 names every position whose data would change the answer. The panel
@@ -66,7 +69,8 @@ for Rule 701 is a question for counsel.
 
 ## Option exercises and Form 3921
 
-**Option Exercises / 3921** records immutable exercise facts from mined
+**Compliance → Option exercises (Form 3921)** records immutable exercise
+facts from mined
 MetaVesT events (who exercised, how much, at what strike, when) and
 counts what a filing export would still need: grant dates, strikes and
 exercise-date FMV. If the recipient's browser failed to save an exercise,
@@ -80,7 +84,8 @@ identifier.
 
 ## 83(b) election tracker
 
-For issued vesting restricted-stock awards, **83(b)** tracks the 30-day
+For issued vesting restricted-stock awards, **Compliance → 83(b)
+elections** tracks the 30-day
 election window and stores the filing evidence the issuer reports: a
 filing date, the submission method and a required PDF. It counts pending
 windows, past-due awards with no evidence, and filings on record. The
@@ -146,7 +151,7 @@ no ratio ("A null ratio is unknown, never 1:1.").
 
 The **Token cap table** tab tracks project-token claims (SAFTs, SAFTEs,
 token warrants) apart from company equity, against the token facts you
-record in **Token config**: name, ticker, network, decimals, total
+record in **More → Token config**: name, ticker, network, decimals, total
 supply, launch date and address, any of which can stay blank until
 fixed. Fixed claims calculate from those facts. Model-based claims (minimum percentages
 implied by an instrument's formula) display their recorded terms and
