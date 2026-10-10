@@ -136,8 +136,9 @@ muted menus beside the **Securities status** link:
 | **Export** | **CSV (.csv)**, **Excel (.xlsx)**, **OCF package (.zip)** |
 | **More** | **Link wallets**, **Invitations**, **Token config**, **Reset ledger** |
 
-**Export** is disabled until the table has loaded. Each item opens its
-panel below the header, and the panel has its own close control.
+**Export** is disabled until the table has loaded. The two blank-template
+items and the three Export items download a file. Every other item opens
+its panel below the header, and the panel has its own close control.
 
 ## Stakeholders
 
