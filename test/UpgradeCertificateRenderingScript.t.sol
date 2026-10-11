@@ -151,6 +151,13 @@ contract UpgradeCertificateRenderingScriptTest is Test {
         );
     }
 
+    /// @notice The final check that the wired image builder shows series names.
+    function testSeriesNameCheckRefusesAnImageBuilderWithoutV3() public {
+        assertFalse(script.rendersSeriesNames(address(new PreviousImageRenderer())));
+        assertFalse(script.rendersSeriesNames(address(0x1234)));
+        assertTrue(script.rendersSeriesNames(address(new CertificateImageBuilderContract())));
+    }
+
     function testRejectsWrongChain() public {
         vm.expectRevert(
             abi.encodeWithSelector(DeploymentScript.ChainIdMismatch.selector, block.chainid + 1, block.chainid)

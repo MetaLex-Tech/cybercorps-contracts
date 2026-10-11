@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {CertificateSVGParamsV2} from "../src/CyberCorpConstants.sol";
+import {ICertificateImageBuilderV3} from "../src/interfaces/ICertificateImageBuilder.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
 import {ERC1967ProxyLib} from "../test/libs/ERC1967ProxyLib.sol";
@@ -52,6 +54,13 @@ contract UpgradeCertificateUriBuilder is Script {
         require(proxy.getErc1967Implementation() == implementation, "Implementation update failed");
         require(uriBuilder.imageBuilder() == imageBuilder, "Image builder update failed");
         require(address(uriBuilder.AUTH()) == address(auth), "AUTH changed unexpectedly");
+        // The URI renderer shows a certificate's own series name only through buildCertificateSVGV3.
+        CertificateSVGParamsV2 memory params;
+        require(
+            bytes(ICertificateImageBuilderV3(imageBuilder).buildCertificateSVGV3(params, 0, "Series Seed 2")).length
+                != 0,
+            "Image builder lacks buildCertificateSVGV3"
+        );
 
         console.log("New implementation:", implementation);
         console.log("New image builder:", imageBuilder);

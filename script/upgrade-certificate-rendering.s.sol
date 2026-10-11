@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {CertificateSVGParamsV2} from "../src/CyberCorpConstants.sol";
+import {ICertificateImageBuilderV3} from "../src/interfaces/ICertificateImageBuilder.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {DeploymentScript} from "./libs/DeploymentScript.sol";
 import {DeploymentUtils} from "./libs/DeploymentUtils.sol";
@@ -18,6 +20,8 @@ import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UU
 ///      Import that batch only after the deployments have been broadcast successfully.
 ///      Forge deploys/links CertificateImageContentBuilder, which the image renderer depends on.
 ///      Set --sender to the address of PRIVATE_KEY_MAIN so linked-library deployments use the same signer.
+///      The URI renderer shows a certificate's own series name only through the image builder's
+///      buildCertificateSVGV3, so the script refuses to finish with an image builder that lacks it.
 contract UpgradeCertificateRenderingScript is DeploymentScript {
     function run() external {
         address proxy = vm.envOr("URI_BUILDER", address(0));
@@ -90,6 +94,7 @@ contract UpgradeCertificateRenderingScript is DeploymentScript {
         require(implementationOf(proxy) == implementation, "URI implementation update failed");
         require(builder.imageBuilder() == image, "Image builder update failed");
         require(address(builder.AUTH()) == auth, "AUTH changed unexpectedly");
+        require(rendersSeriesNames(image), "Image builder lacks buildCertificateSVGV3");
         // finish writes only nonempty batches. Clear any prior actionable batch on a direct/no-op run.
         if (safeTxs.length == 0) {
             vm.writeFile(jsonPath, DeploymentUtils.formatSafeTxJson(safeTxs, chainId));
@@ -97,5 +102,18 @@ contract UpgradeCertificateRenderingScript is DeploymentScript {
         console2.log("Verified URI implementation (simulation):", implementation);
         console2.log("Verified image builder (simulation):", image);
         return safeTxs;
+    }
+
+    /// @notice True when `image` renders a certificate with a free-text series name.
+    function rendersSeriesNames(address image) public view returns (bool) {
+        if (image.code.length == 0) return false;
+        CertificateSVGParamsV2 memory params;
+        try ICertificateImageBuilderV3(image).buildCertificateSVGV3(params, 0, "Series Seed 2") returns (
+            string memory svg
+        ) {
+            return bytes(svg).length != 0;
+        } catch {
+            return false;
+        }
     }
 }
