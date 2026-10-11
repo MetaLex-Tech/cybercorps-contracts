@@ -49,7 +49,11 @@ import "./CertificateImageBuilder.sol";
 /// @notice Standalone contract for building certificate SVG images
 /// @dev Deployed separately to reduce CertificateUriBuilder contract size;
 ///      delegates rendering to the shared CertificateImageBuilder library
-contract CertificateImageBuilderContract is ICertificateImageBuilder, ICertificateImageBuilderV2 {
+contract CertificateImageBuilderContract is
+    ICertificateImageBuilder,
+    ICertificateImageBuilderV2,
+    ICertificateImageBuilderV3
+{
 
     /// @inheritdoc ICertificateImageBuilder
     function buildCertificateSVG(
@@ -58,12 +62,21 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder, ICertifica
     ) external pure override returns (string memory) {
         CertificateSVGParamsV2 memory enriched;
         enriched.certificate = params;
-        return CertificateImageBuilder.buildCertificateSVG(enriched, timestamp);
+        return CertificateImageBuilder.buildCertificateSVG(enriched, timestamp, "");
     }
 
     function buildCertificateSVGV2(CertificateSVGParamsV2 calldata params, uint256 timestamp)
         external pure override returns (string memory)
     {
-        return CertificateImageBuilder.buildCertificateSVG(params, timestamp);
+        return CertificateImageBuilder.buildCertificateSVG(params, timestamp, "");
+    }
+
+    /// @inheritdoc ICertificateImageBuilderV3
+    function buildCertificateSVGV3(
+        CertificateSVGParamsV2 calldata params,
+        uint256 timestamp,
+        string calldata seriesName
+    ) external pure override returns (string memory) {
+        return CertificateImageBuilder.buildCertificateSVG(params, timestamp, seriesName);
     }
 }

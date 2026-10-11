@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity ^0.8.28;
 
 import "./CyberCorpConstants.sol";
+import {CertificateSeries} from "./libs/CertificateSeries.sol";
 import {CertificateText} from "./libs/CertificateText.sol";
 import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
 
@@ -49,9 +50,14 @@ import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
 /// @notice Helper library generating the gradient defs and dynamic text content
 ///         of the "Ledger Entry Token" certificate SVG
 library CertificateImageContentBuilder {
+    /// @dev Longest series name, in code points, that the class and series line shows before "...".
+    uint256 private constant SERIES_NAME_LIMIT = 48;
+
+    /// @param seriesName The certificate's own series name. Empty shows the fixed label of the series enum.
     function buildSVGContent(
         CertificateSVGParamsV2 memory params,
-        uint256 timestamp
+        uint256 timestamp,
+        string memory seriesName
     ) public pure returns (string memory) {
         string memory dateStr = _formatDate(timestamp);
 
@@ -60,7 +66,7 @@ library CertificateImageContentBuilder {
             '<rect width="1" height="31" transform="translate(511 391)" fill="url(#paint0_linear_62908_10123)"/>',
             '<g font-family="system-ui">',
             _buildHeaderText(params),
-            _buildPartiesText(params),
+            _buildPartiesText(params, seriesName),
             _buildStatsText(params, dateStr),
             _buildOfficerText(params),
             _buildRestrictionsText(params.transferRestrictions),
@@ -133,7 +139,10 @@ library CertificateImageContentBuilder {
         ));
     }
 
-    function _buildPartiesText(CertificateSVGParamsV2 memory params) private pure returns (string memory) {
+    function _buildPartiesText(
+        CertificateSVGParamsV2 memory params,
+        string memory seriesName
+    ) private pure returns (string memory) {
         return string(abi.encodePacked(
             '<text x="230" y="318" font-size="14" fill="#9A9A98">Issuer </text>',
             '<text x="230" y="344" font-size="16" fill="#f2f2f2">', CertificateText.xml(params.certificate.corpName, 26), ' </text>',
@@ -143,7 +152,10 @@ library CertificateImageContentBuilder {
             '<text x="630" y="364" font-size="11" fill="#9A9A98">', _truncatedAddress(params.ownerAddress), '</text>',
             '<text x="470" y="418" font-size="14" fill="#9A9A98">Class</text>',
             '<text x="519" y="418" font-size="14" fill="#9A9A98">Series</text>',
-            '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityClassToString(params.certificate.securityType), ' ', _securitySeriesToString(params.certificate.securitySeries), '</text>'
+            // The class, a space, then the series text: "Preferred Stock Series Seed 2". The stored name is
+            // shown as it is, so a name that starts with "Series" does not become "Series Series ...".
+            '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityClassToString(params.certificate.securityType), ' ',
+            CertificateText.xml(CertificateSeries.text(seriesName, params.certificate.securitySeries), SERIES_NAME_LIMIT), '</text>'
         ));
     }
 
@@ -202,20 +214,6 @@ library CertificateImageContentBuilder {
         if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Restricted Token Purchase Agreement";
         if (_class == SecurityClass.RestrictedTokenUnit) return "Restricted Token Unit";
         return "Unknown";
-    }
-
-    function _securitySeriesToString(SecuritySeries _series) private pure returns (string memory) {
-        if (_series == SecuritySeries.SeriesPreSeed) return "Pre-Seed";
-        if (_series == SecuritySeries.SeriesSeed) return "Series Seed";
-        if (_series == SecuritySeries.SeriesA) return "Series A";
-        if (_series == SecuritySeries.SeriesB) return "Series B";
-        if (_series == SecuritySeries.SeriesC) return "Series C";
-        if (_series == SecuritySeries.SeriesD) return "Series D";
-        if (_series == SecuritySeries.SeriesE) return "Series E";
-        if (_series == SecuritySeries.SeriesF) return "Series F";
-        if (_series == SecuritySeries.NA) return "";
-        if (_series == SecuritySeries.ACE) return "ACE";
-        return "";
     }
 
     function _getBaseUnit(SecurityClass _class) private pure returns (string memory) {

@@ -61,3 +61,14 @@ interface ICertificateImageBuilderV2 {
         external pure returns (string memory);
 }
 
+interface ICertificateImageBuilderV3 {
+    /// @notice Builds the V2 certificate SVG with the certificate's own series name after the class
+    /// @param seriesName The free-text series name. Empty shows the fixed label of
+    ///        `params.certificate.securitySeries`, so the result is the same as `buildCertificateSVGV2`.
+    function buildCertificateSVGV3(
+        CertificateSVGParamsV2 calldata params,
+        uint256 timestamp,
+        string calldata seriesName
+    ) external pure returns (string memory);
+}
+

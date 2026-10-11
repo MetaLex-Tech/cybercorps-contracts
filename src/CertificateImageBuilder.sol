@@ -58,15 +58,17 @@ library CertificateImageBuilder {
         ));
     }
 
+    /// @param seriesName The certificate's own series name. Empty shows the fixed label of the series enum.
     function buildCertificateSVG(
         CertificateSVGParamsV2 memory params,
-        uint256 timestamp
+        uint256 timestamp,
+        string memory seriesName
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(
             _getSVGHeader(),
             _getSVGFrame(params.isVoided, params.statusKnown),
             '</g>',
-            CertificateImageContentBuilder.buildSVGContent(params, timestamp),
+            CertificateImageContentBuilder.buildSVGContent(params, timestamp, seriesName),
             '</svg>'
         ));
     }
