@@ -12,7 +12,11 @@ import {
     RestrictionType,
     RestrictiveLegend
 } from "../src/interfaces/ILedgerEntryToken.sol";
-import {ICertificateImageBuilder, ICertificateImageBuilderV2} from "../src/interfaces/ICertificateImageBuilder.sol";
+import {
+    ICertificateImageBuilder,
+    ICertificateImageBuilderV2,
+    ICertificateImageBuilderV3
+} from "../src/interfaces/ICertificateImageBuilder.sol";
 import {MockCyberCorp, MockIssuanceManager} from "./CyberCertPrinterTest.t.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CertificateDetails, ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
@@ -322,6 +326,8 @@ contract CertificateSvgCompatibilityTest is Test {
     function testLegacyImageSelectorAndFallbackRemainCallable() public {
         CertificateSVGParamsV2 memory p = _params();
         assertTrue(_contains(image.buildCertificateSVG(p.certificate, 1709164800), "Ledger Entry Token"));
+        // A builder with neither V3 nor V2 has only the V1 selector.
+        vm.mockCallRevert(address(image), abi.encodeWithSelector(ICertificateImageBuilderV3.buildCertificateSVGV3.selector), hex"");
         vm.mockCallRevert(address(image), abi.encodeWithSelector(ICertificateImageBuilderV2.buildCertificateSVGV2.selector), hex"");
         assertEq(vm.parseJsonString(_json(false, false), ".image"), "");
         vm.mockCall(TOKEN, abi.encodeWithSignature("issueTimestamp(uint256)", 1), abi.encode(uint64(1709164800)));

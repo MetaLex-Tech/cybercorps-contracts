@@ -12,6 +12,11 @@ library MetadataCall {
         if (!ok) revert UnavailableMetadata();
     }
 
+    /// @dev The return data, or empty bytes when the call fails or returns more than the bound.
+    function tryRead(address target, bytes memory input) internal view returns (bytes memory output) {
+        (, output) = probe(target, input);
+    }
+
     function word(address target, bytes memory input) internal view returns (bool ok, uint256 value) {
         bytes memory output;
         (ok, output) = probe(target, input);

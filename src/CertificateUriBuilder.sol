@@ -61,6 +61,7 @@ import {
     ICertificateExtensionV3
 } from "./storage/extensions/ICertificateExtension.sol";
 import "./libs/auth.sol";
+import {CertificateSeries} from "./libs/CertificateSeries.sol";
 import {JsonLib} from "./libs/JsonLib.sol";
 import {MetadataCall} from "./libs/MetadataCall.sol";
 
@@ -69,6 +70,15 @@ interface ICertificateUnitsReserved {
 }
 
 contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
+
+    // Extension types whose data holds a free-text series name. Constants use no storage.
+    bytes32 private constant SHARE = keccak256("SHARE");
+    bytes32 private constant SHARE_V3 = keccak256("SHARE_V3");
+    bytes32 private constant SAFE_V3 = keccak256("SAFE_V3");
+    bytes32 private constant SAFT_V3 = keccak256("SAFT_V3");
+    bytes32 private constant SAFTE_V3 = keccak256("SAFTE_V3");
+    bytes32 private constant TOKEN_WARRANT_V3 = keccak256("TOKEN_WARRANT_V3");
+    bytes32 private constant ACE_SAFE_V3 = keccak256("ACE_SAFE_V3");
 
     /// @notice Address of the external image builder contract
     address public imageBuilder;
@@ -347,12 +357,43 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         return ok && value <= 253402300799 ? value : 0;
     }
 
+    /// @notice The certificate's own free-text series name, or "" when its extension stores none.
+    /// @dev A V1 share payload starts with `terms.seriesName`. The `resolveCert` result of a share, SAFE,
+    ///      SAFT, SAFTE, token warrant or ACE SAFE V3 extension starts with the resolved terms or the series
+    ///      data, and their first field is the name. The V3 extension resolves its own scopes, so a
+    ///      cert-level name overrides the series name. Any other extension gives "". A failed call or
+    ///      malformed data also gives "" and does not revert. The renderers then show the fixed label.
+    function _seriesName(address certificate, uint256 tokenId, address extension, bytes memory certData)
+        private
+        view
+        returns (string memory)
+    {
+        if (extension == address(0)) return "";
+        bytes32[6] memory v3Types = [SHARE_V3, SAFE_V3, SAFT_V3, SAFTE_V3, TOKEN_WARRANT_V3, ACE_SAFE_V3];
+        for (uint256 i; i < v3Types.length; ++i) {
+            if (_supports(extension, v3Types[i])) {
+                return CertificateSeries.leadingName(MetadataCall.tryRead(
+                    extension, abi.encodeWithSignature("resolveCert(address,uint256)", certificate, tokenId)
+                ));
+            }
+        }
+        return _supports(extension, SHARE) ? CertificateSeries.leadingName(certData) : "";
+    }
+
+    function _supports(address extension, bytes32 extensionType) private view returns (bool) {
+        (bool ok, uint256 value) = MetadataCall.word(
+            extension, abi.encodeCall(ICertificateExtension.supportsExtensionType, (extensionType))
+        );
+        return ok && value == 1;
+    }
+
     function _buildImage(
         CertificateSVGParams memory certificate,
         RestrictiveLegend[] memory legends,
         address token,
         address owner,
-        uint256 consideration
+        uint256 consideration,
+        string memory seriesName
     ) private view returns (string memory) {
         CertificateSVGParamsV2 memory params;
         params.certificate = certificate;
@@ -370,9 +411,16 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         params.isVoided = params.statusKnown && status == 1;
         uint256 timestamp = _issueTimestamp(token, certificate.tokenId);
         string memory svg = _optionalString(
-            imageBuilder, abi.encodeCall(ICertificateImageBuilderV2.buildCertificateSVGV2, (params, timestamp))
+            imageBuilder,
+            abi.encodeCall(ICertificateImageBuilderV3.buildCertificateSVGV3, (params, timestamp, seriesName))
         );
         // Allows upgrading the URI implementation before the image builder, and rolling it back.
+        // An image builder without V3 shows the fixed series label.
+        if (bytes(svg).length == 0) {
+            svg = _optionalString(
+                imageBuilder, abi.encodeCall(ICertificateImageBuilderV2.buildCertificateSVGV2, (params, timestamp))
+            );
+        }
         // Old renderers interpret zero as 1970; do not fabricate a date when downgrading.
         if (bytes(svg).length == 0 && timestamp != 0) {
             svg = _optionalString(
@@ -391,13 +439,19 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         string memory cyberCORPContactDetails,
         SecurityClass securityType,
         SecuritySeries securitySeries,
+        string memory seriesNameJson,
         string memory certificateUri
     ) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
                 _buildAttributesPart1(owner, details, cyberCORPName, cyberCORPType),
                 _buildAttributesPart2(
-                    cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri
+                    cyberCORPJurisdiction,
+                    cyberCORPContactDetails,
+                    securityType,
+                    securitySeries,
+                    seriesNameJson,
+                    certificateUri
                 )
             )
         );
@@ -426,6 +480,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         string memory cyberCORPContactDetails,
         SecurityClass securityType,
         SecuritySeries securitySeries,
+        string memory seriesNameJson,
         string memory certificateUri
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(
@@ -433,6 +488,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
             '"}, {"trait_type": "cyberCORPContactDetails", "value": "', JsonLib.jsonEscape(cyberCORPContactDetails),
             '"}, {"trait_type": "securityType", "value": "', securityClassToString(securityType),
             '"}, {"trait_type": "securitySeries", "value": "', securitySeriesToString(securitySeries),
+            '"}, {"trait_type": "seriesName", "value": "', seriesNameJson,
             '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/', JsonLib.jsonEscape(stripIpfsPrefix(certificateUri)),
             '"}'
         ));
@@ -677,6 +733,9 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         // Build on-chain SVG image using the image builder
 
         string memory json;
+        // The image gets the raw name and applies the same fallback. The JSON gets the shown text, escaped.
+        string memory seriesName = _seriesName(contractAddress, tokenId, extension, details.extensionData);
+        string memory seriesNameJson = JsonLib.jsonEscape(CertificateSeries.text(seriesName, securitySeries));
         {
             CertificateSVGParams memory svgParams = CertificateSVGParams({
                 corpName: cyberCORPName,
@@ -691,12 +750,14 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
                 tokenId: tokenId,
                 certificateUri: certificateUri
             });
-            string memory imageDataUri = _buildImage(svgParams, certLegend, contractAddress, owner.ownerAddress, details.investmentAmountUSD);
+            string memory imageDataUri = _buildImage(
+                svgParams, certLegend, contractAddress, owner.ownerAddress, details.investmentAmountUSD, seriesName
+            );
             json = string(abi.encodePacked(
                 '{"title": "MetaLeX Tokenized Certificate",',
                 '"type": "', securityClassToString(securityType),
                 '", "image": "', imageDataUri, '",',
-                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
+                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, seriesNameJson, certificateUri),
                 '],'
             ));
         }
@@ -720,6 +781,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         json = string.concat(json, ', "cyberCORPContactDetails": "', cyberCORPContactDetails, '"');
         json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
         json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
+        json = string.concat(json, ', "seriesName": "', seriesNameJson, '"');
         json = string.concat(json, ', "certificateUri": "', certificateUri, '"');
 
         // Add certificate details
