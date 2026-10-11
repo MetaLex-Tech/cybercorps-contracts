@@ -227,13 +227,19 @@ contract CertificateSeriesNameTest is SeriesNameAssertions {
         _assertSeriesJson(json1, "Series Seed", "SeriesSeed");
     }
 
-    /// @notice The name is shown as stored, after the class and one space. The renderer adds no
-    ///         "Series" of its own.
+    /// @notice The name is shown as stored, after the class label and one space. The renderer adds no
+    ///         "Series" of its own and removes no word, even when the name repeats the class.
     function test_shareV1_NameIsShownAsStored() public {
         LedgerEntryToken printer = _shareV1Printer();
-        string[3] memory names = ["Seed 2", "Series A-1", "Series B Preferred"];
-        string[3] memory lines =
-            ["Preferred Stock Seed 2", "Preferred Stock Series A-1", "Preferred Stock Series B Preferred"];
+        string[5] memory names =
+            ["Seed 2", "Series A-1", "Series B Preferred", "Series Seed Preferred", "Series Seed Preferred Stock"];
+        string[5] memory lines = [
+            "Preferred Stock Seed 2",
+            "Preferred Stock Series A-1",
+            "Preferred Stock Series B Preferred",
+            "Preferred Stock Series Seed Preferred",
+            "Preferred Stock Series Seed Preferred Stock"
+        ];
         for (uint256 i; i < names.length; ++i) {
             string memory json = _jsonOf(printer.tokenURI(_mint(printer, _shareV1Payload(names[i]))));
             _assertLine(_svgOf(json), lines[i]);

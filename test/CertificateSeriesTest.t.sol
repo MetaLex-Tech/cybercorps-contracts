@@ -183,6 +183,9 @@ contract CertificateSeriesTest is Test {
         // NA with a name shows the name.
         svg = image.buildCertificateSVGV3(_params(SecuritySeries.NA), 0, "Seed 2");
         assertTrue(vm.contains(svg, 'text-anchor="middle">Preferred Stock Seed 2</text>'));
+        // A name that repeats the class word is not shortened: class label, one space, the name.
+        svg = image.buildCertificateSVGV3(_params(SecuritySeries.SeriesSeed), 0, "Series Seed Preferred");
+        assertTrue(vm.contains(svg, 'text-anchor="middle">Preferred Stock Series Seed Preferred</text>'));
     }
 
     // --- sizes ---
