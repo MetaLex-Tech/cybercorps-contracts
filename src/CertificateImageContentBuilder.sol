@@ -54,19 +54,32 @@ library CertificateImageContentBuilder {
         uint256 timestamp
     ) public pure returns (string memory) {
         string memory dateStr = _formatDate(timestamp);
+        // Escaped once and shown twice: the header and the footer render the name identically.
+        string memory corpName = CertificateText.xml(params.certificate.corpName, 38);
 
         return string(abi.encodePacked(
             _buildDefs(),
             '<rect width="1" height="31" transform="translate(511 391)" fill="url(#paint0_linear_62908_10123)"/>',
             '<g font-family="system-ui">',
-            _buildHeaderText(params),
+            _buildHeaderText(params, corpName),
             _buildPartiesText(params),
             _buildStatsText(params, dateStr),
             _buildOfficerText(params),
             _buildRestrictionsText(params.transferRestrictions),
-            unicode'<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">Recorded on the MetaLeX Labs, Inc. Tokenized Stock Ledger pursuant to DGCL §§219, 224.</text>',
+            _buildFooter(corpName),
             '</g>',
             _buildVoidedStamp(params.isVoided)
+        ));
+    }
+
+    /// @notice Footer naming the issuing company. One sentence for every company, settled by the owner on
+    ///         2026-10-11. It makes no statutory claim, so the token of a non-Delaware or non-corporate
+    ///         issuer no longer asserts a place on another company's DGCL stock ledger.
+    function _buildFooter(string memory corpName) private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">This constitutes an official entry on the tokenized securities ledger of ',
+            corpName,
+            '.</text>'
         ));
     }
 
@@ -119,9 +132,9 @@ library CertificateImageContentBuilder {
         ));
     }
 
-    function _buildHeaderText(CertificateSVGParamsV2 memory params) private pure returns (string memory) {
+    function _buildHeaderText(CertificateSVGParamsV2 memory params, string memory corpName) private pure returns (string memory) {
         return string(abi.encodePacked(
-            '<text x="512" y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">', CertificateText.xml(params.certificate.corpName, 38), '</text>',
+            '<text x="512" y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">', corpName, '</text>',
             '<text x="152" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">Token ID</text>',
             '<text x="152" y="124" font-size="35" fill="#f2f2f2" text-anchor="middle">#', _uintToString(params.certificate.tokenId), '</text>',
             '<text x="835" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">', _getBaseUnit(params.certificate.securityType), '</text>',
