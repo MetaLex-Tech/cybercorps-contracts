@@ -10,7 +10,7 @@
 - **Repository / branch:** MetaLex-Tech/cybercorps-contracts; base `develop`, working branch `claude/keen-benz-55739a`.
 - **Verified base / code head:** base `10fa89f236b8dcc5b19db0d9c256fe2f1d40d035` (tip of `develop` on 2026-10-11); content commit `5d0cd208e175a7a54f990b85478687be8146c2f8`. Later commits on the branch change only these records.
 - **Worktree locator:** shared at handoff; not committed.
-- **PR / artifact:** see "Review and blockers".
+- **PR / artifact:** [#175](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/175), non-draft, against `develop`; auto-merge off.
 
 ## Acceptance and current state
 
@@ -82,7 +82,7 @@ No deployment, integration acceptance or external review result exists yet.
 
 ## Review and blockers
 
-PR: opened from the records commit that follows `5d0cd208`; the link is recorded in the next commit of this file.
+PR: [#175](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/175), open, non-draft, against `develop`, opened 2026-10-12 from the records commit `ea3a792` on top of the content commit `5d0cd208`. Auto-merge is off.
 
 Independent review: the repository's normal PR review (Codex bot plus the
 owner). Merge, deployment, the upgrade script and Safe signing need separate
