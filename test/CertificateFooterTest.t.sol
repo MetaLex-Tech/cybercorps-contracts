@@ -94,16 +94,16 @@ contract CertificateFooterTest is Test {
 
     function testFooterEscapesAndTruncatesTheName() public view {
         CertificateSVGParamsV2 memory p = _delawareCorp();
-        p.certificate.corpName = 'Smith & Wesson <Holdings> "Co"';
+        p.certificate.corpName = 'Smith & Wesson <Co> "SA"';
         (, bytes memory footer,) = _splitAtFooter(image.buildCertificateSVGV2(p, 0));
-        assertEq(string(footer), _footer("Smith &amp; Wesson &lt;Holdings&gt; &quot;Co&quot;"));
+        assertEq(string(footer), _footer("Smith &amp; Wesson &lt;Co&gt; &quot;SA&quot;"));
 
-        // 54 code points: cut at 38 with "...", exactly as the header shows the name, so the line cannot
-        // overflow the artwork.
+        // 54 code points: the footer cuts at 26 with "...", the parties block's limit, so a long name in a
+        // wide font cannot push the 14px sentence past the 1024px edge. The header keeps its own cut at 38.
         p.certificate.corpName = "Extraordinarily Long Company Name Holdings Corporation";
         string memory svg = image.buildCertificateSVGV2(p, 0);
         (, footer,) = _splitAtFooter(svg);
-        assertEq(string(footer), _footer("Extraordinarily Long Company Name Hold..."));
+        assertEq(string(footer), _footer("Extraordinarily Long Compa..."));
         assertTrue(_contains(svg, 'y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">Extraordinarily Long Company Name Hold...</text>'));
     }
 
