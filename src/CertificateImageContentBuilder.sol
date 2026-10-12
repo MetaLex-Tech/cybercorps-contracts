@@ -64,9 +64,23 @@ library CertificateImageContentBuilder {
             _buildStatsText(params, dateStr),
             _buildOfficerText(params),
             _buildRestrictionsText(params.transferRestrictions),
-            unicode'<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">Recorded on the MetaLeX Labs, Inc. Tokenized Stock Ledger pursuant to DGCL §§219, 224.</text>',
+            _buildFooter(params),
             '</g>',
             _buildVoidedStamp(params.isVoided)
+        ));
+    }
+
+    /// @notice Footer naming the issuing company. One sentence for every company, settled by the owner on
+    ///         2026-10-11. It makes no statutory claim, so the token of a non-Delaware or non-corporate
+    ///         issuer no longer asserts a place on another company's DGCL stock ledger.
+    /// @dev The name is cut at 26 code points, the parties block's limit. The sentence alone takes about
+    ///      620px of the 1024px width at 14px in a wide system font, so the header's limit of 38 would let
+    ///      a long upper-case name run past the edge.
+    function _buildFooter(CertificateSVGParamsV2 memory params) private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">This constitutes an official entry on the tokenized securities ledger of ',
+            CertificateText.xml(params.certificate.corpName, 26),
+            '.</text>'
         ));
     }
 
