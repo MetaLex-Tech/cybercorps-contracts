@@ -1,7 +1,7 @@
 # Task: LET certificate footer names the issuing company
 
 - **Status:** Ready for review (PR open; merge, deployment and Safe signing are not authorized by this record)
-- **Updated:** 2026-10-11 23:40 UTC
+- **Updated:** 2026-10-12 10:17 America/New_York (Codex branch review; task ownership unchanged)
 - **Owner:** Claude Code session in worktree `keen-benz-55739a`, acting for lex-node
 - **Collaborators / boundaries:** Renderer only: `src/CertificateImageContentBuilder.sol`, its tests and fixtures, and these records. No change to `CertificateImageBuilderContract`, `CertificateUriBuilder`, their interfaces, `LedgerEntryToken`, `CyberCorp`, storage, agreement IDs or signatures. The series-designation feature prototyped in the scratch worktree `ccc-wt-series-naming` is a separate decision and is not reused here.
 - **Objective:** Every LET image footer names the issuing company with the sentence the owner settled, and every other byte of the SVG and of the token JSON is unchanged.
@@ -80,7 +80,49 @@
 | Sizes | `forge build --sizes --skip test --skip script` at `10fa89f2` and at `2a8e8b5b` | `CertificateUriBuilder` 21,607 → 21,607; `CertificateImageBuilderContract` 14,856 → 14,856; `CertificateImageContentBuilder` 18,066 → 20,212 (margin 4,364); limit 24,576 |
 | Diff scope | `git diff --stat 10fa89f2 2a8e8b5b -- src test` | `src/CertificateImageContentBuilder.sol`, `test/CertificateFooterTest.t.sol`, two fixtures. No interface, script, docs or webapp change |
 
-No deployment, integration acceptance or external review result exists yet.
+No deployment or live integration acceptance result exists yet. Review evidence
+and exact-head CI verification are recorded below; they do not establish release acceptance.
+
+### 2026-10-12: Codex branch verification
+
+Reviewed clean code head `a098d2f50e610c25a935bd772d717edd855cd032` against
+freshly fetched `origin/develop` at `10fa89f236b8dcc5b19db0d9c256fe2f1d40d035`.
+This is an internal review requested by the user, with no transfer of the
+implementation task or review-monitor ownership. No actionable correctness
+finding was identified and no source or test changes were needed.
+
+- Traced issuer-name propagation through the URI builder and both image-builder
+  selectors. The change uses the existing UTF-8/XML sanitizer, preserves the
+  header's limit, and changes no ABI, storage, authorization or payment logic.
+- Local validation at that exact code head: **41 passed, 0 failed** across the
+  footer (7), SVG compatibility (18), upgrade script (6), legacy URI (8), and JSON
+  escaping (2) suites. Command:
+  `forge test --use 0.8.28 --match-path "test/*Certificate*" --no-match-contract CertificateUriBuilderLegacyForkTest -R "@openzeppelin/contracts/=dependencies/openzeppelin-contracts/contracts/" -R "@openzeppelin/contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/"`.
+  Local Forge is 1.2.0-rc and needed these command-only import mappings; no
+  repository configuration changed. Dependency submodules match the committed
+  revisions. Local fork tests were excluded; remote fork results follow.
+- [CI run 38187428896](https://github.com/MetaLex-Tech/cybercorps-contracts/actions/runs/38187428896)
+  identifies the same head SHA and passed **1,419 unit tests, 202 fork tests and
+  the build-size gate**. Its solc 0.8.28 size output reports runtime sizes of
+  19,130 bytes for `CertificateImageContentBuilder`, 14,856 for
+  `CertificateImageBuilderContract`, and 21,607 for `CertificateUriBuilder`.
+  The earlier local 20,212-byte content-library measurement above is retained as
+  historical evidence; the exact-head CI measurement is 19,130 bytes.
+- Independently checked the prior overflow example using Pillow with DejaVu Sans
+  at 14px: sentence plus 38 `W`s, ellipsis and period measures 1,038.98px;
+  the new 26-`W` result measures 870.98px, within the 1,024px viewport. Windows
+  Segoe UI and Arial measurements also fit. This checks the reported regression,
+  not every possible Unicode glyph or font substitution.
+- `git diff --check origin/develop...HEAD` passed. The non-footer SVG fixture
+  comparisons passed locally. The existing URI integration test checks the
+  embedded footer and two metadata fields; preservation of other JSON fields
+  is additionally supported by unchanged URI-builder source, not a full JSON
+  snapshot assertion.
+
+The existing Codex bot review covered `ea3a79279b`, before the 26-point fix.
+This local review is not a new external-model review or owner approval. Merge,
+deployment and live acceptance remain separate gates. This record update is
+local and uncommitted until deliberately shared.
 
 ## Review and blockers
 

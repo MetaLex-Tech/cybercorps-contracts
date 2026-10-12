@@ -24,3 +24,6 @@ docs/
 /.claude/
 
 /tmp/
+
+# Python script/test caches
+__pycache__/
