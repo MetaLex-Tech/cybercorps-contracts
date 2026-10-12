@@ -8,7 +8,7 @@
 - **Out of scope:** Deployment, upgrade transactions or Safe batches; the JSON `title` field ("MetaLeX Tokenized Certificate"); designation or series-naming text; webapp changes.
 - **Canonical plan / sources:** this record; [DECISIONS.md](../DECISIONS.md) entry "2026-10-11: LET certificate footer wording"; metalex-webapp `AGENTS.md` ("Smart-contract change boundaries").
 - **Repository / branch:** MetaLex-Tech/cybercorps-contracts; base `develop`, working branch `claude/keen-benz-55739a`.
-- **Verified base / code head:** base `10fa89f236b8dcc5b19db0d9c256fe2f1d40d035` (tip of `develop` on 2026-10-11); content commit `5d0cd208e175a7a54f990b85478687be8146c2f8`. Later commits on the branch change only these records.
+- **Verified base / code head:** base `10fa89f236b8dcc5b19db0d9c256fe2f1d40d035` (tip of `develop` on 2026-10-11); content commits `5d0cd208e175a7a54f990b85478687be8146c2f8` (footer) and `2a8e8b5b5208939c812611070d0f496537a4c252` (footer name limit 26, after Codex review). Other commits on the branch change only these records.
 - **Worktree locator:** shared at handoff; not committed.
 - **PR / artifact:** [#175](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/175), non-draft, against `develop`; auto-merge off.
 
@@ -21,9 +21,9 @@
    jurisdiction or on the entity type. **Done; verified by
    `testFooterDoesNotDependOnJurisdiction` and the "DGCL" / "Stock Ledger"
    assertions.**
-3. The company name is XML-escaped and cut at the header's limit of 38 code
-   points, so the footer shows the name exactly as the header does. **Done;
-   verified by `testFooterEscapesAndTruncatesTheName`.**
+3. The company name is XML-escaped and cut at 26 code points, the parties
+   block's limit, so a long upper-case name cannot push the 14px line past the
+   1024px edge. **Done; verified by `testFooterEscapesAndTruncatesTheName`.**
 4. Nothing else in the SVG changes. **Done; `testEverythingButTheFooterIsUnchanged`
    compares the bytes before and after the footer element with two fixtures
    captured from the unmodified renderer at `10fa89f2`.**
@@ -53,12 +53,14 @@
   because `CertificateSVGParams` carries no entity type. Not implemented. The
   owner's decision removed the need for the entity type, so the change stays
   inside the linked library and no ABI changes.
-- **Implementation choice.** `buildSVGContent` escapes `corpName` once with the
-  header's limit (38) and passes it to `_buildHeaderText` and the new
-  `_buildFooter`. A separate escape call for the footer cost about 2.1 KB of
-  library bytecode because via-IR inlines `CertificateText.xml` at every call
-  site; sharing the escaped string cut that to about 1.1 KB and keeps the two
-  renderings of the name identical. The header output is unchanged.
+- **Implementation choice.** `_buildFooter` escapes `corpName` with its own
+  `CertificateText.xml` call at a limit of 26. The content commit `5d0cd208`
+  shared the header's 38-point escape to save about 1 KB of library bytecode
+  (via-IR inlines `CertificateText.xml` at every call site). Codex's review of
+  `ea3a792` showed that 38 points let a long upper-case name run past the
+  1024px edge in a wide system font, because the sentence alone takes about
+  620px at 14px; the footer now uses the parties block's limit and the header
+  code is unchanged from `develop`.
 - **Scratch prototype** (`ccc-wt-series-naming`, `_buildFooter`): matched on
   jurisdiction alone and bundled a designation feature. Read for reference;
   nothing reused.
@@ -70,19 +72,19 @@
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
 | Live defect | `cast call` of `tokenURI(0)` on Base via `https://mainnet.base.org`, decoded; CyberCorp getters; 2026-10-11 | Confirmed: the footer named MetaLeX Labs, Inc. and cited the DGCL for a Wyoming LLC SAFE |
-| New unit tests | `forge test --match-path "test/*Certificate*"` on the working tree equal to `5d0cd208` for all code files | `CertificateFooterTest`: 7 passed |
+| New unit tests | `forge test --match-path "test/*Certificate*"` on the working tree equal to `2a8e8b5b` for all code files | `CertificateFooterTest`: 7 passed |
 | Pre-existing renderer suites | same run | `CertificateSvgCompatibilityTest` 18, `UpgradeCertificateRenderingScriptTest` 6, `CertificateUriBuilderLegacyTest` 8, `CertificateUriBuilderJsonEscapingTest` 2: all passed |
 | Fork tests | same run | `CertificateUriBuilderLegacyForkTest` (2 tests) not run: `vm.createSelectFork` needs `ALCHEMY_API_KEY`, which this machine does not have. They run in CI |
-| Full suite | `forge test` on the same tree | 1,419 passed, 24 failed. 23 failures are fork tests that need `ALCHEMY_API_KEY` or `FORK_RPC_URL` and fail in `setUp` before any code runs (CI runs them with the key). The other, `test_VaultEmptyingConversion_FitsInABlockAtLargeSupply` in `IssuanceManagerVaultEpochAdhocTest`, hits the default per-test gas cap in a 6,500-holder setup; it uses `MockUriBuilderForIM`, so the changed library is not on its path, and CI excludes `AdhocTest` contracts (`--nmc`). CI on `develop` is green at `10fa89f2` |
+| Full suite | `forge test` on the tree equal to `5d0cd208` (before the limit change; the limit change touches only `_buildFooter` and its test) | 1,419 passed, 24 failed. 23 failures are fork tests that need `ALCHEMY_API_KEY` or `FORK_RPC_URL` and fail in `setUp` before any code runs (CI runs them with the key). The other, `test_VaultEmptyingConversion_FitsInABlockAtLargeSupply` in `IssuanceManagerVaultEpochAdhocTest`, hits the default per-test gas cap in a 6,500-holder setup; it uses `MockUriBuilderForIM`, so the changed library is not on its path, and CI excludes `AdhocTest` contracts (`--nmc`). CI on `develop` is green at `10fa89f2` |
 | Byte identity | `testEverythingButTheFooterIsUnchanged` against `test/res/let-svg-10fa89f2-*.svg` (captured at `10fa89f2`, 15,557 and 15,835 bytes, committed byte-exact) | Passed for a Delaware corporation and a voided Wyoming LLC SAFE |
-| Sizes | `forge build --sizes --skip test --skip script` at `10fa89f2` and at `5d0cd208` | `CertificateUriBuilder` 21,607 → 21,607; `CertificateImageBuilderContract` 14,856 → 14,856; `CertificateImageContentBuilder` 18,066 → 19,193 (margin 5,383); limit 24,576 |
-| Diff scope | `git show --stat 5d0cd208` | `src/CertificateImageContentBuilder.sol`, `test/CertificateFooterTest.t.sol`, two fixtures. No interface, script, docs or webapp change |
+| Sizes | `forge build --sizes --skip test --skip script` at `10fa89f2` and at `2a8e8b5b` | `CertificateUriBuilder` 21,607 → 21,607; `CertificateImageBuilderContract` 14,856 → 14,856; `CertificateImageContentBuilder` 18,066 → 20,212 (margin 4,364); limit 24,576 |
+| Diff scope | `git diff --stat 10fa89f2 2a8e8b5b -- src test` | `src/CertificateImageContentBuilder.sol`, `test/CertificateFooterTest.t.sol`, two fixtures. No interface, script, docs or webapp change |
 
 No deployment, integration acceptance or external review result exists yet.
 
 ## Review and blockers
 
-PR: [#175](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/175), open, non-draft, against `develop`, opened 2026-10-12 from the records commit `ea3a792` on top of the content commit `5d0cd208`. Auto-merge is off.
+PR: [#175](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/175), open, non-draft, against `develop`, opened 2026-10-12 from the records commit `ea3a792` on top of the content commit `5d0cd208`. Codex review of `ea3a792` returned one P2 finding (footer name limit); fixed in `2a8e8b5b`. Auto-merge is off.
 
 Independent review: the repository's normal PR review (Codex bot plus the
 owner). Merge, deployment, the upgrade script and Safe signing need separate
