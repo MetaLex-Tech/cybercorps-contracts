@@ -4,6 +4,9 @@ This PR implements the 84-entry catalog. It does not deploy or upgrade contracts
 The owner approved implementation on 2026-10-13. The first release targets
 MetaLeX's cap table; its Series Seed 2 cyberRaise follows separately.
 
+Current ownership, tested revisions and remaining integration work are recorded
+in the [shared task record](../notes/ai/tasks/series-enum-expansion.md).
+
 ## Allocation and compatibility
 
 Values 0–9 retain their identities. Append Pre-Seed 2–10 (10–18), Seed 2–10

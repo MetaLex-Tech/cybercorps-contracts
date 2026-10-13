@@ -23,6 +23,7 @@ have one. Do not assume another checkout's files are present here.
 - [GitBook register paragraph and LeXcheXBadge deployment claims](tasks/gitbook-register-and-badge-corrections.md): docs-only correction, 2026-10-04.
 - [LET certificate footer names the issuing company](tasks/let-footer-issuer-name.md): renderer change, 2026-10-11.
 - [LET footer all-chain upgrade scripts](tasks/let-footer-all-chain-upgrade.md): script preparation and validation, 2026-10-12; no live deployment.
+- [Expanded series catalog for MetaLeX's cap table](tasks/series-enum-expansion.md): contracts #176, 2026-10-13; enum/rendering source and CI complete, review open, webapp direct-write integration and deployment pending.
 
 This seed is not a complete inventory of ongoing tasks. Existing work, PR owners,
 review monitors and audit ledgers retain ownership. No protocol task is reassigned
