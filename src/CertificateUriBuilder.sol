@@ -62,6 +62,7 @@ import {
 } from "./storage/extensions/ICertificateExtension.sol";
 import "./libs/auth.sol";
 import {JsonLib} from "./libs/JsonLib.sol";
+import {SecuritySeriesNames} from "./libs/SecuritySeriesNames.sol";
 import {MetadataCall} from "./libs/MetadataCall.sol";
 
 interface ICertificateUnitsReserved {
@@ -145,7 +146,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         if (_series == SecuritySeries.SeriesF) return "SeriesF";
         if (_series == SecuritySeries.NA) return "NA";
         if (_series == SecuritySeries.ACE) return "ACE";
-        return "Unknown";
+        return SecuritySeriesNames.expanded(_series, false);
     }
 
     function legacyLegendsToRestrictiveLegends(

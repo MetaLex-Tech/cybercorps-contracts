@@ -45,6 +45,8 @@ import "./CyberCorpConstants.sol";
 import {CertificateText} from "./libs/CertificateText.sol";
 import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
 
+import {SecuritySeriesNames} from "./libs/SecuritySeriesNames.sol";
+
 /// @title CertificateImageContentBuilder
 /// @notice Helper library generating the gradient defs and dynamic text content
 ///         of the "Ledger Entry Token" certificate SVG
@@ -157,7 +159,7 @@ library CertificateImageContentBuilder {
             '<text x="630" y="364" font-size="11" fill="#9A9A98">', _truncatedAddress(params.ownerAddress), '</text>',
             '<text x="470" y="418" font-size="14" fill="#9A9A98">Class</text>',
             '<text x="519" y="418" font-size="14" fill="#9A9A98">Series</text>',
-            '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityClassToString(params.certificate.securityType), ' ', _securitySeriesToString(params.certificate.securitySeries), '</text>'
+            '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityName(params.certificate.securityType, params.certificate.securitySeries), '</text>'
         ));
     }
 
@@ -200,6 +202,14 @@ library CertificateImageContentBuilder {
     // ------------------------------------------------------------------
     // Formatting helpers
     // ------------------------------------------------------------------
+
+    function _securityName(SecurityClass securityClass, SecuritySeries series) private pure returns (string memory) {
+        // Keep existing certificate wording; new entries use the complete series before the type.
+        if (uint256(series) <= uint256(SecuritySeries.ACE)) {
+            return string.concat(_securityClassToString(securityClass), " ", _securitySeriesToString(series));
+        }
+        return string.concat(SecuritySeriesNames.expanded(series, true), " ", _securityClassToString(securityClass));
+    }
 
     function _securityClassToString(SecurityClass _class) private pure returns (string memory) {
         if (_class == SecurityClass.SAFE) return "SAFE";
