@@ -1,0 +1,514 @@
+{
+  "status": "Exact allocation for the enum expansion; deployment is a separate milestone",
+  "asOf": "2026-10-13",
+  "existingMaximum": 9,
+  "proposedMaximum": 83,
+  "entries": [
+    {
+      "code": 0,
+      "identifier": "SeriesPreSeed",
+      "label": "PreSeed",
+      "existing": true
+    },
+    {
+      "code": 1,
+      "identifier": "SeriesSeed",
+      "label": "Seed",
+      "existing": true
+    },
+    {
+      "code": 2,
+      "identifier": "SeriesA",
+      "label": "Series A",
+      "existing": true
+    },
+    {
+      "code": 3,
+      "identifier": "SeriesB",
+      "label": "Series B",
+      "existing": true
+    },
+    {
+      "code": 4,
+      "identifier": "SeriesC",
+      "label": "Series C",
+      "existing": true
+    },
+    {
+      "code": 5,
+      "identifier": "SeriesD",
+      "label": "Series D",
+      "existing": true
+    },
+    {
+      "code": 6,
+      "identifier": "SeriesE",
+      "label": "Series E",
+      "existing": true
+    },
+    {
+      "code": 7,
+      "identifier": "SeriesF",
+      "label": "Series F",
+      "existing": true
+    },
+    {
+      "code": 8,
+      "identifier": "NA",
+      "label": "N/A",
+      "existing": true
+    },
+    {
+      "code": 9,
+      "identifier": "ACE",
+      "label": "ACE",
+      "existing": true
+    },
+    {
+      "code": 10,
+      "identifier": "SeriesPreSeed2",
+      "label": "Series Pre-Seed 2",
+      "existing": false
+    },
+    {
+      "code": 11,
+      "identifier": "SeriesPreSeed3",
+      "label": "Series Pre-Seed 3",
+      "existing": false
+    },
+    {
+      "code": 12,
+      "identifier": "SeriesPreSeed4",
+      "label": "Series Pre-Seed 4",
+      "existing": false
+    },
+    {
+      "code": 13,
+      "identifier": "SeriesPreSeed5",
+      "label": "Series Pre-Seed 5",
+      "existing": false
+    },
+    {
+      "code": 14,
+      "identifier": "SeriesPreSeed6",
+      "label": "Series Pre-Seed 6",
+      "existing": false
+    },
+    {
+      "code": 15,
+      "identifier": "SeriesPreSeed7",
+      "label": "Series Pre-Seed 7",
+      "existing": false
+    },
+    {
+      "code": 16,
+      "identifier": "SeriesPreSeed8",
+      "label": "Series Pre-Seed 8",
+      "existing": false
+    },
+    {
+      "code": 17,
+      "identifier": "SeriesPreSeed9",
+      "label": "Series Pre-Seed 9",
+      "existing": false
+    },
+    {
+      "code": 18,
+      "identifier": "SeriesPreSeed10",
+      "label": "Series Pre-Seed 10",
+      "existing": false
+    },
+    {
+      "code": 19,
+      "identifier": "SeriesSeed2",
+      "label": "Series Seed 2",
+      "existing": false
+    },
+    {
+      "code": 20,
+      "identifier": "SeriesSeed3",
+      "label": "Series Seed 3",
+      "existing": false
+    },
+    {
+      "code": 21,
+      "identifier": "SeriesSeed4",
+      "label": "Series Seed 4",
+      "existing": false
+    },
+    {
+      "code": 22,
+      "identifier": "SeriesSeed5",
+      "label": "Series Seed 5",
+      "existing": false
+    },
+    {
+      "code": 23,
+      "identifier": "SeriesSeed6",
+      "label": "Series Seed 6",
+      "existing": false
+    },
+    {
+      "code": 24,
+      "identifier": "SeriesSeed7",
+      "label": "Series Seed 7",
+      "existing": false
+    },
+    {
+      "code": 25,
+      "identifier": "SeriesSeed8",
+      "label": "Series Seed 8",
+      "existing": false
+    },
+    {
+      "code": 26,
+      "identifier": "SeriesSeed9",
+      "label": "Series Seed 9",
+      "existing": false
+    },
+    {
+      "code": 27,
+      "identifier": "SeriesSeed10",
+      "label": "Series Seed 10",
+      "existing": false
+    },
+    {
+      "code": 28,
+      "identifier": "SeriesA2",
+      "label": "Series A-2",
+      "existing": false
+    },
+    {
+      "code": 29,
+      "identifier": "SeriesA3",
+      "label": "Series A-3",
+      "existing": false
+    },
+    {
+      "code": 30,
+      "identifier": "SeriesA4",
+      "label": "Series A-4",
+      "existing": false
+    },
+    {
+      "code": 31,
+      "identifier": "SeriesA5",
+      "label": "Series A-5",
+      "existing": false
+    },
+    {
+      "code": 32,
+      "identifier": "SeriesA6",
+      "label": "Series A-6",
+      "existing": false
+    },
+    {
+      "code": 33,
+      "identifier": "SeriesA7",
+      "label": "Series A-7",
+      "existing": false
+    },
+    {
+      "code": 34,
+      "identifier": "SeriesA8",
+      "label": "Series A-8",
+      "existing": false
+    },
+    {
+      "code": 35,
+      "identifier": "SeriesA9",
+      "label": "Series A-9",
+      "existing": false
+    },
+    {
+      "code": 36,
+      "identifier": "SeriesA10",
+      "label": "Series A-10",
+      "existing": false
+    },
+    {
+      "code": 37,
+      "identifier": "SeriesB2",
+      "label": "Series B-2",
+      "existing": false
+    },
+    {
+      "code": 38,
+      "identifier": "SeriesB3",
+      "label": "Series B-3",
+      "existing": false
+    },
+    {
+      "code": 39,
+      "identifier": "SeriesB4",
+      "label": "Series B-4",
+      "existing": false
+    },
+    {
+      "code": 40,
+      "identifier": "SeriesB5",
+      "label": "Series B-5",
+      "existing": false
+    },
+    {
+      "code": 41,
+      "identifier": "SeriesB6",
+      "label": "Series B-6",
+      "existing": false
+    },
+    {
+      "code": 42,
+      "identifier": "SeriesB7",
+      "label": "Series B-7",
+      "existing": false
+    },
+    {
+      "code": 43,
+      "identifier": "SeriesB8",
+      "label": "Series B-8",
+      "existing": false
+    },
+    {
+      "code": 44,
+      "identifier": "SeriesB9",
+      "label": "Series B-9",
+      "existing": false
+    },
+    {
+      "code": 45,
+      "identifier": "SeriesB10",
+      "label": "Series B-10",
+      "existing": false
+    },
+    {
+      "code": 46,
+      "identifier": "SeriesC2",
+      "label": "Series C-2",
+      "existing": false
+    },
+    {
+      "code": 47,
+      "identifier": "SeriesC3",
+      "label": "Series C-3",
+      "existing": false
+    },
+    {
+      "code": 48,
+      "identifier": "SeriesC4",
+      "label": "Series C-4",
+      "existing": false
+    },
+    {
+      "code": 49,
+      "identifier": "SeriesC5",
+      "label": "Series C-5",
+      "existing": false
+    },
+    {
+      "code": 50,
+      "identifier": "SeriesC6",
+      "label": "Series C-6",
+      "existing": false
+    },
+    {
+      "code": 51,
+      "identifier": "SeriesC7",
+      "label": "Series C-7",
+      "existing": false
+    },
+    {
+      "code": 52,
+      "identifier": "SeriesC8",
+      "label": "Series C-8",
+      "existing": false
+    },
+    {
+      "code": 53,
+      "identifier": "SeriesC9",
+      "label": "Series C-9",
+      "existing": false
+    },
+    {
+      "code": 54,
+      "identifier": "SeriesC10",
+      "label": "Series C-10",
+      "existing": false
+    },
+    {
+      "code": 55,
+      "identifier": "SeriesD2",
+      "label": "Series D-2",
+      "existing": false
+    },
+    {
+      "code": 56,
+      "identifier": "SeriesD3",
+      "label": "Series D-3",
+      "existing": false
+    },
+    {
+      "code": 57,
+      "identifier": "SeriesD4",
+      "label": "Series D-4",
+      "existing": false
+    },
+    {
+      "code": 58,
+      "identifier": "SeriesD5",
+      "label": "Series D-5",
+      "existing": false
+    },
+    {
+      "code": 59,
+      "identifier": "SeriesD6",
+      "label": "Series D-6",
+      "existing": false
+    },
+    {
+      "code": 60,
+      "identifier": "SeriesD7",
+      "label": "Series D-7",
+      "existing": false
+    },
+    {
+      "code": 61,
+      "identifier": "SeriesD8",
+      "label": "Series D-8",
+      "existing": false
+    },
+    {
+      "code": 62,
+      "identifier": "SeriesD9",
+      "label": "Series D-9",
+      "existing": false
+    },
+    {
+      "code": 63,
+      "identifier": "SeriesD10",
+      "label": "Series D-10",
+      "existing": false
+    },
+    {
+      "code": 64,
+      "identifier": "SeriesE2",
+      "label": "Series E-2",
+      "existing": false
+    },
+    {
+      "code": 65,
+      "identifier": "SeriesE3",
+      "label": "Series E-3",
+      "existing": false
+    },
+    {
+      "code": 66,
+      "identifier": "SeriesE4",
+      "label": "Series E-4",
+      "existing": false
+    },
+    {
+      "code": 67,
+      "identifier": "SeriesE5",
+      "label": "Series E-5",
+      "existing": false
+    },
+    {
+      "code": 68,
+      "identifier": "SeriesE6",
+      "label": "Series E-6",
+      "existing": false
+    },
+    {
+      "code": 69,
+      "identifier": "SeriesE7",
+      "label": "Series E-7",
+      "existing": false
+    },
+    {
+      "code": 70,
+      "identifier": "SeriesE8",
+      "label": "Series E-8",
+      "existing": false
+    },
+    {
+      "code": 71,
+      "identifier": "SeriesE9",
+      "label": "Series E-9",
+      "existing": false
+    },
+    {
+      "code": 72,
+      "identifier": "SeriesE10",
+      "label": "Series E-10",
+      "existing": false
+    },
+    {
+      "code": 73,
+      "identifier": "SeriesF2",
+      "label": "Series F-2",
+      "existing": false
+    },
+    {
+      "code": 74,
+      "identifier": "SeriesF3",
+      "label": "Series F-3",
+      "existing": false
+    },
+    {
+      "code": 75,
+      "identifier": "SeriesF4",
+      "label": "Series F-4",
+      "existing": false
+    },
+    {
+      "code": 76,
+      "identifier": "SeriesF5",
+      "label": "Series F-5",
+      "existing": false
+    },
+    {
+      "code": 77,
+      "identifier": "SeriesF6",
+      "label": "Series F-6",
+      "existing": false
+    },
+    {
+      "code": 78,
+      "identifier": "SeriesF7",
+      "label": "Series F-7",
+      "existing": false
+    },
+    {
+      "code": 79,
+      "identifier": "SeriesF8",
+      "label": "Series F-8",
+      "existing": false
+    },
+    {
+      "code": 80,
+      "identifier": "SeriesF9",
+      "label": "Series F-9",
+      "existing": false
+    },
+    {
+      "code": 81,
+      "identifier": "SeriesF10",
+      "label": "Series F-10",
+      "existing": false
+    },
+    {
+      "code": 82,
+      "identifier": "CommonA",
+      "label": "A",
+      "existing": false,
+      "applicationType": "CommonStock"
+    },
+    {
+      "code": 83,
+      "identifier": "CommonB",
+      "label": "B",
+      "existing": false,
+      "applicationType": "CommonStock"
+    }
+  ]
+}
