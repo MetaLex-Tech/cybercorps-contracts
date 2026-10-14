@@ -114,6 +114,11 @@ contract ShareExtensionV3 is ShareExtension {
         return ShareCertDataLayerLib.resolveCert(printer, tokenId);
     }
 
+    /// @notice The series name after the merge. A name on the cert replaces the name on the series.
+    function seriesNameOf(address printer, uint256 tokenId) external view override returns (string memory) {
+        return ShareCertDataLayerLib.resolveCert(printer, tokenId).terms.seriesName;
+    }
+
     function supportsResolvedExtensionData() external pure returns (bool) {
         return true;
     }

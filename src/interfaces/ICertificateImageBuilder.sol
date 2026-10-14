@@ -61,3 +61,9 @@ interface ICertificateImageBuilderV2 {
         external pure returns (string memory);
 }
 
+interface ICertificateImageBuilderV3 {
+    /// @param seriesName The series name from the extension. The image shows the series enum when it is "".
+    function buildCertificateSVGV3(CertificateSVGParamsV2 calldata params, string calldata seriesName, uint256 timestamp)
+        external pure returns (string memory);
+}
+

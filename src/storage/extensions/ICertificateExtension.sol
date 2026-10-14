@@ -46,6 +46,13 @@ interface ICertificateExtension {
     function getExtensionURI(bytes memory data) external view returns (string memory);
 }
 
+/// @notice Optional. Gives the series name that the charter uses, for the certificate image.
+/// The image shows the series enum when the extension does not have this function.
+interface ICertificateSeriesName {
+    /// @return The series name of the cert, or "" when the cert has none
+    function seriesNameOf(address printer, uint256 tokenId) external view returns (string memory);
+}
+
 /// @notice V3 certificate extension: the cert payload alone is not the whole certificate. A section
 /// may be stored at the series scope (the printer's `seriesData`) or the class scope
 /// (`SecurityClassInfo.classData`), so a reader that renders one scope on its own shows a partial

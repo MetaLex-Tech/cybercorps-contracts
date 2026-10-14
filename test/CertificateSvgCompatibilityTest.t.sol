@@ -12,7 +12,11 @@ import {
     RestrictionType,
     RestrictiveLegend
 } from "../src/interfaces/ILedgerEntryToken.sol";
-import {ICertificateImageBuilder, ICertificateImageBuilderV2} from "../src/interfaces/ICertificateImageBuilder.sol";
+import {
+    ICertificateImageBuilder,
+    ICertificateImageBuilderV2,
+    ICertificateImageBuilderV3
+} from "../src/interfaces/ICertificateImageBuilder.sol";
 import {MockCyberCorp, MockIssuanceManager} from "./CyberCertPrinterTest.t.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CertificateDetails, ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
@@ -26,6 +30,28 @@ contract SvgUriHarness is CertificateUriBuilder {
 contract EmptyExtension {
     function getExtensionURI(bytes memory) external pure returns (string memory) {
         return "";
+    }
+}
+
+/// @notice An extension that gives the series name of the charter.
+contract NamedExtension {
+    function getExtensionURI(bytes memory) external pure returns (string memory) {
+        return "";
+    }
+
+    function seriesNameOf(address, uint256) external pure returns (string memory) {
+        return "Series Seed 2";
+    }
+}
+
+/// @notice An extension whose series name getter reverts.
+contract RevertingNameExtension {
+    function getExtensionURI(bytes memory) external pure returns (string memory) {
+        return "";
+    }
+
+    function seriesNameOf(address, uint256) external pure returns (string memory) {
+        revert("no name");
     }
 }
 
@@ -415,5 +441,55 @@ contract CertificateSvgCompatibilityTest is Test {
             p.isVoided = true;
             emit log_named_string("SVG_VOID", image.buildCertificateSVGV2(p, 1709164800));
         }
+    }
+
+    string internal constant ENUM_SERIES_LINE = 'text-anchor="middle">Common Stock Series Seed</text>';
+    string internal constant NAMED_SERIES_LINE = 'text-anchor="middle">Series Seed 2 Common Stock</text>';
+
+    /// @notice The series name changes the series line and nothing else. An empty name gives the V2 image.
+    function testSeriesNameReplacesOnlyTheSeriesLine() public view {
+        CertificateSVGParamsV2 memory p = _params();
+        string memory v2 = image.buildCertificateSVGV2(p, 1709164800);
+        assertTrue(_contains(v2, ENUM_SERIES_LINE));
+        assertEq(image.buildCertificateSVGV3(p, "", 1709164800), v2);
+        assertEq(
+            image.buildCertificateSVGV3(p, "Series Seed 2", 1709164800),
+            vm.replace(v2, ENUM_SERIES_LINE, NAMED_SERIES_LINE)
+        );
+    }
+
+    function testSeriesNameIsEscapedAndCut() public view {
+        CertificateSVGParamsV2 memory p = _params();
+        string memory svg = image.buildCertificateSVGV3(p, 'Seed <2> & "B"', 0);
+        assertTrue(_contains(svg, '>Seed &lt;2&gt; &amp; &quot;B&quot; Common Stock</text>'));
+        assertFalse(_contains(svg, "<2>"));
+
+        // 56 code points. The image cuts the name at 50.
+        svg = image.buildCertificateSVGV3(p, "Series Seed 2 Convertible Participating Preferred Shares", 0);
+        assertTrue(_contains(svg, '>Series Seed 2 Convertible Participating Preferred ... Common Stock</text>'));
+    }
+
+    function testUriBuilderShowsTheExtensionSeriesName() public {
+        vm.etch(EXTENSION, address(new NamedExtension()).code);
+        string memory svg = _svg(_json(false, false));
+        assertTrue(_contains(svg, NAMED_SERIES_LINE));
+        assertFalse(_contains(svg, ENUM_SERIES_LINE));
+    }
+
+    /// @notice An image builder without the V3 entry point still renders, and shows the series enum.
+    function testImageBuilderWithoutV3RendersTheSeriesEnum() public {
+        string memory expected = _json(false, false);
+        vm.etch(EXTENSION, address(new NamedExtension()).code);
+        vm.mockCallRevert(
+            address(image), abi.encodeWithSelector(ICertificateImageBuilderV3.buildCertificateSVGV3.selector), hex""
+        );
+        assertEq(_json(false, false), expected);
+        assertTrue(_contains(_svg(expected), ENUM_SERIES_LINE));
+    }
+
+    function testRevertingSeriesNameGetterRendersTheSeriesEnum() public {
+        string memory expected = _json(false, false);
+        vm.etch(EXTENSION, address(new RevertingNameExtension()).code);
+        assertEq(_json(false, false), expected);
     }
 }

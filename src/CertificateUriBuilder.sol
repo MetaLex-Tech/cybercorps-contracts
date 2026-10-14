@@ -58,7 +58,8 @@ import {
 import "./interfaces/IUriBuilder.sol";
 import {
     ICertificateExtension,
-    ICertificateExtensionV3
+    ICertificateExtensionV3,
+    ICertificateSeriesName
 } from "./storage/extensions/ICertificateExtension.sol";
 import "./libs/auth.sol";
 import {JsonLib} from "./libs/JsonLib.sol";
@@ -352,7 +353,8 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         RestrictiveLegend[] memory legends,
         address token,
         address owner,
-        uint256 consideration
+        uint256 consideration,
+        address extension
     ) private view returns (string memory) {
         CertificateSVGParamsV2 memory params;
         params.certificate = certificate;
@@ -369,9 +371,12 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         params.statusKnown = ok && status <= 1;
         params.isVoided = params.statusKnown && status == 1;
         uint256 timestamp = _issueTimestamp(token, certificate.tokenId);
-        string memory svg = _optionalString(
-            imageBuilder, abi.encodeCall(ICertificateImageBuilderV2.buildCertificateSVGV2, (params, timestamp))
-        );
+        string memory svg = _buildImageWithSeriesName(params, token, extension, timestamp);
+        if (bytes(svg).length == 0) {
+            svg = _optionalString(
+                imageBuilder, abi.encodeCall(ICertificateImageBuilderV2.buildCertificateSVGV2, (params, timestamp))
+            );
+        }
         // Allows upgrading the URI implementation before the image builder, and rolling it back.
         // Old renderers interpret zero as 1970; do not fabricate a date when downgrading.
         if (bytes(svg).length == 0 && timestamp != 0) {
@@ -380,6 +385,23 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
             );
         }
         return bytes(svg).length == 0 ? "" : string.concat("data:image/svg+xml;base64,", Base64.encode(bytes(svg)));
+    }
+
+    /// @dev Returns "" when the extension gives no series name, or when the image builder has no V3 entry
+    ///      point. The caller then renders the series enum through the older entry points.
+    function _buildImageWithSeriesName(
+        CertificateSVGParamsV2 memory params,
+        address token,
+        address extension,
+        uint256 timestamp
+    ) private view returns (string memory) {
+        string memory seriesName = _optionalString(
+            extension, abi.encodeCall(ICertificateSeriesName.seriesNameOf, (token, params.certificate.tokenId))
+        );
+        if (bytes(seriesName).length == 0) return "";
+        return _optionalString(
+            imageBuilder, abi.encodeCall(ICertificateImageBuilderV3.buildCertificateSVGV3, (params, seriesName, timestamp))
+        );
     }
 
     function buildAttributes(
@@ -691,7 +713,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
                 tokenId: tokenId,
                 certificateUri: certificateUri
             });
-            string memory imageDataUri = _buildImage(svgParams, certLegend, contractAddress, owner.ownerAddress, details.investmentAmountUSD);
+            string memory imageDataUri = _buildImage(svgParams, certLegend, contractAddress, owner.ownerAddress, details.investmentAmountUSD, extension);
             json = string(abi.encodePacked(
                 '{"title": "MetaLeX Tokenized Certificate",',
                 '"type": "', securityClassToString(securityType),

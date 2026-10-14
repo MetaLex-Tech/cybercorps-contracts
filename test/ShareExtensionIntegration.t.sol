@@ -191,11 +191,31 @@ contract ShareExtensionIntegrationTest is Test {
         );
     }
 
+    /// @notice The image shows the series name of the charter, not the series enum of the printer. The
+    ///         printer holds `SeriesSeed`, and the payload names the series "Series Seed 2".
+    function test_tokenUri_ImageShowsTheSeriesName() public view {
+        string memory json = _decodeJsonUri(printer.tokenURI(tokenId));
+        string memory svg = _decodeBase64(vm.parseJsonString(json, ".image"), 26); // "data:image/svg+xml;base64,"
+        assertNotEq(vm.indexOf(svg, ">Series Seed 2 Preferred Stock</text>"), type(uint256).max);
+        assertEq(vm.parseJsonString(json, ".securitySeries"), "SeriesSeed", "the JSON keeps the series enum");
+    }
+
+    /// @notice Both storage shapes give the same name: the whole payload on the cert, or the terms on the
+    ///         printer.
+    function test_seriesNameOf_ReadsBothStorageShapes() public {
+        (ShareExtension legacyExt, LedgerEntryToken legacyPrinter, uint256 legacyTokenId) = _deployLegacyPrinter();
+        assertEq(legacyExt.seriesNameOf(address(legacyPrinter), legacyTokenId), "Series Seed 2");
+        assertEq(ext.seriesNameOf(address(printer), tokenId), "Series Seed 2");
+    }
+
     /// @dev `tokenURI` returns a base64 data URI. Decode it so the test can parse the JSON.
     function _decodeJsonUri(string memory uri) private pure returns (string memory) {
+        return _decodeBase64(uri, 29); // "data:application/json;base64,"
+    }
+
+    function _decodeBase64(string memory uri, uint256 prefix) private pure returns (string memory) {
         bytes memory input = bytes(uri);
-        uint256 prefix = 29; // "data:application/json;base64,"
-        require(input.length > prefix, "nonblank token URI required");
+        require(input.length > prefix, "nonblank data URI required");
         bytes memory decoded = new bytes((input.length - prefix) / 4 * 3);
         uint256 accumulator;
         uint256 bits;

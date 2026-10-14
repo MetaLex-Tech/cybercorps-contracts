@@ -46,6 +46,7 @@ import "openzeppelin-contracts/utils/Strings.sol";
 import "../../libs/auth.sol";
 import "../../libs/JsonLib.sol";
 import "./ICertificateExtension.sol";
+import {ILedgerEntryToken} from "../../interfaces/ILedgerEntryToken.sol";
 
 enum LiquidationPreferenceType {
     NonParticipating,
@@ -221,7 +222,7 @@ struct ShareCertData {
     SplitRecord[] splitHistory;
 }
 
-contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract ShareExtension is UUPSUpgradeable, ICertificateExtension, ICertificateSeriesName, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SHARE");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
     uint256 public constant PRICE_PRECISION = 10 ** 18;
@@ -254,6 +255,13 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
 
     function supportsExtensionType(bytes32 extensionType) external pure virtual override returns (bool) {
         return extensionType == EXTENSION_TYPE;
+    }
+
+    /// @notice The series name in the terms of the cert payload.
+    function seriesNameOf(address printer, uint256 tokenId) external view virtual returns (string memory) {
+        bytes memory data = ILedgerEntryToken(printer).getActiveCertificateDetails(tokenId).extensionData;
+        if (data.length == 0) return "";
+        return abi.decode(data, (ShareCertData)).terms.seriesName;
     }
 
     function getExtensionURI(bytes memory data) public pure virtual override returns (string memory) {

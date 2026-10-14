@@ -60,13 +60,14 @@ library CertificateImageBuilder {
 
     function buildCertificateSVG(
         CertificateSVGParamsV2 memory params,
+        string memory seriesName,
         uint256 timestamp
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(
             _getSVGHeader(),
             _getSVGFrame(params.isVoided, params.statusKnown),
             '</g>',
-            CertificateImageContentBuilder.buildSVGContent(params, timestamp),
+            CertificateImageContentBuilder.buildSVGContent(params, seriesName, timestamp),
             '</svg>'
         ));
     }
