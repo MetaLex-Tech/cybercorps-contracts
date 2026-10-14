@@ -21,7 +21,7 @@ import {RealWorldShareCert} from "./libs/RealWorldShareCert.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {CertificateSVGParams, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {CertificateSVGParamsV2, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {ICertificateImageBuilder} from "../src/interfaces/ICertificateImageBuilder.sol";
 import {CertificateDetails, Endorsement, OwnerDetails} from "../src/interfaces/ILedgerEntryToken.sol";
 
@@ -570,7 +570,7 @@ contract PrinterStub {
 
 /// @dev The builder always draws an image, so it needs an image builder wired.
 contract ImageBuilderStub is ICertificateImageBuilder {
-    function buildCertificateSVG(CertificateSVGParams calldata, uint256) external pure returns (string memory) {
+    function buildCertificateSVGV2(CertificateSVGParamsV2 calldata, uint256) external pure returns (string memory) {
         return "<svg/>";
     }
 }

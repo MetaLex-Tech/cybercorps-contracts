@@ -375,17 +375,8 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
             extension, abi.encodeCall(ICertificateSeriesName.seriesNameOf, (token, certificate.tokenId))
         );
         string memory svg = _optionalString(
-            imageBuilder, abi.encodeCall(ICertificateImageBuilderV2.buildCertificateSVGV2, (params, timestamp))
+            imageBuilder, abi.encodeCall(ICertificateImageBuilder.buildCertificateSVGV2, (params, timestamp))
         );
-        // TODO: Production does not use this fallback. It is deprecated. Remove it. The removal has no effect
-        // on production. The fallback is for an image builder without the current `buildCertificateSVGV2`.
-        // MetaLeX upgrades the URI builder and the image builder together, so that case does not occur.
-        // An old image builder shows a zero date as 1970, so the fallback runs only with a known date.
-        if (bytes(svg).length == 0 && timestamp != 0) {
-            svg = _optionalString(
-                imageBuilder, abi.encodeCall(ICertificateImageBuilder.buildCertificateSVG, (certificate, timestamp))
-            );
-        }
         return bytes(svg).length == 0 ? "" : string.concat("data:image/svg+xml;base64,", Base64.encode(bytes(svg)));
     }
 

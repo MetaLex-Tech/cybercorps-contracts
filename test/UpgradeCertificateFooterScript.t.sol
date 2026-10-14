@@ -13,6 +13,7 @@ import {CertificateSVGParamsV2} from "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 contract UpgradeCertificateFooterScriptTest is Test {
     string private PATH;
@@ -30,9 +31,14 @@ contract UpgradeCertificateFooterScriptTest is Test {
     }
 
     function fixture(address owner) internal {
+        fixture(owner, address(new PreviousRenderingUriBuilder()));
+    }
+
+    /// @param implementation The URI implementation the proxy starts with. The default differs from the current
+    ///        source, so the script must upgrade it together with the image builder.
+    function fixture(address owner, address implementation) internal {
         auth = new BorgAuth(owner);
-        // Deliberately differs from current URI source: the footer script must preserve it.
-        builder = CertificateUriBuilder(address(new ERC1967Proxy(address(new PreviousRenderingUriBuilder()),
+        builder = CertificateUriBuilder(address(new ERC1967Proxy(implementation,
             abi.encodeCall(CertificateUriBuilder.initialize, (address(auth))))));
         address image = address(new PreviousImageRenderer());
         vm.prank(owner);
@@ -48,7 +54,7 @@ contract UpgradeCertificateFooterScriptTest is Test {
         address oldImage = builder.imageBuilder();
         assertEq(_run(block.chainid, address(builder), ownerSafe, PATH).length, 1);
         assertNotEq(builder.imageBuilder(), oldImage);
-        assertEq(vm.load(address(builder), ERC1967Utils.IMPLEMENTATION_SLOT), implementation);
+        assertNotEq(vm.load(address(builder), ERC1967Utils.IMPLEMENTATION_SLOT), implementation);
         assertEq(address(builder.AUTH()), address(auth));
         assertEq(auth.userRoles(deployer), 99);
         assertEq(auth.userRoles(ownerSafe), 99);
@@ -62,21 +68,24 @@ contract UpgradeCertificateFooterScriptTest is Test {
         vm.removeFile(PATH);
     }
 
-    function testSafeBatchOnlySetsImageAndClearsOnRerun() public {
+    /// @notice One Safe call switches the URI implementation and the image builder together.
+    function testSafeBatchSwitchesBothRenderersAtomicallyAndClearsOnRerun() public {
         PATH = "script/res/test-footer-safe.json";
         fixture(ownerSafe);
-        bytes32 implementation = vm.load(address(builder), ERC1967Utils.IMPLEMENTATION_SLOT);
+        bytes32 oldImplementation = vm.load(address(builder), ERC1967Utils.IMPLEMENTATION_SLOT);
         GnosisTransaction[] memory txs = _run(block.chainid, address(builder), ownerSafe, PATH);
+        address implementation = address(uint160(uint256(vm.load(address(builder), ERC1967Utils.IMPLEMENTATION_SLOT))));
+        assertNotEq(bytes32(uint256(uint160(implementation))), oldImplementation);
         assertEq(txs.length, 1);
         assertEq(txs[0].to, address(builder));
         assertEq(txs[0].value, 0);
-        assertEq(txs[0].data, abi.encodeCall(CertificateUriBuilder.setImageBuilder, (builder.imageBuilder())));
+        assertEq(txs[0].data, abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation,
+            abi.encodeCall(CertificateUriBuilder.setImageBuilder, (builder.imageBuilder())))));
         string memory batch = vm.readFile(PATH);
         assertEq(vm.parseJsonString(batch, ".chainId"), vm.toString(block.chainid));
         assertEq(vm.parseJsonAddress(batch, ".transactions[0].to"), address(builder));
         assertEq(vm.parseJsonBytes(batch, ".transactions[0].data"), txs[0].data);
         assertFalse(vm.keyExistsJson(batch, ".transactions[1]"));
-        assertEq(vm.load(address(builder), ERC1967Utils.IMPLEMENTATION_SLOT), implementation);
         assertEq(address(builder.AUTH()), address(auth));
         assertEq(auth.userRoles(ownerSafe), 99);
         assertEq(auth.userRoles(deployer), 0);
@@ -85,6 +94,19 @@ contract UpgradeCertificateFooterScriptTest is Test {
         assertEq(_run(block.chainid, address(builder), ownerSafe, PATH).length, 0);
         assertEq(vm.getNonce(deployer), nonce);
         assertEq(vm.parseJson(vm.readFile(PATH), ".transactions"), abi.encode(new bytes[](0)));
+        vm.removeFile(PATH);
+    }
+
+    /// @notice A URI implementation with the current code stays. The Safe then sets only the image builder.
+    function testCurrentUriImplementationOnlyChangesTheImageBuilder() public {
+        PATH = "script/res/test-footer-image-only.json";
+        fixture(ownerSafe, address(new CertificateUriBuilder()));
+        bytes32 implementation = vm.load(address(builder), ERC1967Utils.IMPLEMENTATION_SLOT);
+        GnosisTransaction[] memory txs = _run(block.chainid, address(builder), ownerSafe, PATH);
+        assertEq(txs.length, 1);
+        assertEq(txs[0].data, abi.encodeCall(CertificateUriBuilder.setImageBuilder, (builder.imageBuilder())));
+        assertEq(vm.load(address(builder), ERC1967Utils.IMPLEMENTATION_SLOT), implementation);
+        assertFooter();
         vm.removeFile(PATH);
     }
 
@@ -137,7 +159,9 @@ contract UpgradeCertificateFooterScriptTest is Test {
             runner.run();
             assertEq(vm.parseJsonString(vm.readFile(PATH), ".chainId"), vm.toString(chains[i]));
             assertEq(vm.parseJsonAddress(vm.readFile(PATH), ".transactions[0].to"), core.uriBuilder);
-            assertEq(vm.load(core.uriBuilder, ERC1967Utils.IMPLEMENTATION_SLOT), implementation);
+            assertEq(bytes4(vm.parseJsonBytes(vm.readFile(PATH), ".transactions[0].data")),
+                UUPSUpgradeable.upgradeToAndCall.selector);
+            assertNotEq(vm.load(core.uriBuilder, ERC1967Utils.IMPLEMENTATION_SLOT), implementation);
 
             // The wrapper's explicit argument still refuses a wrong RPC before deployment.
             uint64 nonce = vm.getNonce(deployer);

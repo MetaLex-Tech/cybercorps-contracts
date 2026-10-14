@@ -8,9 +8,13 @@ import {DeploymentScript} from "./libs/DeploymentScript.sol";
 import {DeploymentUtils} from "./libs/DeploymentUtils.sol";
 import {GnosisTransaction} from "./libs/safe.sol";
 import {console2} from "forge-std/Script.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-/// @notice Install the issuer-name footer without upgrading the URI implementation.
-/// @dev Configure RPC, sender and signing through Forge's normal options. No script-specific env vars.
+/// @notice Install the current certificate renderers: the URI implementation and the image builder.
+/// @dev The URI builder calls the image builder through one entry point, and that entry point can change
+///      between releases. So one Safe call switches both parts with `upgradeToAndCall`. The Safe sets the
+///      image builder alone only when the URI implementation already has the current code.
+///      Configure RPC, sender and signing through Forge's normal options. No script-specific env vars.
 ///      Forge links/deploys CertificateImageContentBuilder using the configured wallet.
 contract UpgradeCertificateFooterScript is DeploymentScript {
     function run() external {
@@ -45,25 +49,36 @@ contract UpgradeCertificateFooterScript is DeploymentScript {
         address auth = address(builder.AUTH());
         require(ownerSafe != address(0) && DeploymentUtils.hasOwnerRole(auth, ownerSafe),
             "Safe does not own URI_BUILDER");
+        address oldImage = builder.imageBuilder();
         console2.log("URI proxy:", proxy);
-        console2.log("Preserved URI implementation:", implementation);
-        console2.log("Previous image builder:", builder.imageBuilder());
-        // This renderer has no immutables. Compare linked runtime code in simulation before broadcasting.
-        address image = builder.imageBuilder();
-        address candidate = address(new CertificateImageBuilderContract());
-        bool changed = image.codehash != candidate.codehash;
-        if (changed) {
+        console2.log("Previous URI implementation:", implementation);
+        console2.log("Previous image builder:", oldImage);
+        // Compare linked runtime code in simulation before broadcasting. The URI implementation keeps its own
+        // address as an immutable, and the comparison masks it.
+        address image = oldImage;
+        if (!_sameCode(oldImage, address(new CertificateImageBuilderContract()))) {
             vm.broadcast(msg.sender); // Forge's --sender; the matching wallet signs outside this script.
             image = address(new CertificateImageBuilderContract());
-            // Always require multisig execution, even when the deployment key is also an owner.
-            safeTxs.push(GnosisTransaction({to: proxy, value: 0,
-                data: abi.encodeCall(CertificateUriBuilder.setImageBuilder, (image))}));
         }
-        finish("[footer Safe batch]", path);
-        require(implementationOf(proxy) == implementation, "URI implementation changed");
+        address oldImplementation = implementation;
+        if (!_sameCode(oldImplementation, address(new CertificateUriBuilder()))) {
+            vm.broadcast(msg.sender);
+            implementation = address(new CertificateUriBuilder());
+        }
+        bytes memory imageCall = abi.encodeCall(CertificateUriBuilder.setImageBuilder, (image));
+        // Always require multisig execution, even when the deployment key is also an owner.
+        if (implementation != oldImplementation) {
+            safeTxs.push(GnosisTransaction({to: proxy, value: 0,
+                data: abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, imageCall))}));
+        } else if (image != oldImage) {
+            safeTxs.push(GnosisTransaction({to: proxy, value: 0, data: imageCall}));
+        }
+        finish("[renderer Safe batch]", path);
+        require(implementationOf(proxy) == implementation, "URI implementation update failed");
         require(address(builder.AUTH()) == auth, "AUTH changed");
         require(builder.imageBuilder() == image, "Image builder update failed");
         if (safeTxs.length == 0) vm.writeFile(path, DeploymentUtils.formatSafeTxJson(safeTxs, chainId));
+        console2.log("Verified URI implementation (simulation):", implementation);
         console2.log("Verified image builder (simulation):", image);
         console2.log("Batch output (verify deployment receipts before Safe import):", path);
         return safeTxs;

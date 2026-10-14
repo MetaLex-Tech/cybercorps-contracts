@@ -1,4 +1,7 @@
-# Upgrade the LET issuer footer
+# Upgrade the LET certificate renderers
+
+The script installs the current URI implementation and image builder on the
+shared URI proxy. It first shipped the issuer footer.
 
 The Forge script uses the connected RPC's chain ID and Forge's configured
 sender/wallet. It reads no script-specific environment variables or private keys.
@@ -19,10 +22,16 @@ forge script script/upgrade-certificate-footer.s.sol:UpgradeCertificateFooterScr
 ```
 
 Without `--broadcast` this only simulates. After release approval, add
-`--broadcast --slow` to deploy the linked content library and image builder.
-The script always queues `setImageBuilder` for the configured Safe, even when
-the deployment wallet is also an owner. It never broadcasts the setter itself.
-It preserves the URI implementation and AUTH, including older implementations.
+`--broadcast --slow` to deploy the linked content library, the image builder
+and the URI implementation, when their code changed. The script always queues
+the owner call for the configured Safe, even when the deployment wallet is also
+an owner. It never broadcasts the owner call itself. AUTH stays the same.
+
+The URI builder calls the image builder through one entry point, and that entry
+point can change between releases. So when the URI implementation changed, the
+Safe gets one `upgradeToAndCall(implementation, setImageBuilder(image))` call,
+which switches both parts in one transaction. When the URI implementation
+already has the current code, the Safe gets `setImageBuilder` only.
 
 The output path is derived automatically:
 
@@ -36,8 +45,8 @@ file must not be executed. Direct runs overwrite that chain/proxy file; use the
 latest successfully deployed version. An empty transactions array is a no-op.
 
 The script updates the configured shared URI proxy, not arbitrary custom URI
-builders. Existing tokens using that proxy pick up the footer after the Safe
-executes the setter. Verify the decoded live `tokenURI` after execution.
+builders. Existing tokens using that proxy pick up the new renderers after the
+Safe executes the batch. Verify the decoded live `tokenURI` after execution.
 
 ## Optional all-chain runner
 
@@ -73,8 +82,9 @@ source. Neither entrypoint signs or submits Safe transactions.
 
 For custom proxies, `runWithArgs(uint256,address,address,string)` accepts an
 expected chain ID, proxy, Safe and output path; wallet selection stays with Forge.
-The separate `upgrade-certificate-rendering.s.sol` remains the broader option
-that can also upgrade the URI implementation.
+The separate `upgrade-certificate-rendering.s.sol` makes the same atomic switch.
+It signs with `PRIVATE_KEY_MAIN` and sends the owner call directly when that key
+is an owner.
 
 ## Validation
 
@@ -86,7 +96,8 @@ python test/rehearse_certificate_footer.py
 
 On older Forge versions, add the two OpenZeppelin remappings used by the Python
 runner if auto-remapping fails. Tests cover all five default chain targets,
-Safe-only updates, preservation of implementation/AUTH, no-op reruns, and refusals.
+Safe-only updates, the atomic implementation/image switch, the image-only case,
+AUTH preservation, no-op reruns, and refusals.
 
 The Anvil rehearsal uses public toy keys and Forge wallet flags. It deploys the
 renderer on an isolated localhost chain, verifies the pointer is unchanged,

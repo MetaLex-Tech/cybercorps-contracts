@@ -107,13 +107,6 @@ contract CertificateFooterTest is Test {
         assertTrue(_contains(svg, 'y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">Extraordinarily Long Company Name Hold...</text>'));
     }
 
-    /// @notice The legacy (V1) entry point renders through the same content builder.
-    function testLegacyEntryPointRendersTheSameFooter() public view {
-        CertificateSVGParamsV2 memory p = _delawareCorp();
-        (, bytes memory footer,) = _splitAtFooter(image.buildCertificateSVG(p.certificate, 1709164800));
-        assertEq(string(footer), _footer("MetaLeX Labs, Inc."));
-    }
-
     /// @notice Only the footer element changed. Everything before and after it is byte-identical to the
     ///         SVG the unmodified renderer produced for the same parameters.
     function testEverythingButTheFooterIsUnchanged() public view {

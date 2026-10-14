@@ -54,7 +54,8 @@ enum SecurityClass {
     RestrictedStockPurchaseAgreement,
     RestrictedStockUnit,
     RestrictedTokenPurchaseAgreement,
-    RestrictedTokenUnit
+    RestrictedTokenUnit,
+    MembershipInterest
 }
 
 enum SecuritySeries {
@@ -147,7 +148,7 @@ struct CertificateSVGParams {
     string certificateUri;
 }
 
-/// @dev Separate tuple preserves the legacy image-builder selector.
+/// @dev The input of `buildCertificateSVGV2`. `certificate` holds the base fields of the certificate.
 struct CertificateSVGParamsV2 {
     CertificateSVGParams certificate;
     address issuerAddress;

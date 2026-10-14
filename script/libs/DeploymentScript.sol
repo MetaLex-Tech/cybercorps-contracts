@@ -408,7 +408,7 @@ abstract contract DeploymentScript is Script {
         execute("[set param]", auth, to, abi.encodePacked(setter, value), description);
     }
 
-    function _sameCode(address a, address b) private view returns (bool) {
+    function _sameCode(address a, address b) internal view returns (bool) {
         return keccak256(_withoutOwnAddress(a)) == keccak256(_withoutOwnAddress(b));
     }
 
