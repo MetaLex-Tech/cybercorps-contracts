@@ -24,6 +24,10 @@ contract CertificateFooterTest is Test {
         unicode'<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">Recorded on the MetaLeX Labs, Inc. Tokenized Stock Ledger pursuant to DGCL §§219, 224.</text>';
     string private constant SERIES_OPEN =
         '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">';
+    string private constant OLD_SERIES_LABELS =
+        '<text x="470" y="418" font-size="14" fill="#9A9A98">Class</text><text x="519" y="418" font-size="14" fill="#9A9A98">Series</text>';
+    string private constant SERIES_LABELS =
+        '<text x="505" y="418" font-size="14" fill="#9A9A98" text-anchor="end">Series</text><text x="519" y="418" font-size="14" fill="#9A9A98">Class</text>';
     string private constant SENTENCE = "This constitutes an official entry on the tokenized securities ledger of ";
 
     CertificateImageBuilderContract private image;
@@ -110,8 +114,9 @@ contract CertificateFooterTest is Test {
     }
 
     /// @notice Only the footer element and the series line changed. Everything else is byte-identical to the
-    ///         SVG the renderer produced at 10fa89f2 for the same parameters. The series line now uses the
-    ///         charter order, so the test puts the new series line into the old SVG before it compares.
+    ///         SVG the renderer produced at 10fa89f2 for the same parameters. The series line and its labels now
+    ///         use the charter order, so the test puts the new series line and labels into the old SVG before it
+    ///         compares.
     function testEverythingButTheFooterAndSeriesLineIsUnchanged() public view {
         _assertOnlyFooterChanged(
             image.buildCertificateSVG(_delawareCorp(), 1709164800),
@@ -178,7 +183,8 @@ contract CertificateFooterTest is Test {
         assertEq(suffix, oldSuffix, "bytes after the footer");
     }
 
-    /// @dev Replaces the one series line of `baseline`. Reverts if `baseline` does not have the old line.
+    /// @dev Replaces the one series line of `baseline` and its labels. Reverts if `baseline` does not have the old
+    ///      line or the old labels.
     function _withSeriesLine(string memory baseline, string memory oldText, string memory newText)
         private
         pure
@@ -187,6 +193,9 @@ contract CertificateFooterTest is Test {
         string memory oldLine = string.concat(SERIES_OPEN, oldText, "</text>");
         uint256 at = _indexOf(bytes(baseline), bytes(oldLine), 0);
         assertEq(_indexOf(bytes(baseline), bytes(SERIES_OPEN), 0), at, "the baseline has one series line");
+        assertEq(_indexOf(bytes(baseline), bytes(OLD_SERIES_LABELS), 0), at - bytes(OLD_SERIES_LABELS).length,
+            "the old labels come just before the series line");
+        baseline = vm.replace(baseline, OLD_SERIES_LABELS, SERIES_LABELS);
         return vm.replace(baseline, oldLine, string.concat(SERIES_OPEN, newText, "</text>"));
     }
 

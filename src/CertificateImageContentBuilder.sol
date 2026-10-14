@@ -155,8 +155,8 @@ library CertificateImageContentBuilder {
             '<text x="630" y="318" font-size="14" fill="#9A9A98">Registered Owner </text>',
             '<text x="630" y="344" font-size="16" fill="#f2f2f2">', CertificateText.xml(params.ownerName, 26), ' </text>',
             '<text x="630" y="364" font-size="11" fill="#9A9A98">', _truncatedAddress(params.ownerAddress), '</text>',
-            '<text x="470" y="418" font-size="14" fill="#9A9A98">Class</text>',
-            '<text x="519" y="418" font-size="14" fill="#9A9A98">Series</text>',
+            '<text x="505" y="418" font-size="14" fill="#9A9A98" text-anchor="end">Series</text>',
+            '<text x="519" y="418" font-size="14" fill="#9A9A98">Class</text>',
             '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityName(params), '</text>'
         ));
     }
