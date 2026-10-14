@@ -9,7 +9,7 @@ import {GnosisTransaction} from "../script/libs/safe.sol";
 import {PreviousRenderingUriBuilder, PreviousImageRenderer} from "./UpgradeCertificateRenderingScript.t.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
-import {CertificateSVGParamsV2} from "../src/CyberCorpConstants.sol";
+import {CertificateSVGParams} from "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Utils.sol";
@@ -183,9 +183,9 @@ contract UpgradeCertificateFooterScriptTest is Test {
     }
 
     function assertFooter() internal {
-        CertificateSVGParamsV2 memory p;
-        p.certificate.corpName = "Example LLC";
-        string memory svg = CertificateImageBuilderContract(builder.imageBuilder()).buildCertificateSVGV2(p, 0);
+        CertificateSVGParams memory p;
+        p.corpName = "Example LLC";
+        string memory svg = CertificateImageBuilderContract(builder.imageBuilder()).buildCertificateSVG(p, 0);
         assertTrue(vm.contains(svg,
             "This constitutes an official entry on the tokenized securities ledger of Example LLC.</text>"));
     }

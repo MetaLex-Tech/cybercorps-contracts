@@ -134,6 +134,7 @@ enum UnlockingIntervalType {
     monthly
 }
 
+/// @dev The input of `buildCertificateSVG`.
 struct CertificateSVGParams {
     string corpName;
     SecurityClass securityType;
@@ -146,11 +147,6 @@ struct CertificateSVGParams {
     string ownerName;
     uint256 tokenId;
     string certificateUri;
-}
-
-/// @dev The input of `buildCertificateSVGV2`. `certificate` holds the base fields of the certificate.
-struct CertificateSVGParamsV2 {
-    CertificateSVGParams certificate;
     address issuerAddress;
     address ownerAddress;
     uint256 consideration;

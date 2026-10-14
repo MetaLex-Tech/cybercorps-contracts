@@ -348,16 +348,15 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         return ok && value <= 253402300799 ? value : 0;
     }
 
+    /// @param params The certificate fields. This function sets the other fields of the image.
     function _buildImage(
-        CertificateSVGParams memory certificate,
+        CertificateSVGParams memory params,
         RestrictiveLegend[] memory legends,
         address token,
         address owner,
         uint256 consideration,
         address extension
     ) private view returns (string memory) {
-        CertificateSVGParamsV2 memory params;
-        params.certificate = certificate;
         params.issuerAddress = _issuer(token);
         params.ownerAddress = owner;
         params.consideration = consideration;
@@ -367,15 +366,15 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
             params.transferRestrictions[i] = bytes(legends[i].text).length == 0 ? legends[i].title : legends[i].text;
         }
         (bool ok, uint256 status) =
-            MetadataCall.word(token, abi.encodeCall(ILedgerEntryToken.isVoided, (certificate.tokenId)));
+            MetadataCall.word(token, abi.encodeCall(ILedgerEntryToken.isVoided, (params.tokenId)));
         params.statusKnown = ok && status <= 1;
         params.isVoided = params.statusKnown && status == 1;
-        uint256 timestamp = _issueTimestamp(token, certificate.tokenId);
+        uint256 timestamp = _issueTimestamp(token, params.tokenId);
         params.seriesName = _optionalString(
-            extension, abi.encodeCall(ICertificateSeriesName.seriesNameOf, (token, certificate.tokenId))
+            extension, abi.encodeCall(ICertificateSeriesName.seriesNameOf, (token, params.tokenId))
         );
         string memory svg = _optionalString(
-            imageBuilder, abi.encodeCall(ICertificateImageBuilder.buildCertificateSVGV2, (params, timestamp))
+            imageBuilder, abi.encodeCall(ICertificateImageBuilder.buildCertificateSVG, (params, timestamp))
         );
         return bytes(svg).length == 0 ? "" : string.concat("data:image/svg+xml;base64,", Base64.encode(bytes(svg)));
     }
@@ -676,19 +675,18 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
 
         string memory json;
         {
-            CertificateSVGParams memory svgParams = CertificateSVGParams({
-                corpName: cyberCORPName,
-                securityType: securityType,
-                securitySeries: securitySeries,
-                officerName: details.signingOfficerName,
-                officerTitle: details.signingOfficerTitle,
-                units: details.unitsRepresented,
-                valuation: details.issuerUSDValuationAtTimeOfInvestment,
-                jurisdiction: cyberCORPJurisdiction,
-                ownerName: owner.name,
-                tokenId: tokenId,
-                certificateUri: certificateUri
-            });
+            CertificateSVGParams memory svgParams;
+            svgParams.corpName = cyberCORPName;
+            svgParams.securityType = securityType;
+            svgParams.securitySeries = securitySeries;
+            svgParams.officerName = details.signingOfficerName;
+            svgParams.officerTitle = details.signingOfficerTitle;
+            svgParams.units = details.unitsRepresented;
+            svgParams.valuation = details.issuerUSDValuationAtTimeOfInvestment;
+            svgParams.jurisdiction = cyberCORPJurisdiction;
+            svgParams.ownerName = owner.name;
+            svgParams.tokenId = tokenId;
+            svgParams.certificateUri = certificateUri;
             string memory imageDataUri = _buildImage(svgParams, certLegend, contractAddress, owner.ownerAddress, details.investmentAmountUSD, extension);
             json = string(abi.encodePacked(
                 '{"title": "MetaLeX Tokenized Certificate",',

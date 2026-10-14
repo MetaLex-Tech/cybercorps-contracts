@@ -50,7 +50,7 @@ import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
 ///         of the "Ledger Entry Token" certificate SVG
 library CertificateImageContentBuilder {
     function buildSVGContent(
-        CertificateSVGParamsV2 memory params,
+        CertificateSVGParams memory params,
         uint256 timestamp
     ) public pure returns (string memory) {
         string memory dateStr = _formatDate(timestamp);
@@ -76,10 +76,10 @@ library CertificateImageContentBuilder {
     /// @dev The name is cut at 26 code points, the parties block's limit. The sentence alone takes about
     ///      620px of the 1024px width at 14px in a wide system font, so the header's limit of 38 would let
     ///      a long upper-case name run past the edge.
-    function _buildFooter(CertificateSVGParamsV2 memory params) private pure returns (string memory) {
+    function _buildFooter(CertificateSVGParams memory params) private pure returns (string memory) {
         return string(abi.encodePacked(
             '<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">This constitutes an official entry on the tokenized securities ledger of ',
-            CertificateText.xml(params.certificate.corpName, 26),
+            CertificateText.xml(params.corpName, 26),
             '.</text>'
         ));
     }
@@ -133,12 +133,12 @@ library CertificateImageContentBuilder {
         ));
     }
 
-    function _buildHeaderText(CertificateSVGParamsV2 memory params) private pure returns (string memory) {
+    function _buildHeaderText(CertificateSVGParams memory params) private pure returns (string memory) {
         return string(abi.encodePacked(
-            '<text x="512" y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">', CertificateText.xml(params.certificate.corpName, 38), '</text>',
+            '<text x="512" y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">', CertificateText.xml(params.corpName, 38), '</text>',
             '<text x="152" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">Token ID</text>',
-            '<text x="152" y="124" font-size="35" fill="#f2f2f2" text-anchor="middle">#', _uintToString(params.certificate.tokenId), '</text>',
-            '<text x="835" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">', _getBaseUnit(params.certificate.securityType), '</text>',
+            '<text x="152" y="124" font-size="35" fill="#f2f2f2" text-anchor="middle">#', _uintToString(params.tokenId), '</text>',
+            '<text x="835" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">', _getBaseUnit(params.securityType), '</text>',
             '<text x="838" y="124" font-size="35" fill="#f2f2f2" text-anchor="middle">', _formatUnits(params), '</text>',
             !params.statusKnown ? "" : params.isVoided
                 ? '<text x="805" y="225" font-size="11" fill="#FF2E2E" text-anchor="middle">voided</text>'
@@ -147,33 +147,35 @@ library CertificateImageContentBuilder {
         ));
     }
 
-    function _buildPartiesText(CertificateSVGParamsV2 memory params) private pure returns (string memory) {
+    function _buildPartiesText(CertificateSVGParams memory params) private pure returns (string memory) {
         return string(abi.encodePacked(
             '<text x="230" y="318" font-size="14" fill="#9A9A98">Issuer </text>',
-            '<text x="230" y="344" font-size="16" fill="#f2f2f2">', CertificateText.xml(params.certificate.corpName, 26), ' </text>',
+            '<text x="230" y="344" font-size="16" fill="#f2f2f2">', CertificateText.xml(params.corpName, 26), ' </text>',
             '<text x="230" y="364" font-size="11" fill="#9A9A98">', _truncatedAddress(params.issuerAddress), '</text>',
             '<text x="630" y="318" font-size="14" fill="#9A9A98">Registered Owner </text>',
-            '<text x="630" y="344" font-size="16" fill="#f2f2f2">', CertificateText.xml(params.certificate.ownerName, 26), ' </text>',
+            '<text x="630" y="344" font-size="16" fill="#f2f2f2">', CertificateText.xml(params.ownerName, 26), ' </text>',
             '<text x="630" y="364" font-size="11" fill="#9A9A98">', _truncatedAddress(params.ownerAddress), '</text>',
             '<text x="470" y="418" font-size="14" fill="#9A9A98">Class</text>',
             '<text x="519" y="418" font-size="14" fill="#9A9A98">Series</text>',
-            '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityName(params.certificate, params.seriesName), '</text>'
+            '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityName(params), '</text>'
         ));
     }
 
-    /// @dev A set series name gives the charter form, "Series Seed 2 Preferred Stock". Without a name,
-    ///      the image keeps its old form from the series enum, "Preferred Stock Series Seed".
+    /// @dev The charter form puts the series before the class: "Series Seed 2 Preferred Stock".
+    ///      The series comes from the series name when it is set, else from the series enum.
     ///      The name is free text. Escape it and cut it at 50 code points so that it fits the artwork.
-    function _securityName(CertificateSVGParams memory certificate, string memory seriesName) private pure returns (string memory) {
-        string memory class = _securityClassToString(certificate.securityType);
-        if (bytes(seriesName).length == 0) {
-            return string.concat(class, ' ', _securitySeriesToString(certificate.securitySeries));
-        }
-        return string.concat(CertificateText.xml(seriesName, 50), ' ', class);
+    ///      A security without a series (`NA`) shows the class only.
+    function _securityName(CertificateSVGParams memory params) private pure returns (string memory) {
+        string memory class = _securityClassToString(params.securityType);
+        string memory series = bytes(params.seriesName).length == 0
+            ? _securitySeriesToString(params.securitySeries)
+            : CertificateText.xml(params.seriesName, 50);
+        if (bytes(series).length == 0) return class;
+        return string.concat(series, ' ', class);
     }
 
     function _buildStatsText(
-        CertificateSVGParamsV2 memory params,
+        CertificateSVGParams memory params,
         string memory dateStr
     ) private pure returns (string memory) {
         return string(abi.encodePacked(
@@ -187,12 +189,12 @@ library CertificateImageContentBuilder {
     }
 
     function _buildOfficerText(
-        CertificateSVGParamsV2 memory params
+        CertificateSVGParams memory params
     ) private pure returns (string memory) {
         return string(abi.encodePacked(
             '<text x="512" y="590" font-size="14" fill="#9A9A98" text-anchor="middle">Authorizing Officer</text>',
-            '<text x="512" y="620" font-size="18" fill="#f2f2f2" text-anchor="middle">', CertificateText.xml(params.certificate.officerName, 55), '</text>',
-            '<text x="512" y="645" font-size="16" fill="#9A9A98" text-anchor="middle">', CertificateText.xml(params.certificate.officerTitle, 55), '</text>'
+            '<text x="512" y="620" font-size="18" fill="#f2f2f2" text-anchor="middle">', CertificateText.xml(params.officerName, 55), '</text>',
+            '<text x="512" y="645" font-size="16" fill="#9A9A98" text-anchor="middle">', CertificateText.xml(params.officerTitle, 55), '</text>'
         ));
     }
 
@@ -271,27 +273,27 @@ library CertificateImageContentBuilder {
     }
 
     /// @notice Units displayed: unitsRepresented for shares/units, always 1 for convertibles
-    function _formatUnits(CertificateSVGParamsV2 memory params) private pure returns (string memory) {
-        if (_isConvertible(params.certificate.securityType)) {
+    function _formatUnits(CertificateSVGParams memory params) private pure returns (string memory) {
+        if (_isConvertible(params.securityType)) {
             return "1";
         }
-        return _formatDecimal18(params.certificate.units);
+        return _formatDecimal18(params.units);
     }
 
     /// @notice Consideration displayed: price per share for shares/units (e.g. "0.0000001/sh"),
     ///         total consideration for convertibles, without assuming a currency.
-    function _formatConsideration(CertificateSVGParamsV2 memory params) private pure returns (string memory) {
+    function _formatConsideration(CertificateSVGParams memory params) private pure returns (string memory) {
         if (!params.considerationKnown) return "";
-        if (_isConvertible(params.certificate.securityType)) {
+        if (_isConvertible(params.securityType)) {
             return _formatDecimal18(params.consideration);
         }
-        if (params.certificate.units == 0) {
+        if (params.units == 0) {
             return "";
         }
         // mulDiv handles a 512-bit product, provided the quotient fits in uint256.
-        if (params.certificate.units < 1e18 && params.consideration > Math.mulDiv(type(uint256).max, params.certificate.units, 1e18)) return "";
-        uint256 perUnit = Math.mulDiv(params.consideration, 1e18, params.certificate.units);
-        string memory suffix = (params.certificate.securityType == SecurityClass.CommonStock || params.certificate.securityType == SecurityClass.PreferredStock || params.certificate.securityType == SecurityClass.StockOption) ? "/sh" : "/unit";
+        if (params.units < 1e18 && params.consideration > Math.mulDiv(type(uint256).max, params.units, 1e18)) return "";
+        uint256 perUnit = Math.mulDiv(params.consideration, 1e18, params.units);
+        string memory suffix = (params.securityType == SecurityClass.CommonStock || params.securityType == SecurityClass.PreferredStock || params.securityType == SecurityClass.StockOption) ? "/sh" : "/unit";
         return string(abi.encodePacked(_formatDecimal18(perUnit), suffix));
     }
 

@@ -52,7 +52,7 @@ import "./CertificateImageBuilder.sol";
 contract CertificateImageBuilderContract is ICertificateImageBuilder {
 
     /// @inheritdoc ICertificateImageBuilder
-    function buildCertificateSVGV2(CertificateSVGParamsV2 calldata params, uint256 timestamp)
+    function buildCertificateSVG(CertificateSVGParams calldata params, uint256 timestamp)
         external pure override returns (string memory)
     {
         return CertificateImageBuilder.buildCertificateSVG(params, timestamp);

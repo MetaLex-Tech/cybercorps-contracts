@@ -66,9 +66,9 @@ node or explorer with no external service.
 ## The certificate image
 
 The image builder draws a "Ledger Entry Token" certificate from a
-`CertificateSVGParamsV2` (the `CertificateSVGParams` fields plus issuer
-and owner addresses, consideration, transfer restrictions, void status
-and series name):
+`CertificateSVGParams` (the certificate fields plus issuer and owner
+addresses, consideration, transfer restrictions, void status and series
+name):
 
 * the company name, token id and a status pill (**active** or **voided**,
   with a VOIDED stamp across a void certificate);
@@ -76,8 +76,8 @@ and series name):
   Owner** (holder name and address);
 * class and series. When the extension gives a series name
   (`seriesNameOf`), the image shows it in charter form, for example
-  "Series Seed 2 Preferred Stock". Otherwise it shows the class and the
-  series enum, for example "Preferred Stock Series Seed";
+  "Series Seed 2 Preferred Stock". Otherwise it shows the series enum in
+  the same order, for example "Series Seed Preferred Stock";
 * **Units** and **Consideration**: for shares and units, the units held
   and the price per share or unit; for convertibles (SAFE, SAFT, SAFTE,
   token purchase agreement, token warrant, convertible note), `1` and the
@@ -90,7 +90,7 @@ and series name):
 
 Names and titles are XML-escaped and truncated to fit the artwork
 (`CertificateText.xml`); the full values stay in the JSON. The builder
-calls `buildCertificateSVGV2`. Upgrade the URI builder and the image
+calls `buildCertificateSVG`. Upgrade the URI builder and the image
 builder in one transaction, because the URI builder has no fallback to an
 older image builder. Reads of the issuer,
 issue date and void status tolerate LET contracts and managers that lack

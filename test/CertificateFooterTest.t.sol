@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
-import {CertificateSVGParamsV2, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {CertificateSVGParams, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {
     CertificateDetails,
     Endorsement,
@@ -32,16 +32,16 @@ contract CertificateFooterTest is Test {
 
     /// @dev The parameters behind test/res/let-svg-10fa89f2-delaware-corp.svg, captured from the renderer
     ///      at develop 10fa89f2 before this change.
-    function _delawareCorp() private pure returns (CertificateSVGParamsV2 memory p) {
-        p.certificate.corpName = "MetaLeX Labs, Inc.";
-        p.certificate.securityType = SecurityClass.CommonStock;
-        p.certificate.securitySeries = SecuritySeries.SeriesSeed;
-        p.certificate.officerName = "Officer";
-        p.certificate.officerTitle = "CEO";
-        p.certificate.jurisdiction = "Delaware";
-        p.certificate.ownerName = "Holder";
-        p.certificate.tokenId = 7;
-        p.certificate.units = 25e17;
+    function _delawareCorp() private pure returns (CertificateSVGParams memory p) {
+        p.corpName = "MetaLeX Labs, Inc.";
+        p.securityType = SecurityClass.CommonStock;
+        p.securitySeries = SecuritySeries.SeriesSeed;
+        p.officerName = "Officer";
+        p.officerTitle = "CEO";
+        p.jurisdiction = "Delaware";
+        p.ownerName = "Holder";
+        p.tokenId = 7;
+        p.units = 25e17;
         p.issuerAddress = address(0xBEEF);
         p.ownerAddress = address(0xCAFE);
         p.consideration = 25e16;
@@ -53,12 +53,12 @@ contract CertificateFooterTest is Test {
     }
 
     /// @dev The parameters behind test/res/let-svg-10fa89f2-wyoming-llc-voided.svg, from the same capture.
-    function _wyomingLlcVoided() private pure returns (CertificateSVGParamsV2 memory p) {
+    function _wyomingLlcVoided() private pure returns (CertificateSVGParams memory p) {
         p = _delawareCorp();
-        p.certificate.corpName = "Empulser Enterprises LLC";
-        p.certificate.jurisdiction = "Wyoming";
-        p.certificate.securityType = SecurityClass.SAFE;
-        p.certificate.securitySeries = SecuritySeries.ACE;
+        p.corpName = "Empulser Enterprises LLC";
+        p.jurisdiction = "Wyoming";
+        p.securityType = SecurityClass.SAFE;
+        p.securitySeries = SecuritySeries.ACE;
         p.isVoided = true;
     }
 
@@ -67,14 +67,14 @@ contract CertificateFooterTest is Test {
     }
 
     function testFooterNamesTheIssuer() public view {
-        string memory svg = image.buildCertificateSVGV2(_delawareCorp(), 1709164800);
+        string memory svg = image.buildCertificateSVG(_delawareCorp(), 1709164800);
         (, bytes memory footer,) = _splitAtFooter(svg);
         assertEq(string(footer), _footer("MetaLeX Labs, Inc."));
         assertFalse(_contains(svg, "DGCL"));
     }
 
     function testAnLlcNoLongerClaimsAnotherCompanysStockLedger() public view {
-        string memory svg = image.buildCertificateSVGV2(_wyomingLlcVoided(), 0);
+        string memory svg = image.buildCertificateSVG(_wyomingLlcVoided(), 0);
         (, bytes memory footer,) = _splitAtFooter(svg);
         assertEq(string(footer), _footer("Empulser Enterprises LLC"));
         assertFalse(_contains(svg, "MetaLeX Labs"));
@@ -84,24 +84,24 @@ contract CertificateFooterTest is Test {
 
     /// @notice The sentence is the same for every company; the jurisdiction plays no part.
     function testFooterDoesNotDependOnJurisdiction() public view {
-        CertificateSVGParamsV2 memory p = _delawareCorp();
-        string memory delaware = image.buildCertificateSVGV2(p, 1709164800);
-        p.certificate.jurisdiction = "Wyoming";
-        assertEq(image.buildCertificateSVGV2(p, 1709164800), delaware);
-        p.certificate.jurisdiction = "";
-        assertEq(image.buildCertificateSVGV2(p, 1709164800), delaware);
+        CertificateSVGParams memory p = _delawareCorp();
+        string memory delaware = image.buildCertificateSVG(p, 1709164800);
+        p.jurisdiction = "Wyoming";
+        assertEq(image.buildCertificateSVG(p, 1709164800), delaware);
+        p.jurisdiction = "";
+        assertEq(image.buildCertificateSVG(p, 1709164800), delaware);
     }
 
     function testFooterEscapesAndTruncatesTheName() public view {
-        CertificateSVGParamsV2 memory p = _delawareCorp();
-        p.certificate.corpName = 'Smith & Wesson <Co> "SA"';
-        (, bytes memory footer,) = _splitAtFooter(image.buildCertificateSVGV2(p, 0));
+        CertificateSVGParams memory p = _delawareCorp();
+        p.corpName = 'Smith & Wesson <Co> "SA"';
+        (, bytes memory footer,) = _splitAtFooter(image.buildCertificateSVG(p, 0));
         assertEq(string(footer), _footer("Smith &amp; Wesson &lt;Co&gt; &quot;SA&quot;"));
 
         // 54 code points: the footer cuts at 26 with "...", the parties block's limit, so a long name in a
         // wide font cannot push the 14px sentence past the 1024px edge. The header keeps its own cut at 38.
-        p.certificate.corpName = "Extraordinarily Long Company Name Holdings Corporation";
-        string memory svg = image.buildCertificateSVGV2(p, 0);
+        p.corpName = "Extraordinarily Long Company Name Holdings Corporation";
+        string memory svg = image.buildCertificateSVG(p, 0);
         (, footer,) = _splitAtFooter(svg);
         assertEq(string(footer), _footer("Extraordinarily Long Compa..."));
         assertTrue(_contains(svg, 'y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">Extraordinarily Long Company Name Hold...</text>'));
@@ -111,12 +111,12 @@ contract CertificateFooterTest is Test {
     ///         SVG the unmodified renderer produced for the same parameters.
     function testEverythingButTheFooterIsUnchanged() public view {
         _assertOnlyFooterChanged(
-            image.buildCertificateSVGV2(_delawareCorp(), 1709164800),
+            image.buildCertificateSVG(_delawareCorp(), 1709164800),
             vm.readFile("test/res/let-svg-10fa89f2-delaware-corp.svg"),
             "MetaLeX Labs, Inc."
         );
         _assertOnlyFooterChanged(
-            image.buildCertificateSVGV2(_wyomingLlcVoided(), 0),
+            image.buildCertificateSVG(_wyomingLlcVoided(), 0),
             vm.readFile("test/res/let-svg-10fa89f2-wyoming-llc-voided.svg"),
             "Empulser Enterprises LLC"
         );
