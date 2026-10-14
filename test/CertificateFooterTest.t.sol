@@ -22,6 +22,8 @@ contract CertificateFooterTest is Test {
         '<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">';
     string private constant OLD_FOOTER =
         unicode'<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">Recorded on the MetaLeX Labs, Inc. Tokenized Stock Ledger pursuant to DGCL §§219, 224.</text>';
+    string private constant SERIES_OPEN =
+        '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">';
     string private constant SENTENCE = "This constitutes an official entry on the tokenized securities ledger of ";
 
     CertificateImageBuilderContract private image;
@@ -107,17 +109,19 @@ contract CertificateFooterTest is Test {
         assertTrue(_contains(svg, 'y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">Extraordinarily Long Company Name Hold...</text>'));
     }
 
-    /// @notice Only the footer element changed. Everything before and after it is byte-identical to the
-    ///         SVG the unmodified renderer produced for the same parameters.
-    function testEverythingButTheFooterIsUnchanged() public view {
+    /// @notice Only the footer element and the series line changed. Everything else is byte-identical to the
+    ///         SVG the renderer produced at 10fa89f2 for the same parameters. The series line now uses the
+    ///         charter order, so the test puts the new series line into the old SVG before it compares.
+    function testEverythingButTheFooterAndSeriesLineIsUnchanged() public view {
         _assertOnlyFooterChanged(
             image.buildCertificateSVG(_delawareCorp(), 1709164800),
-            vm.readFile("test/res/let-svg-10fa89f2-delaware-corp.svg"),
+            _withSeriesLine(vm.readFile("test/res/let-svg-10fa89f2-delaware-corp.svg"),
+                "Common Stock Series Seed", "Series Seed Common Stock"),
             "MetaLeX Labs, Inc."
         );
         _assertOnlyFooterChanged(
             image.buildCertificateSVG(_wyomingLlcVoided(), 0),
-            vm.readFile("test/res/let-svg-10fa89f2-wyoming-llc-voided.svg"),
+            _withSeriesLine(vm.readFile("test/res/let-svg-10fa89f2-wyoming-llc-voided.svg"), "SAFE ACE", "ACE SAFE"),
             "Empulser Enterprises LLC"
         );
     }
@@ -172,6 +176,18 @@ contract CertificateFooterTest is Test {
         assertEq(string(footer), _footer(name), "the new footer");
         assertEq(prefix, oldPrefix, "bytes before the footer");
         assertEq(suffix, oldSuffix, "bytes after the footer");
+    }
+
+    /// @dev Replaces the one series line of `baseline`. Reverts if `baseline` does not have the old line.
+    function _withSeriesLine(string memory baseline, string memory oldText, string memory newText)
+        private
+        pure
+        returns (string memory)
+    {
+        string memory oldLine = string.concat(SERIES_OPEN, oldText, "</text>");
+        uint256 at = _indexOf(bytes(baseline), bytes(oldLine), 0);
+        assertEq(_indexOf(bytes(baseline), bytes(SERIES_OPEN), 0), at, "the baseline has one series line");
+        return vm.replace(baseline, oldLine, string.concat(SERIES_OPEN, newText, "</text>"));
     }
 
     /// @return prefix everything before the footer element, footer the element, suffix everything after
