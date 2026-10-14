@@ -84,8 +84,10 @@ abstract contract DeploymentScript is Script {
 
     /// @notice Deploys `creationCode` with CREATE, unless `current` already has the same code.
     /// @dev The step deploys a copy only in the simulation and compares its runtime code with `current`.
-    ///      The only masked difference is the contract's own address, which UUPSUpgradeable keeps as an
-    ///      immutable. Any other difference, a comment change included, deploys a new contract.
+    ///      The comparison ignores two parts that do not change behavior: the contract's own address, which
+    ///      UUPSUpgradeable keeps as an immutable, and the metadata that solc appends. The metadata holds a hash
+    ///      of every source file in the import tree. So a change in a shared file, a comment change included,
+    ///      changes it in every contract that imports the file. Any other difference deploys a new contract.
     ///      A zero `current` always deploys.
     ///      `creationCode` must include the constructor arguments, if any.
     /// @return deployed The new contract, or `current` when the code is the same.
@@ -422,7 +424,20 @@ abstract contract DeploymentScript is Script {
     }
 
     function _sameCode(address a, address b) internal view returns (bool) {
-        return keccak256(_withoutOwnAddress(a)) == keccak256(_withoutOwnAddress(b));
+        return keccak256(_withoutMetadata(_withoutOwnAddress(a))) == keccak256(_withoutMetadata(_withoutOwnAddress(b)));
+    }
+
+    /// @dev Removes the CBOR metadata at the end of the runtime code. Its last two bytes give its length.
+    /// This way a change only in comments or NatSpec would not be treated as a diff
+    function _withoutMetadata(bytes memory code) private pure returns (bytes memory) {
+        if (code.length < 2) return code;
+        uint256 metadataLength = (uint256(uint8(code[code.length - 2])) << 8 | uint8(code[code.length - 1])) + 2;
+        if (metadataLength > code.length) return code;
+        bytes memory body = new bytes(code.length - metadataLength);
+        for (uint256 i = 0; i < body.length; i++) {
+            body[i] = code[i];
+        }
+        return body;
     }
 
     /// @dev Replaces each copy of the contract's own address in its runtime code with zeros.
