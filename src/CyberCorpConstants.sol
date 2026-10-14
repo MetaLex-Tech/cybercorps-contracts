@@ -157,6 +157,8 @@ struct CertificateSVGParamsV2 {
     string[] transferRestrictions;
     bool isVoided;
     bool statusKnown;
+    /// @dev The series name from the extension. The image shows the series enum when it is "".
+    string seriesName;
 }
 
 

@@ -49,27 +49,23 @@ import "./CertificateImageBuilder.sol";
 /// @notice Standalone contract for building certificate SVG images
 /// @dev Deployed separately to reduce CertificateUriBuilder contract size;
 ///      delegates rendering to the shared CertificateImageBuilder library
-contract CertificateImageBuilderContract is ICertificateImageBuilder, ICertificateImageBuilderV2, ICertificateImageBuilderV3 {
+contract CertificateImageBuilderContract is ICertificateImageBuilder, ICertificateImageBuilderV2 {
 
     /// @inheritdoc ICertificateImageBuilder
+    /// @dev TODO: Production code does not call this function. It is deprecated. Remove it.
+    ///      The removal has no effect on production.
     function buildCertificateSVG(
         CertificateSVGParams calldata params,
         uint256 timestamp
     ) external pure override returns (string memory) {
         CertificateSVGParamsV2 memory enriched;
         enriched.certificate = params;
-        return CertificateImageBuilder.buildCertificateSVG(enriched, "", timestamp);
+        return CertificateImageBuilder.buildCertificateSVG(enriched, timestamp);
     }
 
     function buildCertificateSVGV2(CertificateSVGParamsV2 calldata params, uint256 timestamp)
         external pure override returns (string memory)
     {
-        return CertificateImageBuilder.buildCertificateSVG(params, "", timestamp);
-    }
-
-    function buildCertificateSVGV3(CertificateSVGParamsV2 calldata params, string calldata seriesName, uint256 timestamp)
-        external pure override returns (string memory)
-    {
-        return CertificateImageBuilder.buildCertificateSVG(params, seriesName, timestamp);
+        return CertificateImageBuilder.buildCertificateSVG(params, timestamp);
     }
 }

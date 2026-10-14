@@ -45,6 +45,8 @@ import "../CyberCorpConstants.sol";
 
 /// @title ICertificateImageBuilder
 /// @notice Interface for the certificate image builder contract
+/// TODO: Production code does not call this interface. The shared URI builder calls `buildCertificateSVGV2`.
+/// This interface is deprecated. Remove it. The removal has no effect on production.
 interface ICertificateImageBuilder {
     /// @notice Builds a certificate SVG image
     /// @param params The certificate parameters
@@ -58,12 +60,6 @@ interface ICertificateImageBuilder {
 
 interface ICertificateImageBuilderV2 {
     function buildCertificateSVGV2(CertificateSVGParamsV2 calldata params, uint256 timestamp)
-        external pure returns (string memory);
-}
-
-interface ICertificateImageBuilderV3 {
-    /// @param seriesName The series name from the extension. The image shows the series enum when it is "".
-    function buildCertificateSVGV3(CertificateSVGParamsV2 calldata params, string calldata seriesName, uint256 timestamp)
         external pure returns (string memory);
 }
 

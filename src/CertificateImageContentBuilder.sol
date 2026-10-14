@@ -51,7 +51,6 @@ import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
 library CertificateImageContentBuilder {
     function buildSVGContent(
         CertificateSVGParamsV2 memory params,
-        string memory seriesName,
         uint256 timestamp
     ) public pure returns (string memory) {
         string memory dateStr = _formatDate(timestamp);
@@ -61,7 +60,7 @@ library CertificateImageContentBuilder {
             '<rect width="1" height="31" transform="translate(511 391)" fill="url(#paint0_linear_62908_10123)"/>',
             '<g font-family="system-ui">',
             _buildHeaderText(params),
-            _buildPartiesText(params, seriesName),
+            _buildPartiesText(params),
             _buildStatsText(params, dateStr),
             _buildOfficerText(params),
             _buildRestrictionsText(params.transferRestrictions),
@@ -148,7 +147,7 @@ library CertificateImageContentBuilder {
         ));
     }
 
-    function _buildPartiesText(CertificateSVGParamsV2 memory params, string memory seriesName) private pure returns (string memory) {
+    function _buildPartiesText(CertificateSVGParamsV2 memory params) private pure returns (string memory) {
         return string(abi.encodePacked(
             '<text x="230" y="318" font-size="14" fill="#9A9A98">Issuer </text>',
             '<text x="230" y="344" font-size="16" fill="#f2f2f2">', CertificateText.xml(params.certificate.corpName, 26), ' </text>',
@@ -158,7 +157,7 @@ library CertificateImageContentBuilder {
             '<text x="630" y="364" font-size="11" fill="#9A9A98">', _truncatedAddress(params.ownerAddress), '</text>',
             '<text x="470" y="418" font-size="14" fill="#9A9A98">Class</text>',
             '<text x="519" y="418" font-size="14" fill="#9A9A98">Series</text>',
-            '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityName(params.certificate, seriesName), '</text>'
+            '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityName(params.certificate, params.seriesName), '</text>'
         ));
     }
 
