@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
-import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
@@ -25,6 +23,7 @@ import {console2} from "forge-std/Script.sol";
 /// @notice Upgrades the MetaLeX-owned core singletons and the implementations that their factories use.
 ///         It sets the secondary-trade fee ratio, which the upgraded DealManagerFactory starts at zero.
 /// @dev All core singletons exist, so this script deploys only implementations.
+///      The certificate renderers are not here. `DeployBuildersScript` upgrades them in one call.
 ///      For each singleton: deploy a new implementation when the code changed, then upgrade the proxy
 ///      and set the factory references. See `DeploymentScript` for the checks and for who sends each call.
 contract UpgradeCoreScript is DeploymentScript {
@@ -129,18 +128,6 @@ contract UpgradeCoreScript is DeploymentScript {
             dmFactory.setDefaultSecondaryFeeRatio.selector,
             abi.encode(SECONDARY_FEE_RATIO_BPS),
             string.concat("default secondary fee ratio (bps): ", vm.toString(SECONDARY_FEE_RATIO_BPS))
-        );
-
-        upgradeProxy(core.auth, core.uriBuilder, "CertificateUriBuilder", type(CertificateUriBuilder).creationCode);
-
-        CertificateUriBuilder uriBuilder = CertificateUriBuilder(core.uriBuilder);
-        upgradeIfDifferent(
-            core.auth,
-            core.uriBuilder,
-            uriBuilder.imageBuilder.selector,
-            uriBuilder.setImageBuilder.selector,
-            "CertificateImageBuilderContract",
-            type(CertificateImageBuilderContract).creationCode
         );
 
         // TODO: LegalDocRegistry is disabled on all chains for now. Put it back for production: add it to

@@ -176,6 +176,19 @@ abstract contract DeploymentScript is Script {
         string memory name,
         address implementation
     ) internal {
+        upgradeProxy(logLabel, auth, proxy, name, implementation, "");
+    }
+
+    /// @notice The same as the version above. The upgrade also calls the proxy with `data` in the same call.
+    /// @dev Use `data` for a change that must go live together with the new implementation.
+    function upgradeProxy(
+        string memory logLabel,
+        address auth,
+        address proxy,
+        string memory name,
+        address implementation,
+        bytes memory data
+    ) internal {
         if (proxy == address(0)) revert("Missing proxy address");
         if (implementationOf(proxy) == implementation) {
             console2.log(
@@ -189,7 +202,7 @@ abstract contract DeploymentScript is Script {
             logLabel,
             auth,
             proxy,
-            abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, "")),
+            abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, data)),
             string.concat(name, " ", vm.toString(proxy), " to implementation ", vm.toString(implementation))
         );
         if (direct) _requireImplementation(proxy, implementation);

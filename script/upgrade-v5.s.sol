@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 
+import {DeployBuildersScript} from "./deploy-builders.s.sol";
 import {DeployExtensionsV2Script} from "./deploy-extensions-v2.s.sol";
 import {DeployExtensionsV3Script} from "./deploy-extensions-v3.s.sol";
 import {DeploySecondaryConditionsScript} from "./deploy-secondary-conditions.s.sol";
@@ -20,6 +21,7 @@ interface IUUPS {
 
 /// @notice Runs the whole v5 release. Each part has its own script, which can also run alone:
 ///         - `UpgradeCoreScript`: the core singletons.
+///         - `DeployBuildersScript`: the certificate URI builder and image builder, switched in one call.
 ///         - `DeployExtensionsV2Script`: the live V1 and V2 certificate extensions.
 ///         - `DeployExtensionsV3Script`: the V3 extensions.
 ///         - `DeploySecondaryConditionsScript`: the secondary-trading condition singletons.
@@ -61,6 +63,9 @@ contract UpgradeV5Script is DeploymentScript {
 
         // Each called script returns the calls that only the Safe can do.
         appendSafeTxs("[sub-script]", (new UpgradeCoreScript()).runWithArgs(block.chainid, privateKey), "core");
+        appendSafeTxs(
+            "[sub-script]", (new DeployBuildersScript()).runWithArgs(block.chainid, privateKey), "certificate builders"
+        );
         appendSafeTxs(
             "[sub-script]",
             (new DeployExtensionsV2Script()).runWithArgs(block.chainid, EXTENSIONS_V2_PROXY_SALT, privateKey),
