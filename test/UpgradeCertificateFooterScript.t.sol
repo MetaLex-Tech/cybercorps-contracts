@@ -10,10 +10,28 @@ import {PreviousRenderingUriBuilder, PreviousImageRenderer} from "./UpgradeCerti
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CertificateSVGParams} from "../src/CyberCorpConstants.sol";
-import {BorgAuth} from "../src/libs/auth.sol";
+import {CertificateDetails} from "../src/interfaces/ILedgerEntryToken.sol";
+import {BorgAuth, BorgAuthACL} from "../src/libs/auth.sol";
+import {ICertificateSeriesName} from "../src/storage/extensions/ICertificateExtension.sol";
+import {ShareExtensionV3} from "../src/storage/extensions/ShareExtensionV3.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
+/// @notice A Share extension from before `seriesNameOf`. It has the same proxy storage and upgrade gate.
+contract PreviousShareExtension is UUPSUpgradeable, BorgAuthACL {
+    function initialize(address auth) external initializer {
+        __UUPSUpgradeable_init();
+        __BorgAuthACL_init(auth);
+    }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
+}
+
+/// @notice A printer with one cert and no extension data, so `seriesNameOf` returns "".
+contract EmptyCertPrinter {
+    function getActiveCertificateDetails(uint256) external pure returns (CertificateDetails memory details) {}
+}
 
 contract UpgradeCertificateFooterScriptTest is Test {
     string private PATH;
@@ -110,6 +128,42 @@ contract UpgradeCertificateFooterScriptTest is Test {
         vm.removeFile(PATH);
     }
 
+    /// @notice The same Safe batch upgrades both Share extensions, so the image can read their series names.
+    function testShareExtensionsUpgradeInTheSameBatch() public {
+        PATH = "script/res/test-footer-share-extensions.json";
+        fixture(ownerSafe);
+        address share = _previousShareExtension(auth);
+        address shareV3 = _previousShareExtension(auth);
+        EmptyCertPrinter printer = new EmptyCertPrinter();
+        vm.expectRevert();
+        ICertificateSeriesName(share).seriesNameOf(address(printer), 0);
+
+        GnosisTransaction[] memory txs = runner.runWithArgs(block.chainid, address(builder), share, shareV3, ownerSafe, PATH);
+        assertEq(txs.length, 3, "renderers, ShareExtension and ShareExtensionV3");
+        assertEq(txs[1].to, share);
+        assertEq(txs[1].data, abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (_implementation(share), "")));
+        assertEq(txs[2].to, shareV3);
+        assertEq(txs[2].data, abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (_implementation(shareV3), "")));
+        assertEq(ICertificateSeriesName(share).seriesNameOf(address(printer), 0), "");
+        assertTrue(ShareExtensionV3(shareV3).supportsResolvedExtensionData(), "the V3 proxy runs the V3 code");
+        assertEq(address(BorgAuthACL(share).AUTH()), address(auth));
+
+        uint64 nonce = vm.getNonce(deployer);
+        assertEq(runner.runWithArgs(block.chainid, address(builder), share, shareV3, ownerSafe, PATH).length, 0);
+        assertEq(vm.getNonce(deployer), nonce);
+        vm.removeFile(PATH);
+    }
+
+    function testUnownedShareExtensionRefusesBeforeDeployment() public {
+        PATH = "script/res/test-footer-unowned-extension.json";
+        fixture(ownerSafe);
+        address share = _previousShareExtension(new BorgAuth(makeAddr("other owner")));
+        uint64 nonce = vm.getNonce(deployer);
+        vm.expectRevert("Safe does not own ShareExtension");
+        runner.runWithArgs(block.chainid, address(builder), share, address(0), ownerSafe, PATH);
+        assertEq(vm.getNonce(deployer), nonce);
+    }
+
     function testUnauthorizedOwnerRefusesBeforeDeployment() public {
         PATH = "script/res/test-footer-unauthorized.json";
         fixture(makeAddr("other owner"));
@@ -150,6 +204,11 @@ contract UpgradeCertificateFooterScriptTest is Test {
             BorgAuth defaultAuth = new BorgAuth(core.metalexSafe);
             CertificateUriBuilder defaultBuilder = CertificateUriBuilder(core.uriBuilder);
             if (i == 0) defaultBuilder.initialize(address(defaultAuth));
+            DeploymentConstants.ExtensionDeployment memory ext = DeploymentConstants.extensions(chains[i]);
+            if (i == 0) {
+                _putPreviousShareExtension(ext.shareExtension, defaultAuth);
+                _putPreviousShareExtension(ext.shareExtensionV3, defaultAuth);
+            }
             // Defaults share the same proxy and Safe; resetting image keeps each iteration substantive.
             address oldImage = address(new PreviousImageRenderer());
             vm.prank(core.metalexSafe);
@@ -179,7 +238,24 @@ contract UpgradeCertificateFooterScriptTest is Test {
     function _run(uint256 chainId, address proxy, address owner, string memory path)
         internal returns (GnosisTransaction[] memory)
     {
-        return runner.runWithArgs(chainId, proxy, owner, path);
+        return runner.runWithArgs(chainId, proxy, address(0), address(0), owner, path);
+    }
+
+    /// @dev Puts an initialized proxy of the previous Share extension at `target`.
+    function _putPreviousShareExtension(address target, BorgAuth owner) internal {
+        address proxy = _previousShareExtension(owner);
+        vm.etch(target, proxy.code);
+        vm.store(target, ERC1967Utils.IMPLEMENTATION_SLOT, vm.load(proxy, ERC1967Utils.IMPLEMENTATION_SLOT));
+        PreviousShareExtension(target).initialize(address(owner));
+    }
+
+    function _previousShareExtension(BorgAuth owner) internal returns (address) {
+        return address(new ERC1967Proxy(address(new PreviousShareExtension()),
+            abi.encodeCall(PreviousShareExtension.initialize, (address(owner)))));
+    }
+
+    function _implementation(address proxy) internal view returns (address) {
+        return address(uint160(uint256(vm.load(proxy, ERC1967Utils.IMPLEMENTATION_SLOT))));
     }
 
     function assertFooter() internal {

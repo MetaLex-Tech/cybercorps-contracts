@@ -1,7 +1,9 @@
 # Upgrade the LET certificate renderers
 
 The script installs the current URI implementation and image builder on the
-shared URI proxy. It first shipped the issuer footer.
+shared URI proxy, and upgrades the `ShareExtension` and `ShareExtensionV3`
+proxies from `DeploymentConstants.extensions`. It first shipped the issuer
+footer.
 
 The Forge script uses the connected RPC's chain ID and Forge's configured
 sender/wallet. It reads no script-specific environment variables or private keys.
@@ -32,6 +34,12 @@ point can change between releases. So when the URI implementation changed, the
 Safe gets one `upgradeToAndCall(implementation, setImageBuilder(image))` call,
 which switches both parts in one transaction. When the URI implementation
 already has the current code, the Safe gets `setImageBuilder` only.
+
+The image shows the series name that a Share extension gives through
+`seriesNameOf`. So the same batch also upgrades each Share extension proxy
+whose implementation differs from the current source, with
+`upgradeToAndCall(implementation, "")`. The Safe must own each proxy. The Safe
+runs the batch as one transaction.
 
 The output path is derived automatically:
 
@@ -80,9 +88,12 @@ Same-linked-code reruns are no-ops. A fresh Forge invocation may deploy a fresh
 content library and therefore a different image builder even with unchanged
 source. Neither entrypoint signs or submits Safe transactions.
 
-For custom proxies, `runWithArgs(uint256,address,address,string)` accepts an
-expected chain ID, proxy, Safe and output path; wallet selection stays with Forge.
-The separate `upgrade-certificate-rendering.s.sol` makes the same atomic switch.
+For custom proxies, `runWithArgs(uint256,address,address,address,address,string)`
+accepts an expected chain ID, the URI proxy, the `ShareExtension` and
+`ShareExtensionV3` proxies (zero leaves one out), the Safe and the output path;
+wallet selection stays with Forge.
+The separate `upgrade-certificate-rendering.s.sol` makes the same atomic switch
+of the renderers. It does not upgrade the Share extensions.
 It signs with `PRIVATE_KEY_MAIN` and sends the owner call directly when that key
 is an owner.
 
@@ -97,7 +108,8 @@ python test/rehearse_certificate_footer.py
 On older Forge versions, add the two OpenZeppelin remappings used by the Python
 runner if auto-remapping fails. Tests cover all five default chain targets,
 Safe-only updates, the atomic implementation/image switch, the image-only case,
-AUTH preservation, no-op reruns, and refusals.
+Share extension upgrades in the same batch, AUTH preservation, no-op reruns,
+and refusals.
 
 The Anvil rehearsal uses public toy keys and Forge wallet flags. It deploys the
 renderer on an isolated localhost chain, verifies the pointer is unchanged,

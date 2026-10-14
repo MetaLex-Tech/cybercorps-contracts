@@ -228,6 +228,7 @@ library CertificateImageContentBuilder {
         if (_class == SecurityClass.RestrictedStockUnit) return "Restricted Stock Unit";
         if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Restricted Token Purchase Agreement";
         if (_class == SecurityClass.RestrictedTokenUnit) return "Restricted Token Unit";
+        if (_class == SecurityClass.MembershipInterest) return "Membership Interest";
         return "Unknown";
     }
 
@@ -259,6 +260,7 @@ library CertificateImageContentBuilder {
         if (_class == SecurityClass.RestrictedStockUnit) return "Units";
         if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Units";
         if (_class == SecurityClass.RestrictedTokenUnit) return "Units";
+        if (_class == SecurityClass.MembershipInterest) return "Units";
         return "Unknown";
     }
 

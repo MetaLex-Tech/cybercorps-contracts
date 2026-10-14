@@ -386,7 +386,7 @@ abstract contract DeploymentScript is Script {
     }
 
     /// @dev `new` needs a fixed contract type, so a step that takes any creation code needs `create`.
-    function _create(bytes memory creationCode, string memory name) private returns (address created) {
+    function _create(bytes memory creationCode, string memory name) internal returns (address created) {
         assembly ("memory-safe") {
             created := create(0, add(creationCode, 0x20), mload(creationCode))
         }
