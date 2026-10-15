@@ -50,14 +50,7 @@ interface ICertificateImageBuilder {
     /// @param params The certificate parameters
     /// @param timestamp The timestamp for the certificate date
     /// @return The complete SVG string
-    function buildCertificateSVG(
-        CertificateSVGParams calldata params,
-        uint256 timestamp
-    ) external pure returns (string memory);
-}
-
-interface ICertificateImageBuilderV2 {
-    function buildCertificateSVGV2(CertificateSVGParamsV2 calldata params, uint256 timestamp)
+    function buildCertificateSVG(CertificateSVGParams calldata params, uint256 timestamp)
         external pure returns (string memory);
 }
 

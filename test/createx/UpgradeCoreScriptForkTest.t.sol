@@ -22,8 +22,9 @@ contract UpgradeCoreScriptForkTest is Test {
 
     function test_SecondRunAfterSafeBatchDeploysNothing() public {
         // Run 1: the deployer holds no role on mainnet, so every upgrade and setter goes to the Safe.
+        // The certificate builders are not here. `DeployBuildersScriptForkTest` covers their one call.
         GnosisTransaction[] memory safeTxs = (new UpgradeCoreScript()).runWithArgs(block.chainid, deployerKey);
-        assertEq(safeTxs.length, 16);
+        assertEq(safeTxs.length, 14);
         for (uint256 i = 0; i < safeTxs.length; i++) {
             vm.prank(safe);
             (bool success,) = safeTxs[i].to.call(safeTxs[i].data);

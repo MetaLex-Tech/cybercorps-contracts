@@ -59,7 +59,7 @@ library CertificateImageBuilder {
     }
 
     function buildCertificateSVG(
-        CertificateSVGParamsV2 memory params,
+        CertificateSVGParams memory params,
         uint256 timestamp
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(

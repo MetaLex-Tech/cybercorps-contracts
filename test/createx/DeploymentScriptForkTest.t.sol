@@ -416,6 +416,25 @@ contract DeploymentScriptForkTest is Test {
         assertEq(vm.getNonce(deployer), nonce);
     }
 
+    /// @dev A change in a shared source file changes only the metadata at the end of the code. The code stays.
+    function test_DeployIfDifferent_MetadataOnlyChangeKeepsCurrent() public {
+        vm.selectFork(forks[0]);
+        bytes memory code = type(EligibilityCondition).creationCode;
+        (address first,) = harness.deployIfDifferentStep("EligibilityCondition", code, address(0));
+        bytes memory runtime = first.code;
+        bytes32 codehash = first.codehash;
+        // Byte -10 is inside the metadata hash. The metadata of a solc 0.8 contract takes the last 53 bytes.
+        runtime[runtime.length - 10] = runtime[runtime.length - 10] ^ 0xff;
+        vm.etch(first, runtime);
+        assertNotEq(first.codehash, codehash);
+
+        uint256 nonce = vm.getNonce(deployer);
+        (address kept, bool isNew) = harness.deployIfDifferentStep("EligibilityCondition", code, first);
+        assertEq(kept, first);
+        assertFalse(isNew);
+        assertEq(vm.getNonce(deployer), nonce);
+    }
+
     function test_DeployIfDifferent_ChangedCodeDeploysNew() public {
         vm.selectFork(forks[0]);
         (address current,) =

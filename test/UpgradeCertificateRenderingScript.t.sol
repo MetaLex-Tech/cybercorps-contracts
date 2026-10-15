@@ -8,7 +8,7 @@ import {UpgradeCertificateRenderingScript} from "../script/upgrade-certificate-r
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {Base64, CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {
-    CertificateSVGParams, CertificateSVGParamsV2, SecurityClass, SecuritySeries
+    CertificateSVGParams, SecurityClass, SecuritySeries
 } from "../src/CyberCorpConstants.sol";
 import {
     CertificateDetails, Endorsement, OwnerDetails, RestrictiveLegend
@@ -26,8 +26,23 @@ contract PreviousRenderingUriBuilder is CertificateUriBuilder {
     }
 }
 
+/// @dev The image input of an older release. Its tuple differs from the current one, so its selector does too.
+struct PreviousCertificateSVGParams {
+    string corpName;
+    SecurityClass securityType;
+    SecuritySeries securitySeries;
+    string officerName;
+    string officerTitle;
+    uint256 units;
+    uint256 valuation;
+    string jurisdiction;
+    string ownerName;
+    uint256 tokenId;
+    string certificateUri;
+}
+
 contract PreviousImageRenderer {
-    function buildCertificateSVG(CertificateSVGParams calldata, uint256) external pure returns (string memory) {
+    function buildCertificateSVG(PreviousCertificateSVGParams calldata, uint256) external pure returns (string memory) {
         return "<svg><text>Old certificate</text></svg>";
     }
 }
@@ -188,18 +203,18 @@ contract UpgradeCertificateRenderingScriptTest is Test {
     }
 
     function _assertLatestRendering() private view {
-        CertificateSVGParamsV2 memory params;
-        params.certificate.corpName = "Example";
-        params.certificate.securityType = SecurityClass.CommonStock;
-        params.certificate.securitySeries = SecuritySeries.SeriesSeed;
-        params.certificate.units = 1e18;
-        params.certificate.jurisdiction = "DE";
-        params.certificate.ownerName = "Holder";
-        params.certificate.tokenId = 1;
+        CertificateSVGParams memory params;
+        params.corpName = "Example";
+        params.securityType = SecurityClass.CommonStock;
+        params.securitySeries = SecuritySeries.SeriesSeed;
+        params.units = 1e18;
+        params.jurisdiction = "DE";
+        params.ownerName = "Holder";
+        params.tokenId = 1;
         params.ownerAddress = address(0xCAFE);
         params.considerationKnown = true;
         params.transferRestrictions = new string[](0);
-        string memory svg = CertificateImageBuilderContract(builder.imageBuilder()).buildCertificateSVGV2(params, 0);
+        string memory svg = CertificateImageBuilderContract(builder.imageBuilder()).buildCertificateSVG(params, 0);
         assertTrue(_contains(bytes(svg), bytes("Ledger Entry Token")));
         // Verify the proxy's full metadata path uses this renderer, rather than just testing the renderer directly.
         assertEq(

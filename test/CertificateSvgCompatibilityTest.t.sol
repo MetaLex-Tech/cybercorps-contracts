@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {CertificateUriBuilder, Base64} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
-import {CertificateSVGParams, CertificateSVGParamsV2, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {CertificateSVGParams, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {
     CertificateDetails,
     Endorsement,
@@ -12,7 +12,7 @@ import {
     RestrictionType,
     RestrictiveLegend
 } from "../src/interfaces/ILedgerEntryToken.sol";
-import {ICertificateImageBuilder, ICertificateImageBuilderV2} from "../src/interfaces/ICertificateImageBuilder.sol";
+import {ICertificateImageBuilder} from "../src/interfaces/ICertificateImageBuilder.sol";
 import {MockCyberCorp, MockIssuanceManager} from "./CyberCertPrinterTest.t.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CertificateDetails, ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
@@ -26,6 +26,28 @@ contract SvgUriHarness is CertificateUriBuilder {
 contract EmptyExtension {
     function getExtensionURI(bytes memory) external pure returns (string memory) {
         return "";
+    }
+}
+
+/// @notice An extension that gives the series name of the charter.
+contract NamedExtension {
+    function getExtensionURI(bytes memory) external pure returns (string memory) {
+        return "";
+    }
+
+    function seriesNameOf(address, uint256) external pure returns (string memory) {
+        return "Series Seed 2";
+    }
+}
+
+/// @notice An extension whose series name getter reverts.
+contract RevertingNameExtension {
+    function getExtensionURI(bytes memory) external pure returns (string memory) {
+        return "";
+    }
+
+    function seriesNameOf(address, uint256) external pure returns (string memory) {
+        revert("no name");
     }
 }
 
@@ -61,15 +83,15 @@ contract CertificateSvgCompatibilityTest is Test {
         vm.etch(EXTENSION, address(new EmptyExtension()).code);
     }
 
-    function _params() internal pure returns (CertificateSVGParamsV2 memory p) {
-        p.certificate.corpName = "Example Corp";
-        p.certificate.securityType = SecurityClass.CommonStock;
-        p.certificate.securitySeries = SecuritySeries.SeriesSeed;
-        p.certificate.officerName = "Officer";
-        p.certificate.officerTitle = "CEO";
-        p.certificate.ownerName = "Holder";
-        p.certificate.tokenId = 1;
-        p.certificate.units = 25e17;
+    function _params() internal pure returns (CertificateSVGParams memory p) {
+        p.corpName = "Example Corp";
+        p.securityType = SecurityClass.CommonStock;
+        p.securitySeries = SecuritySeries.SeriesSeed;
+        p.officerName = "Officer";
+        p.officerTitle = "CEO";
+        p.ownerName = "Holder";
+        p.tokenId = 1;
+        p.units = 25e17;
         p.consideration = 25e16;
         p.considerationKnown = true;
         p.statusKnown = true;
@@ -319,49 +341,40 @@ contract CertificateSvgCompatibilityTest is Test {
         assertTrue(ok, "the same bound is enough for a working extension");
     }
 
-    function testLegacyImageSelectorAndFallbackRemainCallable() public {
-        CertificateSVGParamsV2 memory p = _params();
-        assertTrue(_contains(image.buildCertificateSVG(p.certificate, 1709164800), "Ledger Entry Token"));
-        vm.mockCallRevert(address(image), abi.encodeWithSelector(ICertificateImageBuilderV2.buildCertificateSVGV2.selector), hex"");
-        assertEq(vm.parseJsonString(_json(false, false), ".image"), "");
-        vm.mockCall(TOKEN, abi.encodeWithSignature("issueTimestamp(uint256)", 1), abi.encode(uint64(1709164800)));
-        assertTrue(_contains(_svg(_json(false, false)), "Ledger Entry Token"));
-    }
-
     function testGregorianDatesAndUnsupportedBounds() public view {
-        CertificateSVGParamsV2 memory p = _params();
-        assertTrue(_contains(image.buildCertificateSVGV2(p, 4107542400), ">3-1-2100</text>"));
-        assertTrue(_contains(image.buildCertificateSVGV2(p, 1704067200), ">1-1-2024</text>"));
-        assertTrue(_contains(image.buildCertificateSVGV2(p, 253402300799), ">12-31-9999</text>"));
-        assertFalse(_contains(image.buildCertificateSVGV2(p, 0), "1970"));
-        assertEq(image.buildCertificateSVGV2(p, type(uint256).max), image.buildCertificateSVGV2(p, 0));
+        CertificateSVGParams memory p = _params();
+        assertTrue(_contains(image.buildCertificateSVG(p, 4107542400), ">3-1-2100</text>"));
+        assertTrue(_contains(image.buildCertificateSVG(p, 1704067200), ">1-1-2024</text>"));
+        assertTrue(_contains(image.buildCertificateSVG(p, 253402300799), ">12-31-9999</text>"));
+        assertFalse(_contains(image.buildCertificateSVG(p, 0), "1970"));
+        assertEq(image.buildCertificateSVG(p, type(uint256).max), image.buildCertificateSVG(p, 0));
     }
 
     function testXmlEscapingFractionalUnitsAndCurrencyNeutralConsideration() public view {
-        CertificateSVGParamsV2 memory p = _params();
-        p.certificate.corpName = 'A & B <C> "D"';
+        CertificateSVGParams memory p = _params();
+        p.corpName = 'A & B <C> "D"';
         bytes memory invalidName = hex"486f6c64657201ff";
-        p.certificate.ownerName = string(invalidName);
+        p.ownerName = string(invalidName);
         p.transferRestrictions = new string[](1); p.transferRestrictions[0] = 'No <script>&';
-        string memory svg = image.buildCertificateSVGV2(p, 0);
+        string memory svg = image.buildCertificateSVG(p, 0);
         assertTrue(_contains(svg, "A &amp; B &lt;C&gt; &quot;D&quot;"));
         assertTrue(_contains(svg, "No &lt;script&gt;&amp;"));
         assertFalse(_contains(svg, "<script>"));
         assertTrue(_contains(svg, ">2.5</text>"));
         assertTrue(_contains(svg, ">0.1/sh</text>"));
-        p.certificate.securityType = SecurityClass.SAFE;
-        assertFalse(_contains(image.buildCertificateSVGV2(p, 0), "$"));
+        p.securityType = SecurityClass.SAFE;
+        assertFalse(_contains(image.buildCertificateSVG(p, 0), "$"));
     }
 
     function testExtremeConsiderationAndZeroUnitsDoNotRevert() public view {
-        CertificateSVGParamsV2 memory p = _params();
+        CertificateSVGParams memory p = _params();
         p.consideration = type(uint256).max;
-        p.certificate.units = 1;
-        assertGt(bytes(image.buildCertificateSVGV2(p, 0)).length, 0);
-        p.certificate.units = 0;
-        assertGt(bytes(image.buildCertificateSVGV2(p, 0)).length, 0);
-        p.certificate.units = type(uint256).max;
-        assertTrue(_contains(image.buildCertificateSVGV2(p, 0), ">1/sh</text>"));
+        p.units = 1;
+        assertGt(bytes(image.buildCertificateSVG(p, 0)).length, 0);
+        p.units = 0;
+        assertGt(bytes(image.buildCertificateSVG(p, 0)).length, 0);
+        p.units = type(uint256).max;
+        assertTrue(_contains(image.buildCertificateSVG(p, 0), ">1/sh</text>"));
     }
 
     function testCurrentTokenMintOverridesAndLegalOwnerChange() public {
@@ -398,12 +411,12 @@ contract CertificateSvgCompatibilityTest is Test {
     }
 
     function testLongTextPreviewRetainsFullRestrictionListInMetadata() public {
-        CertificateSVGParamsV2 memory p = _params();
-        p.certificate.corpName = "A very long corporation name with many more words than fit";
-        p.certificate.ownerName = "A very long registered holder name that needs shortening";
+        CertificateSVGParams memory p = _params();
+        p.corpName = "A very long corporation name with many more words than fit";
+        p.ownerName = "A very long registered holder name that needs shortening";
         p.transferRestrictions = new string[](8);
         for (uint256 i; i < 8; ++i) p.transferRestrictions[i] = "Board consent required & securities transfer limitations apply";
-        string memory svg = image.buildCertificateSVGV2(p, 1709164800);
+        string memory svg = image.buildCertificateSVG(p, 1709164800);
         assertTrue(_contains(svg, "Additional restrictions in token metadata"));
         assertTrue(_contains(svg, "..."));
         if (vm.envOr("SVG_PREVIEW", false)) {
@@ -411,9 +424,47 @@ contract CertificateSvgCompatibilityTest is Test {
             p = _params();
             p.issuerAddress = address(0x1234567890123456789012345678901234567890);
             p.ownerAddress = address(0x2234567890123456789012345678901234567890);
-            emit log_named_string("SVG_NORMAL", image.buildCertificateSVGV2(p, 1709164800));
+            emit log_named_string("SVG_NORMAL", image.buildCertificateSVG(p, 1709164800));
             p.isVoided = true;
-            emit log_named_string("SVG_VOID", image.buildCertificateSVGV2(p, 1709164800));
+            emit log_named_string("SVG_VOID", image.buildCertificateSVG(p, 1709164800));
         }
+    }
+
+    string internal constant ENUM_SERIES_LINE = 'text-anchor="middle">Series Seed Common Stock</text>';
+    string internal constant NAMED_SERIES_LINE = 'text-anchor="middle">Series Seed 2 Common Stock</text>';
+
+    /// @notice The series name changes the series line and nothing else.
+    function testSeriesNameReplacesOnlyTheSeriesLine() public view {
+        CertificateSVGParams memory p = _params();
+        string memory unnamed = image.buildCertificateSVG(p, 1709164800);
+        assertTrue(_contains(unnamed, ENUM_SERIES_LINE));
+        p.seriesName = "Series Seed 2";
+        assertEq(image.buildCertificateSVG(p, 1709164800), vm.replace(unnamed, ENUM_SERIES_LINE, NAMED_SERIES_LINE));
+    }
+
+    function testSeriesNameIsEscapedAndCut() public view {
+        CertificateSVGParams memory p = _params();
+        p.seriesName = 'Seed <2> & "B"';
+        string memory svg = image.buildCertificateSVG(p, 0);
+        assertTrue(_contains(svg, '>Seed &lt;2&gt; &amp; &quot;B&quot; Common Stock</text>'));
+        assertFalse(_contains(svg, "<2>"));
+
+        // 56 code points. The image cuts the name at 50.
+        p.seriesName = "Series Seed 2 Convertible Participating Preferred Shares";
+        svg = image.buildCertificateSVG(p, 0);
+        assertTrue(_contains(svg, '>Series Seed 2 Convertible Participating Preferred ... Common Stock</text>'));
+    }
+
+    function testUriBuilderShowsTheExtensionSeriesName() public {
+        vm.etch(EXTENSION, address(new NamedExtension()).code);
+        string memory svg = _svg(_json(false, false));
+        assertTrue(_contains(svg, NAMED_SERIES_LINE));
+        assertFalse(_contains(svg, ENUM_SERIES_LINE));
+    }
+
+    function testRevertingSeriesNameGetterRendersTheSeriesEnum() public {
+        string memory expected = _json(false, false);
+        vm.etch(EXTENSION, address(new RevertingNameExtension()).code);
+        assertEq(_json(false, false), expected);
     }
 }

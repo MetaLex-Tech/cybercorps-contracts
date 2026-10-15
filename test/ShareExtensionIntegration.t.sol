@@ -191,11 +191,59 @@ contract ShareExtensionIntegrationTest is Test {
         );
     }
 
+    /// @notice The image shows the series name of the charter, not the series enum of the printer. The
+    ///         printer holds `SeriesSeed`, and the payload names the series "Series Seed 2".
+    function test_tokenUri_ImageShowsTheSeriesName() public view {
+        string memory json = _decodeJsonUri(printer.tokenURI(tokenId));
+        string memory svg = _decodeBase64(vm.parseJsonString(json, ".image"), 26); // "data:image/svg+xml;base64,"
+        assertNotEq(vm.indexOf(svg, ">Series Seed 2 Preferred Stock</text>"), type(uint256).max);
+        assertEq(vm.parseJsonString(json, ".securitySeries"), "SeriesSeed", "the JSON keeps the series enum");
+    }
+
+    /// @notice Both storage shapes give the same name: the whole payload on the cert, or the terms on the
+    ///         printer.
+    function test_seriesNameOf_ReadsBothStorageShapes() public {
+        (ShareExtension legacyExt, LedgerEntryToken legacyPrinter, uint256 legacyTokenId) = _deployLegacyPrinter();
+        assertEq(legacyExt.seriesNameOf(address(legacyPrinter), legacyTokenId), "Series Seed 2");
+        assertEq(ext.seriesNameOf(address(printer), tokenId), "Series Seed 2");
+    }
+
+    /// @notice A membership interest renders with its own class name and unit, not "Unknown".
+    function test_tokenUri_NamesTheMembershipInterestClass() public {
+        LedgerEntryToken llcPrinter = LedgerEntryToken(
+            im.createCertPrinter(
+                RealWorldShareCert.legends(),
+                "Membership Interest - MetaLeX Labs, Inc.",
+                "MLI-MI",
+                REAL_WORLD_IPFS_URI,
+                SecurityClass.MembershipInterest,
+                SecuritySeries.NA,
+                address(0),
+                bytes("")
+            )
+        );
+        CertificateDetails memory details = _certDetails();
+        details.extensionData = "";
+        uint256 llcTokenId = im.createCertAndAssign(address(llcPrinter), holder, details);
+
+        string memory json = _decodeJsonUri(llcPrinter.tokenURI(llcTokenId));
+        assertEq(vm.parseJsonString(json, ".type"), "MembershipInterest");
+        assertEq(vm.parseJsonString(json, ".securityType"), "MembershipInterest");
+        string memory svg = _decodeBase64(vm.parseJsonString(json, ".image"), 26); // "data:image/svg+xml;base64,"
+        assertNotEq(vm.indexOf(svg, 'text-anchor="middle">Membership Interest</text>'), type(uint256).max);
+        assertNotEq(vm.indexOf(svg, 'text-anchor="middle">Units</text>'), type(uint256).max);
+        assertEq(vm.indexOf(svg, "Unknown"), type(uint256).max);
+        assertEq(CertificateUriBuilder(im.uriBuilder()).securityClassToUnit(SecurityClass.MembershipInterest), "Units");
+    }
+
     /// @dev `tokenURI` returns a base64 data URI. Decode it so the test can parse the JSON.
     function _decodeJsonUri(string memory uri) private pure returns (string memory) {
+        return _decodeBase64(uri, 29); // "data:application/json;base64,"
+    }
+
+    function _decodeBase64(string memory uri, uint256 prefix) private pure returns (string memory) {
         bytes memory input = bytes(uri);
-        uint256 prefix = 29; // "data:application/json;base64,"
-        require(input.length > prefix, "nonblank token URI required");
+        require(input.length > prefix, "nonblank data URI required");
         bytes memory decoded = new bytes((input.length - prefix) / 4 * 3);
         uint256 accumulator;
         uint256 bits;

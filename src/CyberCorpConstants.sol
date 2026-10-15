@@ -54,7 +54,8 @@ enum SecurityClass {
     RestrictedStockPurchaseAgreement,
     RestrictedStockUnit,
     RestrictedTokenPurchaseAgreement,
-    RestrictedTokenUnit
+    RestrictedTokenUnit,
+    MembershipInterest
 }
 
 enum SecuritySeries {
@@ -133,6 +134,7 @@ enum UnlockingIntervalType {
     monthly
 }
 
+/// @dev The input of `buildCertificateSVG`.
 struct CertificateSVGParams {
     string corpName;
     SecurityClass securityType;
@@ -145,11 +147,6 @@ struct CertificateSVGParams {
     string ownerName;
     uint256 tokenId;
     string certificateUri;
-}
-
-/// @dev Separate tuple preserves the legacy image-builder selector.
-struct CertificateSVGParamsV2 {
-    CertificateSVGParams certificate;
     address issuerAddress;
     address ownerAddress;
     uint256 consideration;
@@ -157,6 +154,8 @@ struct CertificateSVGParamsV2 {
     string[] transferRestrictions;
     bool isVoided;
     bool statusKnown;
+    /// @dev The series name from the extension. The image shows the series enum when it is "".
+    string seriesName;
 }
 
 

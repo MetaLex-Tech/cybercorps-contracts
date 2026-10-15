@@ -84,8 +84,10 @@ abstract contract DeploymentScript is Script {
 
     /// @notice Deploys `creationCode` with CREATE, unless `current` already has the same code.
     /// @dev The step deploys a copy only in the simulation and compares its runtime code with `current`.
-    ///      The only masked difference is the contract's own address, which UUPSUpgradeable keeps as an
-    ///      immutable. Any other difference, a comment change included, deploys a new contract.
+    ///      The comparison ignores two parts that do not change behavior: the contract's own address, which
+    ///      UUPSUpgradeable keeps as an immutable, and the metadata that solc appends. The metadata holds a hash
+    ///      of every source file in the import tree. So a change in a shared file, a comment change included,
+    ///      changes it in every contract that imports the file. Any other difference deploys a new contract.
     ///      A zero `current` always deploys.
     ///      `creationCode` must include the constructor arguments, if any.
     /// @return deployed The new contract, or `current` when the code is the same.
@@ -176,6 +178,19 @@ abstract contract DeploymentScript is Script {
         string memory name,
         address implementation
     ) internal {
+        upgradeProxy(logLabel, auth, proxy, name, implementation, "");
+    }
+
+    /// @notice The same as the version above. The upgrade also calls the proxy with `data` in the same call.
+    /// @dev Use `data` for a change that must go live together with the new implementation.
+    function upgradeProxy(
+        string memory logLabel,
+        address auth,
+        address proxy,
+        string memory name,
+        address implementation,
+        bytes memory data
+    ) internal {
         if (proxy == address(0)) revert("Missing proxy address");
         if (implementationOf(proxy) == implementation) {
             console2.log(
@@ -189,7 +204,7 @@ abstract contract DeploymentScript is Script {
             logLabel,
             auth,
             proxy,
-            abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, "")),
+            abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, data)),
             string.concat(name, " ", vm.toString(proxy), " to implementation ", vm.toString(implementation))
         );
         if (direct) _requireImplementation(proxy, implementation);
@@ -386,7 +401,7 @@ abstract contract DeploymentScript is Script {
     }
 
     /// @dev `new` needs a fixed contract type, so a step that takes any creation code needs `create`.
-    function _create(bytes memory creationCode, string memory name) private returns (address created) {
+    function _create(bytes memory creationCode, string memory name) internal returns (address created) {
         assembly ("memory-safe") {
             created := create(0, add(creationCode, 0x20), mload(creationCode))
         }
@@ -408,8 +423,21 @@ abstract contract DeploymentScript is Script {
         execute("[set param]", auth, to, abi.encodePacked(setter, value), description);
     }
 
-    function _sameCode(address a, address b) private view returns (bool) {
-        return keccak256(_withoutOwnAddress(a)) == keccak256(_withoutOwnAddress(b));
+    function _sameCode(address a, address b) internal view returns (bool) {
+        return keccak256(_withoutMetadata(_withoutOwnAddress(a))) == keccak256(_withoutMetadata(_withoutOwnAddress(b)));
+    }
+
+    /// @dev Removes the CBOR metadata at the end of the runtime code. Its last two bytes give its length.
+    /// This way a change only in comments or NatSpec would not be treated as a diff
+    function _withoutMetadata(bytes memory code) private pure returns (bytes memory) {
+        if (code.length < 2) return code;
+        uint256 metadataLength = (uint256(uint8(code[code.length - 2])) << 8 | uint8(code[code.length - 1])) + 2;
+        if (metadataLength > code.length) return code;
+        bytes memory body = new bytes(code.length - metadataLength);
+        for (uint256 i = 0; i < body.length; i++) {
+            body[i] = code[i];
+        }
+        return body;
     }
 
     /// @dev Replaces each copy of the contract's own address in its runtime code with zeros.
