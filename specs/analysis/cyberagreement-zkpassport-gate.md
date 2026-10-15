@@ -1,16 +1,22 @@
 # CyberAgreement — ZKPassport Gate (Three-Party Workflow)
 
 A new `PassportFinalizer` contract is the agreement's `finalizer`. The registry does not change.
-Each party records a ZKPassport proof for the agreement. The agreement finalizes only when all
-parties have a proof record and a signature.
+Each party sends one transaction. It records the party's ZKPassport proof and the party's
+signature together. The agreement finalizes only when all parties have a proof record and a
+signature.
 
-- `attest(contractId, proof)` stores `passportOf[contractId][party] = uniqueIdentifier`.
-- `signFor(...)` forwards a signature to `registry.signContractFor`. The registry accepts a relayed
-  signature only from the finalizer, because the finalizer is set.
-- `finalize(contractId)` checks a record for every party, then calls `registry.finalizeContract`.
+- `signWithProof(contractId, proof, partyValues, signature)`:
+  1. Verifies the proof and stores `passportOf[contractId][party] = uniqueIdentifier`. The party is
+     the proof's bound sender.
+  2. Forwards the signature to `registry.signContractFor(party, ...)`. The registry accepts a
+     relayed signature only from the finalizer, because the finalizer is set.
+  3. If all parties have signed and have a proof record, calls `registry.finalizeContract`.
+- `attest(contractId, proof)` does steps 1 and 3 only. It is a backup for a party that signed
+  directly on the registry. The normal flow does not use it.
 
 The example has three parties. A is the creator. B and C are email parties with pregenerated
-Privy wallets.
+Privy wallets. The webapp creates the agreement in its own transaction, because it reads the
+agreement back before it offers any signature.
 
 ## Workflow
 
@@ -26,7 +32,7 @@ sequenceDiagram
     participant Reg as CyberAgreementRegistry
     participant V as ZKPassport verifier
 
-    Note over A,Reg: Create
+    Note over A,Reg: Create (tx 1)
     A->>App: Draft agreement, invite B and C by email
     App->>Privy: Look up or pregenerate wallets for B and C
     Privy-->>App: walletB, walletC
@@ -34,47 +40,48 @@ sequenceDiagram
     Note right of Reg: contractId binds finalizer = PF
     App->>App: Read back the agreement, then email B and C
 
-    loop For each party P in A, B, C (any order)
-        Note over P,V: Prove
+    loop For each party P in A, B, C (any order), one tx each
+        Note over P,ZKP: Off-chain: prove and sign
         P->>App: Open the signing link, log in
         App->>ZKP: Proof request, bind(user_address = wallet P, chain, custom_data = contractId)
         P->>ZKP: Scan passport
         ZKP-->>App: Proof
-        App->>PF: attest(contractId, proof)
+        P->>Privy: Sign the EIP-712 SignatureData
+        Privy-->>App: Signature
+
+        Note over App,V: On-chain: one tx
+        App->>PF: signWithProof(contractId, proof, partyValues, signature)
         PF->>V: verify(proof)
         V-->>PF: verified, uniqueIdentifier, helper
         PF->>PF: Check scope, chainId, custom_data == contractId,<br/>registry.isParty(contractId, bound sender)
         PF->>PF: passportOf[contractId][P] = uniqueIdentifier
-
-        Note over P,Reg: Sign
-        P->>Privy: Sign the EIP-712 SignatureData
-        Privy-->>App: Signature
-        App->>PF: signFor(P, contractId, partyValues, signature)
-        PF->>PF: Require passportOf[contractId][P] is set
-        PF->>Reg: signContractFor(P, ...)
+        PF->>Reg: signContractFor(P, contractId, partyValues, signature)
         Reg->>Reg: Verify signature, record signedAt[P]
+        opt P is the last party
+            PF->>PF: Require passportOf set for A, B and C
+            PF->>Reg: finalizeContract(contractId)
+            Reg-->>App: ContractFinalized
+        end
     end
-
-    Note over App,Reg: Finalize
-    Reg-->>App: ContractFullySigned (no auto-finalize, finalizer is set)
-    App->>PF: finalize(contractId)
-    PF->>PF: Require passportOf set for A, B and C
-    PF->>Reg: finalizeContract(contractId)
-    Reg-->>App: ContractFinalized
 ```
+
+Total: four transactions. One creates the agreement. Each party sends one.
 
 ## Notes
 
-- **Order.** Each party proves before it signs through `signFor`. The parties can act in any
-  order and at different times.
-- **Relaying.** `attest` takes the party from the proof's bound sender, not from `msg.sender`.
-  Anyone can submit it. `custom_data = contractId` ties the proof to this agreement.
+- **Order.** The parties can act in any order and at different times. The last
+  `signWithProof` finalizes the agreement.
+- **Relaying.** `signWithProof` takes the party from the proof's bound sender, not from
+  `msg.sender`. Anyone can submit it. The registry still checks the party's own signature.
+  `custom_data = contractId` ties the proof to this agreement.
 - **Self-submission.** A party can call `registry.signContractFor` from its own wallet and skip
-  `signFor`. The agreement then becomes fully signed but not finalized. `finalize` still requires
-  all three proof records. The webapp must treat `finalized` as the effective state.
-- **Finalize caller.** `finalize` has no access control. It can only finalize an agreement that has
-  all signatures and all proof records.
+  the proof. That party then has no proof record, so the agreement does not finalize. The party
+  sends `attest` to record the proof. If that is the last missing proof, `attest` finalizes the
+  agreement. The webapp must treat `finalized` as the effective state.
 - TODO: Decide the proof scope. One app-wide scope makes `uniqueIdentifier` the same in every
   agreement, so it links all agreements of one passport on-chain. A per-agreement scope
   (`scope = contractId`) prevents that link.
 - TODO: Decide if every party needs a proof, or only some parties.
+- TODO: Support the standalone path (`createStandaloneContractAndSign`,
+  `createStandaloneContractAndSignFor`). It fixes `finalizer = address(0)`, so the gate does not
+  apply. The webapp email flow does not use it now.
