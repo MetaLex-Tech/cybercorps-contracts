@@ -48,14 +48,15 @@ import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
-/// @title PassportFinalizer
+/// @title ZKPassportFinalizer
 /// @notice The finalizer of an agreement that needs a passport proof from each party.
 /// - Each party sends one transaction. It records the party's passport and signs.
 /// - The creator can pin a passport to a party. That party can sign only with that passport.
 /// - In one agreement, a passport can fill one party only.
 /// - The agreement finalizes when all parties have signed and have a passport record.
 /// - Only the passport id goes on-chain. No PII.
-contract PassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
+/// - Dev mode lets a mock passport sign. Use it on a testnet only.
+contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
     error InvalidRegistry();
     error InvalidVerifier();
     error PassportIdsLengthMismatch();
@@ -73,18 +74,19 @@ contract PassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
     error PassportPinMismatch();
     error PassportAlreadyUsed();
 
-    struct PassportFinalizerStorage {
+    struct ZKPassportFinalizerStorage {
         ICyberAgreementRegistry registry;
         IZKPassportVerifier verifier;
         string expectedDomain;
         string expectedScope;
+        bool devMode; // accept dev-mode proofs
         mapping(bytes32 => bool) registered; // contractId => created here
         mapping(bytes32 => mapping(address => bytes32)) pinOf; // contractId => party => pinned passport id
         mapping(bytes32 => mapping(address => bytes32)) passportOf; // contractId => party => recorded passport id
         mapping(bytes32 => mapping(bytes32 => address)) partyOfPassport; // contractId => passport id => party
     }
 
-    bytes32 private constant STORAGE_POSITION = keccak256("metalex.agreements.passport-finalizer.storage.v1");
+    bytes32 private constant STORAGE_POSITION = keccak256("metalex.agreements.zkpassport-finalizer.storage.v1");
 
     event VerifierUpdated(address verifier);
     event PassportsPinned(bytes32 indexed contractId, address[] parties, bytes32[] passportIds);
@@ -100,16 +102,18 @@ contract PassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
         address _registry,
         address _verifier,
         string memory _expectedDomain,
-        string memory _expectedScope
+        string memory _expectedScope,
+        bool _devMode
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
 
         if (_registry == address(0)) revert InvalidRegistry();
-        PassportFinalizerStorage storage $ = _passportFinalizerStorage();
+        ZKPassportFinalizerStorage storage $ = _zkpassportFinalizerStorage();
         $.registry = ICyberAgreementRegistry(_registry);
         $.expectedDomain = _expectedDomain;
         $.expectedScope = _expectedScope;
+        $.devMode = _devMode;
         _setVerifier(_verifier);
     }
 
@@ -140,7 +144,7 @@ contract PassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
             }
         }
 
-        PassportFinalizerStorage storage $ = _passportFinalizerStorage();
+        ZKPassportFinalizerStorage storage $ = _zkpassportFinalizerStorage();
         contractId = $.registry
             .createContract(
                 templateId,
@@ -171,51 +175,55 @@ contract PassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes calldata signature
     ) external {
         address party = _record(contractId, params);
-        _passportFinalizerStorage().registry.signContractFor(party, contractId, partyValues, signature, false, "");
+        _zkpassportFinalizerStorage().registry.signContractFor(party, contractId, partyValues, signature, false, "");
         _finalizeIfReady(contractId);
     }
 
     /// @notice Record the passport of a party that signed on the registry directly.
     function attest(bytes32 contractId, ProofVerificationParams calldata params) external {
         address party = _record(contractId, params);
-        if (!_passportFinalizerStorage().registry.hasSigned(contractId, party)) revert NotSigned();
+        if (!_zkpassportFinalizerStorage().registry.hasSigned(contractId, party)) revert NotSigned();
         _finalizeIfReady(contractId);
     }
 
     function registry() external view returns (ICyberAgreementRegistry) {
-        return _passportFinalizerStorage().registry;
+        return _zkpassportFinalizerStorage().registry;
     }
 
     function verifier() external view returns (IZKPassportVerifier) {
-        return _passportFinalizerStorage().verifier;
+        return _zkpassportFinalizerStorage().verifier;
     }
 
     function expectedDomain() external view returns (string memory) {
-        return _passportFinalizerStorage().expectedDomain;
+        return _zkpassportFinalizerStorage().expectedDomain;
     }
 
     function expectedScope() external view returns (string memory) {
-        return _passportFinalizerStorage().expectedScope;
+        return _zkpassportFinalizerStorage().expectedScope;
+    }
+
+    function devMode() external view returns (bool) {
+        return _zkpassportFinalizerStorage().devMode;
     }
 
     function isRegistered(bytes32 contractId) external view returns (bool) {
-        return _passportFinalizerStorage().registered[contractId];
+        return _zkpassportFinalizerStorage().registered[contractId];
     }
 
     function pinOf(bytes32 contractId, address party) external view returns (bytes32) {
-        return _passportFinalizerStorage().pinOf[contractId][party];
+        return _zkpassportFinalizerStorage().pinOf[contractId][party];
     }
 
     function passportOf(bytes32 contractId, address party) external view returns (bytes32) {
-        return _passportFinalizerStorage().passportOf[contractId][party];
+        return _zkpassportFinalizerStorage().passportOf[contractId][party];
     }
 
     /// @dev Verify the proof and store the passport id for its bound sender. Returns that party.
     function _record(bytes32 contractId, ProofVerificationParams calldata params) internal returns (address party) {
-        PassportFinalizerStorage storage $ = _passportFinalizerStorage();
+        ZKPassportFinalizerStorage storage $ = _zkpassportFinalizerStorage();
         if (!$.registered[contractId]) revert AgreementNotRegistered();
-        // A dev-mode proof can come from a mock passport.
-        if (params.serviceConfig.devMode) revert DevModeProof();
+        // A dev-mode proof can come from a mock passport. Only a dev-mode deployment accepts it.
+        if (params.serviceConfig.devMode && !$.devMode) revert DevModeProof();
 
         (bool verified, bytes32 passportId, IZKPassportHelper helper) = $.verifier.verify(params);
         if (!verified || address(helper) == address(0)) revert InvalidProof();
@@ -245,7 +253,7 @@ contract PassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     /// @dev Finalize when all parties have signed and have a passport record. Otherwise do nothing.
     function _finalizeIfReady(bytes32 contractId) internal {
-        PassportFinalizerStorage storage $ = _passportFinalizerStorage();
+        ZKPassportFinalizerStorage storage $ = _zkpassportFinalizerStorage();
         if (!$.registry.allPartiesSigned(contractId)) return;
         address[] memory parties = $.registry.getParties(contractId);
         for (uint256 i = 0; i < parties.length; i++) {
@@ -263,11 +271,11 @@ contract PassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     function _setVerifier(address _verifier) internal {
         if (_verifier == address(0)) revert InvalidVerifier();
-        _passportFinalizerStorage().verifier = IZKPassportVerifier(_verifier);
+        _zkpassportFinalizerStorage().verifier = IZKPassportVerifier(_verifier);
         emit VerifierUpdated(_verifier);
     }
 
-    function _passportFinalizerStorage() private pure returns (PassportFinalizerStorage storage $) {
+    function _zkpassportFinalizerStorage() private pure returns (ZKPassportFinalizerStorage storage $) {
         bytes32 position = STORAGE_POSITION;
         assembly {
             $.slot := position

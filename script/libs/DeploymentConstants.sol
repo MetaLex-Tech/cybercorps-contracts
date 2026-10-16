@@ -37,7 +37,7 @@ library DeploymentConstants {
         address lexchexCondition;
         address zkpassportCondition;
         address zkpassportVerifier;
-        address passportFinalizer;
+        address zkpassportFinalizer;
     }
 
     struct ExtensionDeployment {
@@ -123,7 +123,7 @@ library DeploymentConstants {
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95, // difference from production chains
                     zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8,
-                    passportFinalizer: address(0)
+                    zkpassportFinalizer: address(0)
                 });
         } else if (chainId == BASE_SEPOLIA) {
             return
@@ -145,7 +145,7 @@ library DeploymentConstants {
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: address(0), // no ZKPassport Verifier available
                     zkpassportVerifier: address(0), // no ZKPassport Verifier available
-                    passportFinalizer: address(0)
+                    zkpassportFinalizer: address(0)
                 });
         } else if (chainId == ARBITRUM) {
             return
@@ -167,7 +167,7 @@ library DeploymentConstants {
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: address(0), // TODO: not yet deployed on this chain
                     zkpassportVerifier: address(0), // TODO: check if ZKPassport deployed a verifier on this chain
-                    passportFinalizer: address(0)
+                    zkpassportFinalizer: address(0)
                 });
         } else if (chainId == ETH || chainId == BASE) {
             deployment = CoreDeployment({
@@ -188,7 +188,7 @@ library DeploymentConstants {
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xe71fE689bFAA4939A760EDF7e07f44372a43932A,
                     zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8,
-                    passportFinalizer: address(0)
+                    zkpassportFinalizer: address(0)
                 });
             return deployment;
         } else {

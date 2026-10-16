@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {PassportFinalizer} from "../src/PassportFinalizer.sol";
+import {ZKPassportFinalizer} from "../src/ZKPassportFinalizer.sol";
 import "../src/interfaces/ICyberAgreementRegistry.sol";
 import "../src/interfaces/IZKPassportVerifier.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
@@ -62,7 +62,7 @@ contract MockPassportVerifier is IZKPassportVerifier {
     }
 }
 
-contract PassportFinalizerTest is Test {
+contract ZKPassportFinalizerTest is Test {
     string constant DOMAIN = "app.metalex.tech";
     string constant SCOPE = "cyberagreement-passport";
     string constant LEGAL_URI = "https://example.com/agreement";
@@ -85,7 +85,7 @@ contract PassportFinalizerTest is Test {
     BorgAuth auth;
     CyberAgreementRegistry registry;
     MockPassportVerifier verifier;
-    PassportFinalizer finalizer;
+    ZKPassportFinalizer finalizer;
 
     string[] globalFields;
     string[] partyFields;
@@ -109,17 +109,18 @@ contract PassportFinalizerTest is Test {
             )
         );
         verifier = new MockPassportVerifier(new MockPassportHelper());
-        finalizer = PassportFinalizer(
+        finalizer = ZKPassportFinalizer(
             address(
                 new ERC1967Proxy(
-                    address(new PassportFinalizer()),
+                    address(new ZKPassportFinalizer()),
                     abi.encodeWithSelector(
-                        PassportFinalizer.initialize.selector,
+                        ZKPassportFinalizer.initialize.selector,
                         address(auth),
                         address(registry),
                         address(verifier),
                         DOMAIN,
-                        SCOPE
+                        SCOPE,
+                        false // devMode
                     )
                 )
             )
@@ -244,13 +245,13 @@ contract PassportFinalizerTest is Test {
 
     function test_RevertIf_Create_PassportIdsLengthMismatch() public {
         bytes32[] memory pins = new bytes32[](2);
-        vm.expectRevert(PassportFinalizer.PassportIdsLengthMismatch.selector);
+        vm.expectRevert(ZKPassportFinalizer.PassportIdsLengthMismatch.selector);
         _create(1, pins);
     }
 
     function test_RevertIf_Create_DuplicatePin() public {
         bytes32[] memory pins = _pins(PASSPORT_B, bytes32(0), PASSPORT_B);
-        vm.expectRevert(PassportFinalizer.DuplicatePin.selector);
+        vm.expectRevert(ZKPassportFinalizer.DuplicatePin.selector);
         _create(1, pins);
     }
 
@@ -258,7 +259,7 @@ contract PassportFinalizerTest is Test {
         parties[2] = address(0);
         partyValues.pop();
         bytes32[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
-        vm.expectRevert(PassportFinalizer.OpenSlotNotSupported.selector);
+        vm.expectRevert(ZKPassportFinalizer.OpenSlotNotSupported.selector);
         _create(1, pins);
     }
 
@@ -284,7 +285,7 @@ contract PassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_X, bob);
         bytes memory signature = _sign(contractId, 1, bobKey);
 
-        vm.expectRevert(PassportFinalizer.PassportPinMismatch.selector);
+        vm.expectRevert(ZKPassportFinalizer.PassportPinMismatch.selector);
         finalizer.signWithProof(contractId, params, partyValues[1], signature);
     }
 
@@ -294,7 +295,7 @@ contract PassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, bob);
         bytes memory signature = _sign(contractId, 1, bobKey);
 
-        vm.expectRevert(PassportFinalizer.PassportAlreadyUsed.selector);
+        vm.expectRevert(ZKPassportFinalizer.PassportAlreadyUsed.selector);
         finalizer.signWithProof(contractId, params, partyValues[1], signature);
     }
 
@@ -303,7 +304,7 @@ contract PassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_B, chad);
         bytes memory signature = _sign(contractId, 2, chadKey);
 
-        vm.expectRevert(PassportFinalizer.PassportAlreadyUsed.selector);
+        vm.expectRevert(ZKPassportFinalizer.PassportAlreadyUsed.selector);
         finalizer.signWithProof(contractId, params, partyValues[2], signature);
     }
 
@@ -322,7 +323,7 @@ contract PassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, alice);
         bytes memory signature = _sign(contractId, 0, aliceKey);
 
-        vm.expectRevert(PassportFinalizer.AgreementNotRegistered.selector);
+        vm.expectRevert(ZKPassportFinalizer.AgreementNotRegistered.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
     }
 
@@ -332,7 +333,7 @@ contract PassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, alice);
         bytes memory signature = _sign(contractId, 0, aliceKey);
 
-        vm.expectRevert(PassportFinalizer.InvalidProof.selector);
+        vm.expectRevert(ZKPassportFinalizer.InvalidProof.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
     }
 
@@ -342,7 +343,7 @@ contract PassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, alice);
         bytes memory signature = _sign(contractId, 0, aliceKey);
 
-        vm.expectRevert(PassportFinalizer.InvalidProof.selector);
+        vm.expectRevert(ZKPassportFinalizer.InvalidProof.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
     }
 
@@ -353,7 +354,7 @@ contract PassportFinalizerTest is Test {
         );
         bytes memory signature = _sign(contractId, 0, aliceKey);
 
-        vm.expectRevert(PassportFinalizer.InvalidScope.selector);
+        vm.expectRevert(ZKPassportFinalizer.InvalidScope.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
     }
 
@@ -363,7 +364,7 @@ contract PassportFinalizerTest is Test {
             _proof(PASSPORT_A, alice, block.chainid + 1, Strings.toHexString(uint256(contractId), 32), DOMAIN, false);
         bytes memory signature = _sign(contractId, 0, aliceKey);
 
-        vm.expectRevert(PassportFinalizer.InvalidBoundChainId.selector);
+        vm.expectRevert(ZKPassportFinalizer.InvalidBoundChainId.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
     }
 
@@ -373,7 +374,7 @@ contract PassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(otherId, PASSPORT_A, alice);
         bytes memory signature = _sign(contractId, 0, aliceKey);
 
-        vm.expectRevert(PassportFinalizer.InvalidBoundContractId.selector);
+        vm.expectRevert(ZKPassportFinalizer.InvalidBoundContractId.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
     }
 
@@ -383,8 +384,39 @@ contract PassportFinalizerTest is Test {
             _proof(PASSPORT_A, alice, block.chainid, Strings.toHexString(uint256(contractId), 32), DOMAIN, true);
         bytes memory signature = _sign(contractId, 0, aliceKey);
 
-        vm.expectRevert(PassportFinalizer.DevModeProof.selector);
+        vm.expectRevert(ZKPassportFinalizer.DevModeProof.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
+    }
+
+    function test_SignWithProof_DevModeDeploymentAcceptsDevModeProof() public {
+        ZKPassportFinalizer devFinalizer = ZKPassportFinalizer(
+            address(
+                new ERC1967Proxy(
+                    address(new ZKPassportFinalizer()),
+                    abi.encodeCall(
+                        ZKPassportFinalizer.initialize,
+                        (address(auth), address(registry), address(verifier), DOMAIN, SCOPE, true)
+                    )
+                )
+            )
+        );
+        bytes32 contractId = devFinalizer.createContract(
+            TEMPLATE_ID,
+            1,
+            globalValues,
+            parties,
+            partyValues,
+            block.timestamp + 1 days,
+            _pins(bytes32(0), bytes32(0), bytes32(0))
+        );
+        ProofVerificationParams memory params =
+            _proof(PASSPORT_A, alice, block.chainid, Strings.toHexString(uint256(contractId), 32), DOMAIN, true);
+        bytes memory signature = _sign(contractId, 0, aliceKey);
+
+        devFinalizer.signWithProof(contractId, params, partyValues[0], signature);
+
+        assertTrue(devFinalizer.devMode());
+        assertEq(devFinalizer.passportOf(contractId, alice), PASSPORT_A);
     }
 
     function test_RevertIf_SignWithProof_BoundSenderNotAParty() public {
@@ -392,7 +424,7 @@ contract PassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, relayer);
         bytes memory signature = _sign(contractId, 0, aliceKey);
 
-        vm.expectRevert(PassportFinalizer.NotAParty.selector);
+        vm.expectRevert(ZKPassportFinalizer.NotAParty.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
     }
 
@@ -412,7 +444,7 @@ contract PassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, alice);
         bytes memory signature = _sign(contractId, 0, aliceKey);
 
-        vm.expectRevert(PassportFinalizer.AlreadyRecorded.selector);
+        vm.expectRevert(ZKPassportFinalizer.AlreadyRecorded.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
     }
 
@@ -440,18 +472,19 @@ contract PassportFinalizerTest is Test {
         bytes32 contractId = _create(1, _pins(bytes32(0), bytes32(0), bytes32(0)));
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, alice);
 
-        vm.expectRevert(PassportFinalizer.NotSigned.selector);
+        vm.expectRevert(ZKPassportFinalizer.NotSigned.selector);
         finalizer.attest(contractId, params);
     }
 
     // ── Admin ────────────────────────────────────────────────────────────────
 
     function test_RevertIf_Initialize_ZeroVerifier() public {
-        address implementation = address(new PassportFinalizer());
-        bytes memory initCall =
-            abi.encodeCall(PassportFinalizer.initialize, (address(auth), address(registry), address(0), DOMAIN, SCOPE));
+        address implementation = address(new ZKPassportFinalizer());
+        bytes memory initCall = abi.encodeCall(
+            ZKPassportFinalizer.initialize, (address(auth), address(registry), address(0), DOMAIN, SCOPE, false)
+        );
 
-        vm.expectRevert(PassportFinalizer.InvalidVerifier.selector);
+        vm.expectRevert(ZKPassportFinalizer.InvalidVerifier.selector);
         new ERC1967Proxy(implementation, initCall);
     }
 

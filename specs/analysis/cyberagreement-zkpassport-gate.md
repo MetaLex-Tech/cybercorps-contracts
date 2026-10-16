@@ -1,6 +1,6 @@
 # CyberAgreement — ZKPassport Gate (Three-Party Workflow)
 
-A new `PassportFinalizer` contract is the agreement's `finalizer`. The registry does not change.
+A new `ZKPassportFinalizer` contract is the agreement's `finalizer`. The registry does not change.
 Each party sends one transaction. It records the party's ZKPassport proof and the party's
 signature together. The agreement finalizes only when all parties have a proof record and a
 signature.
@@ -13,7 +13,7 @@ can then sign only with that passport.
     1. Requires one `passportIds` entry for each party. `bytes32(0)` means "any passport". Two
        parties cannot have the same pin. Refuses an open slot (zero-address party), because pins
        and passport records belong to a party address.
-    2. Calls `registry.createContract` with `finalizer = PassportFinalizer`, `secretHash = 0` and
+    2. Calls `registry.createContract` with `finalizer = ZKPassportFinalizer`, `secretHash = 0` and
        `salt = keccak256(abi.encode(salt, passportIds))`. Thus `contractId` binds the pins.
     3. Stores the pins and marks the agreement as registered here. A pinned passport is reserved
        for its party from the start.
@@ -44,7 +44,7 @@ sequenceDiagram
     participant App as Webapp + relayer
     participant Privy
     participant ZKP as ZKPassport app
-    participant PF as PassportFinalizer
+    participant PF as ZKPassportFinalizer
     participant Reg as CyberAgreementRegistry
     participant V as ZKPassport verifier
     Note over A, ZKP: Vet (off-chain, pinned parties only)
@@ -109,7 +109,7 @@ off-chain.
   An unpinned party opens it once.
 - **Create front-run.** Anyone can call `registry.createContract` with the same arguments and the
   derived salt before the creator. The registry then refuses the creator's call, and
-  `PassportFinalizer` has no record of that agreement, so it refuses every signature. The attacker
+  `ZKPassportFinalizer` has no record of that agreement, so it refuses every signature. The attacker
   gains nothing. The creator must create again with a new salt.
 - **Self-submission.** A party can call `registry.signContractFor` from its own wallet and skip
   the proof. That party then has no proof record, so the agreement does not finalize. The party
@@ -124,12 +124,15 @@ off-chain.
 - **Proof age.** The ZKPassport verifier checks the proof date:
   `proofDate <= block.timestamp < proofDate + validityPeriodInSeconds`. The submitter sets
   `validityPeriodInSeconds`, and the proof does not bind it, so the check gives no real age limit.
-  `PassportFinalizer` adds no cap. The proof must name `contractId`, so the holder makes it for
+  `ZKPassportFinalizer` adds no cap. The proof must name `contractId`, so the holder makes it for
   this agreement only.
 - **Proof format.** The proof binds `custom_data` to `contractId` as a lowercase `0x` hex string
-  of 32 bytes. `PassportFinalizer` refuses a proof with `devMode = true`. The verifier accepts a
-  mock-passport proof only in dev mode. On mainnet, the registry has no mock certificates, so the
-  verifier refuses such a proof anyway. On a testnet, this check stops tests with mock passports.
+  of 32 bytes.
+- **Dev mode.** The verifier accepts a mock-passport proof only in dev mode. `ZKPassportFinalizer`
+  takes a `devMode` flag at `initialize`. Without it, the contract refuses a proof with
+  `devMode = true`. The deploy script sets the flag on a testnet only, so tests can use mock
+  passports there. On mainnet, the registry has no mock certificates, so the verifier refuses a
+  mock-passport proof anyway.
 - TODO: Decide the proof scope. It must be the same for vetting and signing. One app-wide scope
   makes `uniqueIdentifier` the same in every agreement, so it links all agreements of one passport
   on-chain.
@@ -142,14 +145,15 @@ off-chain.
 
 ## Invariants
 
-1. An agreement with `finalizer = PassportFinalizer` finalizes only when every party has signed
+1. An agreement with `finalizer = ZKPassportFinalizer` finalizes only when every party has signed
    and has a passport record.
 2. A passport record comes only from a proof that verifies, has the expected domain and scope,
-   is bound to this chain and to this `contractId`, and is not in dev mode.
+   is bound to this chain and to this `contractId`, and is not in dev mode unless the deployment
+   allows dev mode.
 3. The record goes to the proof's bound sender. That address must be a party of the agreement.
 4. A pinned party's record equals its pin.
 5. Within one agreement, a passport fills one party only, and each party has one record.
-6. Only `PassportFinalizer.createContract` registers an agreement and its pins. `contractId`
+6. Only `ZKPassportFinalizer.createContract` registers an agreement and its pins. `contractId`
    binds the pins through the salt.
 
 ## Acceptance tests
@@ -167,6 +171,7 @@ off-chain.
 | Different pins, same other arguments                                              | Different `contractId`                           |
 | Agreement created on the registry directly                                        | `signWithProof` reverts `AgreementNotRegistered` |
 | Proof fails, zero helper, wrong scope, wrong chain, wrong `custom_data`, dev mode | Reverts with the matching error                  |
+| Dev-mode proof on a dev-mode deployment                                           | Signs                                            |
 | Bound sender is not a party                                                       | `NotAParty`                                      |
 | Valid proof, bad signature                                                        | Registry reverts; no record stays                |
 | Party signs on the registry directly, then `attest`                               | Last `attest` finalizes                          |
