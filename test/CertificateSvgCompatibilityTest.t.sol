@@ -377,6 +377,38 @@ contract CertificateSvgCompatibilityTest is Test {
         assertTrue(_contains(image.buildCertificateSVG(p, 0), ">1/sh</text>"));
     }
 
+    /// @dev The values of MetaLeX Labs preferred token #0 on Ethereum mainnet.
+    function testLongUnitsShrinkAndPriceIsRounded() public view {
+        CertificateSVGParams memory p = _params();
+        p.units = 76297143957565664850;
+        p.consideration = 2000e18;
+        string memory svg = image.buildCertificateSVG(p, 0);
+        assertTrue(_contains(svg, 'font-size="20" fill="#f2f2f2" text-anchor="middle">76.29714395756566485</text>'));
+        assertTrue(_contains(svg, 'font-size="18" font-weight="700" fill="url(#paint0_linear_62908_10150)">76.29714395756566485</text>'));
+        assertTrue(_contains(svg, 'font-size="34" font-weight="700" fill="url(#paint0_linear_62908_10150)">26.2133/sh</text>'));
+    }
+
+    function testPriceOfOneOrMoreRoundsAtFourDecimals() public view {
+        CertificateSVGParams memory p = _params();
+        p.units = 1e18;
+        p.consideration = 1.99995e18;
+        assertTrue(_contains(image.buildCertificateSVG(p, 0), ">2/sh</text>"));
+        p.consideration = 1.99994e18;
+        assertTrue(_contains(image.buildCertificateSVG(p, 0), ">1.9999/sh</text>"));
+    }
+
+    function testPriceBelowOneKeepsFourSignificantDigits() public view {
+        CertificateSVGParams memory p = _params();
+        p.units = 1e18;
+        p.consideration = 1e11;
+        assertTrue(_contains(image.buildCertificateSVG(p, 0), ">0.0000001/sh</text>"));
+        p.units = 3e18;
+        p.consideration = 2e18;
+        assertTrue(_contains(image.buildCertificateSVG(p, 0), ">0.6667/sh</text>"));
+        p.consideration = 2e11;
+        assertTrue(_contains(image.buildCertificateSVG(p, 0), ">0.00000006667/sh</text>"));
+    }
+
     function testCurrentTokenMintOverridesAndLegalOwnerChange() public {
         MockCyberCorp corp = new MockCyberCorp(address(0xDE1), address(0xA0));
         MockIssuanceManager manager = new MockIssuanceManager(address(corp), address(builder));

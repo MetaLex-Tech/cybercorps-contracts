@@ -134,12 +134,13 @@ library CertificateImageContentBuilder {
     }
 
     function _buildHeaderText(CertificateSVGParams memory params) private pure returns (string memory) {
+        string memory units = _formatUnits(params);
         return string(abi.encodePacked(
             '<text x="512" y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">', CertificateText.xml(params.corpName, 38), '</text>',
             '<text x="152" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">Token ID</text>',
             '<text x="152" y="124" font-size="35" fill="#f2f2f2" text-anchor="middle">#', _uintToString(params.tokenId), '</text>',
             '<text x="835" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">', _getBaseUnit(params.securityType), '</text>',
-            '<text x="838" y="124" font-size="35" fill="#f2f2f2" text-anchor="middle">', _formatUnits(params), '</text>',
+            '<text x="838" y="124" font-size="', _fitFontSize(units, 240, 35), '" fill="#f2f2f2" text-anchor="middle">', units, '</text>',
             !params.statusKnown ? "" : params.isVoided
                 ? '<text x="805" y="225" font-size="11" fill="#FF2E2E" text-anchor="middle">voided</text>'
                 : '<text x="805" y="225" font-size="11" fill="#DAFF00" text-anchor="middle">active</text>',
@@ -178,11 +179,13 @@ library CertificateImageContentBuilder {
         CertificateSVGParams memory params,
         string memory dateStr
     ) private pure returns (string memory) {
+        string memory units = _formatUnits(params);
+        string memory consideration = _formatConsideration(params);
         return string(abi.encodePacked(
             '<text x="140" y="500" font-size="14" fill="#9A9A98">Units</text>',
-            '<text x="150" y="540" font-size="34" font-weight="700" fill="url(#paint0_linear_62908_10150)">', _formatUnits(params), '</text>',
+            '<text x="150" y="540" font-size="', _fitFontSize(units, 225, 34), '" font-weight="700" fill="url(#paint0_linear_62908_10150)">', units, '</text>',
             '<text x="385" y="500" font-size="14" fill="#9A9A98">Consideration</text>',
-            '<text x="390" y="540" font-size="34" font-weight="700" fill="url(#paint0_linear_62908_10150)">', _formatConsideration(params), '</text>',
+            '<text x="390" y="540" font-size="', _fitFontSize(consideration, 245, 34), '" font-weight="700" fill="url(#paint0_linear_62908_10150)">', consideration, '</text>',
             '<text x="645" y="500" font-size="14" fill="#9A9A98">Issue Date</text>',
             '<text x="660" y="540" font-size="34" font-weight="700" fill="url(#paint0_linear_62908_10150)">', dateStr, '</text>'
         ));
@@ -296,24 +299,59 @@ library CertificateImageContentBuilder {
         if (params.units < 1e18 && params.consideration > Math.mulDiv(type(uint256).max, params.units, 1e18)) return "";
         uint256 perUnit = Math.mulDiv(params.consideration, 1e18, params.units);
         string memory suffix = (params.securityType == SecurityClass.CommonStock || params.securityType == SecurityClass.PreferredStock || params.securityType == SecurityClass.StockOption) ? "/sh" : "/unit";
-        return string(abi.encodePacked(_formatDecimal18(perUnit), suffix));
+        return string(abi.encodePacked(_formatPrice(perUnit), suffix));
+    }
+
+    /// @notice Rounds the price per unit for display. The price is a derived figure, not a ledger fact.
+    ///         A price of 1 or more keeps 4 decimals.
+    ///         A price below 1 keeps 4 digits from its first non-zero digit. Thus a tiny price does not show as 0.
+    ///
+    ///         | Exact price      | Shown         |
+    ///         |------------------|---------------|
+    ///         | 26.213300999...  | 26.2133       |
+    ///         | 1.99995          | 2             |
+    ///         | 0.666666...      | 0.6667        |
+    ///         | 0.0000001        | 0.0000001     |
+    ///         | 0.0000000666...  | 0.00000006667 |
+    function _formatPrice(uint256 value) private pure returns (string memory) {
+        uint256 leadingZeros;
+        for (uint256 v = value; v < 1e17 && leadingZeros < 14; v *= 10) leadingZeros++;
+        uint256 decimals = 4 + leadingZeros;
+        uint256 scale = 10 ** (18 - decimals);
+        uint256 rounded = value / scale;
+        if (value % scale >= scale / 2) rounded++;
+        return _formatFixed(rounded, decimals);
+    }
+
+    /// @notice A long number gets a smaller font so that it stays in its column.
+    ///         A digit in the bold system font is about 0.6 of the font size wide.
+    function _fitFontSize(string memory text, uint256 width, uint256 maxSize) private pure returns (string memory) {
+        uint256 len = bytes(text).length;
+        if (len == 0) return _uintToString(maxSize);
+        return _uintToString(Math.min(maxSize, width * 5 / (len * 3)));
     }
 
     /// @notice Formats an 18-decimal value without dropping fractional units.
     function _formatDecimal18(uint256 value) private pure returns (string memory) {
-        uint256 wholePart = value / 1e18;
-        uint256 frac = value % 1e18;
+        return _formatFixed(value, 18);
+    }
+
+    /// @notice Formats a value with `decimals` fractional digits. It drops trailing zeros.
+    function _formatFixed(uint256 value, uint256 decimals) private pure returns (string memory) {
+        uint256 scale = 10 ** decimals;
+        uint256 wholePart = value / scale;
+        uint256 frac = value % scale;
         if (frac == 0) {
             return _formatNumberWithCommas(wholePart);
         }
 
-        bytes memory fracDigits = new bytes(18);
+        bytes memory fracDigits = new bytes(decimals);
         uint256 f = frac;
-        for (uint256 i = 18; i > 0; i--) {
+        for (uint256 i = decimals; i > 0; i--) {
             fracDigits[i - 1] = bytes1(uint8(48 + (f % 10)));
             f /= 10;
         }
-        uint256 len = 18;
+        uint256 len = decimals;
         while (len > 0 && fracDigits[len - 1] == "0") {
             len--;
         }
