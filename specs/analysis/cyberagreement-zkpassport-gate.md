@@ -115,8 +115,21 @@ off-chain.
   the proof. That party then has no proof record, so the agreement does not finalize. The party
   sends `attest` to record the proof. If that is the last missing proof, `attest` finalizes the
   agreement. The webapp must treat `finalized` as the effective state.
+- **What the record proves.** The holder of passport `uniqueIdentifier` approved this agreement
+  for this wallet on this chain. The contract reads no other passport fact: no name, nationality,
+  age or sanctions status. For a pinned party, the creator checks these facts off-chain during
+  vetting (for example, a name disclosure, a nationality-exclusion proof or a sanctions proof).
+  The contract relies on that vetting and records only that the signer used the vetted passport.
+  An unpinned party gets no such check.
+- **Proof age.** The ZKPassport verifier checks the proof date:
+  `proofDate <= block.timestamp < proofDate + validityPeriodInSeconds`. The submitter sets
+  `validityPeriodInSeconds`, and the proof does not bind it, so the check gives no real age limit.
+  `PassportFinalizer` adds no cap. The proof must name `contractId`, so the holder makes it for
+  this agreement only.
 - **Proof format.** The proof binds `custom_data` to `contractId` as a lowercase `0x` hex string
-  of 32 bytes. `PassportFinalizer` refuses a proof with `devMode = true`.
+  of 32 bytes. `PassportFinalizer` refuses a proof with `devMode = true`. The verifier accepts a
+  mock-passport proof only in dev mode. On mainnet, the registry has no mock certificates, so the
+  verifier refuses such a proof anyway. On a testnet, this check stops tests with mock passports.
 - TODO: Decide the proof scope. It must be the same for vetting and signing. One app-wide scope
   makes `uniqueIdentifier` the same in every agreement, so it links all agreements of one passport
   on-chain.

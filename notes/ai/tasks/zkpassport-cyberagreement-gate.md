@@ -32,13 +32,14 @@
 | New unit suite | `forge test ... --match-path test/PassportFinalizerTest.t.sol`, 9499ae47 + uncommitted files | 22 passed |
 | Full unit suite | `forge test ... --nmc '(ForkTest|AdhocTest)'`, same tree, Forge 1.7.1 | 1455 passed, 0 failed |
 | Size | `forge build ... --sizes` | PassportFinalizer 9,884 B |
-| Fork tests | not run | no real-proof sample yet |
+| Deploy script fork test | `test/createx/DeployPassportFinalizerScriptForkTest.t.sol`, 79d82cdf + uncommitted script, Base and Base Sepolia pinned | 2 passed; no real-proof sample yet |
+| Full unit suite after `DeploymentConstants` change | same tree | 1456 passed, 0 failed |
 
 ## Review and blockers
 
-- Unconfirmed: the real ZKPassport verifier's `devMode` semantics, and that the SDK returns `uniqueIdentifier` from off-chain verification (needed for vetting).
+- Unconfirmed: that the deployed verifier runs ZKPassport's current `SubVerifier` source (read 2026-10-15, commit 5edbf08), and that the SDK returns `uniqueIdentifier` from off-chain verification (needed for vetting).
 - Open TODOs in the spec: proof scope, which parties need a proof, one person as two parties, standalone path.
 
 ## Next action and handoff
 
-Review the contract and tests; then decide on a real-proof fork test and the webapp integration.
+Confirm the domain and scope TODOs in `script/deploy-passport-finalizer.s.sol`; then decide on a real-proof fork test and the webapp integration. Base Sepolia has no ZKPassport verifier (checked 2026-10-15), so staging uses Sepolia.

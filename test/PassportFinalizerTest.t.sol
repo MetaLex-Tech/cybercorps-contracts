@@ -446,6 +446,15 @@ contract PassportFinalizerTest is Test {
 
     // ── Admin ────────────────────────────────────────────────────────────────
 
+    function test_RevertIf_Initialize_ZeroVerifier() public {
+        address implementation = address(new PassportFinalizer());
+        bytes memory initCall =
+            abi.encodeCall(PassportFinalizer.initialize, (address(auth), address(registry), address(0), DOMAIN, SCOPE));
+
+        vm.expectRevert(PassportFinalizer.InvalidVerifier.selector);
+        new ERC1967Proxy(implementation, initCall);
+    }
+
     function test_UpdateVerifier_OnlyAdmin() public {
         address newVerifier = makeAddr("newVerifier");
         vm.expectRevert();
