@@ -80,7 +80,7 @@ The two `DEPRECATED-*` files in the directory (`SAFE-version-0-1`,
 
 These eight packets and eight standalone instruments are published on IPFS.
 Their CIDs and fetched bytes match the approved release manifest. Registration
-on Ethereum, Base and Arbitrum is authorized and awaits an available signer.
+and full field readbacks are complete on Ethereum, Base and Arbitrum.
 Each packet combines the reusable cyberSPA with its Exhibit A instrument(s).
 The registry URI identifies that packet; each LET uses its matching standalone
 instrument URI. Existing v1.3 and custom templates remain unchanged.
@@ -95,7 +95,8 @@ instrument URI. Existing v1.3 and custom templates remain unchanged.
 [Exact approved registration arguments](../../templates/releases/let-v1.4.json)
 preserve predecessor field order and encoding. The release package includes
 offline CAR roots, PDF hashes and successful gateway verification receipts.
-Read back all registry fields on each target chain before enabling the app defaults. The release requires no existing-family core protocol change.
+The manifest records confirmed transactions and receipt blocks for all three chains.
+Testnets retain their existing templates. The release requires no existing-family core protocol change.
 SAFO integration and upgrades are a separate review; no SAFO registration is
 included in this release manifest.
 

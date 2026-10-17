@@ -1,8 +1,8 @@
 {
   "release": "cyberforms-2026-10-17",
-  "status": "published_verified_registration_pending",
+  "status": "published_registered_verified",
   "registryInterface": "createTemplate(bytes32,string,string,string[],string[])",
-  "chainSelection": "Ethereum (1), Base (8453), Arbitrum (42161); registration authorized and awaiting an available signer.",
+  "chainSelection": "Ethereum (1), Base (8453), Arbitrum (42161); all eight templates registered and fully read back on each chain.",
   "templates": [
     {
       "templateId": "0x6d6c785f736166655f7265675f645f76315f3400000000000000000000000000",
@@ -249,5 +249,37 @@
     "pinataGroup": "https://app.pinata.cloud/ipfs/groups/1d0529b0-e5d2-448b-b890-856c2928db5c",
     "verifiedPdfCount": 16,
     "verification": "All CIDs and fetched PDF bytes match the approved release manifest."
-  }
+  },
+  "registrations": [
+    {
+      "chainId": 1,
+      "chain": "Ethereum",
+      "registry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+      "transactionHash": "0x740d341e49d9f13f775a1f0d4b84c42efd58fe0762b143c5635630ccff5ca1d0",
+      "blockNumber": 26215244,
+      "explorerUrl": "https://etherscan.io/tx/0x740d341e49d9f13f775a1f0d4b84c42efd58fe0762b143c5635630ccff5ca1d0",
+      "registeredTemplateCount": 8,
+      "fullReadbackVerified": true
+    },
+    {
+      "chainId": 8453,
+      "chain": "Base",
+      "registry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+      "transactionHash": "0xa283f27580fecc4dcd5b2eb9b660511aff325a2eef1fcaa0474235f1d0766b83",
+      "blockNumber": 52743312,
+      "explorerUrl": "https://basescan.org/tx/0xa283f27580fecc4dcd5b2eb9b660511aff325a2eef1fcaa0474235f1d0766b83",
+      "registeredTemplateCount": 8,
+      "fullReadbackVerified": true
+    },
+    {
+      "chainId": 42161,
+      "chain": "Arbitrum",
+      "registry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+      "transactionHash": "0x54145658eb25d4365c580ffac60fb3a72234304fd28b69a2245d068afac3a468",
+      "blockNumber": 515798573,
+      "explorerUrl": "https://arbiscan.io/tx/0x54145658eb25d4365c580ffac60fb3a72234304fd28b69a2245d068afac3a468",
+      "registeredTemplateCount": 8,
+      "fullReadbackVerified": true
+    }
+  ]
 }
