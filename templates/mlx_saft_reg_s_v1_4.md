@@ -1,6 +1,6 @@
 # mlx_saft_reg_s_v1_4
 
-Status: prepared locally; PDF not pinned and template not registered.
+Status: PDF published on IPFS and verified against the approved SHA-256; template registration pending on Ethereum, Base and Arbitrum.
 
 Template ID: `0x6d6c785f736166745f7265675f735f76315f3400000000000000000000000000` (`bytes32(bytes("mlx_saft_reg_s_v1_4"))`).
 Title: `mlx_saft_reg_s_v1_4`.
@@ -48,4 +48,4 @@ Core monetary fields retain their existing 18-decimal USD convention. Token sche
 
 The v1.4 registry name versions the agreement packet. It does not renumber the approved Word masters or imply a new protocol version. Existing v1.3/custom registrations and their legal URIs remain unchanged.
 
-See `releases/let-v1.4.json` for the exact proposed registration arguments and the release package for the offline CAR roots. Registration is per chain. Pin and fetch-verify every referenced document, then compare all registry fields before enabling this version.
+See `releases/let-v1.4.json` for the exact approved registration arguments and the release package for the offline CAR roots. Registration is per chain. The PDFs passed pin and fetch verification. Compare all registry fields on each target chain before enabling this version.

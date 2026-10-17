@@ -1,18 +1,18 @@
 # cyberForms existing family publication specifications
 
-- Status: local preparation complete, unpublished/unregistered.
+- Status: sixteen PDFs published and verified; eight per-chain registrations pending.
 - Updated: 2026-10-17.
-- Authorization: existing-family spec/app release preparation and precise SAFO scope proposal; no publication or deployment.
-- Base: `2510ff38723f6e084e7399325958220daa859d61`, freshly fetched `origin/develop`.
+- Authorization: owner authorized the non-SAFO webapp release and template registration, and waived a separate isolated review/testing cycle for this release.
+- Base: `2510ff38723f6e084e7399325958220daa859d61`, current `origin/develop` when fetched for execution.
 - Branch: `codex/cyberforms-release-prep`.
 - Package: `/home/lex/repos/metalex-webapp/output/cyberforms-release-prep-20261017`.
 
-Eight v1.4 specs and `templates/releases/let-v1.4.json` identify the approved combined cyberSPA packets and matching standalone instrument PDFs. Offline CAR roots reproduce the exact PDF bytes. Global/party field order and plain-text encoding match the predecessor registration script, available predecessor specs and live registry reads on all five checked chains. The old Reg S SAFTE markdown is absent; its shared SAFTE schema was verified against the actual script/caller and onchain template instead.
+Eight v1.4 specifications and `templates/releases/let-v1.4.json` identify approved combined cyberSPA packets and matching standalone instrument PDFs. All sixteen PDFs are pinned in the dedicated Pinata release group. Returned CIDs and fetched bytes match the frozen manifest and approved SHA-256 values. Global/party field order and plain-text encoding remain unchanged from v1.3.
 
-All eight new IDs were unused at the pinned read blocks recorded in `qa/registry-preflight.json`. This does not reserve them. Every proposed registration calldata item round-tripped through the existing createTemplate ABI. No transaction was sent. Fresh pin/fetch verification, registry identity/ID checks and readback on each target chain precede later activation.
+Fresh registry reads on Ethereum, Base and Arbitrum found all eight new IDs unused and all predecessor field lists equal to the approved payloads. The implementations match the preparation snapshot. Execution evidence, including pinned block numbers and code hashes, is in `release-execution/registry-check-latest.json` in the package. These reads do not reserve IDs.
 
-No Solidity implementation, test, ABI, storage, signature, authorization, deployment script or broadcast log was changed in this branch. No protocol upgrade is proposed for the existing-family legal revision. App changes live in the separate managed webapp release worktree on the same branch name. Existing registrations/custom forms are preserved, and active pickers remain v1.3.
+The owner selected `grantsDeployer`, but its encrypted account requires an unknown password. The empty-password check failed. The owner selected an unlocked browser wallet as the alternative; connection and signing remain pending. No registration transaction has been submitted. Recheck identities and IDs before execution, then verify complete template readbacks before application activation.
 
-Independent internal app/spec review passed after fixing a webapp configuration-order regression. The package contains exact validation receipts and a separate proposed SAFO integration/upgrade scope. SAFO extension implementation remains at `e294600d97210f2265cf45bb2d69abdcdb79d93f`; no new SAFO core implementation, registration or deployment is part of this spec branch.
+No Solidity implementation, ABI, storage, signature, authorization, deployment script or broadcast log is changed. The existing registry entry point supports this legal-text release. SAFO registration, integration and upgrades remain outside scope.
 
-Remaining release gates: external review required by AGENTS.local, target-company runtime verification and isolated affected-flow acceptance, publication approval, per-chain registration, deliberate frontend activation and source-library refresh. None is claimed by local preparation.
+The app release branch is `codex/cyberforms-let-release`, based on current production, in the managed webapp release worktree. It adds v1.4 configurations and defaults while retaining v1.3 saved offerings and custom forms. Typecheck and formatting passed. A separate isolated test/review cycle was not run, as requested. Production merge/deployment remains pending successful registration.

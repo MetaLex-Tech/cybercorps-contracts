@@ -1,8 +1,8 @@
 {
   "release": "cyberforms-2026-10-17",
-  "status": "prepared_unpublished_unregistered",
+  "status": "published_verified_registration_pending",
   "registryInterface": "createTemplate(bytes32,string,string,string[],string[])",
-  "chainSelection": "Pending release approval; validate each registry and template ID before execution.",
+  "chainSelection": "Ethereum (1), Base (8453), Arbitrum (42161); registration authorized and awaiting an available signer.",
   "templates": [
     {
       "templateId": "0x6d6c785f736166655f7265675f645f76315f3400000000000000000000000000",
@@ -244,5 +244,10 @@
         "investorJurisdiction"
       ]
     }
-  ]
+  ],
+  "publication": {
+    "pinataGroup": "https://app.pinata.cloud/ipfs/groups/1d0529b0-e5d2-448b-b890-856c2928db5c",
+    "verifiedPdfCount": 16,
+    "verification": "All CIDs and fetched PDF bytes match the approved release manifest."
+  }
 }
