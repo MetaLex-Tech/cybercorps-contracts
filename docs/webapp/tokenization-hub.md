@@ -108,7 +108,9 @@ company and Issuance Manager versions on the network. v4 and v5
 companies are both supported. The instrument list does not include stock
 options or restricted stock and token awards. A cap table line of an
 unsupported type shows **This cap table line cannot be configured here**
-and points back to the cap table.
+with an **Open in cap table** button. For a class or series line the
+button opens the cap table's **Class terms** tab on that line; for a plan
+pool or an award line it opens the cap table itself.
 
 > **Under the hood.** The company's
 > [`IssuanceManager`](../reference/contracts/IssuanceManager.md) deploys
