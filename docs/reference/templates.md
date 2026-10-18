@@ -108,3 +108,20 @@ included in this release manifest.
 ## cyberSAFO (prepared, not registered)
 
 * [Reg D v1.0](../../templates/mlx_safo_reg_d_v1_0.md) and [Reg S v1.0](../../templates/mlx_safo_reg_s_v1_0.md): native class 14 and the version-1 per-LET SAFO extension. Both require the separately approved compatible deployment and publication release.
+
+## Blockchain notices legal release (October 18, 2026)
+
+The approved v1.5 existing-family packets and v1.1 SAFO packets add a common Blockchain Notices clause. Dark and light copies are pinned and CID-verified. Browser retrieval verified every PDF byte hash. Ethereum, Base and Arbitrum registrations for the eight existing-family templates are verified in the [registration readbacks](../../templates/releases/let-v1.5-registrations.json). App release remains pending. SAFO registration and activation retain their separate runtime and review gates. Existing registrations retain their original text.
+
+- [mlx_safe_reg_d_v1_5](../../templates/mlx_safe_reg_d_v1_5.md)
+- [mlx_safe_tw_reg_d_v1_5](../../templates/mlx_safe_tw_reg_d_v1_5.md)
+- [mlx_saft_reg_d_v1_5](../../templates/mlx_saft_reg_d_v1_5.md)
+- [mlx_safte_reg_d_v1_5](../../templates/mlx_safte_reg_d_v1_5.md)
+- [mlx_safe_reg_s_v1_5](../../templates/mlx_safe_reg_s_v1_5.md)
+- [mlx_safe_tw_reg_s_v1_5](../../templates/mlx_safe_tw_reg_s_v1_5.md)
+- [mlx_saft_reg_s_v1_5](../../templates/mlx_saft_reg_s_v1_5.md)
+- [mlx_safte_reg_s_v1_5](../../templates/mlx_safte_reg_s_v1_5.md)
+- [mlx_safo_reg_d_v1_1](../../templates/mlx_safo_reg_d_v1_1.md)
+- [mlx_safo_reg_s_v1_1](../../templates/mlx_safo_reg_s_v1_1.md)
+
+SAFO also requires its separate runtime and independent review gates. The notices clause requires no contract implementation change.
