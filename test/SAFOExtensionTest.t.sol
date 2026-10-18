@@ -2,7 +2,8 @@
 pragma solidity 0.8.28;
 
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
-import {SecurityClass, SecuritySeries, UnlockStartTimeType, UnlockingIntervalType} from "../src/CyberCorpConstants.sol";
+import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
+import {CertificateSVGParams, SecurityClass, SecuritySeries, UnlockStartTimeType, UnlockingIntervalType} from "../src/CyberCorpConstants.sol";
 import {CertificateDetails, Endorsement, OwnerDetails} from "../src/interfaces/ILedgerEntryToken.sol";
 import {BorgAuth, BorgAuthACL} from "../src/libs/auth.sol";
 import {SAFOData, SAFOExtension} from "../src/storage/extensions/SAFOExtension.sol";
@@ -217,13 +218,12 @@ contract SAFOExtensionTest is Test {
             legalDetails: "Governing law: Delaware",
             extensionData: extension.encodeExtensionData(_terms())
         });
-        // CommonStock exercises only existing renderer plumbing; it is NOT an authorized SAFO classification.
         string memory json = builder.buildCertificateUriNotEncoded(
             "Test Corp",
             "C-Corp",
             "DE",
             "",
-            SecurityClass.CommonStock,
+            SecurityClass.SAFO,
             SecuritySeries.SeriesA,
             "",
             new string[](0),
@@ -237,7 +237,43 @@ contract SAFOExtensionTest is Test {
             address(extension)
         );
         vm.parseJson(json);
+        assertEq(builder.securityClassToString(SecurityClass.SAFO), "SAFO");
+        assertEq(builder.securityClassToUnit(SecurityClass.SAFO), "Dollars");
         assertEq(vm.parseJsonString(json, ".SAFODetails.minProjectReserve"), "200000");
         assertEq(vm.parseJsonString(json, ".SAFODetails.customProvisions"), _terms().customProvisions);
+    }
+
+    function test_NativeImageShowsOneSAFOAndTotalConsideration() public {
+        CertificateSVGParams memory params;
+        params.corpName = "Test Corp";
+        params.securityType = SecurityClass.SAFO;
+        params.securitySeries = SecuritySeries.NA;
+        params.units = 1500 ether;
+        params.consideration = 1500 ether;
+        params.considerationKnown = true;
+        params.ownerName = "Investor";
+        params.officerName = "Officer";
+        params.officerTitle = "President";
+        params.transferRestrictions = new string[](0);
+        string memory svg = new CertificateImageBuilderContract().buildCertificateSVG(params, 1_900_000_000);
+        assertTrue(_contains(svg, ">SAFO</text>"));
+        assertTrue(_contains(svg, ">Instruments</text>"));
+        assertTrue(_contains(svg, ">1</text>"));
+        assertFalse(_contains(svg, "/unit"));
+        assertFalse(_contains(svg, "/sh"));
+    }
+
+    function _contains(string memory text, string memory part) private pure returns (bool) {
+        bytes memory a = bytes(text);
+        bytes memory b = bytes(part);
+        if (b.length > a.length) return false;
+        for (uint256 i; i <= a.length - b.length; ++i) {
+            bool matches = true;
+            for (uint256 j; j < b.length; ++j) {
+                if (a[i + j] != b[j]) { matches = false; break; }
+            }
+            if (matches) return true;
+        }
+        return false;
     }
 }

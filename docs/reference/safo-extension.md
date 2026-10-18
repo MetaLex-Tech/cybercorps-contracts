@@ -80,7 +80,4 @@ Before live issuance, separately complete and approve native SAFO security
 classification and application support, any required component upgrades,
 deployment with verified proxy/AUTH/runtime versions, legal PDF/IPFS upload,
 per-chain registry registration, and end-to-end issuance/rendering tests
-against the target company's deployed versions. Existing `SecurityClass`
-contains no SAFO member; using SAFE or SAFTE as a substitute is not enabled
-by this change. The base URI integration test uses a placeholder class only
-to test renderer compatibility and is not live issuance acceptance.
+against the target company's deployed versions. The implementation branch appends native `SecurityClass.SAFO` (14) and tests its actual issuance, rendering, ticket settlement and round allocation. Deployed contracts still require separate capability verification and upgrades; source support is not live acceptance. Both [Reg D](../../templates/mlx_safo_reg_d_v1_0.md) and [Reg S](../../templates/mlx_safo_reg_s_v1_0.md) have prepared 19-field template specifications.

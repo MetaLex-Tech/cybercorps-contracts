@@ -232,6 +232,7 @@ library CertificateImageContentBuilder {
         if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Restricted Token Purchase Agreement";
         if (_class == SecurityClass.RestrictedTokenUnit) return "Restricted Token Unit";
         if (_class == SecurityClass.MembershipInterest) return "Membership Interest";
+        if (_class == SecurityClass.SAFO) return "SAFO";
         return "Unknown";
     }
 
@@ -264,6 +265,7 @@ library CertificateImageContentBuilder {
         if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Units";
         if (_class == SecurityClass.RestrictedTokenUnit) return "Units";
         if (_class == SecurityClass.MembershipInterest) return "Units";
+        if (_class == SecurityClass.SAFO) return "Instruments";
         return "Unknown";
     }
 
@@ -272,6 +274,7 @@ library CertificateImageContentBuilder {
         return _class == SecurityClass.SAFE ||
                _class == SecurityClass.SAFT ||
                _class == SecurityClass.SAFTE ||
+               _class == SecurityClass.SAFO ||
                _class == SecurityClass.ConvertibleNote ||
                _class == SecurityClass.TokenWarrant ||
                _class == SecurityClass.TokenPurchaseAgreement;

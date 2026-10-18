@@ -154,6 +154,23 @@ contract IssuanceManagerTest is Test {
         issuanceManager.createCert(address(certPrinter), investor, details);
     }
 
+    function test_SAFOClassCreatesAndReadsNativePrinterWithoutChangingExistingClasses() public {
+        ILedgerEntryToken existing = _deployPrinter("Stock", "STOCK");
+        ILedgerEntryToken safo = _deployPrinterOfType("SAFO", "SAFO", SecurityClass.SAFO);
+        assertEq(uint256(LedgerEntryToken(address(safo)).securityType()), 14);
+        assertEq(uint256(LedgerEntryToken(address(existing)).securityType()), 6);
+        uint256 classId = issuanceManager.getPrinterClassId(address(safo));
+        assertEq(uint256(issuanceManager.getSecurityClass(classId).classType), 14);
+        CertificateDetails memory details = _buildCertificateDetails(1000);
+        details.investmentAmountUSD = 1000 ether;
+        details.issuerUSDValuationAtTimeOfInvestment = 100_000 ether;
+        uint256 id = issuanceManager.createCertAndAssign(address(safo), investor, details);
+        CertificateDetails memory actual = safo.getCertificateDetails(id);
+        assertEq(actual.investmentAmountUSD, 1000 ether);
+        assertEq(actual.issuerUSDValuationAtTimeOfInvestment, 100_000 ether);
+        assertEq(actual.unitsRepresented, 1000 ether);
+    }
+
     function test_createCertAndAssign_emitsCertificateCreated() public {
         ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
         CertificateDetails memory details = _buildCertificateDetails(100);
