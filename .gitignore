@@ -27,3 +27,6 @@ docs/
 
 # Python script/test caches
 __pycache__/
+
+# Generated local SAFO fork inputs (unsigned release evidence stays with operator).
+/test/res/safo-rollout-*.local.json

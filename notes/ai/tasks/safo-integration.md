@@ -1,10 +1,20 @@
 # Native SAFO integration: Reg D and Reg S
 
-Updated 2026-10-17. Owner: Codex, current cyberForms task.
+Updated 2026-10-18. Owner: Codex, current cyberForms task.
 
-The owner approved comprehensive implementation of the reviewed native SAFO proposal for both exemptions. Settled v0.22 economics remain fixed. This does not authorize merge, publication, registry transactions, deployment/upgrades, live signing or activation.
+The owner explicitly approved the narrow native-SAFO contract rollout, both Reg D/Reg S activation after checks, and waived independent Claude review. Settled v22 economics and approved v1.1 notices PDFs remain fixed. The rollout covers a Base Sepolia pilot then coordinated Ethereum/Base/Arbitrum: separate SAFO extension; compatible IM/LET and libraries; shared URI/image builders; DM; RM/library; combined company factory and existing reference setters. It excludes unrelated implementations, ownership changes and blanket upgrades of existing companies. Runtime/fork/regression/CI checks and normal app release order remain required. No new external audit or private-code upload is authorized.
 
-Review PRs: [contracts #180](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/180) and [app #1769](https://github.com/MetaLex-Tech/metalex-webapp/pull/1769). Both target develop. Codex in the current cyberForms chat owns the paired review loops; no auto-merge. Automated review and CI are pending.
+Implementation PRs #180 and app #1769 are merged; their monitors remain retired. Rollout branch `codex/safo-rollout-20261018` starts at develop `0661a0563572a4bb6560b64497f211224faefe14`. App activation branch is `codex/safo-activation-20261018`. No rollout transaction has been sent. Next: prepare narrow deterministic deployment and admin batches, verify authority, and rehearse storage/legacy/native routes against current testnet runtime. Do not run broad upgrade scripts which change unrelated contracts or drop ownership.
+
+The cross-repository task record in `metalex-webapp/notes/ai/tasks/safo-integration.md` owns current release status; historical implementation evidence below remains dated.
+
+## October 18 rollout checkpoint
+
+The app operator tools at `scripts/safo-rollout/` prepare narrow unsigned CreateX deployments, owner calls and v1.1 registrations. All four chain packages are prepared. Base Sepolia deployment rehearsal passed: 21 calls, exact deployed code hashes, six unauthorized-upgrade refusals, 581 sampled storage words with seven intended changes, native label 14 and exact Reg D/S registry readbacks. Only the local fork changed.
+
+`SAFORolloutForkTest` reuses the 11 existing SAFO signature/payment/allocation cases against actual forked factories, registry, extension and payment token. All 11 passed after the proposed rollout on Base Sepolia. The five source suites still pass all 113 tests. Source under test is develop `0661a056` plus this working tree's fixture and three virtual test hooks. The fork fixture skips explicitly when its generated plan is absent; no hosted RPC secret is required by default. Separate operator acceptance signs, simulates and submits local RPC transactions, verifies existing-company upgrade refusal/preservation and tests both native variants after owner upgrades. No live company is upgraded by these tests.
+
+Full `forge build --sizes` compiled but exits nonzero for pre-existing test artifacts CyberCertPrinterEnhanced and HolderCountHarness. All 13 release artifacts satisfy EIP-170/EIP-3860 and deploy in the rehearsal. Production fork checks and repository review remain pending. No live pilot, production upgrade, registration or activation has occurred. Base Sepolia deployer access is pending; production Safe quorum is three on Ethereum and two on Base/Arbitrum. Preserve these signing boundaries.
 
 ## Source and implementation
 
