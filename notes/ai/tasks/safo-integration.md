@@ -4,6 +4,8 @@ Updated 2026-10-17. Owner: Codex, current cyberForms task.
 
 The owner approved comprehensive implementation of the reviewed native SAFO proposal for both exemptions. Settled v0.22 economics remain fixed. This does not authorize merge, publication, registry transactions, deployment/upgrades, live signing or activation.
 
+Review PRs: [contracts #180](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/180) and [app #1769](https://github.com/MetaLex-Tech/metalex-webapp/pull/1769). Both target develop. Codex in the current cyberForms chat owns the paired review loops; no auto-merge. Automated review and CI are pending.
+
 ## Source and implementation
 
 Branch: `codex/safo-integration`. Code: `cb6737eac21a84a26e771a816a1acfb5124dd244`. This retains SAFO extension `e294600d` and merges current develop `f2a4243` through `e4fcf23`. The matching app branch is `codex/safo-integration`, application code `455edb1e6e` plus develop merge `72b77fe15f`.

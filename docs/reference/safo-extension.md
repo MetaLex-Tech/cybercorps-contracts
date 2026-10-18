@@ -2,8 +2,9 @@
 
 The schema implements the metadata fields for the Simple Agreement for Future
 Ownership based on legal draft v0.22. It is an implementation specification,
-not a registered agreement template. There is no template ID, IPFS CID or live
-extension address assigned by this change.
+not a registered agreement template. The prepared Reg D and Reg S template
+specifications assign their IDs; publication CIDs and live extension addresses
+remain pending a separately approved release.
 
 ## Storage and decoding
 
