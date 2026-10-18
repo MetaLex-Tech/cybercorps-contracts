@@ -1,0 +1,78 @@
+{
+  "release": "cyberforms-notices-2026-10-18",
+  "status": "pinned_pending_runtime_review_and_registration",
+  "templates": [
+    {
+      "title": "mlx_safo_reg_d_v1_1",
+      "templateId": "0x6d6c785f7361666f5f7265675f645f76315f3100000000000000000000000000",
+      "agreementUri": "ipfs://bafybeiapwuvzzumyoaxpglczsu2kmlxmor6arvl6337pfnbcguvit2sqsu",
+      "sha256": "a2054ec7eb74ca9c61a0d73142b7b19cd49601557224c88c2bbddc4f69a8f392",
+      "instrumentUri": "ipfs://bafybeib3bwpa2vaqhoe62v6pkml25w23plga7lrequ3hgjs4chx3lttup4",
+      "instrumentSha256": "0b2069de199ee92bf322b4a9c23b6479af04f06c3130540cb7fb84a8020b7d9f",
+      "globalFields": [
+        "purchaseAmount",
+        "projectValuation",
+        "governingJurisdiction",
+        "disputeResolution",
+        "schemaVersion",
+        "minProjectReserve",
+        "maxUnlockingCliffPeriod",
+        "maxUnlockingPeriod",
+        "requiresTokenholderGovernance",
+        "outsideDateEnabled",
+        "outsideDate",
+        "hasUnlockParameters",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "customProvisions"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "title": "mlx_safo_reg_s_v1_1",
+      "templateId": "0x6d6c785f7361666f5f7265675f735f76315f3100000000000000000000000000",
+      "agreementUri": "ipfs://bafybeihq7knnav6watytknp7yf6bm4wsnkzlvsiqoey4kanisbn3x5gf5i",
+      "sha256": "2a19e1978f71cbc5a1b436e4ad29271834b5a5f4af8f0e4fe0e4524a799245fb",
+      "instrumentUri": "ipfs://bafybeibhk5dbgjmxdqma6p2zepeqmfysyh4pgghwmsxklsrphu3ge53gqm",
+      "instrumentSha256": "0083ea8b4aeb14e0cebb7b406578173fa04985221de44e80920e27e139e0b27b",
+      "globalFields": [
+        "purchaseAmount",
+        "projectValuation",
+        "governingJurisdiction",
+        "disputeResolution",
+        "schemaVersion",
+        "minProjectReserve",
+        "maxUnlockingCliffPeriod",
+        "maxUnlockingPeriod",
+        "requiresTokenholderGovernance",
+        "outsideDateEnabled",
+        "outsideDate",
+        "hasUnlockParameters",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "customProvisions"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    }
+  ]
+}
