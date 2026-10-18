@@ -36,7 +36,7 @@ contract SAFOIntegrationTest is Test {
     address investor;
     bytes payload;
 
-    function setUp() public {
+    function setUp() public virtual {
         vm.warp(1_800_000_000);
         officer = vm.addr(OFFICER_KEY);
         investor = vm.addr(INVESTOR_KEY);
@@ -72,7 +72,7 @@ contract SAFOIntegrationTest is Test {
         payload = extension.encodeExtensionData(terms);
     }
 
-    function _template(bool regS) internal returns (bytes32 id) {
+    function _template(bool regS) internal virtual returns (bytes32 id) {
         id = regS ? bytes32("mlx_safo_reg_s_v1_0") : bytes32("mlx_safo_reg_d_v1_0");
         string[19] memory ordered = [
             "purchaseAmount",
@@ -260,6 +260,11 @@ contract SAFOIntegrationTest is Test {
         _allocation(true);
     }
 
+    /// @dev Fork suites keep the real factory payment asset and override this fixture-only setter.
+    function _configureFactoryStable() internal virtual {
+        companyFactory.setStable(address(usdc));
+    }
+
     function _ticket(bool regS, bool newCompany) internal {
         CompanyOfficer memory officerInfo = CompanyOfficer(officer, "Officer", "officer@example.com", "CEO");
         if (newCompany) {
@@ -277,7 +282,7 @@ contract SAFOIntegrationTest is Test {
                 DealManagerFactory(companyFactory.dealManagerFactory())
                     .computeDealManagerAddress(deploySalt, address(companyFactory))
             );
-            companyFactory.setStable(address(usdc));
+            _configureFactoryStable();
             vm.prank(investor);
             usdc.approve(address(dealManager), type(uint256).max);
         }

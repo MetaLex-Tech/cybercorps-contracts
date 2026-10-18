@@ -19,6 +19,7 @@ have one. Do not assume another checkout's files are present here.
 
 ## Shared tasks
 
+- [SAFO Reg D/S rollout](tasks/safo-integration.md): October 18 owner-approved coordinated rollout; Claude review waived; Base Sepolia fork acceptance passed, live signer/quorum and remaining release checks pending.
 - [Shared-state setup](tasks/shared-project-state.md): this documentation change.
 - [GitBook register paragraph and LeXcheXBadge deployment claims](tasks/gitbook-register-and-badge-corrections.md): docs-only correction, 2026-10-04.
 - [LET certificate footer names the issuing company](tasks/let-footer-issuer-name.md): renderer change, 2026-10-11.
