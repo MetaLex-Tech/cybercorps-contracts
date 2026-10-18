@@ -76,6 +76,30 @@ and registers the template on first use.
 The two `DEPRECATED-*` files in the directory (`SAFE-version-0-1`,
 `SAFEplusT-version-0-1`) are not for new agreements.
 
+## LET legal release v1.4
+
+These eight packets and eight standalone instruments are published on IPFS.
+Their CIDs and fetched bytes match the approved release manifest. Registration
+and full field readbacks are complete on Ethereum, Base and Arbitrum.
+Each packet combines the reusable cyberSPA with its Exhibit A instrument(s).
+The registry URI identifies that packet; each LET uses its matching standalone
+instrument URI. Existing v1.3 and custom templates remain unchanged.
+
+| Instrument | Reg D specification | Reg S specification |
+|---|---|---|
+| SAFE | [mlx_safe_reg_d_v1_4](../../templates/mlx_safe_reg_d_v1_4.md) | [mlx_safe_reg_s_v1_4](../../templates/mlx_safe_reg_s_v1_4.md) |
+| SAFE + Token Warrant | [mlx_safe_tw_reg_d_v1_4](../../templates/mlx_safe_tw_reg_d_v1_4.md) | [mlx_safe_tw_reg_s_v1_4](../../templates/mlx_safe_tw_reg_s_v1_4.md) |
+| SAFT | [mlx_saft_reg_d_v1_4](../../templates/mlx_saft_reg_d_v1_4.md) | [mlx_saft_reg_s_v1_4](../../templates/mlx_saft_reg_s_v1_4.md) |
+| SAFTE | [mlx_safte_reg_d_v1_4](../../templates/mlx_safte_reg_d_v1_4.md) | [mlx_safte_reg_s_v1_4](../../templates/mlx_safte_reg_s_v1_4.md) |
+
+[Exact approved registration arguments](../../templates/releases/let-v1.4.json)
+preserve predecessor field order and encoding. The release package includes
+offline CAR roots, PDF hashes and successful gateway verification receipts.
+The manifest records confirmed transactions and receipt blocks for all three chains.
+Testnets retain their existing templates. The release requires no existing-family core protocol change.
+SAFO integration and upgrades are a separate review; no SAFO registration is
+included in this release manifest.
+
 ## See also
 
 * [Sign a cyberAgreement](../how-to/sign-a-cyberagreement.md)
