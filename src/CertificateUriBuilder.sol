@@ -115,6 +115,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "RestrictedTokenPurchaseAgreement";
         if (_class == SecurityClass.RestrictedTokenUnit) return "RestrictedTokenUnit";
         if (_class == SecurityClass.MembershipInterest) return "MembershipInterest";
+        if (_class == SecurityClass.SAFO) return "SAFO";
         return "Unknown";
     }
 
@@ -133,6 +134,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Units";
         if (_class == SecurityClass.RestrictedTokenUnit) return "Units";
         if (_class == SecurityClass.MembershipInterest) return "Units";
+        if (_class == SecurityClass.SAFO) return "Dollars";
         return "Unknown";
     }
 

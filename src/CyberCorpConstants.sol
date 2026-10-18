@@ -55,7 +55,8 @@ enum SecurityClass {
     RestrictedStockUnit,
     RestrictedTokenPurchaseAgreement,
     RestrictedTokenUnit,
-    MembershipInterest
+    MembershipInterest,
+    SAFO
 }
 
 enum SecuritySeries {

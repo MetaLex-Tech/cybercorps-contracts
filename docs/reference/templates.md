@@ -104,3 +104,7 @@ included in this release manifest.
 
 * [Sign a cyberAgreement](../how-to/sign-a-cyberagreement.md)
 * [`CyberAgreementRegistry`](contracts/CyberAgreementRegistry.md)
+
+## cyberSAFO (prepared, not registered)
+
+* [Reg D v1.0](../../templates/mlx_safo_reg_d_v1_0.md) and [Reg S v1.0](../../templates/mlx_safo_reg_s_v1_0.md): native class 14 and the version-1 per-LET SAFO extension. Both require the separately approved compatible deployment and publication release.

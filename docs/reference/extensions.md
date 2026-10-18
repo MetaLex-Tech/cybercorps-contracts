@@ -123,6 +123,26 @@ premium multiplier, and protocol valuation at time of investment. V2 adds
 `customProvisions`; V3 adds series-scope `SAFTESeriesData` (series name,
 governing-document URIs, custom provisions).
 
+## SAFOExtension
+
+Simple Agreement for Future Ownership, using the settled v0.22 legal terms.
+`SAFOData` is ABI-encoded in each LET's `CertificateDetails.extensionData`.
+It carries a schema version, minimum Project Reserve, maximum cliff and
+unlock durations, tokenholder-governance requirement, optional Outside Date,
+optional record of the Launch Configuration's unlock schedule, and custom
+provisions. Purchase Amount and Project Valuation use the core
+`investmentAmountUSD` and `issuerUSDValuationAtTimeOfInvestment` fields.
+
+This extension implements the base `ICertificateExtension` surface. It reads
+no series or class data and emits `SAFODetails`. Structure elections, launch
+notices, entitlement calculations and conversion remain governed by the
+agreement; the extension does not execute them. See the
+[SAFO field specification](safo-extension.md) for units, optional-field rules
+and the deployment/integration gates. The integration appends native
+`SecurityClass.SAFO` as value 14. Live issuance still requires the coordinated
+component upgrades, verified legal publication/registration and matched app
+release; adding the extension does not enable it on deployed companies.
+
 ## TokenWarrantExtension / TokenWarrantExtensionV2 / TokenWarrantExtensionV3
 
 Token warrants.
