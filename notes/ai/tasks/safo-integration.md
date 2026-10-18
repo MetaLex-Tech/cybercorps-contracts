@@ -35,3 +35,14 @@ Before activation: approve the new Reg S offering adaptation; publish exact clea
 ## First GitHub review dispositions
 
 Review #5561133969 identified accepted noncanonical payload bytes and stale documentation about native class 14. Two tests reproduced the decoding defect against `acc1d42`. Commit `e74e22a` compares decoded/re-encoded bytes and rejects trailing bytes or nonzero string padding with `NoncanonicalEncoding` on decoder, validator and renderer. Both tests pass; all 113 protocol tests pass. Native-class documentation is corrected. The paired app ABI matches the compiled extension exactly. This changes malformed-payload acceptance only; canonical schema-1 layout, storage and signatures remain unchanged.
+
+## Owner approval and next release step (2026-10-17)
+
+The owner approved the submitted Reg D/Reg S implementation and document package and asked for the next step. This clears the owner review of the new Reg S legal adaptation. The legal files are unchanged from the approved package; clean PDF hashes are:
+
+- cyberSAFO - Reg D - clean.pdf: `eff41a0c6b75b05ba7f892b798698b1861b4a5c5bc6c86bf4b6a9a9709b4f3e5`.
+- cyberSAFO - Reg S - clean.pdf: `c99c64d813f988861bd4c95f7da35d470badf587a807042f98e00c1fd48baf03`.
+- mlx_safo_reg_d_v1_0.pdf: `ffdea368e833059496b31e672d0d10204ed97221943d394648b4573f4b36c810`.
+- mlx_safo_reg_s_v1_0.pdf: `d629378f4da59db3fda6a49db23d823b288c46a2b4e45dec6a28c2447e2b056d`.
+
+This approval does not waive CI, independent external-model review or isolated target-runtime acceptance. The owner asked for next steps; no new publication, live transactions, merge, upgrade or production activation was performed. Recommended sequence: close technical checks/review; publish the four clean PDFs with verified CIDs; perform an approved Base Sepolia pilot with both templates and compatible components; then coordinate mainnet upgrade/registration and app promotion through develop → staging → production.
