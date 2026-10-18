@@ -1,12 +1,18 @@
 # Native SAFO integration: Reg D and Reg S
 
-Updated 2026-10-18. Owner: Codex, current cyberForms task. **Live rollout and activation HELD: existing High V12 F-295271 reproduces on the proposed native SAFO runtime.**
+Updated 2026-10-18. Owner: Codex, current cyberForms task. **Owner accepted the specific F-295271 authorized-manager risk for this rollout and declined the signature correction; other release checks and live execution remain pending.**
 
 The owner explicitly approved the narrow native-SAFO contract rollout, both Reg D/Reg S activation after checks, and waived independent Claude review. Settled v22 economics and approved v1.1 notices PDFs remain fixed. The rollout covers a Base Sepolia pilot then coordinated Ethereum/Base/Arbitrum: separate SAFO extension; compatible IM/LET and libraries; shared URI/image builders; DM; RM/library; combined company factory and existing reference setters. It excludes unrelated implementations, ownership changes and blanket upgrades of existing companies. Runtime/fork/regression/CI checks and normal app release order remain required. No new external audit or private-code upload is authorized.
 
-Implementation PRs #180 and app #1769 are merged; their monitors remain retired. Rollout branch `codex/safo-rollout-20261018` starts at develop `0661a0563572a4bb6560b64497f211224faefe14`. App activation branch is `codex/safo-activation-20261018`. No rollout transaction has been sent. Next: obtain owner approval for the additional signature-binding correction scope before changing implementation. Continue review/CI on preparation; do not execute the rollout or activate SAFO while this check fails. The unsigned packages and four-chain fork acceptance are complete. Do not run broad upgrade scripts which change unrelated contracts or drop ownership.
+Implementation PRs #180 and app #1769 are merged; their monitors remain retired. Rollout branch `codex/safo-rollout-20261018` starts at develop `0661a0563572a4bb6560b64497f211224faefe14`. App activation branch is `codex/safo-activation-20261018`. No rollout transaction has been sent. Next: complete preparation review/current-head checks and the already approved live pilot, then verify rollout and registration before activation. The owner declined the signature correction after the authorized-manager prerequisite was explained; do not implement it or repeat that approval question. Its diagnostic failure remains recorded, with owner-accepted release treatment. Other findings and gates remain required. The unsigned packages and four-chain fork acceptance are complete. Do not run broad upgrade scripts which change unrelated contracts or drop ownership.
 
 The cross-repository task record in `metalex-webapp/notes/ai/tasks/safo-integration.md` owns current release status; historical implementation evidence below remains dated.
+
+## Owner decision: retain the existing signatures (2026-10-18)
+
+After being told that the reproduced attack requires a malicious or compromised authorized company manager with access to another officer's agreement signature, the owner replied: “yeah this is a corner case not worth dealing with”. In the context of the already approved SAFO rollout, this accepts that specific risk and declines the proposed signature correction. The F-295271 release hold is lifted for this SAFO rollout; do not ask for that correction approval again or implement it.
+
+The underlying finding remains **High, F-295271, unresolved**, with its original audit owner and reproduction evidence. The diagnostic result remains FAILED; release treatment is **OWNER-ACCEPTED RISK**, not a successful integrity check or a fixed defect. This decision does not waive other findings, approve changed signature semantics, establish that every RoundManager path is safe, or alter the canonical audit dashboard. Independent Claude review remains separately WAIVED. Current-head CI/review, live pilot, required Safe quorum, runtime/registration verification, hosted acceptance, applicable staging audit and develop → staging → production still apply. No live transaction or activation has occurred.
 
 ## October 18 rollout checkpoint
 
