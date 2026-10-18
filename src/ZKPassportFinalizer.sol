@@ -134,36 +134,32 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
         uint256 expiry,
         bytes32[] memory passportIds
     ) external returns (bytes32 contractId) {
-        if (passportIds.length != parties.length) revert PassportIdsLengthMismatch();
-        for (uint256 i = 0; i < parties.length; i++) {
-            // A pin and a passport record belong to a party address. An open slot has none yet.
-            if (parties[i] == address(0)) revert OpenSlotNotSupported();
-            if (passportIds[i] == bytes32(0)) continue;
-            for (uint256 j = i + 1; j < passportIds.length; j++) {
-                if (passportIds[i] == passportIds[j]) revert DuplicatePin();
-            }
-        }
+        return _createContract(templateId, salt, globalValues, parties, partyValues, expiry, passportIds);
+    }
 
-        ZKPassportFinalizerStorage storage $ = _zkpassportFinalizerStorage();
-        contractId = $.registry
-            .createContract(
-                templateId,
-                uint256(keccak256(abi.encode(salt, passportIds))),
-                globalValues,
-                parties,
-                partyValues,
-                bytes32(0), // secretHash
-                address(this), // finalizer
-                expiry
-            );
-
-        $.registered[contractId] = true;
-        for (uint256 i = 0; i < parties.length; i++) {
-            $.pinOf[contractId][parties[i]] = passportIds[i];
-            // A pinned passport is taken from the start. No other party can use it.
-            if (passportIds[i] != bytes32(0)) $.partyOfPassport[contractId][passportIds[i]] = parties[i];
-        }
-        emit PassportsPinned(contractId, parties, passportIds);
+    /// @notice Same as the registry's `createStandaloneContractAndSignFor`, with a passport gate.
+    /// - Creates the template if it does not exist.
+    /// - Creates the agreement as `createContract` does.
+    /// - Records the passport and signs for the proof's bound sender, as `signWithProof` does.
+    /// The signer uses `partyValues[0]`, so the signer must be the first party.
+    /// Anyone can relay this call.
+    function createStandaloneContractAndSignWithProof(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        bytes32[] memory passportIds,
+        ProofVerificationParams calldata params,
+        bytes calldata signature
+    ) external returns (bytes32 contractId) {
+        bytes32 templateId = _createTemplateIfMissing(title, legalContractUri, globalFields, partyFields);
+        contractId = _createContract(templateId, salt, globalValues, parties, partyValues, expiry, passportIds);
+        _signWithProof(contractId, params, partyValues[0], signature);
     }
 
     /// @notice Record the party's passport and sign for the party. The party is the proof's bound
@@ -174,9 +170,7 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] memory partyValues,
         bytes calldata signature
     ) external {
-        address party = _record(contractId, params);
-        _zkpassportFinalizerStorage().registry.signContractFor(party, contractId, partyValues, signature, false, "");
-        _finalizeIfReady(contractId);
+        _signWithProof(contractId, params, partyValues, signature);
     }
 
     /// @notice Record the passport of a party that signed on the registry directly.
@@ -216,6 +210,74 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     function passportOf(bytes32 contractId, address party) external view returns (bytes32) {
         return _zkpassportFinalizerStorage().passportOf[contractId][party];
+    }
+
+    /// @dev Use the same template id as the registry's standalone path.
+    function _createTemplateIfMissing(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) internal returns (bytes32 templateId) {
+        templateId = keccak256(abi.encode(title, legalContractUri, globalFields, partyFields));
+        ICyberAgreementRegistry registry_ = _zkpassportFinalizerStorage().registry;
+        // The registry has no existence check that does not revert. A revert means "no template".
+        try registry_.getTemplateDetails(templateId) {}
+        catch {
+            registry_.createTemplate(templateId, title, legalContractUri, globalFields, partyFields);
+        }
+    }
+
+    function _createContract(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        bytes32[] memory passportIds
+    ) internal returns (bytes32 contractId) {
+        if (passportIds.length != parties.length) revert PassportIdsLengthMismatch();
+        for (uint256 i = 0; i < parties.length; i++) {
+            // A pin and a passport record belong to a party address. An open slot has none yet.
+            if (parties[i] == address(0)) revert OpenSlotNotSupported();
+            if (passportIds[i] == bytes32(0)) continue;
+            for (uint256 j = i + 1; j < passportIds.length; j++) {
+                if (passportIds[i] == passportIds[j]) revert DuplicatePin();
+            }
+        }
+
+        ZKPassportFinalizerStorage storage $ = _zkpassportFinalizerStorage();
+        contractId = $.registry
+            .createContract(
+                templateId,
+                uint256(keccak256(abi.encode(salt, passportIds))),
+                globalValues,
+                parties,
+                partyValues,
+                bytes32(0), // secretHash
+                address(this), // finalizer
+                expiry
+            );
+
+        $.registered[contractId] = true;
+        for (uint256 i = 0; i < parties.length; i++) {
+            $.pinOf[contractId][parties[i]] = passportIds[i];
+            // A pinned passport is taken from the start. No other party can use it.
+            if (passportIds[i] != bytes32(0)) $.partyOfPassport[contractId][passportIds[i]] = parties[i];
+        }
+        emit PassportsPinned(contractId, parties, passportIds);
+    }
+
+    function _signWithProof(
+        bytes32 contractId,
+        ProofVerificationParams calldata params,
+        string[] memory partyValues,
+        bytes calldata signature
+    ) internal {
+        address party = _record(contractId, params);
+        _zkpassportFinalizerStorage().registry.signContractFor(party, contractId, partyValues, signature, false, "");
+        _finalizeIfReady(contractId);
     }
 
     /// @dev Verify the proof and store the passport id for its bound sender. Returns that party.

@@ -67,6 +67,7 @@ contract ZKPassportFinalizerTest is Test {
     string constant SCOPE = "cyberagreement-passport";
     string constant LEGAL_URI = "https://example.com/agreement";
     bytes32 constant TEMPLATE_ID = keccak256("passport-template");
+    string constant STANDALONE_TITLE = "Standalone Passport Agreement";
 
     bytes32 constant PASSPORT_A = keccak256("passport-a");
     bytes32 constant PASSPORT_B = keccak256("passport-b");
@@ -208,6 +209,43 @@ contract ZKPassportFinalizerTest is Test {
         bytes memory signature = _sign(contractId, index, key);
         vm.prank(relayer);
         finalizer.signWithProof(contractId, params, partyValues[index], signature);
+    }
+
+    function _standaloneId(uint256 salt, bytes32[] memory pins) internal view returns (bytes32) {
+        bytes32 templateId = keccak256(abi.encode(STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields));
+        return keccak256(
+            abi.encode(
+                templateId,
+                uint256(keccak256(abi.encode(salt, pins))),
+                globalValues,
+                parties,
+                bytes32(0),
+                address(finalizer)
+            )
+        );
+    }
+
+    function _standalone(
+        uint256 salt,
+        bytes32[] memory pins,
+        ProofVerificationParams memory params,
+        bytes memory signature
+    ) internal returns (bytes32) {
+        vm.prank(relayer);
+        return finalizer.createStandaloneContractAndSignWithProof(
+            STANDALONE_TITLE,
+            LEGAL_URI,
+            globalFields,
+            partyFields,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            block.timestamp + 1 days,
+            pins,
+            params,
+            signature
+        );
     }
 
     // ── Create ───────────────────────────────────────────────────────────────
@@ -446,6 +484,78 @@ contract ZKPassportFinalizerTest is Test {
 
         vm.expectRevert(ZKPassportFinalizer.AlreadyRecorded.selector);
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
+    }
+
+    // ── Standalone ───────────────────────────────────────────────────────────
+
+    function test_Standalone_CreatesTemplateAgreementAndFirstSignature() public {
+        bytes32[] memory pins = _pins(bytes32(0), PASSPORT_B, bytes32(0));
+        bytes32 contractId = _standaloneId(1, pins);
+        ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, alice);
+        bytes memory signature = _sign(contractId, 0, aliceKey);
+
+        assertEq(_standalone(1, pins, params, signature), contractId);
+
+        (, string memory title,,) =
+            registry.getTemplateDetails(keccak256(abi.encode(STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields)));
+        assertEq(title, STANDALONE_TITLE);
+        assertTrue(finalizer.isRegistered(contractId));
+        assertEq(finalizer.pinOf(contractId, bob), PASSPORT_B);
+        assertEq(finalizer.passportOf(contractId, alice), PASSPORT_A);
+        assertTrue(registry.hasSigned(contractId, alice));
+        assertFalse(registry.isFinalized(contractId));
+
+        _signWithProof(contractId, 1, bobKey, PASSPORT_B);
+        _signWithProof(contractId, 2, chadKey, PASSPORT_C);
+        assertTrue(registry.isFinalized(contractId));
+    }
+
+    function test_Standalone_ReusesExistingTemplate() public {
+        bytes32[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
+        bytes32 firstId = _standaloneId(1, pins);
+        _standalone(1, pins, _proof(firstId, PASSPORT_A, alice), _sign(firstId, 0, aliceKey));
+        bytes32 secondId = _standaloneId(2, pins);
+        ProofVerificationParams memory params = _proof(secondId, PASSPORT_A, alice);
+        bytes memory signature = _sign(secondId, 0, aliceKey);
+
+        assertEq(_standalone(2, pins, params, signature), secondId);
+        assertTrue(registry.hasSigned(secondId, alice));
+    }
+
+    function test_Standalone_SingleParty_Finalizes() public {
+        parties.pop();
+        parties.pop();
+        partyValues.pop();
+        partyValues.pop();
+        bytes32[] memory pins = new bytes32[](1);
+        bytes32 contractId = _standaloneId(1, pins);
+        ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, alice);
+        bytes memory signature = _sign(contractId, 0, aliceKey);
+
+        _standalone(1, pins, params, signature);
+
+        assertTrue(registry.isFinalized(contractId));
+    }
+
+    function test_RevertIf_Standalone_SignerNotFirstParty() public {
+        bytes32[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
+        bytes32 contractId = _standaloneId(1, pins);
+        ProofVerificationParams memory params = _proof(contractId, PASSPORT_B, bob);
+        bytes memory signature = _sign(contractId, 1, bobKey);
+
+        vm.expectRevert(CyberAgreementRegistry.ClosedAgreementPartyValueMismatch.selector);
+        _standalone(1, pins, params, signature);
+    }
+
+    function test_RevertIf_Standalone_PinMismatch_NothingCreated() public {
+        bytes32[] memory pins = _pins(PASSPORT_A, bytes32(0), bytes32(0));
+        bytes32 contractId = _standaloneId(1, pins);
+        ProofVerificationParams memory params = _proof(contractId, PASSPORT_X, alice);
+        bytes memory signature = _sign(contractId, 0, aliceKey);
+
+        vm.expectRevert(ZKPassportFinalizer.PassportPinMismatch.selector);
+        _standalone(1, pins, params, signature);
+        assertFalse(finalizer.isRegistered(contractId));
     }
 
     // ── Attest ───────────────────────────────────────────────────────────────

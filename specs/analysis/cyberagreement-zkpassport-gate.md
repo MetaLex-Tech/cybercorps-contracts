@@ -28,6 +28,19 @@ can then sign only with that passport.
     6. If all parties have signed and have a proof record, calls `registry.finalizeContract`.
 - `attest(contractId, proof)` does steps 1–4 and 6 only. It is a backup for a party that signed
   directly on the registry. The normal flow does not use it.
+- `createStandaloneContractAndSignWithProof(title, legalContractUri, globalFields, partyFields, salt,
+  globalValues, parties, partyValues, expiry, passportIds, proof, signature)` is the gated form of the
+  registry's `createStandaloneContractAndSign` and `createStandaloneContractAndSignFor`:
+    1. Creates the template if it does not exist. The template id is the same as on the registry's
+       standalone path.
+    2. Does the steps of `createContract`.
+    3. Does the steps of `signWithProof` for the proof's bound sender, with `partyValues[0]`. Thus
+       the signer must be the first party. A single-party agreement finalizes in this one
+       transaction.
+
+  The signer is the proof's bound sender, so anyone can relay the call. Thus one function covers
+  both registry functions. The registry functions do not change. They still fix
+  `finalizer = address(0)`, so they make ungated agreements only.
 
 The example has three parties. A is the creator. B and C are email parties with pregenerated
 Privy wallets. A pins B's passport and leaves C unpinned. The webapp creates the agreement in its
@@ -139,9 +152,6 @@ off-chain.
 - TODO: Decide if every party needs a proof, or only some parties.
 - TODO: Decide if one person can fill two parties (for example, as an individual and as an officer
   of a company). The one-passport-one-party rule refuses this now.
-- TODO: Support the standalone path (`createStandaloneContractAndSign`,
-  `createStandaloneContractAndSignFor`). It fixes `finalizer = address(0)`, so the gate does not
-  apply. The webapp email flow does not use it now.
 
 ## Invariants
 
@@ -153,7 +163,8 @@ off-chain.
 3. The record goes to the proof's bound sender. That address must be a party of the agreement.
 4. A pinned party's record equals its pin.
 5. Within one agreement, a passport fills one party only, and each party has one record.
-6. Only `ZKPassportFinalizer.createContract` registers an agreement and its pins. `contractId`
+6. Only `ZKPassportFinalizer.createContract` and `createStandaloneContractAndSignWithProof`
+   register an agreement and its pins. `contractId`
    binds the pins through the salt.
 
 ## Acceptance tests
@@ -178,3 +189,8 @@ off-chain.
 | `attest` before the party signs                                                   | `NotSigned`                                      |
 | Same party proves twice                                                           | `AlreadyRecorded`                                |
 | Non-last party signs                                                              | Not finalized                                    |
+| Standalone: new template, three parties                                           | Creates template and agreement; first party signs |
+| Standalone: template exists                                                       | Uses it                                          |
+| Standalone: single party                                                          | Finalizes in one transaction                     |
+| Standalone: bound sender is not the first party                                   | Registry `ClosedAgreementPartyValueMismatch`     |
+| Standalone: pin mismatch                                                          | `PassportPinMismatch`; no agreement stays        |
