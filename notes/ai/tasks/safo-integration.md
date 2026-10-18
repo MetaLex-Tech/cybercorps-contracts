@@ -8,7 +8,7 @@ Review PRs: [contracts #180](https://github.com/MetaLex-Tech/cybercorps-contract
 
 ## Source and implementation
 
-Branch: `codex/safo-integration`. Code: `cb6737eac21a84a26e771a816a1acfb5124dd244`. This retains SAFO extension `e294600d` and merges current develop `f2a4243` through `e4fcf23`. The matching app branch is `codex/safo-integration`, application code `455edb1e6e` plus develop merge `72b77fe15f`.
+Branch: `codex/safo-integration`. Code: `e74e22abca685ea705a22cda4937a4f8a1394841`. This retains SAFO extension `e294600d` and merges current develop `f2a4243` through `e4fcf23`. The matching app branch is `codex/safo-integration`, application code `1bf65ae2f2`, retaining develop merge `72b77fe15f`.
 
 The extension follows the approved per-LET schema 1, with explicit presence flags and raw integer terms. Native `SecurityClass.SAFO` is appended as 14; values 0–13 remain unchanged. URI/image builders identify SAFO and display one instrument with total consideration. Existing core storage declarations, agreement IDs and signature formats are unchanged. Both new template specifications use 19 global and 5 party fields. Publication URIs remain pending.
 
@@ -16,7 +16,7 @@ The cross-repository discovery, complete app/legal status and release ownership 
 
 ## Verified locally
 
-111 tests passed, zero failures or skips, across five matching suites (SAFO extension/integration, IssuanceManager, RoundManager, DealManager). Command:
+113 tests passed, zero failures or skips, across five matching suites (SAFO extension/integration, IssuanceManager, RoundManager, DealManager). Command:
 
 ```bash
 forge test --match-contract '^(SAFOExtensionTest|SAFOIntegrationTest|IssuanceManagerTest|RoundManagerTest|DealManagerTest|CertificateUriBuilderTest|CertificateImageBuilderTest|CyberCorpFactoryTest)$' -vv
@@ -31,3 +31,7 @@ No deployed upgrade/storage acceptance or target-company RPC sign → simulate �
 Review this PR and the matching app PR, then approve a concrete pilot/release plan separately. Required coordinated deployment includes the new extension proxy/AUTH, IM/LET and linked storage libraries, URI/image builders/content library, DM new-printer wrapper, RM/library, and combined company factory. Existing companies require their actual components and LET beacon checked and owner upgrades where necessary. Builder/beacon changes can affect existing instruments. No registry, CyberCorp, single-factory or escrow implementation change is proposed.
 
 Before activation: approve the new Reg S offering adaptation; publish exact clean PDFs; register both templates per approved chain; verify actual runtime hashes, references, exact registered fields/legends and payment assets; complete external review and isolated target-runtime acceptance; populate the app release manifest; approve hosted indexer rollout; promote the app develop → staging → production. No step here is authorized merely by this record. Existing review/audit ownership remains unchanged.
+
+## First GitHub review dispositions
+
+Review #5561133969 identified accepted noncanonical payload bytes and stale documentation about native class 14. Two tests reproduced the decoding defect against `acc1d42`. Commit `e74e22a` compares decoded/re-encoded bytes and rejects trailing bytes or nonzero string padding with `NoncanonicalEncoding` on decoder, validator and renderer. Both tests pass; all 113 protocol tests pass. Native-class documentation is corrected. The paired app ABI matches the compiled extension exactly. This changes malformed-payload acceptance only; canonical schema-1 layout, storage and signatures remain unchanged.
