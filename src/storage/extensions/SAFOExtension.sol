@@ -50,6 +50,7 @@ contract SAFOExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     error UnexpectedOutsideDate();
     error UnexpectedUnlockParameters();
     error UnexpectedUnlockStartTime();
+    error NoncanonicalEncoding();
 
     uint256[30] private __gap;
 
@@ -75,6 +76,9 @@ contract SAFOExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function decodeExtensionData(bytes memory encoded) public pure returns (SAFOData memory data) {
         data = abi.decode(encoded, (SAFOData));
         _validate(data);
+        // ABI decoding ignores trailing bytes and unused string padding. Require
+        // one byte representation so reviewed terms have one payload hash.
+        if (keccak256(encoded) != keccak256(abi.encode(data))) revert NoncanonicalEncoding();
     }
 
     /// @notice Validates the payload's schema, units' bounds and optional-field consistency.

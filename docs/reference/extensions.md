@@ -138,8 +138,10 @@ no series or class data and emits `SAFODetails`. Structure elections, launch
 notices, entitlement calculations and conversion remain governed by the
 agreement; the extension does not execute them. See the
 [SAFO field specification](safo-extension.md) for units, optional-field rules
-and the deployment/integration gates. This addition does not itself add a
-native SAFO `SecurityClass` or enable SAFO issuance in the application.
+and the deployment/integration gates. The integration appends native
+`SecurityClass.SAFO` as value 14. Live issuance still requires the coordinated
+component upgrades, verified legal publication/registration and matched app
+release; adding the extension does not enable it on deployed companies.
 
 ## TokenWarrantExtension / TokenWarrantExtensionV2 / TokenWarrantExtensionV3
 

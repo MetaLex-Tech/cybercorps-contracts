@@ -180,6 +180,30 @@ contract SAFOExtensionTest is Test {
         extension.encodeExtensionData(d);
     }
 
+    function _assertNoncanonicalRefuses(bytes memory encoded, SAFOData memory expected) internal {
+        // Solidity itself accepts these bytes and decodes the same terms.
+        assertEq(abi.encode(abi.decode(encoded, (SAFOData))), abi.encode(expected));
+        vm.expectRevert(SAFOExtension.NoncanonicalEncoding.selector);
+        extension.decodeExtensionData(encoded);
+        vm.expectRevert(SAFOExtension.NoncanonicalEncoding.selector);
+        extension.validateExtensionData(encoded);
+        vm.expectRevert(SAFOExtension.NoncanonicalEncoding.selector);
+        extension.getExtensionURI(encoded);
+    }
+
+    function test_RejectTrailingBytesOnAllReadSurfaces() public {
+        SAFOData memory d = _terms();
+        _assertNoncanonicalRefuses(bytes.concat(abi.encode(d), hex"deadbeef"), d);
+    }
+
+    function test_RejectNonzeroStringPaddingOnAllReadSurfaces() public {
+        SAFOData memory d = _terms();
+        d.customProvisions = "x";
+        bytes memory encoded = abi.encode(d);
+        encoded[encoded.length - 1] = 0x01;
+        _assertNoncanonicalRefuses(encoded, d);
+    }
+
     function test_InitializersAndUpgradeAuthority() public {
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         implementation.initialize(address(auth));

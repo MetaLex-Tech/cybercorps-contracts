@@ -13,7 +13,9 @@ remain pending a separately approved release.
 identifies itself with `keccak256("SAFO")`, and emits a `SAFODetails` JSON
 fragment. It does not read or inherit series/class terms. Its typed encoder,
 decoder, validator and renderer all reject unsupported schema versions or
-inconsistent optional fields. The URI builder skips an empty payload, so these
+inconsistent optional fields. Decoding also requires byte-for-byte canonical
+`abi.encode(SAFOData)` output, rejecting trailing bytes and nonzero unused string
+padding. The URI builder skips an empty payload, so these
 helpers are not an issuance-time enforcement hook.
 
 | Field in ABI order | Solidity type | Meaning and encoding |
