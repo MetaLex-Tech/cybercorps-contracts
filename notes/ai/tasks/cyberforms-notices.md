@@ -13,3 +13,5 @@ This branch changes specifications and publication manifests only. App ownership
 Next: complete PR review and the app’s staged release. All 24 existing-family registrations have exact receipt-block and fresh readbacks. Do not activate SAFO from these publication records alone.
 
 PR: [#181](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/181), paired with webapp #1784. The cyberForms conversation owns both review loops through heartbeat `review-cyberforms-notices-prs`; retain existing per-PR state files. Cross-repository manifest, schema, CID/hash and readback validation passed. CI and GitHub review remain pending.
+
+GitHub P2 finding 4307735521 identified missing SAFO legend arrays in the release manifest. Each Reg D/S entry now includes the four exact legends extracted from its approved clean Word master. Both appearance masters match, the prior approved legends are unchanged, and all legend text appears in the frozen standalone PDF after page-header removal. The PDFs, CIDs, field schemas and SAFO activation gates are unchanged.
