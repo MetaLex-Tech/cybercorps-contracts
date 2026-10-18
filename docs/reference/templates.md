@@ -111,7 +111,7 @@ included in this release manifest.
 
 ## Blockchain notices legal release (October 18, 2026)
 
-The approved v1.5 existing-family packets and v1.1 SAFO packets add a common Blockchain Notices clause. Dark and light copies are pinned and CID-verified. Browser retrieval verified every PDF byte hash. Registration and app activation remain pending. Existing registrations retain their original text.
+The approved v1.5 existing-family packets and v1.1 SAFO packets add a common Blockchain Notices clause. Dark and light copies are pinned and CID-verified. Browser retrieval verified every PDF byte hash. Ethereum and Base registrations are verified in the [registration readbacks](../../templates/releases/let-v1.5-registrations.json). Arbitrum registration and app activation remain pending. Existing registrations retain their original text.
 
 - [mlx_safe_reg_d_v1_5](../../templates/mlx_safe_reg_d_v1_5.md)
 - [mlx_safe_tw_reg_d_v1_5](../../templates/mlx_safe_tw_reg_d_v1_5.md)

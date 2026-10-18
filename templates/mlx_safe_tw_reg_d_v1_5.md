@@ -1,6 +1,6 @@
 # mlx_safe_tw_reg_d_v1_5
 
-Status: approved PDFs pinned; uploaded CIDs match the frozen local bytes. Browser retrieval verified every PDF byte hash; onchain registration remains pending. Do not select these templates for new agreements until registry readbacks pass on the target chain.
+Status: approved PDFs pinned; uploaded CIDs match the frozen local bytes. Browser retrieval verified every PDF byte hash; Ethereum and Base registrations are verified; Arbitrum registration and app activation remain pending.
 
 Template ID: `0x6d6c785f736166655f74775f7265675f645f76315f3500000000000000000000` (`bytes32(bytes("mlx_safe_tw_reg_d_v1_5"))`).
 Title: `mlx_safe_tw_reg_d_v1_5`.
@@ -52,11 +52,11 @@ Field names, order and plain-text value encoding remain the same as the correspo
 
 Use the existing instrument-specific extension for the actual company/LET runtime: legacy/V2 or the supported V3 series/class layout as applicable. This specification does not attest that an extension is deployed on a particular chain. Resolve and verify the implementation, ABI and extension there before issuance. The legal URI and restrictive legends must match the clean instrument in the release manifest.
 
-Core monetary fields retain their existing 18-decimal USD convention. Token scheduling and calculation fields retain the selected extension’s encoding; the notice addition do not authorize changing those units.
+Core monetary fields retain their existing 18-decimal USD convention. Token scheduling and calculation fields retain the selected extension’s encoding; the notice addition does not authorize changing those units.
 
 The v1.5 registry name versions the agreement packet. It does not renumber the approved Word masters or imply a new protocol version. Existing v1.3/v1.4/custom registrations and their legal URIs remain unchanged.
 
-See `releases/let-v1.5.json` for exact registration arguments. All eight new IDs are unregistered on Ethereum, Base and Arbitrum as of the read-only checks on October 18, 2026. The ordered fields match v1.4. Testnets retain their existing forms.
+See `releases/let-v1.5.json` for exact registration arguments. All eight templates are registered and verified on Ethereum and Base as of October 18, 2026. Arbitrum remains pending. See [registration readbacks](releases/let-v1.5-registrations.json). The ordered fields match v1.4. Testnets retain their existing forms.
 
 ## Presentation copies
 
