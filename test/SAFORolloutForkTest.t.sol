@@ -33,6 +33,10 @@ contract SAFORolloutForkTest is SAFOIntegrationTest {
         assertEq(usdc.decimals(), 6);
         officer = vm.addr(OFFICER_KEY);
         investor = vm.addr(INVESTOR_KEY);
+        // These published fixture keys can carry live EIP-7702 delegations. Clear
+        // only the two synthetic accounts inside this disposable fork.
+        vm.etch(officer, hex"");
+        vm.etch(investor, hex"");
         // Test fixture funding changes token storage only inside the disposable fork.
         deal(address(usdc), investor, 20_000e6);
         address rm;
@@ -56,6 +60,14 @@ contract SAFORolloutForkTest is SAFOIntegrationTest {
         terms.outsideDateEnabled = true;
         terms.outsideDate = 0;
         payload = extension.encodeExtensionData(terms);
+    }
+
+    function test_RejectsInvestorWithNonReceiverCode() public {
+        vm.etch(investor, hex"60006000fd");
+        (bool success, bytes memory result) =
+            address(this).call(abi.encodeCall(this.test_RegD_TicketSignPayFinalizePreservesOriginalIssueDate, ()));
+        assertFalse(success);
+        assertEq(bytes4(result), bytes4(keccak256("ERC721InvalidReceiver(address)")));
     }
 
     function _template(bool regS) internal view override returns (bytes32 id) {

@@ -16,6 +16,10 @@ The app operator tools at `scripts/safo-rollout/` prepare narrow unsigned Create
 
 Full `forge build --sizes` compiled but exits nonzero for pre-existing test artifacts CyberCertPrinterEnhanced and HolderCountHarness. All 13 release artifacts satisfy EIP-170/EIP-3860 and deploy in the rehearsal. Production fork checks and repository review remain pending. No live pilot, production upgrade, registration or activation has occurred. Base Sepolia deployer access is pending; production Safe quorum is three on Ethereum and two on Base/Arbitrum. Preserve these signing boundaries.
 
+### Public test-wallet delegation (fork fixture)
+
+The Ethereum fork rejected 10 routes with `ERC721InvalidReceiver` at the published investor key's address. A pinned read confirmed EIP-7702 code `0xef01002e623468c560072e91d7a94a1dcb2eefbdbe69cb` on that synthetic wallet. The fixture now clears code only for its two public test keys, as the existing application fork harness does. A separate negative test reinstalls rejecting receiver code and requires the unchanged receiver refusal. No protocol implementation or live wallet code changes. All 12 cases passed on Arbitrum after this correction; final matching tests on the other chains are in progress.
+
 ## Source and implementation
 
 Branch: `codex/safo-integration`. Code: `e74e22abca685ea705a22cda4937a4f8a1394841`. This retains SAFO extension `e294600d` and merges current develop `f2a4243` through `e4fcf23`. The matching app branch is `codex/safo-integration`, application code `1bf65ae2f2`, retaining develop merge `72b77fe15f`.
