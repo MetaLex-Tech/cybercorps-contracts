@@ -148,14 +148,41 @@ contract ZKPassportFinalizerTest is Test {
         values[0] = value;
     }
 
-    function _pins(bytes32 a, bytes32 b, bytes32 c) internal pure returns (bytes32[] memory pins) {
-        pins = new bytes32[](3);
-        pins[0] = a;
-        pins[1] = b;
-        pins[2] = c;
+    /// @dev Every party needs a proof. `bytes32(0)` means "any passport".
+    function _pins(bytes32 a, bytes32 b, bytes32 c)
+        internal
+        pure
+        returns (ZKPassportFinalizer.PartyGate[] memory pins)
+    {
+        pins = new ZKPassportFinalizer.PartyGate[](3);
+        pins[0] = _gate(true, a);
+        pins[1] = _gate(true, b);
+        pins[2] = _gate(true, c);
     }
 
-    function _create(uint256 salt, bytes32[] memory pins) internal returns (bytes32) {
+    function _gate(bool proofRequired, bytes32 passportId)
+        internal
+        pure
+        returns (ZKPassportFinalizer.PartyGate memory)
+    {
+        return ZKPassportFinalizer.PartyGate({proofRequired: proofRequired, passportId: passportId});
+    }
+
+    /// @dev Alice needs a proof with any passport, Bob needs none, Chad needs PASSPORT_C.
+    function _mixedGates() internal pure returns (ZKPassportFinalizer.PartyGate[] memory gates) {
+        gates = new ZKPassportFinalizer.PartyGate[](3);
+        gates[0] = _gate(true, bytes32(0));
+        gates[1] = _gate(false, bytes32(0));
+        gates[2] = _gate(true, PASSPORT_C);
+    }
+
+    function _signWithoutProof(bytes32 contractId, uint256 index, uint256 key) internal {
+        bytes memory signature = _sign(contractId, index, key);
+        vm.prank(relayer);
+        finalizer.signWithoutProof(contractId, parties[index], partyValues[index], signature);
+    }
+
+    function _create(uint256 salt, ZKPassportFinalizer.PartyGate[] memory pins) internal returns (bytes32) {
         return
             finalizer.createContract(
                 TEMPLATE_ID, salt, globalValues, parties, partyValues, block.timestamp + 1 days, pins
@@ -211,7 +238,7 @@ contract ZKPassportFinalizerTest is Test {
         finalizer.signWithProof(contractId, params, partyValues[index], signature);
     }
 
-    function _standaloneId(uint256 salt, bytes32[] memory pins) internal view returns (bytes32) {
+    function _standaloneId(uint256 salt, ZKPassportFinalizer.PartyGate[] memory pins) internal view returns (bytes32) {
         bytes32 templateId = keccak256(abi.encode(STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields));
         return keccak256(
             abi.encode(
@@ -227,7 +254,7 @@ contract ZKPassportFinalizerTest is Test {
 
     function _standalone(
         uint256 salt,
-        bytes32[] memory pins,
+        ZKPassportFinalizer.PartyGate[] memory pins,
         ProofVerificationParams memory params,
         bytes memory signature
     ) internal returns (bytes32) {
@@ -254,16 +281,16 @@ contract ZKPassportFinalizerTest is Test {
         bytes32 contractId = _create(1, _pins(bytes32(0), PASSPORT_B, bytes32(0)));
 
         assertTrue(finalizer.isRegistered(contractId));
-        assertEq(finalizer.pinOf(contractId, alice), bytes32(0));
-        assertEq(finalizer.pinOf(contractId, bob), PASSPORT_B);
-        assertEq(finalizer.pinOf(contractId, chad), bytes32(0));
+        assertEq(finalizer.gateOf(contractId, alice).passportId, bytes32(0));
+        assertEq(finalizer.gateOf(contractId, bob).passportId, PASSPORT_B);
+        assertEq(finalizer.gateOf(contractId, chad).passportId, bytes32(0));
         address[] memory stored = registry.getParties(contractId);
         assertEq(stored.length, 3);
         assertEq(stored[1], bob);
     }
 
     function test_Create_ContractIdBindsPins() public {
-        bytes32[] memory pins = _pins(bytes32(0), PASSPORT_B, bytes32(0));
+        ZKPassportFinalizer.PartyGate[] memory pins = _pins(bytes32(0), PASSPORT_B, bytes32(0));
         bytes32 expected = keccak256(
             abi.encode(
                 TEMPLATE_ID,
@@ -282,13 +309,13 @@ contract ZKPassportFinalizerTest is Test {
     }
 
     function test_RevertIf_Create_PassportIdsLengthMismatch() public {
-        bytes32[] memory pins = new bytes32[](2);
-        vm.expectRevert(ZKPassportFinalizer.PassportIdsLengthMismatch.selector);
+        ZKPassportFinalizer.PartyGate[] memory pins = new ZKPassportFinalizer.PartyGate[](2);
+        vm.expectRevert(ZKPassportFinalizer.GatesLengthMismatch.selector);
         _create(1, pins);
     }
 
     function test_RevertIf_Create_DuplicatePin() public {
-        bytes32[] memory pins = _pins(PASSPORT_B, bytes32(0), PASSPORT_B);
+        ZKPassportFinalizer.PartyGate[] memory pins = _pins(PASSPORT_B, bytes32(0), PASSPORT_B);
         vm.expectRevert(ZKPassportFinalizer.DuplicatePin.selector);
         _create(1, pins);
     }
@@ -296,9 +323,34 @@ contract ZKPassportFinalizerTest is Test {
     function test_RevertIf_Create_OpenSlot() public {
         parties[2] = address(0);
         partyValues.pop();
-        bytes32[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
+        ZKPassportFinalizer.PartyGate[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
         vm.expectRevert(ZKPassportFinalizer.OpenSlotNotSupported.selector);
         _create(1, pins);
+    }
+
+    function test_Create_StoresGatePerParty() public {
+        bytes32 contractId = _create(1, _mixedGates());
+
+        assertTrue(finalizer.gateOf(contractId, alice).proofRequired);
+        assertFalse(finalizer.gateOf(contractId, bob).proofRequired);
+        assertTrue(finalizer.gateOf(contractId, chad).proofRequired);
+        assertEq(finalizer.gateOf(contractId, chad).passportId, PASSPORT_C);
+    }
+
+    function test_Create_ContractIdBindsProofRequirement() public {
+        ZKPassportFinalizer.PartyGate[] memory gates = _mixedGates();
+        bytes32 mixed = _create(1, gates);
+        gates[1].proofRequired = true;
+        bytes32 allGated = _create(1, gates);
+
+        assertTrue(mixed != allGated);
+    }
+
+    function test_RevertIf_Create_PinWithoutProofRequired() public {
+        ZKPassportFinalizer.PartyGate[] memory gates = _mixedGates();
+        gates[1].passportId = PASSPORT_B;
+        vm.expectRevert(ZKPassportFinalizer.PinWithoutProofRequired.selector);
+        _create(1, gates);
     }
 
     // ── Sign ─────────────────────────────────────────────────────────────────
@@ -486,10 +538,120 @@ contract ZKPassportFinalizerTest is Test {
         finalizer.signWithProof(contractId, params, partyValues[0], signature);
     }
 
+    // ── Per-party gates ──────────────────────────────────────────────────────
+
+    function test_MixedGates_UngatedPartySignsWithoutProof_LastOneFinalizes() public {
+        bytes32 contractId = _create(1, _mixedGates());
+
+        _signWithProof(contractId, 0, aliceKey, PASSPORT_A);
+        _signWithProof(contractId, 2, chadKey, PASSPORT_C);
+        assertFalse(registry.isFinalized(contractId));
+        _signWithoutProof(contractId, 1, bobKey);
+
+        assertTrue(registry.isFinalized(contractId));
+        assertEq(finalizer.passportOf(contractId, bob), bytes32(0));
+    }
+
+    function test_MixedGates_GatedPartyLast_Finalizes() public {
+        bytes32 contractId = _create(1, _mixedGates());
+
+        _signWithoutProof(contractId, 1, bobKey);
+        _signWithProof(contractId, 0, aliceKey, PASSPORT_A);
+        assertFalse(registry.isFinalized(contractId));
+        _signWithProof(contractId, 2, chadKey, PASSPORT_C);
+
+        assertTrue(registry.isFinalized(contractId));
+    }
+
+    function test_NoGates_AllSignWithoutProof_Finalizes() public {
+        ZKPassportFinalizer.PartyGate[] memory gates = new ZKPassportFinalizer.PartyGate[](3);
+        bytes32 contractId = _create(1, gates);
+
+        _signWithoutProof(contractId, 0, aliceKey);
+        _signWithoutProof(contractId, 1, bobKey);
+        _signWithoutProof(contractId, 2, chadKey);
+
+        assertTrue(registry.isFinalized(contractId));
+    }
+
+    function test_RevertIf_SignWithoutProof_ProofRequired() public {
+        bytes32 contractId = _create(1, _mixedGates());
+        bytes memory signature = _sign(contractId, 0, aliceKey);
+
+        vm.expectRevert(ZKPassportFinalizer.ProofRequired.selector);
+        finalizer.signWithoutProof(contractId, alice, partyValues[0], signature);
+    }
+
+    function test_RevertIf_SignWithoutProof_AgreementNotRegistered() public {
+        ZKPassportFinalizer.PartyGate[] memory gates = new ZKPassportFinalizer.PartyGate[](3);
+        uint256 salt = uint256(keccak256(abi.encode(uint256(1), gates)));
+        bytes32 contractId = registry.createContract(
+            TEMPLATE_ID,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            bytes32(0),
+            address(finalizer),
+            block.timestamp + 1 days
+        );
+        bytes memory signature = _sign(contractId, 0, aliceKey);
+
+        vm.expectRevert(ZKPassportFinalizer.AgreementNotRegistered.selector);
+        finalizer.signWithoutProof(contractId, alice, partyValues[0], signature);
+    }
+
+    function test_RevertIf_SignWithProof_ProofNotRequired() public {
+        bytes32 contractId = _create(1, _mixedGates());
+        ProofVerificationParams memory params = _proof(contractId, PASSPORT_B, bob);
+        bytes memory signature = _sign(contractId, 1, bobKey);
+
+        vm.expectRevert(ZKPassportFinalizer.ProofNotRequired.selector);
+        finalizer.signWithProof(contractId, params, partyValues[1], signature);
+    }
+
+    // ── Finalize ─────────────────────────────────────────────────────────────
+
+    function test_Finalize_AfterUngatedPartySignsDirectly() public {
+        bytes32 contractId = _create(1, _mixedGates());
+        _signWithProof(contractId, 0, aliceKey, PASSPORT_A);
+        _signWithProof(contractId, 2, chadKey, PASSPORT_C);
+
+        // Bob signs on the registry directly. The registry does not finalize, because the finalizer is set.
+        bytes memory signature = _sign(contractId, 1, bobKey);
+        vm.prank(bob);
+        registry.signContract(contractId, partyValues[1], signature, false, "");
+        assertFalse(registry.isFinalized(contractId));
+
+        finalizer.finalize(contractId);
+
+        assertTrue(registry.isFinalized(contractId));
+    }
+
+    function test_RevertIf_Finalize_GatedPartyHasNoRecord() public {
+        bytes32 contractId = _create(1, _mixedGates());
+        _signWithoutProof(contractId, 1, bobKey);
+        _signWithProof(contractId, 2, chadKey, PASSPORT_C);
+        bytes memory signature = _sign(contractId, 0, aliceKey);
+        vm.prank(alice);
+        registry.signContract(contractId, partyValues[0], signature, false, "");
+
+        vm.expectRevert(ZKPassportFinalizer.NotReadyToFinalize.selector);
+        finalizer.finalize(contractId);
+    }
+
+    function test_RevertIf_Finalize_NotAllSigned() public {
+        bytes32 contractId = _create(1, _mixedGates());
+        _signWithoutProof(contractId, 1, bobKey);
+
+        vm.expectRevert(ZKPassportFinalizer.NotReadyToFinalize.selector);
+        finalizer.finalize(contractId);
+    }
+
     // ── Standalone ───────────────────────────────────────────────────────────
 
     function test_Standalone_CreatesTemplateAgreementAndFirstSignature() public {
-        bytes32[] memory pins = _pins(bytes32(0), PASSPORT_B, bytes32(0));
+        ZKPassportFinalizer.PartyGate[] memory pins = _pins(bytes32(0), PASSPORT_B, bytes32(0));
         bytes32 contractId = _standaloneId(1, pins);
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, alice);
         bytes memory signature = _sign(contractId, 0, aliceKey);
@@ -500,7 +662,7 @@ contract ZKPassportFinalizerTest is Test {
             registry.getTemplateDetails(keccak256(abi.encode(STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields)));
         assertEq(title, STANDALONE_TITLE);
         assertTrue(finalizer.isRegistered(contractId));
-        assertEq(finalizer.pinOf(contractId, bob), PASSPORT_B);
+        assertEq(finalizer.gateOf(contractId, bob).passportId, PASSPORT_B);
         assertEq(finalizer.passportOf(contractId, alice), PASSPORT_A);
         assertTrue(registry.hasSigned(contractId, alice));
         assertFalse(registry.isFinalized(contractId));
@@ -511,7 +673,7 @@ contract ZKPassportFinalizerTest is Test {
     }
 
     function test_Standalone_ReusesExistingTemplate() public {
-        bytes32[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
+        ZKPassportFinalizer.PartyGate[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
         bytes32 firstId = _standaloneId(1, pins);
         _standalone(1, pins, _proof(firstId, PASSPORT_A, alice), _sign(firstId, 0, aliceKey));
         bytes32 secondId = _standaloneId(2, pins);
@@ -527,7 +689,8 @@ contract ZKPassportFinalizerTest is Test {
         parties.pop();
         partyValues.pop();
         partyValues.pop();
-        bytes32[] memory pins = new bytes32[](1);
+        ZKPassportFinalizer.PartyGate[] memory pins = new ZKPassportFinalizer.PartyGate[](1);
+        pins[0] = _gate(true, bytes32(0));
         bytes32 contractId = _standaloneId(1, pins);
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_A, alice);
         bytes memory signature = _sign(contractId, 0, aliceKey);
@@ -538,7 +701,7 @@ contract ZKPassportFinalizerTest is Test {
     }
 
     function test_RevertIf_Standalone_SignerNotFirstParty() public {
-        bytes32[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
+        ZKPassportFinalizer.PartyGate[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
         bytes32 contractId = _standaloneId(1, pins);
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_B, bob);
         bytes memory signature = _sign(contractId, 1, bobKey);
@@ -548,7 +711,7 @@ contract ZKPassportFinalizerTest is Test {
     }
 
     function test_RevertIf_Standalone_PinMismatch_NothingCreated() public {
-        bytes32[] memory pins = _pins(PASSPORT_A, bytes32(0), bytes32(0));
+        ZKPassportFinalizer.PartyGate[] memory pins = _pins(PASSPORT_A, bytes32(0), bytes32(0));
         bytes32 contractId = _standaloneId(1, pins);
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_X, alice);
         bytes memory signature = _sign(contractId, 0, aliceKey);
@@ -556,6 +719,50 @@ contract ZKPassportFinalizerTest is Test {
         vm.expectRevert(ZKPassportFinalizer.PassportPinMismatch.selector);
         _standalone(1, pins, params, signature);
         assertFalse(finalizer.isRegistered(contractId));
+    }
+
+    function test_StandaloneWithoutProof_UngatedFirstParty() public {
+        ZKPassportFinalizer.PartyGate[] memory gates = _mixedGates();
+        gates[0] = _gate(false, bytes32(0));
+        gates[1] = _gate(true, bytes32(0));
+        bytes32 contractId = _standaloneId(1, gates);
+        bytes memory signature = _sign(contractId, 0, aliceKey);
+
+        vm.prank(relayer);
+        bytes32 created = finalizer.createStandaloneContractAndSignWithoutProof(
+            STANDALONE_TITLE,
+            LEGAL_URI,
+            globalFields,
+            partyFields,
+            1,
+            globalValues,
+            parties,
+            partyValues,
+            block.timestamp + 1 days,
+            gates,
+            signature
+        );
+
+        assertEq(created, contractId);
+        assertTrue(registry.hasSigned(contractId, alice));
+        assertTrue(finalizer.gateOf(contractId, bob).proofRequired);
+    }
+
+    function test_RevertIf_StandaloneWithoutProof_FirstPartyGated() public {
+        ZKPassportFinalizer.PartyGate[] memory gates = _mixedGates();
+        bytes32 contractId = _standaloneId(1, gates);
+        bytes memory signature = _sign(contractId, 0, aliceKey);
+        string[] memory gFields = globalFields;
+        string[] memory pFields = partyFields;
+        string[] memory gValues = globalValues;
+        address[] memory ps = parties;
+        string[][] memory pValues = partyValues;
+        uint256 expiry = block.timestamp + 1 days;
+
+        vm.expectRevert(ZKPassportFinalizer.ProofRequired.selector);
+        finalizer.createStandaloneContractAndSignWithoutProof(
+            STANDALONE_TITLE, LEGAL_URI, gFields, pFields, 1, gValues, ps, pValues, expiry, gates, signature
+        );
     }
 
     // ── Attest ───────────────────────────────────────────────────────────────

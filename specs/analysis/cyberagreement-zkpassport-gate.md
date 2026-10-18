@@ -1,50 +1,59 @@
 # CyberAgreement — ZKPassport Gate (Three-Party Workflow)
 
 A new `ZKPassportFinalizer` contract is the agreement's `finalizer`. The registry does not change.
-Each party sends one transaction. It records the party's ZKPassport proof and the party's
-signature together. The agreement finalizes only when all parties have a proof record and a
-signature.
+The creator sets a gate for each party: proof required or not. Each party sends one transaction.
+For a gated party, that transaction records the party's ZKPassport proof and the party's signature
+together. A party with no gate only signs. The agreement finalizes only when all parties have
+signed and each gated party has a proof record.
 
-The creator can pin a passport to a party. The creator first checks that party's passport
-off-chain (for example, the name on it). The pin is that passport's `uniqueIdentifier`. The party
-can then sign only with that passport.
+The creator can also pin a passport to a gated party. The creator first checks that party's
+passport off-chain (for example, the name on it). The pin is that passport's `uniqueIdentifier`.
+The party can then sign only with that passport.
 
-- `createContract(templateId, salt, globalValues, parties, partyValues, expiry, passportIds)`:
-    1. Requires one `passportIds` entry for each party. `bytes32(0)` means "any passport". Two
-       parties cannot have the same pin. Refuses an open slot (zero-address party), because pins
-       and passport records belong to a party address.
+- `createContract(templateId, salt, globalValues, parties, partyValues, expiry, gates)`:
+    1. Requires one gate for each party. A gate is `(proofRequired, passportId)`. `passportId =
+       bytes32(0)` means "any passport". A pin requires `proofRequired`. Two parties cannot have
+       the same pin. Refuses an open slot (zero-address party), because gates and passport records
+       belong to a party address.
     2. Calls `registry.createContract` with `finalizer = ZKPassportFinalizer`, `secretHash = 0` and
-       `salt = keccak256(abi.encode(salt, passportIds))`. Thus `contractId` binds the pins.
-    3. Stores the pins and marks the agreement as registered here. A pinned passport is reserved
+       `salt = keccak256(abi.encode(salt, gates))`. Thus `contractId` binds the gates.
+    3. Stores the gates and marks the agreement as registered here. A pinned passport is reserved
        for its party from the start.
-- `signWithProof(contractId, proof, partyValues, signature)`:
+- `signWithProof(contractId, proof, partyValues, signature)`, for a gated party:
     1. Verifies the proof. The party is the proof's bound sender. Requires that the agreement is
-       registered here.
+       registered here and that the party is gated.
     2. If the party has a pin, requires `uniqueIdentifier == pin`.
     3. Requires that no other party of this agreement used the same `uniqueIdentifier`.
     4. Stores `passportOf[contractId][party] = uniqueIdentifier`.
     5. Forwards the signature to `registry.signContractFor(party, ...)`. The registry accepts a
        relayed signature only from the finalizer, because the finalizer is set.
-    6. If all parties have signed and have a proof record, calls `registry.finalizeContract`.
-- `attest(contractId, proof)` does steps 1–4 and 6 only. It is a backup for a party that signed
-  directly on the registry. The normal flow does not use it.
+    6. If the agreement is ready, calls `registry.finalizeContract`. Ready means all parties have
+       signed and each gated party has a proof record.
+- `signWithoutProof(contractId, party, partyValues, signature)`, for a party with no gate: requires
+  that the agreement is registered here and that the party is not gated. Then it does steps 5–6.
+- `attest(contractId, proof)` does steps 1–4 and 6 only. It is a backup for a gated party that
+  signed directly on the registry. The normal flow does not use it.
+- `finalize(contractId)` does step 6, and reverts if the agreement is not ready. It is a backup for
+  an agreement whose last party signed directly on the registry. The normal flow does not use it.
 - `createStandaloneContractAndSignWithProof(title, legalContractUri, globalFields, partyFields, salt,
-  globalValues, parties, partyValues, expiry, passportIds, proof, signature)` is the gated form of the
+  globalValues, parties, partyValues, expiry, gates, proof, signature)` and
+  `createStandaloneContractAndSignWithoutProof(..., gates, signature)` are the gated forms of the
   registry's `createStandaloneContractAndSign` and `createStandaloneContractAndSignFor`:
-    1. Creates the template if it does not exist. The template id is the same as on the registry's
+    1. Create the template if it does not exist. The template id is the same as on the registry's
        standalone path.
-    2. Does the steps of `createContract`.
-    3. Does the steps of `signWithProof` for the proof's bound sender, with `partyValues[0]`. Thus
-       the signer must be the first party. A single-party agreement finalizes in this one
-       transaction.
+    2. Do the steps of `createContract`.
+    3. Sign for the first party with `partyValues[0]`: the first form as `signWithProof` (the
+       proof's bound sender must be the first party), the second form as `signWithoutProof`. A
+       single-party agreement finalizes in this one transaction.
 
-  The signer is the proof's bound sender, so anyone can relay the call. Thus one function covers
-  both registry functions. The registry functions do not change. They still fix
-  `finalizer = address(0)`, so they make ungated agreements only.
+  Both forms take the signer from the proof or from `parties[0]`, so anyone can relay them. Thus
+  two functions cover both registry functions. The registry functions do not change. They still
+  fix `finalizer = address(0)`, so they make ungated agreements only.
 
-The example has three parties. A is the creator. B and C are email parties with pregenerated
-Privy wallets. A pins B's passport and leaves C unpinned. The webapp creates the agreement in its
-own transaction, because it reads the agreement back before it offers any signature.
+The example has three parties. A is the creator and needs no proof. B and C are email parties with
+pregenerated Privy wallets. Both need a proof. A pins B's passport and leaves C unpinned. The
+webapp creates the agreement in its own transaction, because it reads the agreement back before it
+offers any signature.
 
 ## Workflow
 
@@ -71,31 +80,39 @@ sequenceDiagram
     A ->> App: Draft agreement, invite B and C by email
     App ->> Privy: Look up or pregenerate wallets for B and C
     Privy -->> App: walletB, walletC
-    A ->> PF: createContract(parties = [A, walletB, walletC],<br/>passportIds = [0, U_B, 0])
-    PF ->> Reg: createContract(salt = hash(salt, passportIds), finalizer = PF)
-    PF ->> PF: Store pins
-    Note right of Reg: contractId binds finalizer and pins
-    App ->> App: Read back the agreement and the pins, then email B and C
+    A ->> PF: createContract(parties = [A, walletB, walletC],<br/>gates = [(no proof), (proof, U_B), (proof, any)])
+    PF ->> Reg: createContract(salt = hash(salt, gates), finalizer = PF)
+    PF ->> PF: Store gates
+    Note right of Reg: contractId binds finalizer and gates
+    App ->> App: Read back the agreement and the gates, then email B and C
 
     loop For each party P in A, B, C (any order), one tx each
-        Note over P, ZKP: Off-chain: prove and sign
         P ->> App: Open the signing link, log in
-        App ->> ZKP: Proof request, bind(user_address = wallet P, chain, custom_data = contractId)
-        P ->> ZKP: Scan passport
-        ZKP -->> App: Proof
-        P ->> Privy: Sign the EIP-712 SignatureData
-        Privy -->> App: Signature
-        Note over App, V: On-chain: one tx
-        App ->> PF: signWithProof(contractId, proof, partyValues, signature)
-        PF ->> V: verify(proof)
-        V -->> PF: verified, uniqueIdentifier U, helper
-        PF ->> PF: Check scope, chainId, custom_data == contractId,<br/>agreement registered here, bound sender is a party
-        PF ->> PF: Require U == pin of P (if pinned),<br/>U not used by another party
-        PF ->> PF: passportOf[contractId][P] = U
+        alt P is gated (B, C)
+            Note over P, ZKP: Off-chain: prove and sign
+            App ->> ZKP: Proof request, bind(user_address = wallet P, chain, custom_data = contractId)
+            P ->> ZKP: Scan passport
+            ZKP -->> App: Proof
+            P ->> Privy: Sign the EIP-712 SignatureData
+            Privy -->> App: Signature
+            Note over App, V: On-chain: one tx
+            App ->> PF: signWithProof(contractId, proof, partyValues, signature)
+            PF ->> V: verify(proof)
+            V -->> PF: verified, uniqueIdentifier U, helper
+            PF ->> PF: Check scope, chainId, custom_data == contractId,<br/>agreement registered here, bound sender is a gated party
+            PF ->> PF: Require U == pin of P (if pinned),<br/>U not used by another party
+            PF ->> PF: passportOf[contractId][P] = U
+        else P has no gate (A)
+            P ->> Privy: Sign the EIP-712 SignatureData
+            Privy -->> App: Signature
+            Note over App, Reg: On-chain: one tx
+            App ->> PF: signWithoutProof(contractId, P, partyValues, signature)
+            PF ->> PF: Check agreement registered here, P has no gate
+        end
         PF ->> Reg: signContractFor(P, contractId, partyValues, signature)
         Reg ->> Reg: Verify signature, record signedAt[P]
         opt P is the last party
-            PF ->> PF: Require passportOf set for A, B and C
+            PF ->> PF: Require passportOf set for B and C
             PF ->> Reg: finalizeContract(contractId)
             Reg -->> App: ContractFinalized
         end
@@ -108,32 +125,36 @@ off-chain.
 ## Notes
 
 - **Order.** The parties can act in any order and at different times. The last
-  `signWithProof` finalizes the agreement.
+  `signWithProof` or `signWithoutProof` finalizes the agreement.
 - **Relaying.** `signWithProof` takes the party from the proof's bound sender, not from
-  `msg.sender`. Anyone can submit it. The registry still checks the party's own signature.
-  `custom_data = contractId` ties the proof to this agreement.
+  `msg.sender`. `signWithoutProof` takes the party as an argument. Anyone can submit either call.
+  The registry still checks the party's own signature. `custom_data = contractId` ties the proof
+  to this agreement.
+- **Gates.** A gated party cannot sign through `signWithoutProof`. A party with no gate cannot
+  record a proof, so it cannot take a passport from a gated party.
 - **One passport, one party.** Within one agreement, each `uniqueIdentifier` can fill one party
-  only. A pin stops a party from using another person's passport. An unpinned party can use any
+  only. A pin stops a party from using another person's passport. An unpinned gated party can use any
   passport that no other party of the agreement used.
 - **Pins and scope.** `uniqueIdentifier` depends on the passport, the domain and the scope. The
   vetting proof and the signing proof must use the same domain and scope, or the pin never
-  matches. The scope cannot be `contractId`, because `contractId` depends on the pins.
+  matches. The scope cannot be `contractId`, because `contractId` depends on the gates.
 - **Pinned party visits twice.** A pinned party opens the app once for vetting and once to sign.
-  An unpinned party opens it once.
+  Other parties open it once.
 - **Create front-run.** Anyone can call `registry.createContract` with the same arguments and the
   derived salt before the creator. The registry then refuses the creator's call, and
   `ZKPassportFinalizer` has no record of that agreement, so it refuses every signature. The attacker
   gains nothing. The creator must create again with a new salt.
-- **Self-submission.** A party can call `registry.signContractFor` from its own wallet and skip
-  the proof. That party then has no proof record, so the agreement does not finalize. The party
-  sends `attest` to record the proof. If that is the last missing proof, `attest` finalizes the
-  agreement. The webapp must treat `finalized` as the effective state.
+- **Self-submission.** A party can call `registry.signContract` from its own wallet. The registry
+  then does not finalize, because the finalizer is set. A gated party has no proof record after
+  this, so it sends `attest` to record the proof. If the last signer has no gate, anyone sends
+  `finalize`. Both finalize the agreement when it is ready. The webapp must treat `finalized` as
+  the effective state.
 - **What the record proves.** The holder of passport `uniqueIdentifier` approved this agreement
   for this wallet on this chain. The contract reads no other passport fact: no name, nationality,
   age or sanctions status. For a pinned party, the creator checks these facts off-chain during
   vetting (for example, a name disclosure, a nationality-exclusion proof or a sanctions proof).
   The contract relies on that vetting and records only that the signer used the vetted passport.
-  An unpinned party gets no such check.
+  A gated party with no pin gets no such check. A party with no gate gives no passport.
 - **Proof age.** The ZKPassport verifier checks the proof date:
   `proofDate <= block.timestamp < proofDate + validityPeriodInSeconds`. The submitter sets
   `validityPeriodInSeconds`, and the proof does not bind it, so the check gives no real age limit.
@@ -149,23 +170,22 @@ off-chain.
 - TODO: Decide the proof scope. It must be the same for vetting and signing. One app-wide scope
   makes `uniqueIdentifier` the same in every agreement, so it links all agreements of one passport
   on-chain.
-- TODO: Decide if every party needs a proof, or only some parties.
 - TODO: Decide if one person can fill two parties (for example, as an individual and as an officer
   of a company). The one-passport-one-party rule refuses this now.
 
 ## Invariants
 
 1. An agreement with `finalizer = ZKPassportFinalizer` finalizes only when every party has signed
-   and has a passport record.
+   and each gated party has a passport record.
 2. A passport record comes only from a proof that verifies, has the expected domain and scope,
    is bound to this chain and to this `contractId`, and is not in dev mode unless the deployment
    allows dev mode.
-3. The record goes to the proof's bound sender. That address must be a party of the agreement.
-4. A pinned party's record equals its pin.
+3. The record goes to the proof's bound sender. That address must be a gated party of the
+   agreement.
+4. A pinned party's record equals its pin. Only a gated party can have a pin.
 5. Within one agreement, a passport fills one party only, and each party has one record.
-6. Only `ZKPassportFinalizer.createContract` and `createStandaloneContractAndSignWithProof`
-   register an agreement and its pins. `contractId`
-   binds the pins through the salt.
+6. Only `ZKPassportFinalizer.createContract` and the two standalone functions register an
+   agreement and its gates. `contractId` binds the gates through the salt.
 
 ## Acceptance tests
 
@@ -177,10 +197,18 @@ off-chain.
 | Two parties prove with the same passport                                          | Second call `PassportAlreadyUsed`                |
 | Unpinned party proves with another party's pinned passport                        | `PassportAlreadyUsed`                            |
 | Two parties with the same non-zero pin at create                                  | `DuplicatePin`                                   |
-| `passportIds` length differs from `parties`                                       | `PassportIdsLengthMismatch`                      |
+| `gates` length differs from `parties`                                             | `GatesLengthMismatch`                            |
+| Pin on a party with no gate                                                       | `PinWithoutProofRequired`                        |
 | Zero-address party at create                                                      | `OpenSlotNotSupported`                           |
 | Different pins, same other arguments                                              | Different `contractId`                           |
-| Agreement created on the registry directly                                        | `signWithProof` reverts `AgreementNotRegistered` |
+| Different `proofRequired`, same other arguments                                   | Different `contractId`                           |
+| Gated and ungated parties, any order                                              | Last call finalizes; ungated party has no record |
+| No party gated, each `signWithoutProof`                                           | Last call finalizes                              |
+| Gated party calls `signWithoutProof`                                              | `ProofRequired`                                  |
+| Ungated party calls `signWithProof`                                               | `ProofNotRequired`                               |
+| Ungated party signs last on the registry directly, then `finalize`                | Finalizes                                        |
+| `finalize` before all sign, or a gated party has no record                        | `NotReadyToFinalize`                             |
+| Agreement created on the registry directly                                        | `signWithProof` and `signWithoutProof` revert `AgreementNotRegistered` |
 | Proof fails, zero helper, wrong scope, wrong chain, wrong `custom_data`, dev mode | Reverts with the matching error                  |
 | Dev-mode proof on a dev-mode deployment                                           | Signs                                            |
 | Bound sender is not a party                                                       | `NotAParty`                                      |
@@ -194,3 +222,5 @@ off-chain.
 | Standalone: single party                                                          | Finalizes in one transaction                     |
 | Standalone: bound sender is not the first party                                   | Registry `ClosedAgreementPartyValueMismatch`     |
 | Standalone: pin mismatch                                                          | `PassportPinMismatch`; no agreement stays        |
+| Standalone without proof: ungated first party                                     | Creates agreement; first party signs             |
+| Standalone without proof: gated first party                                       | `ProofRequired`                                  |

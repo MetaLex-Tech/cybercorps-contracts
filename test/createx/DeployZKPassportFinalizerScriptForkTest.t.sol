@@ -88,9 +88,9 @@ contract DeployZKPassportFinalizerScriptForkTest is Test {
         partyValues[0][0] = "Alice";
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Bob";
-        bytes32[] memory pins = new bytes32[](2);
-        pins[1] = keccak256("passport-b");
+        ZKPassportFinalizer.PartyGate[] memory gates = new ZKPassportFinalizer.PartyGate[](2);
+        gates[1] = ZKPassportFinalizer.PartyGate({proofRequired: true, passportId: keccak256("passport-b")});
 
-        return finalizer.createContract(templateId, 1, fields, parties, partyValues, block.timestamp + 1 days, pins);
+        return finalizer.createContract(templateId, 1, fields, parties, partyValues, block.timestamp + 1 days, gates);
     }
 }
