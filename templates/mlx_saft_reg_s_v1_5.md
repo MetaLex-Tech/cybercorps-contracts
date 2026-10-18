@@ -1,6 +1,6 @@
 # mlx_saft_reg_s_v1_5
 
-Status: approved PDFs pinned; uploaded CIDs match the frozen local bytes. Browser retrieval verified every PDF byte hash; Ethereum and Base registrations are verified; Arbitrum registration and app activation remain pending.
+Status: approved PDFs pinned; uploaded CIDs match the frozen local bytes. Browser retrieval verified every PDF byte hash; Ethereum, Base and Arbitrum registrations are verified; app release remains pending.
 
 Template ID: `0x6d6c785f736166745f7265675f735f76315f3500000000000000000000000000` (`bytes32(bytes("mlx_saft_reg_s_v1_5"))`).
 Title: `mlx_saft_reg_s_v1_5`.
@@ -48,7 +48,7 @@ Core monetary fields retain their existing 18-decimal USD convention. Token sche
 
 The v1.5 registry name versions the agreement packet. It does not renumber the approved Word masters or imply a new protocol version. Existing v1.3/v1.4/custom registrations and their legal URIs remain unchanged.
 
-See `releases/let-v1.5.json` for exact registration arguments. All eight templates are registered and verified on Ethereum and Base as of October 18, 2026. Arbitrum remains pending. See [registration readbacks](releases/let-v1.5-registrations.json). The ordered fields match v1.4. Testnets retain their existing forms.
+See `releases/let-v1.5.json` for exact registration arguments. All eight templates are registered and verified on Ethereum, Base and Arbitrum as of October 18, 2026. See [registration readbacks](releases/let-v1.5-registrations.json). The ordered fields match v1.4. Testnets retain their existing forms.
 
 ## Presentation copies
 
