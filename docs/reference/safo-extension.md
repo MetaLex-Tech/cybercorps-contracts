@@ -2,9 +2,13 @@
 
 The schema implements the metadata fields for the Simple Agreement for Future
 Ownership based on legal draft v0.22. It is an implementation specification,
-not a registered agreement template. The prepared Reg D and Reg S template
-specifications assign their IDs; publication CIDs and live extension addresses
-remain pending a separately approved release.
+not a registered agreement template. The Reg D and Reg S v1.1 template
+specifications assign their IDs. Their agreement and LET instrument PDFs are
+pinned and CID-verified in the
+[v1.1 release manifest](../../templates/releases/safo-v1.1.json). Registry
+registration and live extension addresses remain pending a separately approved
+release. The v1.0 specifications are superseded and are not registration
+candidates.
 
 ## Storage and decoding
 
@@ -81,6 +85,7 @@ identity or authorization to bind an extension.
 
 Before live issuance, separately complete and approve native SAFO security
 classification and application support, any required component upgrades,
-deployment with verified proxy/AUTH/runtime versions, legal PDF/IPFS upload,
-per-chain registry registration, and end-to-end issuance/rendering tests
-against the target company's deployed versions. The implementation branch appends native `SecurityClass.SAFO` (14) and tests its actual issuance, rendering, ticket settlement and round allocation. Deployed contracts still require separate capability verification and upgrades; source support is not live acceptance. Both [Reg D](../../templates/mlx_safo_reg_d_v1_0.md) and [Reg S](../../templates/mlx_safo_reg_s_v1_0.md) have prepared 19-field template specifications.
+deployment with verified proxy/AUTH/runtime versions, per-chain registry
+registration, and end-to-end issuance/rendering tests against the target
+company's deployed versions. The v1.1 legal PDFs are already pinned to IPFS.
+The source enum appends native `SecurityClass.SAFO` (14), and the tests cover its actual issuance, rendering, ticket settlement and round allocation. Deployed contracts still require separate capability verification and upgrades; source support is not live acceptance. [Reg D v1.1](../../templates/mlx_safo_reg_d_v1_1.md) and [Reg S v1.1](../../templates/mlx_safo_reg_s_v1_1.md) are the 19-field template specifications for registration.

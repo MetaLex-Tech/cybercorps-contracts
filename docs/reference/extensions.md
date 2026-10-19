@@ -139,9 +139,10 @@ notices, entitlement calculations and conversion remain governed by the
 agreement; the extension does not execute them. See the
 [SAFO field specification](safo-extension.md) for units, optional-field rules
 and the deployment/integration gates. The integration appends native
-`SecurityClass.SAFO` as value 14. Live issuance still requires the coordinated
-component upgrades, verified legal publication/registration and matched app
-release; adding the extension does not enable it on deployed companies.
+`SecurityClass.SAFO` as value 14. The v1.1 legal PDFs are pinned. Live
+issuance still requires the coordinated component upgrades, per-chain template
+registration and matched app release; adding the extension does not enable it
+on deployed companies.
 
 ## TokenWarrantExtension / TokenWarrantExtensionV2 / TokenWarrantExtensionV3
 
