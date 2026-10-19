@@ -128,18 +128,24 @@ contract DeployMetaDAOCreditFacilityFactoryScript is Script {
         string[] memory globalFields,
         string[] memory partyFields
     ) internal {
-        (string memory existingUri, string memory existingTitle) = CyberAgreementRegistry(registry).templates(id);
+        (string memory existingUri,) = CyberAgreementRegistry(registry).templates(id);
         if (bytes(existingUri).length == 0) {
             CyberAgreementRegistry(registry).createTemplate(id, title, uri, globalFields, partyFields);
             console2.log("template created:", title);
             return;
         }
+        // The whole schema must match: a same-title registration with other
+        // fields would make every later createContract bind the wrong values.
+        (string memory registeredUri, string memory registeredTitle, string[] memory registeredGlobal, string[] memory registeredParty) =
+            CyberAgreementRegistry(registry).getTemplateDetails(id);
         require(
-            keccak256(bytes(existingUri)) == keccak256(bytes(uri))
-                && keccak256(bytes(existingTitle)) == keccak256(bytes(title)),
+            keccak256(bytes(registeredUri)) == keccak256(bytes(uri))
+                && keccak256(bytes(registeredTitle)) == keccak256(bytes(title))
+                && keccak256(abi.encode(registeredGlobal)) == keccak256(abi.encode(globalFields))
+                && keccak256(abi.encode(registeredParty)) == keccak256(abi.encode(partyFields)),
             "template id already registered with other content"
         );
-        console2.log("template already registered:", title);
+        console2.log("template already registered with the same schema:", title);
     }
 
     function _globalFields() internal pure returns (string[] memory fields) {
