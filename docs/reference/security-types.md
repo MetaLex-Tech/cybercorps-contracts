@@ -22,9 +22,18 @@ enum SecurityClass {
     RestrictedStockPurchaseAgreement,
     RestrictedStockUnit,
     RestrictedTokenPurchaseAgreement,
-    RestrictedTokenUnit
+    RestrictedTokenUnit,
+    MembershipInterest,
+    SAFO
 }
 ```
+
+New values are appended, so the values 0 to 12 keep their meaning. A
+deployed contract decodes only the values that it was compiled with. Before
+you use `MembershipInterest` (13) or `SAFO` (14), verify the target
+company's deployed component versions. Native SAFO issuance also needs the
+coordinated SAFO component upgrades and template registration in the
+[SAFO extension specification](safo-extension.md#validation-limits-and-release-gates).
 
 ## `SecuritySeries`
 
