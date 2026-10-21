@@ -222,7 +222,7 @@ The protocol has been used or piloted across Delaware C-corps, Delaware LLCs, Ca
 ### Prerequisites
 
 - [Foundry](https://book.getfoundry.sh/)
-- `ALCHEMY_API_KEY` environment variable (set in `.env`; only required for fork tests)
+- `RPC_URL_ETHEREUM`, `RPC_URL_BASE`, `RPC_URL_SEPOLIA` and `RPC_URL_BASE_SEPOLIA` environment variables (set in `.env`; only required for fork tests)
 
 ### Build
 
@@ -239,10 +239,10 @@ Tests are split into three categories by contract name:
 - **Adhoc tests** — contracts ending in `AdhocTest`; excluded from CI entirely, for local one-off exploration only.
 
 ```sh
-# Unit tests (no ALCHEMY_API_KEY needed)
+# Unit tests (no RPC URLs needed)
 forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc '(ForkTest|AdhocTest)'
 
-# Fork tests (requires ALCHEMY_API_KEY in env)
+# Fork tests (requires the RPC_URL_* variables in env)
 forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --nmc AdhocTest --threads 1 --cups 10
 ```
 
