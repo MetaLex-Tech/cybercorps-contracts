@@ -148,7 +148,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
 
     event DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
     event DelegationRevoked(address indexed delegator, address indexed delegate);
-    event BoundContractCreated(bytes32 indexed contractId, address indexed creator);
 
     error TemplateAlreadyExists();
     error TemplateDoesNotExist();
@@ -1006,7 +1005,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         }
 
         emit ContractCreated(contractId, templateId, parties);
-        emit BoundContractCreated(contractId, creator);
 
         for (uint256 i = 0; i < parties.length; i++) {
             agreementsForParty[parties[i]].push(contractId);

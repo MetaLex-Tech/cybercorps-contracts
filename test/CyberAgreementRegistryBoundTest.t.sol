@@ -97,6 +97,12 @@ contract CyberAgreementRegistryBoundTest is Test {
     function test_createBoundContract() public {
         (bytes32 expectedTemplateId, bytes32 expectedId) = _ids(alice, 1);
 
+        vm.expectEmit(address(registry));
+        emit ICyberAgreementRegistry.TemplateCreated(
+            expectedTemplateId, template.title, template.legalContractUri, template.globalFields, template.partyFields
+        );
+        vm.expectEmit(address(registry));
+        emit ICyberAgreementRegistry.ContractCreated(expectedId, expectedTemplateId, parties);
         vm.prank(alice);
         (bytes32 templateId, bytes32 contractId) =
             registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
