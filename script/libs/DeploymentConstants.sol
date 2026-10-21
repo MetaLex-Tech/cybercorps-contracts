@@ -123,7 +123,7 @@ library DeploymentConstants {
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95, // difference from production chains
                     zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8,
-                    zkpassportFinalizer: address(0)
+                    zkpassportFinalizer: 0x83580c6c950802011C339b3adf13FB9e68B2f356
                 });
         } else if (chainId == BASE_SEPOLIA) {
             return
