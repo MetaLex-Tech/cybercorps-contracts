@@ -17,18 +17,18 @@ import {console2} from "forge-std/Script.sol";
 contract DeployZKPassportFinalizerScript is DeploymentScript {
     function run() public {
         runAndExecute(
-//            // Production
-//            DeploymentConstants.BASE,
-//            "CyberCorpV5-ZKPassportFinalizerV1.0.1", // proxySaltStr
-//            "app.metalex.tech",
-//            "cyberagreement-passport",
-//            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
-            // Staging
-            DeploymentConstants.ETH_SEPOLIA,
+            // Production
+            DeploymentConstants.ETH,
             "CyberCorpV5-ZKPassportFinalizerV1.0.1", // proxySaltStr
-            "preview.app.metalex.tech",
+            "app.metalex.tech",
             "cyberagreement-passport",
             vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
+//            // Staging
+//            DeploymentConstants.ETH_SEPOLIA,
+//            "CyberCorpV5-ZKPassportFinalizerV1.0.1", // proxySaltStr
+//            "preview.app.metalex.tech",
+//            "cyberagreement-passport",
+//            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
         );
     }
 

@@ -16,7 +16,8 @@
 
 - Spec acceptance-test table: all rows covered by `test/ZKPassportFinalizerTest.t.sol` — verified (unit, mock verifier).
 - Real-proof fork test: pending (needs a sample proof with `custom_data = contractId`).
-- Independent external review, merge, deployment: not started.
+- Independent external review, merge: not started.
+- Deployment: proxy `0x83580c6c950802011C339b3adf13FB9e68B2f356` (salt `CyberCorpV5-ZKPassportFinalizerV1.0.1`) on Sepolia, Ethereum and Base, recorded in `DeploymentConstants` (2026-10-21). Evidence: `broadcast/deploy-zkpassport-finalizer.s.sol/{11155111,1,8453}/run-latest.json`, all receipts status 1.
 
 ## Decisions and evidence
 
