@@ -24,15 +24,15 @@
 - Per-party gate `(proofRequired, passportId)`, bound into `contractId`; ungated parties sign through `signWithoutProof`; `finalize` added as a backup for a last direct registry signature (2026-10-18, chat).
 - Pins optional and only on gated parties; one passport fills one party per agreement; pinned passports reserved at create.
 - No adopt of a pre-existing agreement; the webapp read-back handles the front-run case.
-- Standalone path: `createStandaloneContractAndSignWithProof` and `createStandaloneContractAndSignWithoutProof` cover both registry standalone functions; registry unchanged; signer must be the first party (2026-10-17, split 2026-10-18).
-- Refuses open slots. Refuses `devMode` proofs unless initialized with `devMode`; the deploy script sets it on testnets only (2026-10-15).
+- Standalone path: `createStandaloneContractAndSignWithProof` and `createStandaloneContractAndSignWithoutProof` cover both registry standalone functions; registry unchanged; signer must be the first party, checked by `SignerNotFirstParty` (2026-10-17, split 2026-10-18, check added 2026-10-21 from PR #186 review).
+- Refuses open slots and repeated party addresses (`DuplicateParty`, 2026-10-21, PR #186 review). Refuses `devMode` proofs unless initialized with `devMode`; the deploy script sets it on testnets only (2026-10-15).
 
 ## Validation
 
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
 | New unit suite | `forge test ... --match-path test/ZKPassportFinalizerTest.t.sol`, e41d4288 + uncommitted per-party gate change | 43 passed |
-| Deploy script fork test | `test/createx/DeployZKPassportFinalizerScriptForkTest.t.sol`, same tree; Base, Sepolia and Base Sepolia pinned | 3 passed; no real-proof sample yet |
+| Deploy script fork test | Removed 2026-10-21 (PR #186 review). Each recorded deployment in `DeploymentConstants` breaks its fresh-deploy premise. | No test now proves the script's config or the testnet-only `devMode` flag |
 | Full unit suite | `forge test ... --nmc '(ForkTest|AdhocTest)'`, same tree, Forge 1.7.1 | 1476 passed, 0 failed |
 | Size | `forge build ... --sizes`, same tree | ZKPassportFinalizer 12,498 B |
 

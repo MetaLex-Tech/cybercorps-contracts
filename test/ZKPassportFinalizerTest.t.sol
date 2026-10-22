@@ -328,6 +328,13 @@ contract ZKPassportFinalizerTest is Test {
         _create(1, pins);
     }
 
+    function test_RevertIf_Create_DuplicateParty() public {
+        parties[2] = alice;
+        ZKPassportFinalizer.PartyGate[] memory gates = _mixedGates();
+        vm.expectRevert(ZKPassportFinalizer.DuplicateParty.selector);
+        _create(1, gates);
+    }
+
     function test_Create_StoresGatePerParty() public {
         bytes32 contractId = _create(1, _mixedGates());
 
@@ -706,8 +713,21 @@ contract ZKPassportFinalizerTest is Test {
         ProofVerificationParams memory params = _proof(contractId, PASSPORT_B, bob);
         bytes memory signature = _sign(contractId, 1, bobKey);
 
-        vm.expectRevert(CyberAgreementRegistry.ClosedAgreementPartyValueMismatch.selector);
+        vm.expectRevert(ZKPassportFinalizer.SignerNotFirstParty.selector);
         _standalone(1, pins, params, signature);
+    }
+
+    /// @dev Bob has the same party values as Alice, so the registry's value check passes for Bob.
+    function test_RevertIf_Standalone_SignerNotFirstParty_SamePartyValues() public {
+        partyValues[1] = partyValues[0];
+        ZKPassportFinalizer.PartyGate[] memory pins = _pins(bytes32(0), bytes32(0), bytes32(0));
+        bytes32 contractId = _standaloneId(1, pins);
+        ProofVerificationParams memory params = _proof(contractId, PASSPORT_B, bob);
+        bytes memory signature = _sign(contractId, 1, bobKey);
+
+        vm.expectRevert(ZKPassportFinalizer.SignerNotFirstParty.selector);
+        _standalone(1, pins, params, signature);
+        assertFalse(finalizer.isRegistered(contractId));
     }
 
     function test_RevertIf_Standalone_PinMismatch_NothingCreated() public {

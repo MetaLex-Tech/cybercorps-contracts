@@ -14,7 +14,8 @@ The party can then sign only with that passport.
     1. Requires one gate for each party. A gate is `(proofRequired, passportId)`. `passportId =
        bytes32(0)` means "any passport". A pin requires `proofRequired`. Two parties cannot have
        the same pin. Refuses an open slot (zero-address party), because gates and passport records
-       belong to a party address.
+       belong to a party address. Refuses a repeated party address, because the registry records
+       one signature for each address and such an agreement cannot finalize.
     2. Calls `registry.createContract` with `finalizer = ZKPassportFinalizer`, `secretHash = 0` and
        `salt = keccak256(abi.encode(salt, gates))`. Thus `contractId` binds the gates.
     3. Stores the gates and marks the agreement as registered here. A pinned passport is reserved
@@ -200,6 +201,7 @@ off-chain.
 | `gates` length differs from `parties`                                             | `GatesLengthMismatch`                            |
 | Pin on a party with no gate                                                       | `PinWithoutProofRequired`                        |
 | Zero-address party at create                                                      | `OpenSlotNotSupported`                           |
+| Same party address twice at create                                                | `DuplicateParty`                                 |
 | Different pins, same other arguments                                              | Different `contractId`                           |
 | Different `proofRequired`, same other arguments                                   | Different `contractId`                           |
 | Gated and ungated parties, any order                                              | Last call finalizes; ungated party has no record |
@@ -220,7 +222,7 @@ off-chain.
 | Standalone: new template, three parties                                           | Creates template and agreement; first party signs |
 | Standalone: template exists                                                       | Uses it                                          |
 | Standalone: single party                                                          | Finalizes in one transaction                     |
-| Standalone: bound sender is not the first party                                   | Registry `ClosedAgreementPartyValueMismatch`     |
+| Standalone: bound sender is not the first party, same or other party values       | `SignerNotFirstParty`; no agreement stays        |
 | Standalone: pin mismatch                                                          | `PassportPinMismatch`; no agreement stays        |
 | Standalone without proof: ungated first party                                     | Creates agreement; first party signs             |
 | Standalone without proof: gated first party                                       | `ProofRequired`                                  |

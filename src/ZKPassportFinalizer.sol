@@ -62,6 +62,7 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
     error InvalidVerifier();
     error GatesLengthMismatch();
     error OpenSlotNotSupported();
+    error DuplicateParty();
     error PinWithoutProofRequired();
     error DuplicatePin();
     error AgreementNotRegistered();
@@ -71,6 +72,7 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
     error InvalidBoundContractId();
     error DevModeProof();
     error NotAParty();
+    error SignerNotFirstParty();
     error NotSigned();
     error ProofRequired();
     error ProofNotRequired();
@@ -154,7 +156,7 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
     /// - Creates the template if it does not exist.
     /// - Creates the agreement as `createContract` does.
     /// - Records the passport and signs for the proof's bound sender, as `signWithProof` does.
-    /// The signer uses `partyValues[0]`, so the signer must be the first party.
+    /// The proof's bound sender must be the first party, because the signer uses `partyValues[0]`.
     /// Anyone can relay this call.
     function createStandaloneContractAndSignWithProof(
         string memory title,
@@ -172,7 +174,9 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
     ) external returns (bytes32 contractId) {
         bytes32 templateId = _createTemplateIfMissing(title, legalContractUri, globalFields, partyFields);
         contractId = _createContract(templateId, salt, globalValues, parties, partyValues, expiry, gates);
-        _signWithProof(contractId, params, partyValues[0], signature);
+        address party = _record(contractId, params);
+        if (party != parties[0]) revert SignerNotFirstParty();
+        _signAndFinalizeIfReady(contractId, party, partyValues[0], signature);
     }
 
     /// @notice Same as the registry's `createStandaloneContractAndSignFor`, for a first party with no gate.
@@ -203,7 +207,7 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] memory partyValues,
         bytes calldata signature
     ) external {
-        _signWithProof(contractId, params, partyValues, signature);
+        _signAndFinalizeIfReady(contractId, _record(contractId, params), partyValues, signature);
     }
 
     /// @notice Sign for a party with no gate. Anyone can relay this call.
@@ -288,6 +292,11 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
         for (uint256 i = 0; i < parties.length; i++) {
             // A gate and a passport record belong to a party address. An open slot has none yet.
             if (parties[i] == address(0)) revert OpenSlotNotSupported();
+            // The registry records one signature for each address.
+            // An agreement with a repeated address cannot finalize.
+            for (uint256 j = i + 1; j < parties.length; j++) {
+                if (parties[i] == parties[j]) revert DuplicateParty();
+            }
             bytes32 pin = gates[i].passportId;
             if (pin == bytes32(0)) continue;
             if (!gates[i].proofRequired) revert PinWithoutProofRequired();
@@ -319,24 +328,22 @@ contract ZKPassportFinalizer is Initializable, UUPSUpgradeable, BorgAuthACL {
         emit GatesSet(contractId, parties, gates);
     }
 
-    function _signWithProof(
-        bytes32 contractId,
-        ProofVerificationParams calldata params,
-        string[] memory partyValues,
-        bytes calldata signature
-    ) internal {
-        address party = _record(contractId, params);
-        _zkpassportFinalizerStorage().registry.signContractFor(party, contractId, partyValues, signature, false, "");
-        _finalizeIfReady(contractId);
-    }
-
     function _signWithoutProof(bytes32 contractId, address party, string[] memory partyValues, bytes calldata signature)
         internal
     {
         ZKPassportFinalizerStorage storage $ = _zkpassportFinalizerStorage();
         if (!$.registered[contractId]) revert AgreementNotRegistered();
         if ($.gateOf[contractId][party].proofRequired) revert ProofRequired();
-        $.registry.signContractFor(party, contractId, partyValues, signature, false, "");
+        _signAndFinalizeIfReady(contractId, party, partyValues, signature);
+    }
+
+    function _signAndFinalizeIfReady(
+        bytes32 contractId,
+        address party,
+        string[] memory partyValues,
+        bytes calldata signature
+    ) internal {
+        _zkpassportFinalizerStorage().registry.signContractFor(party, contractId, partyValues, signature, false, "");
         _finalizeIfReady(contractId);
     }
 
