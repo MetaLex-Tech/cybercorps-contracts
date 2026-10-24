@@ -2,9 +2,13 @@
 
 id: bytes32(uint256(35))
 
-combined doc: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeidquzma24o53tiys7kvspvx5izc7iru5n5dfgfwmxefi3qd67ou2y
+legalURI:
+saftURI: ipfs://bafybeighy3fgweoeivmxnp62ryrckn7xgtjerrsefrkxrruea6tq2q6gyi
 
-SAFT alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeieqiarv2kqdbkmvrf2o6powu375hayji54gauqhqpz2kfmypao6nm
+
+combined doc: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeidquzma24o53tiys7kvspvx5izc7iru5n5dfgfwmxefi3qd67ou2y](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeibwrz3rttteguo5ccoh5x7ndwdu6hyhy7i3iraii5c5ml4pfv73t4)
+
+SAFT alone: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeieqiarv2kqdbkmvrf2o6powu375hayji54gauqhqpz2kfmypao6nm](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeighy3fgweoeivmxnp62ryrckn7xgtjerrsefrkxrruea6tq2q6gyi)
 
 
 ## Global Fields
@@ -21,6 +25,7 @@ SAFT alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeieqiarv2
 | unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
 | unlockingCliffPercentage       | e.g. "10.5%" |
 | unlockingIntervalType       |  "secondly", "hourly", "daily", "monthly", "blockly". Note that this affects both `unlockingPeriod` and `unlockingCliffPeriod`   |
+| customProvisions  | an arbitrary string intended to insert any custom provision the parties agree upon |
 
 
 ## Party Fields
@@ -37,7 +42,7 @@ SAFT alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeieqiarv2
 
 ## Certificate Extension
 
-name: TokenWarrantExtension
+name: SAFTExtension
 ```solidity
 struct SAFTData {
     UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be agreementStartTime, tgeTime, or setTime
@@ -46,6 +51,7 @@ struct SAFTData {
     uint256 unlockingCliffPeriod;
     uint256 unlockingCliffPercentage;
     UnlockingIntervalType unlockingIntervalType; - // blockly, secondly, daily, weekly, monthly
+    string customProvisions; // an arbitrary string intended to insert any custom provision the parties agree upon
 }
 ```
 
