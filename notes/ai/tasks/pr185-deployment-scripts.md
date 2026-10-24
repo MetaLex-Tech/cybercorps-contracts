@@ -59,3 +59,18 @@ fixture tests do not prove compatibility with every historical live implementati
 Actual Safe threshold/guard/UI acceptance, remote fork/testnet application
 acceptance and required independent external-model review remain pending.
 No live deployment or real Safe execution occurred.
+
+## Upstream merge — 2026-10-24
+
+User authorized merging the upstream base into the current branch. PR #185 targets
+`develop`; fetched and merged `origin/develop` at
+`d964679a6a1dd16b88022865b71214102e6839fa` into
+`feat/registry-creator-bound-agreements`, producing clean merge
+`3c6ece41df2e748cd98889cd2b556a5075c9d026` from prior head
+`bdedf77c43c5d134aa788709ccbfc23014cae835`. No conflicts or manual source edits.
+
+Validation at that merge commit: Solidity 0.8.28 affected Foundry suites passed
+84 tests (registry 24, creator-bound registry 8, registry deployment script 7,
+ZKPassport finalizer 45), zero failed/skipped; `git diff --check` passed.
+This is local unit validation only. Existing independent-review, integration and
+release gates retain their prior status. No push or deployment was performed.
