@@ -19,6 +19,7 @@ have one. Do not assume another checkout's files are present here.
 
 ## Shared tasks
 
+- [PR #185 deployment scripts and Safe exports](tasks/pr185-deployment-scripts.md): linked registry deployment/export preparation, 2026-10-23; local tests and toy-key rehearsal passed, no live deployment.
 - [SAFO Reg D/S rollout](tasks/safo-integration.md): October 18 owner-approved coordinated rollout; Claude review waived; Base Sepolia fork acceptance passed, live signer/quorum and remaining release checks pending.
 - [Shared-state setup](tasks/shared-project-state.md): this documentation change.
 - [GitBook register paragraph and LeXcheXBadge deployment claims](tasks/gitbook-register-and-badge-corrections.md): docs-only correction, 2026-10-04.

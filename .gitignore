@@ -28,5 +28,8 @@ docs/
 # Python script/test caches
 __pycache__/
 
+# Local-only creator-bound registry deployment rehearsal evidence.
+/script/res/bound-registry-rehearsal/
+
 # Generated local SAFO fork inputs (unsigned release evidence stays with operator).
 /test/res/safo-rollout-*.local.json
