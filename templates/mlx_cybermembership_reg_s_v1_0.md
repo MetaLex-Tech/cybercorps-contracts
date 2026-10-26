@@ -1,4 +1,6 @@
-# Data Overview
+# Historical v1.0 Data Overview
+
+This sheet retains the original v1.0 identity and paper. For new P2PIX rounds, use the separately approved [v1.1 sheet](mlx_cybermembership_reg_s_v1_1.md). For any agreement using v1.0, retain its actual template ID, title, URI, ordered fields and original manager/finalizer routing. Do not substitute v1.1 paper or field semantics under this ID.
 
 id: bytes32(bytes("metalex_cybermember_reg_s_v1_0"))
 idHex: 0x6d6574616c65785f63796265726d656d6265725f7265675f735f76315f300000
@@ -53,6 +55,6 @@ Both PDFs were pinned through the configured Pinata service. Retrieved bytes mat
 - Combined pack: `010e648320d51a567e1f64e49bddd076e6b7dbd9bc53b70e9c018ebbdd67aff1`.
 - Amendment: `0e946cb2a6b14fbcc45ace152efe95139403694bfea03fd6a821e48b186e38e2`.
 
-This data sheet does not register the template or deploy contracts. Live Base Sepolia and Base registration remain operator steps. Verify the exact title, URI and both ordered field arrays with `getTemplateDetails` after each registration. Mainnet transactions require separate owner approval.
+This data sheet does not register the template or deploy contracts. Earlier Base Sepolia and Base launch guidance is superseded: the selected P2PIX issuer is the existing company on Ethereum chain 1, and new rounds use the separate v1.1 identity. Do not register this historical payload as the new v1.1 packet or overwrite an occupied ID. Resolve any existing agreement from its actual onchain template ID and verify the matching title, URI and ordered fields.
 
-The application implementation, runtime discovery, isolated Base fork results and launch runbook belong to `metalex-webapp/notes/ai/tasks/cybermembership-reg-s-round.md` on `claude/cybermembership-reg-s-round`. No Solidity implementation changes are required by this data sheet.
+The current application, Ethereum runtime and controller evidence are maintained in the [webapp task record](https://github.com/MetaLex-Tech/metalex-webapp/blob/develop/notes/ai/tasks/cybermembership-reg-s-round.md). The earlier Base fork results are historical. No Solidity implementation changes are required by this data sheet.
