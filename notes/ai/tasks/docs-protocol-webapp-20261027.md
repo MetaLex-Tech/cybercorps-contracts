@@ -9,7 +9,13 @@
 - Application evidence: fetched `develop` `3ad76d665b6df9fe084db8a883e135ad7cf4425b`; `production` `f5f620eee4d994372c4f7ecaaf52fa0b28f16a4a`.
 - Canonical sources: [dated review](../../../docs/reference/documentation-status.md), exact source links there, webapp terminology guide and scoped task records read alongside current code.
 - Ownership: existing implementation, release and audit owners remain unchanged. Unrelated dirty files in the original checkouts were left untouched; work uses isolated checkouts.
-- PR: not yet created. No merge or auto-merge authorization.
+- PR: [#188](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/188),
+  ready for review against `develop`. Content commit
+  `c440d587717903a067c70849d61fc14d8ca30450`. No merge or auto-merge authorization.
+- Monitor: `review-protocol-docs-pr-188`, this chat, five-minute heartbeat.
+  Creation returned ACTIVE; app view and persisted TOML confirmed ACTIVE and
+  the current thread binding. Event state: `pr188_seen.txt` in the task
+  artifact directory. No other monitor ownership changed.
 
 ## Discovery and decisions
 
@@ -51,14 +57,19 @@ historical evidence only. Other deployments were not re-probed.
   ignore rule ignores untracked `docs/` files.
 - Independent external review: not performed; normal PR review pending.
 - Contract/app tests and browser/live acceptance: not run, docs-only scope.
-- Publication, GAIBE import and deployment: not performed.
+- GitBook preview checks: both SUCCESS on content commit `c440d58`, revision
+  `kEcD84YEQHv2uOyIYrNO`; production publication and GAIBE import not performed.
+- Initial full review sweep after baseline: no inline comments or review
+  bodies; conversation contained only the automated review-running summary
+  (comment 6442236792), with no actionable finding or audit attachment.
+- Hosted CI at that sweep: Build sizes, Unit tests and Fork tests in progress.
+  This record does not claim their success.
 
 ## Next action
 
-Finish documentation validation, open a ready PR against contracts `develop`,
-and start a persisted review-and-fix heartbeat under the owner's standing
-instructions. Initial full sweep must include conversation comments, complete
-review bodies, inline threads and any applicable existing audit findings.
+The persisted heartbeat continues PR #188 review and scoped fixes. Inspect
+conversation comments, complete review bodies, inline threads and any
+applicable existing audit findings on each pass.
 Do not start an audit or alter another task's ledger. After merge/closure,
 perform the final sweep and retire the monitor; check publication/GAIBE
 workflow evidence without merging or deploying the webapp on inference.
