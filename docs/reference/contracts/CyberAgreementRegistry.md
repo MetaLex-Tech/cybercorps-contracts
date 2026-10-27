@@ -55,10 +55,12 @@ bytes32 public constant SIGNATUREDATA_TYPEHASH = keccak256(
 bytes32 public VOIDSIGNATUREDATA_TYPEHASH; // keccak256("VoidSignatureData(bytes32 contractId,address party)")
 ```
 
-The `contractId` is `keccak256(abi.encode(templateId, salt, globalValues,
+For the existing `createContract` entry point, `contractId` is
+`keccak256(abi.encode(templateId, salt, globalValues,
 parties, secretHash, finalizer))`. `secretHash` and `finalizer` are bound
-into the id so a front-runner cannot seize the same id with hostile terms.
-`expiry` is left out so presigned offchain signatures stay verifiable.
+into the id: different secret or finalizer values produce a different id.
+This recipe does not bind every stored term. In particular, initial party
+values and `expiry` are excluded. The creator-bound path below commits both.
 
 The `signer` field binds a signature to one party. A delegate can hold
 delegations from several parties, and without the field one delegate
@@ -68,9 +70,9 @@ fields are hashed as EIP-712 requires: `legalContractUri` as
 concatenated `keccak256` of its elements.
 
 {% hint style="warning" %}
-**Two registry implementations run in production.** The registry proxy
+**Signature formats and creation capabilities are separate checks.** The registry proxy
 `0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134` on Ethereum, Base and
-Arbitrum runs this implementation: `SIGNATUREDATA_TYPEHASH()` returns
+Arbitrum uses the signer-bound signature format: `SIGNATUREDATA_TYPEHASH()` returns
 `0xe37d17c3…6f05`, and `createContract` derives the six-field id above.
 The separate zkSync Era registry
 (`0x07E0a0BeC742f90f7879830bC917E783dA6a6357`) returns
@@ -79,8 +81,13 @@ type without `signer`, and derives ids from four fields:
 `keccak256(abi.encode(templateId, salt, globalValues, parties))`. Both
 report `version()` `"1"`.
 
+The creator-bound build retains that typehash and `version()`. Neither
+getter establishes support for its new creation methods. Verify the actual
+implementation and the bound-domain getters before choosing that path.
+
 Read `SIGNATUREDATA_TYPEHASH()` on the registry you are about to sign
-against before choosing the typed data or the id formula. Where the flow
+against before choosing typed data. Choose the id formula from the reviewed
+implementation and the actual creation method. Where the flow
 allows, take the id from the `ContractCreated` event or an `eth_call` of
 `createContract`. An agreement keeps the id it was created with, so read an
 existing agreement's id instead of recomputing it.
@@ -118,12 +125,69 @@ function voidContractFor(bytes32 contractId, address party, bytes signature) ext
 function finalizeContract(bytes32 contractId) external; // onlyFinalizerIfSet
 ```
 
+## Creator-bound agreements
+
+The October 24 source merge adds two methods on the concrete registry:
+
+```solidity
+function createBoundContract(Template template, uint256 salt,
+    string[] globalValues, address[] parties, string[][] partyValues,
+    uint256 expiry) external returns (bytes32 templateId, bytes32 contractId);
+
+function createBoundContractAndSignFor(Template template, uint256 salt,
+    string[] globalValues, address[] parties, string[][] partyValues,
+    uint256 expiry, bytes creatorSignature)
+    external returns (bytes32 templateId, bytes32 contractId);
+```
+
+`createBoundContract` binds creation to `msg.sender` and leaves the agreement
+unsigned. `createBoundContractAndSignFor` binds it to `parties[0]` and verifies
+that party's signature through `signContractFor`; another address can relay
+it. The `Template` tuple order is URI, title, global fields, party fields.
+These methods are not declared in `ICyberAgreementRegistry`; use the concrete
+contract ABI when integrating them.
+
+The identifiers are derived as follows, using `abi.encode` throughout:
+
+```solidity
+templateId = keccak256(abi.encode(
+    BOUND_TEMPLATE_DOMAIN, creator, salt, template.title,
+    template.legalContractUri, template.globalFields, template.partyFields
+));
+contractId = keccak256(abi.encode(
+    BOUND_AGREEMENT_DOMAIN,
+    keccak256(abi.encode(creator, templateId, salt, globalValues, parties,
+        keccak256(abi.encode(partyValues)), expiry))
+));
+```
+
+The domains are the hashes of
+`MetaLeX.CyberAgreementRegistry.BoundTemplate.v1` and
+`MetaLeX.CyberAgreementRegistry.BoundAgreement.v1`. Both have public getters.
+Unlike the older creation method, this path commits the expiry and every
+party's initial values into the identifiers. Its EIP-712 signature schema
+is unchanged: the new commitment travels through `contractId`.
+
+Creation requires a nonempty URI, at least one party, unique nonzero party
+addresses, matching field/value lengths, and either zero expiry or a future
+expiry. There are no open slots, secret or finalizer. The registry emits
+ordinary `TemplateCreated` and `ContractCreated` events; there is no separate
+bound-creation event. Signing and automatic finalization use the existing
+registry lifecycle. Reusing an already registered bound template id reverts.
+
+The app uses this capability for eligible formation-packet requests. Older
+requests retain their original ids and creation strategy. See
+[the dated source review](../documentation-status.md) for the inspected
+revisions and runtime evidence.
+
 ## Views
 
 `getParties`, `hasSigned`, `getSignatureTimestamp`, `allPartiesSigned`,
 `getContractDetails`, `getTemplateDetails`, `getSignerValues`, `isVoided`,
 `isFinalized`, `getAgreementsForParty`, `getVoidRequestedBy`,
-`getContractJson`, `getDelegation`, `isValidDelegation`, `isValidDelegate`.
+`getContractJson`, `getDelegation`, `isValidDelegation`, `isValidDelegate`,
+`isParty`, `getFirstOpenPartyIndex`, `BOUND_TEMPLATE_DOMAIN`,
+`BOUND_AGREEMENT_DOMAIN`.
 
 ## How signing works
 
@@ -181,7 +245,8 @@ agreement voids only by unanimous request of its allocated parties, or by
 the proposer while sole signer.
 {% endhint %}
 
-`getContractJson(contractId)` returns the agreement as a JSON string
+`getContractJson(contractId)` delegates rendering to the linked
+`CyberAgreementJson` library and returns the agreement as a JSON string
 (template id, title, legal URI, global fields, per-party values with
 `signedAt`, signature count, `isComplete`, `voided`, `voidRequestedBy`,
 `finalized`). Titles, URIs, field names and values are JSON-escaped, so a
@@ -194,3 +259,7 @@ quote or backslash typed into a field cannot break the document.
 `ContractFinalized`, `VoidRequested`, `ContractVoided`, `DelegationSet`
 and `DelegationRevoked` in the contract. The registry proxy emits all of
 them.
+
+Agreements that require passport evidence use a separate
+[ZKPassportFinalizer](ZKPassportFinalizer.md). A fully signed agreement can
+still await that finalizer; signature count alone does not prove finalization.

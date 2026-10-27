@@ -12,7 +12,9 @@ LedgerEntryToken, CyberScrip) report `"5"`, the version deployed on
 Ethereum, Base and Arbitrum. New companies are created on v5. An existing
 company runs the version it was created with (`"3"`, `"4"` or `"4.1"`)
 until its owner upgrades it, so read `DEPLOY_VERSION()` on the instance
-before choosing an ABI. See [Upgrade model](upgrade-model.md).
+before choosing an ABI. Features such as native Membership Interest, SAFO
+and creator-bound creation also need implementation-level capability checks;
+a major-version string alone is insufficient. See [Upgrade model](upgrade-model.md).
 
 ```mermaid
 flowchart TD
@@ -42,6 +44,7 @@ flowchart TD
 | [**RoundManager**](contracts/RoundManager.md) | Multi-investor fundraising rounds: create, submit EOIs, allocate, reject or recall, close. |
 | [**LeXscroWLite**](contracts/LeXscroWLite.md) | The escrow used when deals and rounds close: the `LexScrowStorage` library that DealManager and RoundManager share. |
 | [**CyberAgreementRegistry**](contracts/CyberAgreementRegistry.md) | Onchain registry of agreement templates and executed multi-party agreements, with signing delegation and void-request tracking. |
+| [**ZKPassportFinalizer**](contracts/ZKPassportFinalizer.md) | Per-party passport gates for exact-party registry agreements; finalizes only after the required signatures and proofs. |
 | [**SafeCertificateConverter**](contracts/SafeCertificateConverter.md) | Computes a SAFE-to-equity conversion plan from round data. A stub that returns an empty plan. |
 | [**LexChex / LeXcheXBadge**](contracts/LexChex.md) | ERC-5484 soulbound credentials: the LeXcheX accreditation NFT and the LeXcheXBadge fact-keyed credential registry. |
 | [**CertificateUriBuilder**](contracts/CertificateUriBuilder.md) | Builds the onchain JSON and SVG token URI of every LET, with the SVG drawn by a separate image-builder contract. |

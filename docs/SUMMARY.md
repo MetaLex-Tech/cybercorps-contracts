@@ -6,6 +6,7 @@
 
 * [Getting started](webapp/README.md)
 * [Form a company](webapp/formation.md)
+  * [Formation packets and signing](webapp/formation-packets.md)
 * [Run your company](webapp/company.md)
   * [Tokenization Hub](webapp/tokenization-hub.md)
   * [The cap table](webapp/captable.md)
@@ -60,6 +61,7 @@
     * [RoundManager](reference/contracts/RoundManager.md)
     * [LeXscroWLite](reference/contracts/LeXscroWLite.md)
     * [CyberAgreementRegistry](reference/contracts/CyberAgreementRegistry.md)
+    * [ZKPassportFinalizer](reference/contracts/ZKPassportFinalizer.md)
     * [SafeCertificateConverter](reference/contracts/SafeCertificateConverter.md)
     * [LexChex / LeXcheXBadge / LeXcheXMinter](reference/contracts/LexChex.md)
     * [CertificateUriBuilder](reference/contracts/CertificateUriBuilder.md)
@@ -73,3 +75,4 @@
   * [Security types](reference/security-types.md)
   * [Deployments](reference/deployments.md)
   * [Glossary](reference/glossary.md)
+  * [Documentation status and source review](reference/documentation-status.md)

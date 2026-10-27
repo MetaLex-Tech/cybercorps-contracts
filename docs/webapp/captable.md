@@ -64,7 +64,7 @@ the LET's owner to the scrip holders.
 
 The **Securities cap table** tab has summary cards (issued and
 outstanding, semi-diluted and fully diluted shares, stakeholders, total
-raised, onchain certificates, offchain entries, duplicates), a donut by
+raised, onchain LETs, offchain entries, duplicates), a donut by
 class, and sections for **Equity**, **Convertibles**, **Token
 instruments** and **History** (void, terminated, tokenized, exercised
 and converted rows, kept for audit). You can group by stakeholder or by
@@ -88,7 +88,7 @@ The app reads the onchain half from an indexer. If the read is
 incomplete or has not reached the block it needs, a tokenization
 allocation is unreconciled, or a class line carries conflicting legal
 identities, the app stops presenting totals. A caution banner reads
-"Some certificate records are incomplete. Registered exports are
+"Some LET records are incomplete. Registered exports are
 unavailable." and lists the gaps, the summary cards switch to **Known
 issued subtotal** and **Known amount raised**, the donut is hidden, and
 **Model a round** and **Exit waterfall** show "Analysis requires complete
@@ -106,14 +106,14 @@ each with its own review dialog.
   what grant withdrawals explain. Flagged rows carry a **⚠ unregistered**
   chip, and the review can stage a draft position (never an active one)
   prefilled from the onchain evidence.
-* **Review cert double counts**: a counting LET beside a counting live
+* **Review LET double counts**: a counting LET beside a counting live
   offchain entry for the same holder, class and size, as an unlink or a
   declined import link leaves them. The dialog names the remedy for each
-  pair, usually **Link existing cert** on the entry or **Unlink cert** on
+  pair, usually **Link existing LET** on the entry or **Unlink LET** on
   a mis-linked position, and never assumes the LET is the mistake. You
   apply the fix on the rows themselves, and can dismiss pairs that are
   separate holdings.
-* **Review cert printer links** and **Review duplicate classes** open
+* **Review LET contract links** and **Review duplicate classes** open
   **Reconcile classes**. A tokenized series is an offchain class line
   linked to its LET contract. Once linked, the pair renders as one class
   everywhere, and until then it counts as two. The dialog lists unlinked
@@ -259,7 +259,7 @@ the position, and the entry then mirrors the LET. If the transaction
 mines but the link-back fails, the dialog lets you retry the link or
 enter the LET's number, so you never mint a duplicate.
 
-**Link existing cert** links a LET that already exists on the class's LET
+**Link existing LET** links a LET that already exists on the class's LET
 contract, without minting. The app checks the LET number you enter: the
 LET must be live, claimed by no other position, held by a wallet of this
 stakeholder, and carry exactly the position's registered units. The
@@ -268,11 +268,11 @@ wallet is recorded on the stakeholder. Use it to relink a LET unlinked
 from the wrong position, or after importing a table whose LETs already
 exist.
 
-**Unlink cert**, the one action on a tokenized row, is a journaled
+**Unlink LET**, the one action on a tokenized row, is a journaled
 correction for a mistaken link. The position becomes an active offchain
 record again while the LET stays live onchain, so both count and the
 double-count review flags the pair. Resolve it promptly with **Link
-existing cert** on the correct position, or void the LET onchain.
+existing LET** on the correct position, or void the LET onchain.
 
 Equity awards (options, RSUs, vesting restricted stock) never become
 LETs: **Escrow award (MetaVesT) →** sends them to [grants](grants.md),
@@ -295,7 +295,7 @@ line is linked to that LET contract, with each split (for example
 "1,000 units · 250 tokenized · 750 untokenized"). A position qualifies
 when it is active and offchain, is not an equity award, is not linked
 whole to a LET, and is not in a vesting escrow. The class line must be
-linked to the LET contract (the **Review cert printer links** banner does
+linked to the LET contract (the **Review LET contract links** banner does
 that) and must have
 [activated legal terms](#legal-classes-series-and-versioned-terms).
 Without them the attempt is refused with a message naming the line.
@@ -345,7 +345,7 @@ activated terms in place of the line's stored values.
 The workflow is the **Legal class and terms** section of a class panel
 in the [Tokenization Hub](tokenization-hub.md). It needs the LET contract
 linked to a cap table line. Until it is, the section says the line has
-no legal identity yet and links to the cap table's **Review cert printer
+no legal identity yet and links to the cap table's **Review LET contract
 links** banner. Reading needs a signed-in owner wallet, and the other
 steps need that wallet to be a current officer of the cyberCORP. No step
 is a transaction: identities, versions and approvals are app records,
@@ -428,15 +428,25 @@ derived live from the cap table and the chain:
    terms**, **Review exemption** and **Review board approval**, in that
    order, then **Record issuance**. They cannot be edited, and once
    recorded they cannot return to draft or be deleted, so corrections
-   use Edit, Void and Terminate. Only plain Common Stock can be recorded this
-   way. A draft with restricted, award, plan, convertible or token terms
-   stays a non-counting draft for a custom workflow.
+   use Edit, Void and Terminate. A finalized formation-packet Board consent
+   can cover an exactly matching
+   Schedule 3 position, including supported restricted stock whose vesting
+   terms match. Other unsupported award, plan, convertible or token terms
+   need their own workflow. The page links each founder's signing and
+   automatic-recording status to the packet. An approval linked after
+   issuance is labeled separately. See [Formation packets](formation-packets.md).
 2. **Awaiting signature**: proposed onchain, unsigned by the recipient.
-   Copy the cyberSign signing link and send it yourself, since the app
-   sends no email.
+   Use the assigned cyberSign link and check the request's invitation status.
+   Email delivery is available only for supported signing-request flows.
 3. **Awaiting acceptance**: signed, with the escrow not yet finalized.
 4. **Awaiting settlement**: escrowed with vested units to sweep or
    post-termination cleanup left.
+
+For eligible plain founder purchases, issuance recording can precede the
+Notice of Issuance signature once the required launch documents are final
+and the owner has approved the issue date. Restricted purchases retain their
+applicable document requirements. The worklist records an explicit decision
+to proceed without a linked Board consent where permitted by the workflow.
 
 ## Exports
 
@@ -458,7 +468,7 @@ A current untokenized row also offers **Download statement**, a PDF
 position statement that says on its face it is neither a tokenized
 certificate nor a stock certificate and does not by itself determine
 which record is the company's securities ledger. A row mirroring a LET
-offers **Download certificate**, a PDF rendering of the indexed LET that
+offers **Download LET**, a PDF rendering of the indexed LET that
 tells the reader to verify its status onchain.
 
 The **Compliance** menu's panels (the §219 stockholder list, 409A and FMV
@@ -531,6 +541,12 @@ The LET stays part of the same LLC position, and a reserved or tokenized
 position cannot be changed offchain until its tokenization reconciles. A
 reverted transaction releases the reservation, and **Release unsent
 reservation** releases an unsent one.
+
+The native Membership Interest fundraising flow uses protocol class 13,
+with its own verified runtime, Unit Class Record and legal-document
+requirements. It is separate from this existing CommonStock compatibility
+mapping. See [cyberRAISE](cyberraise.md). Neither route makes a holder a
+member solely because a token exists.
 
 **Export this view (CSV)** uses rounded percentages, and **Export all
 records (JSON)** keeps exact quantities and every record and history entry

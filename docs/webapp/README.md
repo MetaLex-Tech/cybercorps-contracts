@@ -69,8 +69,9 @@ You also need:
   Safe can delegate its agreement signing to one wallet (see
   [Profile](profile.md)).
 * **ETH for gas** on the company's network. cyberCORPs run on Ethereum,
-  Arbitrum and Base. A company formed through the app gets its onchain
-  record on Ethereum mainnet, the chain the formation fee is paid on.
+  Arbitrum and Base. Formation payments use Ethereum mainnet. Choosing
+  the onchain formation option also creates the company record there;
+  offchain-only formation creates no cyberCORP.
 * **A desktop browser** for company setup and the longer flows. The apps
   also work on a phone.
 
@@ -91,7 +92,11 @@ kind before you approve:
   company, issuing a security, funding a round and closing a round are
   transactions.
 
-Each guide says which steps are which.
+Fully offchain cyberSign email acceptance needs no wallet or gas. Mixed
+execution adds separately consented onchain recording, and supported managed
+requests can offer sponsored submission. Each guide names the relevant steps.
+Transaction inclusion and finality are separate; the app can continue waiting
+after a wallet reports a successful transaction.
 
 ## What it costs
 

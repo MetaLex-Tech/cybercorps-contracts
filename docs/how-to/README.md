@@ -118,7 +118,12 @@ Anyone can register a template in the `CyberAgreementRegistry`, and a
 standalone agreement creates its template in the same transaction. Parties
 countersign onchain with EIP-712 signatures, and executed agreements are
 linked to LETs and deal records. cyberSign works as a signing layer for any
-legal instrument, with or without a raise.
+legal instrument, with or without a raise. The app also offers fully
+offchain and mixed execution with separate evidence and completion rules;
+those modes must not be treated as a fully signed registry agreement.
+Creator-bound registration and passport gates are covered in the
+[registry](../reference/contracts/CyberAgreementRegistry.md) and
+[finalizer](../reference/contracts/ZKPassportFinalizer.md) references.
 
 ### LiquiLeX
 

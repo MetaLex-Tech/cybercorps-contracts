@@ -44,7 +44,7 @@ Delaware corporation, an LLC and so on).
   transaction creates its public onchain company record, through the
   wizard below.
 * **No**: **Form a company** forms an LLC or C-Corp for a flat \$1,000
-  in USDC and creates the onchain record as part of the process. See
+  in USDC, with a choice of an onchain or offchain-only company record. See
   [Form a company](formation.md).
 
 The setup wizard has three steps and saves your progress as you go.
@@ -191,18 +191,22 @@ place:
 * **Sign with cyberSign**: **Open cyberSign ↗** opens MetaLeX's signing
   app. An existing agreement's own signing link opens that agreement.
 
-The page also shows **Formation documents** and **Standalone templates**
-cards. Document preparation and templates are not enabled in the
-production app, and both cards say so. The formation card links to the
-Incorporation Hub for filing status and company records.
+**Formation documents** opens the [formation packet](formation-packets.md)
+workflow where enabled. Review its saved revisions, assign signers, prepare
+requests, track recording and download the closeout. **Standalone templates**
+uses the shared document composer for available templates; a prepared draft
+still needs the relevant approval and signing steps. The workspace also
+links to filing documents and private formation records.
 
 ## Edit the company profile
 
 The **edit profile** link in mission control's identity strip opens the
 **admin** area. Its top half is the **public profile** (description,
 image and links), saved without a transaction. Below it, **onchain
-details** lets an owner update the cyberCORP name, the payable address
-and the officer roster. Each of those changes is an onchain transaction
+details** lets an owner update the cyberCORP name, jurisdiction, payable
+address and officer roster. The jurisdiction editor checks the selected
+company's current onchain value and supports reviewed legacy/v4/v5 paths.
+Each of those changes is an onchain transaction
 sent from an owner wallet. Removing an officer whose wallet holds the
 company's grants authority shows a warning you must acknowledge first.
 The [grants guide](grants.md) explains the grants authority.
@@ -217,7 +221,8 @@ the public MetaLeX indexer record, and every address links to a block
 explorer so you can check it yourself:
 
 * **Entity**: the entity type and jurisdiction the company recorded
-  onchain at formation (not checked against any government registry),
+  onchain, including a later jurisdiction update (not checked against any
+  government registry),
   the formation source (the MetaDAO or Umia launchpad, or *Self-formed*
   through the MetaLeX cyberCORP factory), the date its contracts were
   deployed (the legal formation date may differ), the chain and the

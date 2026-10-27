@@ -58,12 +58,34 @@ A registry with the older signature type, whose
 `SIGNATUREDATA_TYPEHASH()` returns `0x49ba7af1…0da4`, derives the id from
 four fields only: `keccak256(abi.encode(templateId, salt, globalValues,
 parties))`. The separate zkSync Era deployment is one. Both registry types
-report `version()` `"1"`, so only the typehash tells them apart.
+report `version()` `"1"`; the typehash distinguishes these signature schemas
+but does not identify the complete implementation.
+
+### Choose the creation method before collecting signatures
+
+For a new exact-party agreement on a reviewed creator-bound deployment, use
+`createBoundContract` or `createBoundContractAndSignFor`. Their ids bind the
+creator, full template, values and expiry. Use the
+[bound id recipe](../reference/contracts/CyberAgreementRegistry.md#creator-bound-agreements),
+not the six-field `createContract` formula. The legacy methods remain
+available for existing integrations and for flows needing open slots or a
+finalizer. Do not recompute an existing agreement under a different recipe.
+
+The signature typehash identifies a signature schema, not the complete
+runtime. Confirm the implementation and supported creation methods before
+exposing a signature. An unchanged `version()` or typehash does not establish
+creator-bound support.
+
+For per-party passport gates, create through the
+[ZKPassportFinalizer](../reference/contracts/ZKPassportFinalizer.md), which
+binds the gates into the salt and waits for both signatures and proofs.
 
 ## 3. Collect each party's signature
 
-Every signing entry point carries the signer's EIP-712 signature over the
-agreement content. On a registry with the current type, the typed data is:
+Direct signing and relayed signing verify the party's EIP-712 signature over
+the agreement content. The escrow entry point instead trusts its designated
+finalizer to submit a previously escrowed signature. On a registry with the
+current type, the typed data is:
 
 ```ts
 // viem signTypedData

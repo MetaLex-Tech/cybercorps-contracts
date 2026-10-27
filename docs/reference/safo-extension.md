@@ -6,8 +6,11 @@ not a registered agreement template. The Reg D and Reg S v1.1 template
 specifications assign their IDs. Their agreement and LET instrument PDFs are
 pinned and CID-verified in the
 [v1.1 release manifest](../../templates/releases/safo-v1.1.json). Registry
-registration and live extension addresses remain pending a separately approved
-release. The v1.0 specifications are superseded and are not registration
+registration and activation remain subject to a separately approved
+release. The inspected webapp records component deployment preparation and
+partial deployment evidence, but keeps new SAFO launches paused as of
+October 27, 2026. This page specifies the source schema and does not certify
+a live issuer configuration. The v1.0 specifications are superseded and are not registration
 candidates.
 
 ## Storage and decoding

@@ -35,3 +35,8 @@ here. The [guides](../how-to/README.md) show how to put them together.
 | [Security types](security-types.md) | The `SecurityClass`, `SecuritySeries` and `SecurityStatus` enums. |
 | [Deployments](deployments.md) | Contract addresses by chain. |
 | [Glossary](glossary.md) | Protocol and app terms. |
+
+[Documentation status and source review](documentation-status.md) records the
+October 27, 2026 source baseline, historical updates and runtime checks.
+A source API, deployed implementation, enabled application flow and completed
+user transaction are distinct evidence.

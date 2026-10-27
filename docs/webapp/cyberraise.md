@@ -46,6 +46,36 @@ structure** copies one answer, ticket by ticket or structured round, into
 the setup; you set everything else in the normal steps. The plan is
 guidance and gives no legal clearance.
 
+### Explore advanced raises and custom documents
+
+The October 27 development source adds **Explore advanced raises and custom
+documents**. This preparation interface is not in the inspected production
+branch. It lets you explore custom preferred-stock Reg D and economic
+Membership Unit Reg S terms before choosing an issuer.
+
+Issuer setup separates the purchase agreement, LET document and governing
+class document. Publication of a final PDF to public IPFS requires explicit
+consent. Registration, company adoption, legal approval and activation, and
+round creation are separate steps. A published template alone does not make
+it eligible for a round.
+
+The native Membership Interest route requires a reviewed compatible company,
+one documented class, N/A series and no extension. The custom economic Units
+flow uses the supported U.S.-excluded structured round. Arbitrary field
+schemas and extra signing roles are refused. Existing issuer-specific
+membership templates retain their own governance requirements and original
+agreement identities. Check the issuer and active legal version before
+signing; the app rechecks them before submission and allocation.
+
+### SAFO availability
+
+SAFO is present in the protocol source as security class 14. Its legal
+packets are published, but the app's launch policy remains paused and
+preview-only. Existing record decoding does not enable new SAFO tickets or
+rounds. Restored drafts must pass the same launch gate. See
+[Security types](../reference/security-types.md) and the
+[dated source review](../reference/documentation-status.md).
+
 ### Choose ticket by ticket or a structured round
 
 * **Ticket by Ticket** sells securities to investors one at a time, each on
@@ -145,7 +175,7 @@ approved by MetaLeX for any company. The
 which the app checks against the onchain registry. If the series already
 has a line, you add a **sub-series label** (e.g. "2" to run Series A-2) so
 the new round's onchain identifiers stay unique. If the company already has
-a LET contract for the series and deal type, an **Existing cert printer**
+a LET contract for the series and deal type, an **Existing LET contract**
 field shows it and the round reuses it.
 
 **Step 3, set up the agreement.** Configure the standard agreement

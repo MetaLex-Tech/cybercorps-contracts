@@ -7,8 +7,9 @@ description: "Form an LLC or incorporate a C-Corp in the cyberCORPs app for a fl
 If your company does not exist as a legal entity yet, the cyberCORPs app
 (`cybercorps.metalex.tech`) can form it for you. **Form a company** forms
 an LLC or incorporates a C-Corporation in one guided, in-app flow, and
-creates the company's public onchain record (its cyberCORP) as part of
-the same process.
+lets you choose an onchain cyberCORP or an offchain-only company record.
+The offchain option files the legal entity without publishing company data
+onchain. Its USDC payment remains an onchain transfer.
 
 To start, choose **Set up your company** on the app's start screen,
 answer **No** to **Has your company already been legally formed?**, and
@@ -41,10 +42,11 @@ Annual reports you file later through the app cost only the state's fee
 
 **Form a company** opens a single long-page form headed **Incorporate
 your company**, or **Form your LLC** once you pick an LLC. It gathers
-everything the filing and the onchain record need. Nothing is saved
-automatically. On a fresh session, a dialog tells you to save with the
-disk icon and to keep the session link, which reopens your saved draft in
-the same browser.
+everything the filing and your chosen company record need. The app saves
+draft edits automatically in the browser and supports saved draft links.
+Keep the link to resume in the same browser. Sign in with the account
+responsible for the order before submitting; a browser draft is not a filed
+formation request.
 
 ## Choose an entity with the entity guide
 
@@ -117,7 +119,8 @@ The sections, in order:
   allocations, saved **encrypted** as a private setup plan. The form
   states that this creates no positions, reserves no shares and promises
   no stock. It pre-stages your cap table for later.
-* **Public company record** (always public): the founding wallet, the
+* **Company record**: choose onchain or offchain-only. If onchain, the
+  **Public company record** contains the founding wallet, the
   treasury address, the public contact and first public officer, and the
   optional profile. The network is locked to the payment chain, Ethereum
   mainnet.
@@ -154,7 +157,8 @@ details, the private setup plan and the public record) and states the
 service price: \$1,000 in USDC, with network gas shown separately by your
 wallet. **Save and continue** leads to payment.
 
-**Pay 1,000 USDC and start incorporation** (**… and start LLC
+For an onchain company record, **Pay 1,000 USDC and start incorporation**
+(**… and start LLC
 formation** for an LLC) asks for two approvals that settle as **one
 onchain transaction**:
 
@@ -175,6 +179,12 @@ both are verified.
 > status page's recovery actions (verify transaction hash, reset payment
 > attempt) reconcile exactly this case. See
 > [Integrate from a frontend](../how-to/integrate-from-frontend.md).
+
+For an offchain-only record, payment is a plain USDC transfer. No factory
+call creates a cyberCORP, and no company details or officer roster are
+published by that flow. After filing, **Add a cyberCORP** on the status page
+can create the public record separately. Cap table, boardRoom, packet and
+fundraising workflows require that cyberCORP.
 
 ## Track the order on the Formation Status page
 
@@ -215,6 +225,14 @@ EIN arrives. You can discard a saved setup plan you no longer want at any
 time without touching the company or the cap table. The seeded positions
 and the Securities status queue are covered in [the cap table](captable.md).
 
+## Prepare the founder documents
+
+The Documents workspace can prepare and sign the company's
+[formation packet](formation-packets.md). Review the founder positions,
+officer and director roles, and the service-filed or other formation history
+before approving preparation. Signing documents, recording an issuance
+and tokenizing the resulting position are separate steps.
+
 ## Read mail, notices and filings from doola
 
 For a company formed through the app, doola provides legal notices, mail
@@ -227,8 +245,9 @@ account that submitted the formation sees it.
 
 ## File annual reports
 
-The Incorporation Hub of a company formed through the app has an
-**Annual reports** panel, under **Ongoing compliance**, showing the next
+The formation status page and the Incorporation Hub expose an
+**Annual reports** panel for eligible formation orders, under **Ongoing
+compliance**, showing the next
 calendar deadline, the last filing and the state's filing requirement.
 Mission control also shows notices such as **Annual report due in N
 days** or **Annual report overdue** that link to the panel.

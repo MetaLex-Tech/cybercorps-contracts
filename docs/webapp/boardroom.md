@@ -177,10 +177,10 @@ wizard:
    signature plus one transaction creates the consent in the agreement
    registry with your signature recorded. The dialog warns that the
    document, including stakeholder names and unit counts, goes to public
-   IPFS, as every signed agreement document does.
+   IPFS. Other managed cyberSign requests can use private PDFs.
 
 You then send each remaining signer their cyberSign link yourself,
-because the app sends no email. The signing window is 60 days, and a consent is
+because this direct consent route does not queue email invitations. The signing window is 60 days, and a consent is
 approved when every signer has signed. The app reads a consent's status
 live from the chain and never stores it. The archive shows per-consent
 signature counts, whether the board or the officers standing in signed
@@ -236,7 +236,9 @@ deployed for your company.
 > director tier,
 > so the boardRoom reads its director roster from officer titles. Consents are agreements in the
 > [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md),
-> created and signed in one transaction.
+> created through the signing workflow selected for that document. Ordinary
+> standalone creation can create and sign in one transaction; managed
+> requests track preparation, signatures and recording separately.
 
 ## Good to know
 

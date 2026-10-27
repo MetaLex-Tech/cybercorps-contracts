@@ -4,15 +4,37 @@ description: Deployed addresses and versions per chain
 
 # Deployments
 
-Canonical contract addresses, by chain.
+Contract addresses recorded by chain. The tables below were last edited on
+October 2, 2026 before this review. Treat implementation addresses and chain
+availability as that recorded snapshot, not a live deployment manifest.
+The October 27 check below covers the registry on Base and Arbitrum only;
+the other tables were not re-probed in this documentation pass.
 
-> **Source of truth:** the
+> **Configuration and historical deployment records:** the
 > [`script/libs/DeploymentConstants.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/script/libs/DeploymentConstants.sol)
 > library (and the raw deploy logs in `script/res/deployment-addresses.md`)
 > in the contracts repository, plus MetaLeX release notes on
 > [Substack](https://metalex.substack.com/). Most entries are proxies whose
 > implementations differ by chain, so read the EIP-1967 implementation slot
 > instead of assuming one.
+
+## Registry checks on October 27, 2026
+
+Read-only RPC checks of the shared registry proxy returned:
+
+| Chain | Block observed before reads | EIP-1967 implementation | Creator-bound template getter |
+| --- | --- | --- | --- |
+| Base | 53157679 | `0x04295bc98728a972c9f3ddced5ccff5c78760f34` | `0x2768953c2f11df2fc4ba05b23165ea634035fbb305bc67d721a18fbc82c13eb9` |
+| Arbitrum | 518741765 | `0x46c32a4a7fb22d4a03f41e19f84a65b0ea9bc032` | `0x2768953c2f11df2fc4ba05b23165ea634035fbb305bc67d721a18fbc82c13eb9` |
+
+Both returned the signer-bound `SIGNATUREDATA_TYPEHASH`
+`0xe37d17c3ab7740aee31093101f9d27d139a5c3b35324b266efe5d085d6486f05`.
+These were consecutive latest-state reads, not calls pinned to one block;
+they do not establish transaction acceptance or a full bytecode audit.
+Ethereum reads failed at two public endpoints. The app's October 23 reviewed
+runtime matrix records Ethereum creator-bound support, but this pass did not
+independently reverify that deployment. See the
+[registry reference](contracts/CyberAgreementRegistry.md#creator-bound-agreements).
 
 ## Production chains (Ethereum, Base, Arbitrum)
 

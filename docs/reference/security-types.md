@@ -31,7 +31,8 @@ enum SecurityClass {
 New values are appended, so the values 0 to 12 keep their meaning. A
 deployed contract decodes only the values that it was compiled with. Before
 you use `MembershipInterest` (13) or `SAFO` (14), verify the target
-company's deployed component versions. Native SAFO issuance also needs the
+company's actual implementations and supported enum range. The major
+version alone cannot establish native instrument support. Native SAFO issuance also needs the
 coordinated SAFO component upgrades and template registration in the
 [SAFO extension specification](safo-extension.md#validation-limits-and-release-gates).
 
@@ -91,8 +92,14 @@ page covers class ids, assignment and updates. `ShareExtensionV3` reads
 
 ## Instrument-specific metadata
 
-Each security class is paired with a [certificate extension](extensions.md)
-that encodes its instrument-specific terms. `CyberCorpConstants.sol` also
+A security class can use a [certificate extension](extensions.md) for
+instrument-specific terms. The native Membership Interest application
+route uses no extension and records its class documents separately. `CyberCorpConstants.sol` also
 defines supporting enums for token-warrant and vesting instruments:
 `ExercisePriceMethod`, `TokenCalculationMethod`, `UnlockStartTimeType`,
 `UnlockingIntervalType`.
+
+As of October 27, 2026, the webapp keeps new SAFO launches paused and
+preview-only. Native Membership Interest and the older CommonStock-based
+LLC compatibility route are distinct workflows; do not relabel or migrate
+an existing LET merely because enum value 13 now exists.

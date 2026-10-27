@@ -80,11 +80,13 @@ name):
   the same order, for example "Series Seed Preferred Stock";
 * **Units** and **Consideration**: for shares and units, the units held
   and the price per share or unit; for convertibles (SAFE, SAFT, SAFTE,
-  token purchase agreement, token warrant, convertible note), `1` and the
+  token purchase agreement, token warrant, convertible note, SAFO), `1` and the
   whole amount;
 * **Issue Date**, from the LET contract's `issueTimestamp` (blank when
   unknown);
 * the authorizing officer's name and title;
+* an issuer-specific footer, which names the issuing company rather than
+  another company's stock ledger;
 * up to six transfer restrictions, taken from the restrictive legends
   (text, or title when the text is empty).
 
@@ -110,3 +112,10 @@ two overloads: one taking a `string[] certLegend`, one taking
 The URI builder is set on the IssuanceManager (`uriBuilder()` /
 `setUriBuilder`). This page summarizes the builder; the source has the
 full function set.
+
+The October source removes `CertificateSVGParamsV2` and
+`buildCertificateSVGV2`; the expanded `CertificateSVGParams` is now the
+argument of `buildCertificateSVG`. Integrators must use the ABI of the
+actual deployed builder pair, not combine a current tuple with an older
+selector. Membership Interest renders in units; SAFO has dedicated type
+and display handling. These source changes do not establish deployment.
