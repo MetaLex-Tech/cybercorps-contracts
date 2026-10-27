@@ -38,7 +38,7 @@ After you **Authenticate**, **My holdings** lists the wallets it read
 has you on its cap table: how you are registered ("Registered as Alice
 Founder · employee"), your **Cap table positions** (class, units,
 status, vesting schedule and, if the issuer allows it, prices) and your
-**Onchain certificates**.
+**Onchain LETs**.
 
 Each LET row gives its registered units and your wallet's role, a **PDF**
 download of the current certificate, and **View** for the LET's full
@@ -154,7 +154,7 @@ Converting scrip back into registered units carries legal weight,
 because it makes you a registered holder again. There are two paths:
 
 * If you still hold a LET of the same class, or the issuer has approved
-  you, **De-scripify** opens **Convert scrip to a certificate**. Enter the
+  you, **De-scripify** opens **Convert scrip to a LET**. Enter the
   **Scrip amount to convert** and choose **Review conversion**. The
   review shows where the units will land (your existing LET, which the
   protocol picks as the first non-void LET you hold of record, or a new

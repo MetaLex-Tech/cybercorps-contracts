@@ -111,7 +111,8 @@ included in this release manifest.
 
 ## Blockchain notices legal release (October 18, 2026)
 
-The approved v1.5 existing-family packets and v1.1 SAFO packets add a common Blockchain Notices clause. Dark and light copies are pinned and CID-verified. Browser retrieval verified every PDF byte hash. Ethereum, Base and Arbitrum registrations for the eight existing-family templates are verified in the [registration readbacks](../../templates/releases/let-v1.5-registrations.json). App release remains pending. SAFO registration and activation retain their separate runtime and review gates. Existing registrations retain their original text.
+The approved v1.5 existing-family packets and v1.1 SAFO packets add a common Blockchain Notices clause. Dark and light copies are pinned and CID-verified. Browser retrieval verified every PDF byte hash. Ethereum, Base and Arbitrum registrations for the eight existing-family templates are verified in the [registration readbacks](../../templates/releases/let-v1.5-registrations.json). The webapp release record reports the notices in production on October 18,
+2026; this documentation pass did not rerun that deployment acceptance. SAFO registration and activation retain their separate runtime and review gates. Existing registrations retain their original text.
 
 - [mlx_safe_reg_d_v1_5](../../templates/mlx_safe_reg_d_v1_5.md)
 - [mlx_safe_tw_reg_d_v1_5](../../templates/mlx_safe_tw_reg_d_v1_5.md)
@@ -125,3 +126,15 @@ The approved v1.5 existing-family packets and v1.1 SAFO packets add a common Blo
 - [mlx_safo_reg_s_v1_1](../../templates/mlx_safo_reg_s_v1_1.md)
 
 SAFO also requires its separate runtime and independent review gates. The notices clause requires no contract implementation change.
+
+## Membership subscription templates and application adoption
+
+The October 25 source includes the [P2PIX membership subscription
+specification](../../templates/mlx_cybermembership_reg_s_v1_1.md).
+Use the published specification's exact identity and field order. A revised
+legal document must not silently replace the URI or terms of an existing
+registered agreement. Check issuer adoption, active class terms and actual
+runtime support separately from template publication.
+
+SAFO launch remains paused in the inspected webapp source as of October 27,
+2026. Published PDFs and source support do not override that pause.

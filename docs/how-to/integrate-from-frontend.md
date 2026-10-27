@@ -77,7 +77,7 @@ is a worked Base-mainnet example, including the
 
 ## Build EIP-712 signatures
 
-cyberRAISE EOIs, deal countersignatures and cyberSign agreements are
+cyberRAISE EOIs, deal countersignatures and onchain cyberSign agreements are
 EIP-712 typed-data signatures, produced with viem's `signTypedData`. The
 `CyberAgreementRegistry` underlies all of them. A round EOI and a deal both
 resolve to a registry contract identified by a `bytes32` id, and the party
@@ -108,7 +108,7 @@ registry uses the older one. With the current type, set `signer` to the
 party the signature counts for (the delegator when a delegate signs). Where
 the flow allows, take agreement ids from the `ContractCreated` event or a
 simulated `createContract`. When a party must sign first, hash the id with
-the formula for that registry's type, given in [Sign a
+the formula for that registry implementation and creation method, given in [Sign a
 cyberAgreement](sign-a-cyberagreement.md) and
 [CyberAgreementRegistry](../reference/contracts/CyberAgreementRegistry.md).
 
@@ -120,6 +120,24 @@ id and the verifying contract:
 | Officer's escrowed round signature (`EscrowedSignatureData`) | `"RoundManager"` | the RoundManager |
 | Relayed `postOffer` / `acceptOffer` / `cancelOffer` / void authorizations | `"DealManager"` | the DealManager |
 | Officer's deployment-metadata signature (`RoundSupplementalData`) for `deployCyberCorpAndCreateRound` | `"CyberCorpFactory"` (or `"PumpCorpFactory"`) | the factory |
+
+A typehash check does not identify creator-bound creation support. Match the
+reviewed implementation and bound-domain getters, and retain the exact
+creation recipe for an existing request. See the
+[creator-bound reference](../reference/contracts/CyberAgreementRegistry.md#creator-bound-agreements).
+
+The app's document-only request workflows live in
+[`packages/document-signing`](https://github.com/MetaLex-Tech/metalex-webapp/tree/3ad76d665b6df9fe084db8a883e135ad7cf4425b/packages/document-signing).
+They separate request preparation, signer authentication, signature
+collection, registration, recording and finality. Private PDFs, fully
+offchain execution and mixed execution have their own evidence and consent
+rules. Reuse those workflows for application integration instead of treating
+all signing requests as one registry transaction. Formation packets use the
+shared `packages/legal-documents` composer and template architecture.
+
+The offchain-only formation option also uses a separate payment flow: a
+plain USDC transfer, with no company factory deployment. A later request to
+add a cyberCORP does not repeat the original combined formation payment.
 
 ## Render a LET
 

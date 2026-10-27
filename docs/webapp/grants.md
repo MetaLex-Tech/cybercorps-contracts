@@ -145,8 +145,8 @@ Then come the transactions:
 3. **Approve & propose**: two transactions, an ERC-20 approval of the
    scrip to the controller and then the deal proposal.
 
-The result is a signing link scoped to the grantee's wallet. The app
-sends no email, so copy the link and send it to the recipient yourself.
+The result is a signing link scoped to the grantee's wallet. This grant-proposal route
+does not queue email invitations, so copy the link and send it to the recipient.
 Nothing moves until they sign, and the shares escrow when they do.
 
 Onchain vesting follows the market convention. Nothing vests before the

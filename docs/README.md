@@ -32,7 +32,8 @@ contracts. It runs on Ethereum, Base and Arbitrum.
   back into a LET. The rights scrip carries come from the company's governing
   documents and the scrip's terms: under MetaLeX-form bylaws, scrip is not
   stock and gives no stockholder rights on its own.
-* **cyberSign** records agreements in the `CyberAgreementRegistry`. When a
+* **cyberSign** supports onchain, fully offchain and mixed execution. Its
+  onchain flows record agreements in the `CyberAgreementRegistry`. When a
   party signs directly (`signContract`, `signContractFor`), the registry
   verifies the party's EIP-712 signature. When an agreement's finalizer, such
   as a DealManager, submits a signature it holds in escrow
@@ -58,7 +59,7 @@ rest.
 | **cyberCORPs app** | Form a company or bring an existing one onchain, then run its cap table, board, grants and securities. | [Run your company](webapp/company.md) |
 | **cyberRAISE** | Primary fundraising rounds: SAFEs, SAFTs, SAFTEs, token warrants and priced equity. | [cyberRAISE](webapp/cyberraise.md) |
 | **ACE** | Rounds paid in a token community's own token. | [ACE](webapp/ace.md) |
-| **cyberSign** | Propose and sign agreements, each signature recorded onchain. | [cyberSign](webapp/cybersign.md) |
+| **cyberSign** | Propose and sign agreements with public or private documents and a stated onchain, offchain or mixed execution policy. | [cyberSign](webapp/cybersign.md) |
 | **LeXcheX** | Accredited-investor and compliance credentials attached to a wallet. | [LeXcheX](webapp/lexchex.md) |
 | **cyberTRADE** | Settlement of negotiated secondary trades under an elected exemption pathway. | [Run a secondary trade](how-to/run-a-secondary-trade.md) |
 | **LiquiLeX** | Uniswap v4 liquidity pools for scrip. | [Deploy a LiquiLeX pool](how-to/deploy-liquilex-pool.md) |
@@ -69,3 +70,7 @@ The contracts are in
 [MetaLex-Tech/cybercorps-contracts](https://github.com/MetaLex-Tech/cybercorps-contracts),
 and the apps in
 [MetaLex-Tech/metalex-webapp](https://github.com/MetaLex-Tech/metalex-webapp).
+
+Reviewed against contract and webapp source on **October 27, 2026**. See
+[Documentation status and source review](reference/documentation-status.md)
+for the prior update dates, inspected revisions and deployment limits.

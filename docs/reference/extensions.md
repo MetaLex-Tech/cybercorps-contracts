@@ -142,7 +142,8 @@ and the deployment/integration gates. The integration appends native
 `SecurityClass.SAFO` as value 14. The v1.1 legal PDFs are pinned. Live
 issuance still requires the coordinated component upgrades, per-chain template
 registration and matched app release; adding the extension does not enable it
-on deployed companies.
+on deployed companies. The webapp launch policy is paused as of October 27,
+2026, independently of the presence of a deployment manifest.
 
 ## TokenWarrantExtension / TokenWarrantExtensionV2 / TokenWarrantExtensionV3
 

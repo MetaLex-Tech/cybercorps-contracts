@@ -6,7 +6,7 @@ description: "Set up a company's security classes and series, issue Ledger Entry
 
 The **Tokenization Hub** is the cyberCORPs app area where a company sets
 up its security classes and series, issues Ledger Entry Tokens (LETs) to
-holders, and manages scrip, the fungible form of a class. Like every
+holders, and manages scrip backed by units represented in LETs. Like every
 company area, it opens for a signed-in profile that has one of the
 company's owner wallets linked (see
 [Run your company](company.md#company-access-follows-your-profile)).
@@ -103,6 +103,14 @@ through three steps, and only the last one is onchain:
    **Transaction hash from your wallet** and choose **Check transaction
    and finish linking**.
 
+The legal-identity step can start from a cap table line that has no identity
+yet. It names the protocol security class and can suggest the governing
+document from the formation record. Review that suggestion. Class documents
+use an IPFS reference; an eligible founder can pin the filed formation
+document or upload a PDF, with publication consent. A class link preserves
+its historical LET contract associations. The replacement shortcut is
+suspended where the app cannot establish that replacement is safe.
+
 Setting up a LET contract needs a current company officer and supported
 company and Issuance Manager versions on the network. v4 and v5
 companies are both supported. The instrument list does not include stock
@@ -132,7 +140,8 @@ details:
   issuance date, which must be in the past.
 * **Certificate-specific terms**: terms that depend on the security
   type, such as a SAFE's custom provisions or a SAFT's unlock schedule.
-* **Signing officers**: the officer or officers signing the certificate.
+* **Signing officer**: the connected officer who will sign. The form refuses
+  a signature from a different wallet and uses that officer's name and title.
 * **Legal terms**: the dispute-resolution method and the governing legal
   document.
 
