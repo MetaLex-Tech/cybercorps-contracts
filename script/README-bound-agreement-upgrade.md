@@ -1,7 +1,7 @@
 # Deploy creator-bound agreements and generate the Safe batch
 
-`DeployBoundAgreementRegistryScript` deploys the linked `CyberAgreementJson`
-library and a new registry implementation, simulates the proxy upgrade, and
+`DeployBoundAgreementRegistryScript` deploys the linked `CyberAgreementBound`
+and `CyberAgreementJson` libraries and a new registry implementation, simulates the proxy upgrade, and
 writes Safe Transaction Builder JSON directly. It uses the existing
 `DeploymentUtils.formatSafeTxJson` helper, as `deploy-parentco-factory.s.sol`
 and `DeploymentScript.finish` do. No separate exporter or manifest is needed.
@@ -19,7 +19,7 @@ forge script script/deploy-bound-agreement-registry.s.sol:DeployBoundAgreementRe
 
 Omit `--broadcast --slow` for a dry run. Standard Forge wallet options such as
 `--ledger` can replace `--account`. The sender must match the selected wallet.
-Forge deploys and links the library automatically. Use repository optimizer/via-IR
+Forge deploys and links the libraries automatically. Use repository optimizer/via-IR
 settings; CI pins Foundry 1.7.1. No script-specific private-key environment variable
 is required.
 
@@ -38,12 +38,12 @@ Targets come from `DeploymentConstants.coreV2`: registry
 After the deployment broadcast succeeds, import the generated JSON into the
 matching chain's Safe Transaction Builder. It contains exactly one zero-value
 `upgradeToAndCall(newImplementation, 0x)` call to the existing registry, with
-no initializer. The script prints the library, implementation, proxy and authority
+no initializer. The script prints the libraries, implementation, proxy and authority
 addresses along with the JSON.
 
 Forge writes files during simulation, before broadcast receipts exist. A dry-run
-or failed-broadcast JSON is only a preview: confirm successful library and
-implementation deployment before importing it. Each run overwrites the chain's
+or failed-broadcast JSON is only a preview: confirm that the libraries and the
+implementation deployed successfully before importing it. Each run overwrites the chain's
 file and may use new nonces/addresses; use the output from the successful run.
 No automatic post-deployment exporter checks are performed.
 

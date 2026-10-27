@@ -47,6 +47,8 @@ import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./libs/JsonLib.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
+import {ISignerCondition, SignerCondition} from "./interfaces/ISignerCondition.sol";
+import {ERC165Checker} from "openzeppelin-contracts/utils/introspection/ERC165Checker.sol";
 
 contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     ICyberAgreementRegistry
@@ -67,10 +69,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         "SignatureData(bytes32 contractId,address signer,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
     );
 
-    bytes32 public constant BOUND_TEMPLATE_DOMAIN =
-        keccak256("MetaLeX.CyberAgreementRegistry.BoundTemplate.v1");
-    bytes32 public constant BOUND_AGREEMENT_DOMAIN =
-        keccak256("MetaLeX.CyberAgreementRegistry.BoundAgreement.v1");
+    bytes32 public constant BOUND_TEMPLATE_DOMAIN = CyberAgreementBound.BOUND_TEMPLATE_DOMAIN;
+    bytes32 public constant BOUND_AGREEMENT_DOMAIN = CyberAgreementBound.BOUND_AGREEMENT_DOMAIN;
+    bytes32 public constant CONDITIONED_BOUND_AGREEMENT_DOMAIN = CyberAgreementBound.CONDITIONED_BOUND_AGREEMENT_DOMAIN;
 
 
     struct AgreementData {
@@ -125,8 +126,12 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
 
     mapping(address => Delegation) public delegations;
 
+    // contractId => party => the check the party must pass to sign
+    mapping(bytes32 => mapping(address => SignerCondition)) internal signerConditions;
+
     // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40)
-    uint256[40] private __gap;
+    // and signerConditions mapping (40 - 1 = 39)
+    uint256[39] private __gap;
 
 
 
@@ -148,6 +153,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
 
     event DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
     event DelegationRevoked(address indexed delegator, address indexed delegate);
+    event SignerConditionSet(bytes32 indexed contractId, address indexed party, address condition, bytes data);
 
     error TemplateAlreadyExists();
     error TemplateDoesNotExist();
@@ -173,6 +179,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     error DelegateZeroAddress();
     error DelegateIsSelf();
     error ExpiryNotInFuture();
+    error SignerConditionsLengthMismatch();
+    error InvalidSignerCondition(address condition);
+    error SignerConditionNotMet(address condition);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -414,7 +423,24 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         uint256 expiry
     ) external returns (bytes32 templateId, bytes32 contractId) {
         return _createBoundContract(
-            msg.sender, template, salt, globalValues, parties, partyValues, expiry
+            msg.sender, template, salt, globalValues, parties, partyValues, expiry, new SignerCondition[](0)
+        );
+    }
+
+    /// @notice See `createBoundContract()`. Each party must also pass its check to sign.
+    /// @param conditions One entry for each party. They are part of the agreement id.
+    /// An empty list gives the same agreement as `createBoundContract()` without conditions.
+    function createBoundContract(
+        Template memory template,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        SignerCondition[] memory conditions
+    ) external returns (bytes32 templateId, bytes32 contractId) {
+        return _createBoundContract(
+            msg.sender, template, salt, globalValues, parties, partyValues, expiry, conditions
         );
     }
 
@@ -428,43 +454,47 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         uint256 expiry,
         bytes calldata creatorSignature
     ) external returns (bytes32 templateId, bytes32 contractId) {
-        if (parties.length == 0) revert InvalidPartyCount();
-        (templateId, contractId) = _createBoundContract(
-            parties[0], template, salt, globalValues, parties, partyValues, expiry
+        return _createBoundContractAndSignFor(
+            template, salt, globalValues, parties, partyValues, expiry, new SignerCondition[](0), creatorSignature
         );
-        signContractFor(parties[0], contractId, partyValues[0], creatorSignature, false, "");
     }
 
-    function _boundIds(
+    /// @notice See `createBoundContractAndSignFor()` and the `createBoundContract()` with conditions.
+    /// `parties[0]` must pass its own check in this call.
+    function createBoundContractAndSignFor(
+        Template memory template,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        SignerCondition[] memory conditions,
+        bytes calldata creatorSignature
+    ) external returns (bytes32 templateId, bytes32 contractId) {
+        return _createBoundContractAndSignFor(
+            template, salt, globalValues, parties, partyValues, expiry, conditions, creatorSignature
+        );
+    }
+
+    /// @notice The ids that a bound creation by `creator` gives. Clients use it to know the
+    /// agreement id before creation, for example to put it in a proof.
+    function boundIdsOf(
         address creator,
         Template memory template,
         uint256 salt,
         string[] memory globalValues,
         address[] memory parties,
         string[][] memory partyValues,
-        uint256 expiry
-    ) internal pure returns (bytes32 templateId, bytes32 contractId) {
-        templateId = keccak256(abi.encode(
-            BOUND_TEMPLATE_DOMAIN,
-            creator,
-            salt,
-            template.title,
-            template.legalContractUri,
-            template.globalFields,
-            template.partyFields
-        ));
-        contractId = keccak256(abi.encode(
-            BOUND_AGREEMENT_DOMAIN,
-            keccak256(abi.encode(
-                creator,
-                templateId,
-                salt,
-                globalValues,
-                parties,
-                keccak256(abi.encode(partyValues)),
-                expiry
-            ))
-        ));
+        uint256 expiry,
+        SignerCondition[] memory conditions
+    ) external pure returns (bytes32 templateId, bytes32 contractId) {
+        return CyberAgreementBound.boundIds(
+            creator, template, salt, globalValues, parties, partyValues, expiry, conditions
+        );
+    }
+
+    function getSignerCondition(bytes32 contractId, address party) external view returns (SignerCondition memory) {
+        return signerConditions[contractId][party];
     }
 
     function signContract(
@@ -608,6 +638,10 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     
         if (partyValues.length != template.partyFields.length)
             revert MismatchedFieldsLength();
+
+        // Only a bound agreement with conditions has one.
+        if (address(signerConditions[contractId][signer].condition) != address(0))
+            CyberAgreementBound.checkSigner(signerConditions, contractId, signer);
 
         uint256 timestamp = block.timestamp;
 
@@ -936,28 +970,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         string[] memory globalFields,
         string[] memory partyFields
     ) internal {
-        if (bytes(templates[templateId].legalContractUri).length > 0) {
-            revert TemplateAlreadyExists();
-        }
-
-        if (bytes(title).length == 0) {
-            revert TitleEmpty();
-        }
-
-        templates[templateId] = Template({
-            legalContractUri: legalContractUri,
-            title: title,
-            globalFields: globalFields,
-            partyFields: partyFields
-        });
-
-        emit TemplateCreated(
-            templateId,
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        );
+        CyberAgreementBound.createTemplate(templates, templateId, title, legalContractUri, globalFields, partyFields);
     }
 
     function _createBoundContract(
@@ -967,48 +980,40 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         string[] memory globalValues,
         address[] memory parties,
         string[][] memory partyValues,
-        uint256 expiry
+        uint256 expiry,
+        SignerCondition[] memory conditions
     ) private returns (bytes32 templateId, bytes32 contractId) {
-        if (bytes(template.legalContractUri).length == 0) revert TemplateDoesNotExist();
+        return CyberAgreementBound.create(
+            templates,
+            agreements,
+            agreementsForParty,
+            signerConditions,
+            creator,
+            template,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            expiry,
+            conditions
+        );
+    }
+
+    function _createBoundContractAndSignFor(
+        Template memory template,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        SignerCondition[] memory conditions,
+        bytes calldata creatorSignature
+    ) private returns (bytes32 templateId, bytes32 contractId) {
         if (parties.length == 0) revert InvalidPartyCount();
-        if (partyValues.length != parties.length) revert MismatchedPartyValuesLength();
-        if (globalValues.length != template.globalFields.length) revert MismatchedFieldsLength();
-        if (expiry != 0 && expiry <= block.timestamp) revert ExpiryNotInFuture();
-        for (uint256 i = 0; i < parties.length; i++) {
-            if (parties[i] == address(0)) revert FirstPartyZeroAddress();
-            if (partyValues[i].length != template.partyFields.length) revert MismatchedFieldsLength();
-            for (uint256 j = 0; j < i; j++) {
-                if (parties[i] == parties[j]) revert DuplicateParty();
-            }
-        }
-
-        (templateId, contractId) = _boundIds(
-            creator, template, salt, globalValues, parties, partyValues, expiry
+        (templateId, contractId) = _createBoundContract(
+            parties[0], template, salt, globalValues, parties, partyValues, expiry, conditions
         );
-
-        _createTemplate(
-            templateId,
-            template.title,
-            template.legalContractUri,
-            template.globalFields,
-            template.partyFields
-        );
-
-        AgreementData storage agreementData = agreements[contractId];
-        if (agreementData.parties.length > 0) revert ContractAlreadyExists();
-        agreementData.templateId = templateId;
-        agreementData.globalValues = globalValues;
-        agreementData.parties = parties;
-        agreementData.expiry = expiry;
-        for (uint256 i = 0; i < parties.length; i++) {
-            agreementData.partyValues[parties[i]] = partyValues[i];
-        }
-
-        emit ContractCreated(contractId, templateId, parties);
-
-        for (uint256 i = 0; i < parties.length; i++) {
-            agreementsForParty[parties[i]].push(contractId);
-        }
+        signContractFor(parties[0], contractId, partyValues[0], creatorSignature, false, "");
     }
 
     function _verifySignature(
@@ -1133,6 +1138,184 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
                     )
                 )
             );
+    }
+}
+
+/// @notice Template and creator-bound agreement creation, and the signer check. The registry
+/// delegatecalls it, so it writes the registry's storage and emits the registry's events.
+library CyberAgreementBound {
+    bytes32 internal constant BOUND_TEMPLATE_DOMAIN =
+        keccak256("MetaLeX.CyberAgreementRegistry.BoundTemplate.v1");
+    bytes32 internal constant BOUND_AGREEMENT_DOMAIN =
+        keccak256("MetaLeX.CyberAgreementRegistry.BoundAgreement.v1");
+    bytes32 internal constant CONDITIONED_BOUND_AGREEMENT_DOMAIN =
+        keccak256("MetaLeX.CyberAgreementRegistry.ConditionedBoundAgreement.v1");
+
+    function createTemplate(
+        mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
+        bytes32 templateId,
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) public {
+        if (bytes(templates[templateId].legalContractUri).length > 0) {
+            revert CyberAgreementRegistry.TemplateAlreadyExists();
+        }
+
+        if (bytes(title).length == 0) {
+            revert CyberAgreementRegistry.TitleEmpty();
+        }
+
+        templates[templateId] = ICyberAgreementRegistry.Template({
+            legalContractUri: legalContractUri,
+            title: title,
+            globalFields: globalFields,
+            partyFields: partyFields
+        });
+
+        emit ICyberAgreementRegistry.TemplateCreated(
+            templateId,
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields
+        );
+    }
+
+    /// @notice Create a template and an unsigned agreement whose ids bind `creator`, every
+    /// stored term and the conditions. Exact parties only; no secret or finalizer.
+    function create(
+        mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
+        mapping(bytes32 => CyberAgreementRegistry.AgreementData) storage agreements,
+        mapping(address => bytes32[]) storage agreementsForParty,
+        mapping(bytes32 => mapping(address => SignerCondition)) storage signerConditions,
+        address creator,
+        ICyberAgreementRegistry.Template memory template,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        SignerCondition[] memory conditions
+    ) external returns (bytes32 templateId, bytes32 contractId) {
+        if (bytes(template.legalContractUri).length == 0) revert CyberAgreementRegistry.TemplateDoesNotExist();
+        if (parties.length == 0) revert CyberAgreementRegistry.InvalidPartyCount();
+        if (partyValues.length != parties.length) revert CyberAgreementRegistry.MismatchedPartyValuesLength();
+        if (globalValues.length != template.globalFields.length) revert CyberAgreementRegistry.MismatchedFieldsLength();
+        if (expiry != 0 && expiry <= block.timestamp) revert CyberAgreementRegistry.ExpiryNotInFuture();
+        for (uint256 i = 0; i < parties.length; i++) {
+            if (parties[i] == address(0)) revert CyberAgreementRegistry.FirstPartyZeroAddress();
+            if (partyValues[i].length != template.partyFields.length) revert CyberAgreementRegistry.MismatchedFieldsLength();
+            for (uint256 j = 0; j < i; j++) {
+                if (parties[i] == parties[j]) revert CyberAgreementRegistry.DuplicateParty();
+            }
+        }
+        _checkConditions(conditions, parties.length);
+
+        (templateId, contractId) = boundIds(
+            creator, template, salt, globalValues, parties, partyValues, expiry, conditions
+        );
+
+        createTemplate(
+            templates,
+            templateId,
+            template.title,
+            template.legalContractUri,
+            template.globalFields,
+            template.partyFields
+        );
+
+        CyberAgreementRegistry.AgreementData storage agreementData = agreements[contractId];
+        if (agreementData.parties.length > 0) revert CyberAgreementRegistry.ContractAlreadyExists();
+        agreementData.templateId = templateId;
+        agreementData.globalValues = globalValues;
+        agreementData.parties = parties;
+        agreementData.expiry = expiry;
+        for (uint256 i = 0; i < parties.length; i++) {
+            agreementData.partyValues[parties[i]] = partyValues[i];
+        }
+
+        emit ICyberAgreementRegistry.ContractCreated(contractId, templateId, parties);
+
+        for (uint256 i = 0; i < conditions.length; i++) {
+            if (address(conditions[i].condition) == address(0)) continue;
+            signerConditions[contractId][parties[i]] = conditions[i];
+            emit CyberAgreementRegistry.SignerConditionSet(
+                contractId, parties[i], address(conditions[i].condition), conditions[i].data
+            );
+        }
+
+        for (uint256 i = 0; i < parties.length; i++) {
+            agreementsForParty[parties[i]].push(contractId);
+        }
+    }
+
+    /// @dev With no conditions, the ids are the same as before conditions existed.
+    function boundIds(
+        address creator,
+        ICyberAgreementRegistry.Template memory template,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        SignerCondition[] memory conditions
+    ) public pure returns (bytes32 templateId, bytes32 contractId) {
+        templateId = keccak256(abi.encode(
+            BOUND_TEMPLATE_DOMAIN,
+            creator,
+            salt,
+            template.title,
+            template.legalContractUri,
+            template.globalFields,
+            template.partyFields
+        ));
+        bytes32 terms = keccak256(abi.encode(
+            creator,
+            templateId,
+            salt,
+            globalValues,
+            parties,
+            keccak256(abi.encode(partyValues)),
+            expiry
+        ));
+        if (conditions.length == 0) {
+            contractId = keccak256(abi.encode(BOUND_AGREEMENT_DOMAIN, terms));
+        } else {
+            contractId = keccak256(abi.encode(
+                CONDITIONED_BOUND_AGREEMENT_DOMAIN,
+                terms,
+                keccak256(abi.encode(conditions))
+            ));
+        }
+    }
+
+    /// @notice Revert unless `signer` passes its check for `contractId`.
+    function checkSigner(
+        mapping(bytes32 => mapping(address => SignerCondition)) storage signerConditions,
+        bytes32 contractId,
+        address signer
+    ) external view {
+        SignerCondition storage signerCondition = signerConditions[contractId][signer];
+        // In a delegatecall, `address(this)` is the registry.
+        if (!signerCondition.condition.checkSigner(address(this), contractId, signer, signerCondition.data)) {
+            revert CyberAgreementRegistry.SignerConditionNotMet(address(signerCondition.condition));
+        }
+    }
+
+    /// @dev An empty list means no conditions. Otherwise each party has one entry, and each
+    /// nonzero entry must report `ISignerCondition`.
+    function _checkConditions(SignerCondition[] memory conditions, uint256 partyCount) private view {
+        if (conditions.length == 0) return;
+        if (conditions.length != partyCount) revert CyberAgreementRegistry.SignerConditionsLengthMismatch();
+        for (uint256 i = 0; i < conditions.length; i++) {
+            address condition = address(conditions[i].condition);
+            if (condition == address(0)) continue;
+            if (!ERC165Checker.supportsInterface(condition, type(ISignerCondition).interfaceId)) {
+                revert CyberAgreementRegistry.InvalidSignerCondition(condition);
+            }
+        }
     }
 }
 
