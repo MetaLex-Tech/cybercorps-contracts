@@ -73,3 +73,24 @@ applicable existing audit findings on each pass.
 Do not start an audit or alter another task's ledger. After merge/closure,
 perform the final sweep and retire the monitor; check publication/GAIBE
 workflow evidence without merging or deploying the webapp on inference.
+
+
+## CI diagnosis, October 27
+
+At documentation head `80663877a4ec8d8e2c7ccd1ee89570957debec43`,
+[CI run 40506700393](https://github.com/MetaLex-Tech/cybercorps-contracts/actions/runs/40506700393)
+passed Build sizes and Fork tests; both GitBook preview contexts also passed.
+Unit tests reported 1520 passing and five failures in
+`DeployBoundAgreementRegistryScriptTest`. Each failure reaches
+`vm.envUint("PRIVATE_KEY_MAIN")` in the existing deployment script without
+that variable set. The exact base commit `03651994` has the same five
+failures and totals in
+[develop run 40257409633](https://github.com/MetaLex-Tech/cybercorps-contracts/actions/runs/40257409633).
+The PR changes none of `src/`, `test/`, `script/`, `.github/` or
+`foundry.toml` against that base.
+
+This is a verified pre-existing unit-test failure, not a docs regression or
+a passed check. No secrets were read or added. Script/test/CI changes remain
+outside this documentation task. Do not repeat an unchanged failed job or
+introduce a live deployment key as a workaround. Normal code review still
+ran with no posted findings at this sweep. Keep the docs monitor active.
