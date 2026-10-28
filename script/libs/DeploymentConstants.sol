@@ -7,6 +7,8 @@ library DeploymentConstants {
     uint256 internal constant ETH = 1;
     uint256 internal constant BASE = 8453;
     uint256 internal constant ARBITRUM = 42161;
+    uint256 internal constant ROBINHOOD = 4663;
+    uint256 internal constant ROBINHOOD_TESTNET = 46630;
 
     uint256 internal constant ETH_SEPOLIA = 11155111;
     uint256 internal constant BASE_SEPOLIA = 84532;
@@ -14,9 +16,36 @@ library DeploymentConstants {
     /// @notice Tells if the chain is a testnet. A testnet keeps new auths with the deployer.
     ///         A production chain hands them off to the MetaLeX Safe.
     function isTestnet(uint256 chainId) internal pure returns (bool) {
-        if (chainId == ETH_SEPOLIA || chainId == BASE_SEPOLIA) return true;
-        if (chainId == ETH || chainId == BASE || chainId == ARBITRUM) return false;
+        if (chainId == ETH_SEPOLIA || chainId == BASE_SEPOLIA || chainId == ROBINHOOD_TESTNET) return true;
+        if (chainId == ETH || chainId == BASE || chainId == ARBITRUM || chainId == ROBINHOOD) return false;
         revert UnsupportedChain(chainId);
+    }
+
+    /// @notice Original deployment, before the Robinhood bootstrap replaces factory references.
+    struct OriginalDeployment {
+        address auth;
+        address issuanceManagerFactory;
+        address cyberCorpSingleFactory;
+        address dealManagerFactory;
+        address uriBuilder;
+        address cyberCertPrinterImplementation;
+        address cyberAgreementRegistry;
+        address cyberCorpFactory;
+    }
+
+    /// @notice Robinhood mainnet addresses reported by the original deploy.s.sol run.
+    /// @dev These legacy component factories must not be used as coreV2 upgrade targets.
+    function robinhoodOriginal() internal pure returns (OriginalDeployment memory) {
+        return OriginalDeployment({
+            auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
+            issuanceManagerFactory: 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf,
+            cyberCorpSingleFactory: 0xc8e084D3f8B3b326FCc894C7afD28F4904196406,
+            dealManagerFactory: 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3,
+            uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
+            cyberCertPrinterImplementation: 0x016C3a68C3a82179B4e63871c7730aaA272c9638,
+            cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
+            cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2
+        });
     }
 
     struct CoreDeployment {
@@ -103,7 +132,21 @@ library DeploymentConstants {
         pure
         returns (CoreDeployment memory deployment)
     {
-        if (chainId == ETH_SEPOLIA) {
+        if (chainId == ROBINHOOD || chainId == ROBINHOOD_TESTNET) {
+            // Original mainnet deployment is recorded separately in robinhoodOriginal().
+            // Keep these post-bootstrap targets: the legacy factories are not upgradeable proxies.
+            // Historical proxies reproduced by bootstrap-robinhood.s.sol. This is a target
+            // manifest, not evidence of deployment. No verifier/legacy condition is assumed.
+            deployment = coreV2(ETH);
+            // Fresh pinned CREATE2 badge; historical badge payloads are not available.
+            deployment.lexchexBadgeAuth = 0x8e50f5409f1DF3af22C68A1c63927a5585005DB7;
+            deployment.lexchexBadge = 0xe1B94940a1926D3A836820F054b071815Aae964f;
+            deployment.lexchexCondition = address(0);
+            deployment.zkpassportCondition = address(0);
+            deployment.zkpassportVerifier = address(0);
+            deployment.zkpassportFinalizer = address(0);
+            return deployment;
+        } else if (chainId == ETH_SEPOLIA) {
             return
                 CoreDeployment({
                     metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
@@ -202,7 +245,16 @@ library DeploymentConstants {
         pure
         returns (ExtensionDeployment memory deployment)
     {
-        if (chainId == BASE) {
+        if (chainId == ROBINHOOD || chainId == ROBINHOOD_TESTNET) {
+            // The bridge replays these four historical proxies. V3 has no archived replay
+            // payload here, so the v5 runner creates it with CREATE3. Record those addresses
+            // (and the ShareExtension/secondary addresses) after the first run before rerunning v5.
+            deployment.safeExtension = 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8;
+            deployment.saftExtensionV2 = 0x37c2A0e801e569e01f0972186aF4DB01409e92c1;
+            deployment.safteExtensionV2 = 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A;
+            deployment.tokenWarrantExtensionV2 = 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F;
+            return deployment;
+        } else if (chainId == BASE) {
             return ExtensionDeployment({
                 safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
                 safeExtensionV3: 0x740003076c9F16c4a364AE07f3770FB77899299b,
@@ -255,7 +307,10 @@ library DeploymentConstants {
         pure
         returns (SecondaryConditionDeployment memory deployment)
     {
-        if (chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == BASE || chainId == ETH) {
+        if (chainId == ROBINHOOD || chainId == ROBINHOOD_TESTNET) {
+            // Fresh CREATE3 deployments. Do not claim historical addresses exist on this chain.
+            return deployment;
+        } else if (chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == BASE || chainId == ETH) {
             // deployed with salt "CyberCorpV5-SecondaryConditionsV1.0.0"
             return SecondaryConditionDeployment({
                 eligibility: 0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B,
