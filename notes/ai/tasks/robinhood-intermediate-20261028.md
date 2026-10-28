@@ -44,3 +44,26 @@ Independent external-model review, source-chain provenance review and real test-
 ## Next action and handoff
 
 Review the [updated operator runbook](../../../script/res/robinhood-bootstrap.md) and simulation-only batch. After the existing release gates and explicit live authorization, the operator may broadcast the unchanged bootstrap entrypoint, confirm receipts, then sign and execute that live run's complete Safe batch atomically. Verify the listed on-chain postconditions before proceeding to v5. This chat owns only the intermediate setup; prior task and optional rollout ownership is unchanged.
+
+## October 28 follow-up: labeled deployment logs
+
+At the user's request, the bootstrap now names every replay target and distinguishes
+proxies, implementations, libraries and LeXcheX AUTH. It separately prints the
+preserved original core AUTH/factory/registry/URI proxy addresses. This supersedes
+the source-byte-identity criterion above only for console labeling; the frozen
+manifest, payloads, salts, addresses, authority checks and Safe calls are unchanged.
+The source-byte-identity validation above applies to preparation commit `2ab7563`.
+
+All ten shared replay proxy addresses were compared with the checked-in production
+core/extension records (including grouped ETH/Arbitrum extension constants); all
+match. This is a repository-address comparison, not a new remote-chain inspection.
+The approved badge exception is retained. A locally generated unsuffixed Safe
+batch was present before this change and was left untouched; its presence and the
+pasted logs do not establish that any deployment or Safe execution occurred.
+
+Validation on dirty base `2ab7563761fc21d13e3048cc8d91af5dae26c1be`: the existing
+original-to-bridge state/configuration regression passed for the initial named-log
+change; final display-role refinements passed `forge build` for the bootstrap and
+`forge fmt --check`. Manifest SHA-256 remains
+`0e08923887062963553ad3d8a36e911c0e68cb05c46de075bbf304856d24f82a`.
+No new test was added for this display-only change, and no transaction was submitted.

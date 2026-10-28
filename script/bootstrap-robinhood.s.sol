@@ -100,6 +100,10 @@ contract BootstrapRobinhoodScript is Script {
         delete calls;
         DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
         _preflight(core, sender, config);
+        console2.log("[preserved] Core AUTH:", core.auth);
+        console2.log("[preserved] CyberCorpFactory proxy:", core.cyberCorpFactory);
+        console2.log("[preserved] CyberAgreementRegistry proxy:", core.cyberAgreementRegistry);
+        console2.log("[preserved] CertificateUriBuilder proxy:", core.uriBuilder);
         Creation[] memory entries = _manifest();
         // Check every address before recording any broadcast.
         for (uint256 i; i < entries.length; ++i) {
@@ -107,6 +111,7 @@ contract BootstrapRobinhoodScript is Script {
         }
         for (uint256 i; i < entries.length; ++i) {
             _replay(entries[i], sender);
+            console2.log(string.concat("[pinned deployment] ", _deploymentLabel(entries, i), ":"), entries[i].addr);
         }
 
         // Historical AUTH constructor embeds HISTORICAL_OWNER, regardless of who relays CREATE2.
@@ -298,7 +303,29 @@ contract BootstrapRobinhoodScript is Script {
         bool matches = keccak256(_normalized(entry.addr)) == keccak256(_normalized(sample));
         require(vm.revertToState(snapshot), "snapshot rollback failed");
         if (!matches) revert WrongCode(entry.addr);
-        console2.log("[pinned deployment]", entry.addr);
+    }
+
+    /// @dev Historical proxy entries have the generic name ERC1967Proxy. Resolve their implementation's name
+    ///      for display without changing the pinned manifest or any deployment inputs.
+    function _deploymentLabel(Creation[] memory entries, uint256 index) internal pure returns (string memory) {
+        Creation memory entry = entries[index];
+        bytes32 nameHash = keccak256(bytes(entry.name));
+        if (nameHash == keccak256("ERC1967Proxy")) {
+            for (uint256 i; i < entries.length; ++i) {
+                if (entries[i].addr == entry.implementation) return string.concat(entries[i].name, " proxy");
+            }
+            return "ERC1967Proxy";
+        }
+        // The four new badge entries already have descriptive names in the frozen manifest.
+        if (entry.sourceTx == bytes32(0)) return entry.name;
+        if (nameHash == keccak256("BorgAuth")) return "LeXcheX AUTH";
+        if (
+            nameHash == keccak256("CyberCertPrinterStorage") || nameHash == keccak256("RoundManagerStorage")
+                || nameHash == keccak256("EIP712Lib")
+        ) {
+            return string.concat(entry.name, " library");
+        }
+        return string.concat(entry.name, " implementation");
     }
 
     function _validateManifestProxies(Creation[] memory entries) internal view {

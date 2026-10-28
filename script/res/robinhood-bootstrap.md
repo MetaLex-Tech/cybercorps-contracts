@@ -4,8 +4,9 @@
 
 Use branch `codex/robinhood-intermediate-20261028`, based on develop
 `0a598592e2b66a1754af81c3746e93b6c155e7c8`, for the intermediate step.
-The bootstrap Solidity and pinned manifest are byte-identical to prepared commit
-`4537d18`. This branch adds Robinhood constants, behavioral tests and a key-free
+The pinned manifest is byte-identical to prepared commit `4537d18`. The bootstrap
+deployment logic is unchanged; the October 28 follow-up labels its console output.
+This branch adds Robinhood constants, behavioral tests and a key-free
 rehearsal launcher. It does not include the separate final-stage refresh's
 `upgrade-robinhood.s.sol` wrapper or builder/JSON compatibility changes; use that
 prepared branch and revalidate current source when taking up the final step.
@@ -59,6 +60,20 @@ Verify factory implementation `0x424ab1B1DA8b7B2FE13cA0A7ABC346b22efa9191`,
 the four factory references, stable whitelist, both 50-bps fees/recipients,
 LeXcheX roles and badge issuer keys against the simulated batch before v5.
 This setup grants no live deployment or signing approval.
+
+### Reading the deployment logs
+
+`[preserved]` identifies the original core AUTH and the three existing core proxies
+whose addresses remain in place. `[pinned deployment]` identifies a frozen manifest
+entry whose runtime was checked during this execution, either after replaying it
+or reusing an occupied matching address. Each entry now includes its contract name
+and role: proxy, implementation, library or AUTH. The shared factory, LeXcheX,
+minter and four historical extension proxy targets match the production addresses
+recorded for Ethereum/Base/Arbitrum in `DeploymentConstants`; the badge auth/proxy
+retain their approved Robinhood-specific exception. Historical implementations
+are bridge versions and need not equal the latest v5 implementations.
+These logs appear during dry runs too; successful chain receipts establish actual
+deployment. The Safe batch still must execute before the v5 step.
 
 ## October 23 refresh
 
