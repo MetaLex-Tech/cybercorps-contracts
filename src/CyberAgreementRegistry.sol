@@ -47,11 +47,11 @@ import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./libs/JsonLib.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
-import {ISignerCondition, SignerCondition} from "./interfaces/ISignerCondition.sol";
-import {ERC165Checker} from "openzeppelin-contracts/utils/introspection/ERC165Checker.sol";
+import {ISignerConditions, SignerCondition} from "./interfaces/ISignerConditions.sol";
+import {SignerConditionLib} from "./libs/SignerConditionLib.sol";
 
 contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
-    ICyberAgreementRegistry
+    ICyberAgreementRegistry, ISignerConditions
 {
     using ECDSA for bytes32;
     // Domain information
@@ -72,6 +72,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     bytes32 public constant BOUND_TEMPLATE_DOMAIN = CyberAgreementBound.BOUND_TEMPLATE_DOMAIN;
     bytes32 public constant BOUND_AGREEMENT_DOMAIN = CyberAgreementBound.BOUND_AGREEMENT_DOMAIN;
     bytes32 public constant CONDITIONED_BOUND_AGREEMENT_DOMAIN = CyberAgreementBound.CONDITIONED_BOUND_AGREEMENT_DOMAIN;
+    // Type hash for a party with signer conditions. It is SignatureData plus the evidence, so the
+    // signature covers the evidence too.
+    bytes32 public constant SIGNATUREWITHEVIDENCEDATA_TYPEHASH = CyberAgreementBound.SIGNATUREWITHEVIDENCEDATA_TYPEHASH;
 
 
     struct AgreementData {
@@ -126,12 +129,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
 
     mapping(address => Delegation) public delegations;
 
-    // contractId => party => the check the party must pass to sign
-    mapping(bytes32 => mapping(address => SignerCondition)) internal signerConditions;
-
     // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40)
-    // and signerConditions mapping (40 - 1 = 39)
-    uint256[39] private __gap;
+    uint256[40] private __gap;
 
 
 
@@ -153,7 +152,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
 
     event DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
     event DelegationRevoked(address indexed delegator, address indexed delegate);
-    event SignerConditionSet(bytes32 indexed contractId, address indexed party, address condition, bytes data);
 
     error TemplateAlreadyExists();
     error TemplateDoesNotExist();
@@ -179,9 +177,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     error DelegateZeroAddress();
     error DelegateIsSelf();
     error ExpiryNotInFuture();
-    error SignerConditionsLengthMismatch();
-    error InvalidSignerCondition(address condition);
-    error SignerConditionNotMet(address condition);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -423,13 +418,13 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         uint256 expiry
     ) external returns (bytes32 templateId, bytes32 contractId) {
         return _createBoundContract(
-            msg.sender, template, salt, globalValues, parties, partyValues, expiry, new SignerCondition[](0)
+            msg.sender, template, salt, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
         );
     }
 
-    /// @notice See `createBoundContract()`. Each party must also pass its check to sign.
-    /// @param conditions One entry for each party. They are part of the agreement id.
-    /// An empty list gives the same agreement as `createBoundContract()` without conditions.
+    /// @notice See `createBoundContract()`. Each party must also pass its conditions to sign.
+    /// @param conditions `conditions[i]` lists the conditions of `parties[i]`. They are part of the
+    /// agreement id. An empty list gives the same agreement as `createBoundContract()` without conditions.
     function createBoundContract(
         Template memory template,
         uint256 salt,
@@ -437,7 +432,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[] memory conditions
+        SignerCondition[][] memory conditions
     ) external returns (bytes32 templateId, bytes32 contractId) {
         return _createBoundContract(
             msg.sender, template, salt, globalValues, parties, partyValues, expiry, conditions
@@ -455,12 +450,21 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         bytes calldata creatorSignature
     ) external returns (bytes32 templateId, bytes32 contractId) {
         return _createBoundContractAndSignFor(
-            template, salt, globalValues, parties, partyValues, expiry, new SignerCondition[](0), creatorSignature
+            template,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            expiry,
+            new SignerCondition[][](0),
+            new bytes[](0),
+            creatorSignature
         );
     }
 
     /// @notice See `createBoundContractAndSignFor()` and the `createBoundContract()` with conditions.
-    /// `parties[0]` must pass its own check in this call.
+    /// @param creatorEvidence Empty when `parties[0]` has no conditions. Otherwise see
+    /// `signContractWithEvidenceFor()`.
     function createBoundContractAndSignFor(
         Template memory template,
         uint256 salt,
@@ -468,11 +472,12 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[] memory conditions,
+        SignerCondition[][] memory conditions,
+        bytes[] memory creatorEvidence,
         bytes calldata creatorSignature
     ) external returns (bytes32 templateId, bytes32 contractId) {
         return _createBoundContractAndSignFor(
-            template, salt, globalValues, parties, partyValues, expiry, conditions, creatorSignature
+            template, salt, globalValues, parties, partyValues, expiry, conditions, creatorEvidence, creatorSignature
         );
     }
 
@@ -486,15 +491,36 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[] memory conditions
+        SignerCondition[][] memory conditions
     ) external pure returns (bytes32 templateId, bytes32 contractId) {
         return CyberAgreementBound.boundIds(
             creator, template, salt, globalValues, parties, partyValues, expiry, conditions
         );
     }
 
-    function getSignerCondition(bytes32 contractId, address party) external view returns (SignerCondition memory) {
-        return signerConditions[contractId][party];
+    /// @notice Sign for a party with signer conditions. The party passes each condition with its evidence
+    /// in this call. The signature uses `SIGNATUREWITHEVIDENCEDATA_TYPEHASH`, so it covers the evidence.
+    /// @param evidence `evidence[j]` is for the party's condition `j`, as the struct that its kind defines.
+    function signContractWithEvidenceFor(
+        address signer,
+        bytes32 contractId,
+        string[] memory partyValues,
+        bytes[] memory evidence,
+        bytes calldata signature
+    ) public {
+        CyberAgreementBound.signWithEvidence(
+            agreements, templates, delegations, DOMAIN_SEPARATOR, signer, contractId, partyValues, evidence, signature
+        );
+    }
+
+    /// @notice Set the config of a condition kind, as the struct that the kind defines. It applies to all
+    /// agreements.
+    function setSignerConditionConfig(bytes32 kind, bytes calldata config) external onlyAdmin {
+        CyberAgreementBound.setSignerConditionConfig(kind, config);
+    }
+
+    function getSignerConditionConfig(bytes32 kind) external view returns (bytes memory) {
+        return CyberAgreementBound.getSignerConditionConfig(kind);
     }
 
     function signContract(
@@ -574,6 +600,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         bool fillUnallocated, // to fill a 0 address or not
         string memory secret
     ) public {
+        // A party with signer conditions signs with evidence. See `signContractWithEvidenceFor()`.
+        if (SignerConditionLib.conditionsOf(contractId, signer).length != 0) revert EvidenceRequired();
+
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
@@ -638,10 +667,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     
         if (partyValues.length != template.partyFields.length)
             revert MismatchedFieldsLength();
-
-        // Only a bound agreement with conditions has one.
-        if (address(signerConditions[contractId][signer].condition) != address(0))
-            CyberAgreementBound.checkSigner(signerConditions, contractId, signer);
 
         uint256 timestamp = block.timestamp;
 
@@ -981,13 +1006,12 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[] memory conditions
+        SignerCondition[][] memory conditions
     ) private returns (bytes32 templateId, bytes32 contractId) {
         return CyberAgreementBound.create(
             templates,
             agreements,
             agreementsForParty,
-            signerConditions,
             creator,
             template,
             salt,
@@ -1006,14 +1030,19 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[] memory conditions,
+        SignerCondition[][] memory conditions,
+        bytes[] memory creatorEvidence,
         bytes calldata creatorSignature
     ) private returns (bytes32 templateId, bytes32 contractId) {
         if (parties.length == 0) revert InvalidPartyCount();
         (templateId, contractId) = _createBoundContract(
             parties[0], template, salt, globalValues, parties, partyValues, expiry, conditions
         );
-        signContractFor(parties[0], contractId, partyValues[0], creatorSignature, false, "");
+        if (creatorEvidence.length == 0) {
+            signContractFor(parties[0], contractId, partyValues[0], creatorSignature, false, "");
+        } else {
+            signContractWithEvidenceFor(parties[0], contractId, partyValues[0], creatorEvidence, creatorSignature);
+        }
     }
 
     function _verifySignature(
@@ -1141,8 +1170,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     }
 }
 
-/// @notice Template and creator-bound agreement creation, and the signer check. The registry
-/// delegatecalls it, so it writes the registry's storage and emits the registry's events.
+/// @notice Template and creator-bound agreement creation, signer conditions, and signing with evidence.
+/// The registry delegatecalls it, so it writes the registry's storage and emits the registry's events.
 library CyberAgreementBound {
     bytes32 internal constant BOUND_TEMPLATE_DOMAIN =
         keccak256("MetaLeX.CyberAgreementRegistry.BoundTemplate.v1");
@@ -1150,6 +1179,9 @@ library CyberAgreementBound {
         keccak256("MetaLeX.CyberAgreementRegistry.BoundAgreement.v1");
     bytes32 internal constant CONDITIONED_BOUND_AGREEMENT_DOMAIN =
         keccak256("MetaLeX.CyberAgreementRegistry.ConditionedBoundAgreement.v1");
+    bytes32 internal constant SIGNATUREWITHEVIDENCEDATA_TYPEHASH = keccak256(
+        "SignatureWithEvidenceData(bytes32 contractId,address signer,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues,bytes[] evidence)"
+    );
 
     function createTemplate(
         mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
@@ -1189,7 +1221,6 @@ library CyberAgreementBound {
         mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
         mapping(bytes32 => CyberAgreementRegistry.AgreementData) storage agreements,
         mapping(address => bytes32[]) storage agreementsForParty,
-        mapping(bytes32 => mapping(address => SignerCondition)) storage signerConditions,
         address creator,
         ICyberAgreementRegistry.Template memory template,
         uint256 salt,
@@ -1197,7 +1228,7 @@ library CyberAgreementBound {
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[] memory conditions
+        SignerCondition[][] memory conditions
     ) external returns (bytes32 templateId, bytes32 contractId) {
         if (bytes(template.legalContractUri).length == 0) revert CyberAgreementRegistry.TemplateDoesNotExist();
         if (parties.length == 0) revert CyberAgreementRegistry.InvalidPartyCount();
@@ -1211,7 +1242,7 @@ library CyberAgreementBound {
                 if (parties[i] == parties[j]) revert CyberAgreementRegistry.DuplicateParty();
             }
         }
-        _checkConditions(conditions, parties.length);
+        SignerConditionLib.checkLength(conditions, parties.length);
 
         (templateId, contractId) = boundIds(
             creator, template, salt, globalValues, parties, partyValues, expiry, conditions
@@ -1238,13 +1269,7 @@ library CyberAgreementBound {
 
         emit ICyberAgreementRegistry.ContractCreated(contractId, templateId, parties);
 
-        for (uint256 i = 0; i < conditions.length; i++) {
-            if (address(conditions[i].condition) == address(0)) continue;
-            signerConditions[contractId][parties[i]] = conditions[i];
-            emit CyberAgreementRegistry.SignerConditionSet(
-                contractId, parties[i], address(conditions[i].condition), conditions[i].data
-            );
-        }
+        SignerConditionLib.set(contractId, parties, conditions);
 
         for (uint256 i = 0; i < parties.length; i++) {
             agreementsForParty[parties[i]].push(contractId);
@@ -1260,7 +1285,7 @@ library CyberAgreementBound {
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[] memory conditions
+        SignerCondition[][] memory conditions
     ) public pure returns (bytes32 templateId, bytes32 contractId) {
         templateId = keccak256(abi.encode(
             BOUND_TEMPLATE_DOMAIN,
@@ -1291,31 +1316,100 @@ library CyberAgreementBound {
         }
     }
 
-    /// @notice Revert unless `signer` passes its check for `contractId`.
-    function checkSigner(
-        mapping(bytes32 => mapping(address => SignerCondition)) storage signerConditions,
+    /// @notice Sign for a party with signer conditions. The party must pass each condition with its
+    /// evidence. The signature covers the evidence. A bound agreement has no finalizer, open slot or secret.
+    function signWithEvidence(
+        mapping(bytes32 => CyberAgreementRegistry.AgreementData) storage agreements,
+        mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
+        mapping(address => CyberAgreementRegistry.Delegation) storage delegations,
+        bytes32 domainSeparator,
+        address signer,
         bytes32 contractId,
-        address signer
-    ) external view {
-        SignerCondition storage signerCondition = signerConditions[contractId][signer];
-        // In a delegatecall, `address(this)` is the registry.
-        if (!signerCondition.condition.checkSigner(address(this), contractId, signer, signerCondition.data)) {
-            revert CyberAgreementRegistry.SignerConditionNotMet(address(signerCondition.condition));
+        string[] memory partyValues,
+        bytes[] memory evidence,
+        bytes memory signature
+    ) external {
+        CyberAgreementRegistry.AgreementData storage agreementData = agreements[contractId];
+        if (agreementData.parties.length == 0) revert CyberAgreementRegistry.ContractDoesNotExist();
+        if (agreementData.signedAt[signer] != 0) revert CyberAgreementRegistry.AlreadySigned();
+        if (agreementData.voided) revert CyberAgreementRegistry.ContractAlreadyVoided();
+        if (agreementData.finalized) revert CyberAgreementRegistry.ContractAlreadyFinalized();
+        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp) {
+            revert CyberAgreementRegistry.ContractExpired();
+        }
+
+        // Only the named parties of a bound agreement have conditions.
+        uint256 conditionCount = SignerConditionLib.conditionsOf(contractId, signer).length;
+        if (conditionCount == 0) revert ISignerConditions.NoSignerConditions();
+        if (evidence.length != conditionCount) revert ISignerConditions.EvidenceLengthMismatch();
+
+        // A bound agreement stores the values of every party at creation.
+        if (keccak256(abi.encode(agreementData.partyValues[signer])) != keccak256(abi.encode(partyValues))) {
+            revert CyberAgreementRegistry.ClosedAgreementPartyValueMismatch();
+        }
+
+        ICyberAgreementRegistry.Template memory template = templates[agreementData.templateId];
+        bytes32 digest = keccak256(abi.encodePacked(
+            "\x19\x01",
+            domainSeparator,
+            keccak256(abi.encode(
+                SIGNATUREWITHEVIDENCEDATA_TYPEHASH,
+                contractId,
+                signer,
+                keccak256(bytes(template.legalContractUri)),
+                _hashStringArray(template.globalFields),
+                _hashStringArray(template.partyFields),
+                _hashStringArray(agreementData.globalValues),
+                _hashStringArray(partyValues),
+                _hashBytesArray(evidence)
+            ))
+        ));
+        address recovered = ECDSA.recover(digest, signature);
+        CyberAgreementRegistry.Delegation storage delegation = delegations[signer];
+        if (
+            recovered != signer
+                && !(delegation.delegate == recovered
+                    && (delegation.expiry == 0 || delegation.expiry > block.timestamp))
+        ) {
+            revert CyberAgreementRegistry.SignatureVerificationFailed();
+        }
+
+        SignerConditionLib.verifyAll(contractId, signer, evidence);
+
+        uint256 timestamp = block.timestamp;
+        agreementData.signedAt[signer] = timestamp;
+        uint256 totalSignatures = ++agreementData.numSignatures;
+        emit ICyberAgreementRegistry.AgreementSigned(contractId, signer, timestamp);
+
+        if (totalSignatures == agreementData.parties.length) {
+            agreementData.finalized = true;
+            emit CyberAgreementRegistry.ContractFinalized(contractId, msg.sender, timestamp);
+            emit ICyberAgreementRegistry.ContractFullySigned(contractId, timestamp);
         }
     }
 
-    /// @dev An empty list means no conditions. Otherwise each party has one entry, and each
-    /// nonzero entry must report `ISignerCondition`.
-    function _checkConditions(SignerCondition[] memory conditions, uint256 partyCount) private view {
-        if (conditions.length == 0) return;
-        if (conditions.length != partyCount) revert CyberAgreementRegistry.SignerConditionsLengthMismatch();
-        for (uint256 i = 0; i < conditions.length; i++) {
-            address condition = address(conditions[i].condition);
-            if (condition == address(0)) continue;
-            if (!ERC165Checker.supportsInterface(condition, type(ISignerCondition).interfaceId)) {
-                revert CyberAgreementRegistry.InvalidSignerCondition(condition);
-            }
+    function setSignerConditionConfig(bytes32 kind, bytes memory config) external {
+        SignerConditionLib.setConfig(kind, config);
+    }
+
+    function getSignerConditionConfig(bytes32 kind) external view returns (bytes memory) {
+        return SignerConditionLib.getConfig(kind);
+    }
+
+    function _hashStringArray(string[] memory array) private pure returns (bytes32) {
+        bytes32[] memory hashes = new bytes32[](array.length);
+        for (uint256 i = 0; i < array.length; i++) {
+            hashes[i] = keccak256(bytes(array[i]));
         }
+        return keccak256(abi.encodePacked(hashes));
+    }
+
+    function _hashBytesArray(bytes[] memory array) private pure returns (bytes32) {
+        bytes32[] memory hashes = new bytes32[](array.length);
+        for (uint256 i = 0; i < array.length; i++) {
+            hashes[i] = keccak256(array[i]);
+        }
+        return keccak256(abi.encodePacked(hashes));
     }
 }
 

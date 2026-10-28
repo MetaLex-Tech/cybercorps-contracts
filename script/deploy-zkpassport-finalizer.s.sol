@@ -20,14 +20,14 @@ contract DeployZKPassportFinalizerScript is DeploymentScript {
             // Production
             DeploymentConstants.ETH,
             "CyberCorpV5-ZKPassportFinalizerV1.0.1", // proxySaltStr
-            "app.metalex.tech",
-            "cyberagreement-passport",
+            DeploymentConstants.zkpassportDomain(DeploymentConstants.ETH),
+            DeploymentConstants.ZKPASSPORT_SCOPE,
             vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
 //            // Staging
 //            DeploymentConstants.ETH_SEPOLIA,
 //            "CyberCorpV5-ZKPassportFinalizerV1.0.1", // proxySaltStr
-//            "preview.app.metalex.tech",
-//            "cyberagreement-passport",
+//            DeploymentConstants.zkpassportDomain(DeploymentConstants.ETH_SEPOLIA),
+//            DeploymentConstants.ZKPASSPORT_SCOPE,
 //            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
         );
     }

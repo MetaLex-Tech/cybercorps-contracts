@@ -22,7 +22,7 @@ have one. Do not assume another checkout's files are present here.
 - [Protocol and webapp documentation refresh](tasks/docs-protocol-webapp-20261027.md): October 27 source comparison and GitBook guide/reference updates; documentation only, review pending.
 
 - [PR #185 deployment scripts and Safe exports](tasks/pr185-deployment-scripts.md): linked registry deployment/export preparation, 2026-10-23; local tests and toy-key rehearsal passed, no live deployment.
-- [Signer conditions on creator-bound agreements](tasks/creator-bound-signer-conditions.md): per-party third-party checks in the registry, `ZKPassportSignerCondition`, 2026-10-27; unit and registry fork suites pass, uncommitted, no deployment.
+- [Signer conditions on creator-bound agreements](tasks/creator-bound-signer-conditions.md): per-party conditions with evidence signed in the registry (ZKPassport first), 2026-10-27; unit and registry fork suites pass, uncommitted, no deployment.
 - [SAFO Reg D/S rollout](tasks/safo-integration.md): October 18 owner-approved coordinated rollout; Claude review waived; Base Sepolia fork acceptance passed, live signer/quorum and remaining release checks pending.
 - [Shared-state setup](tasks/shared-project-state.md): this documentation change.
 - [GitBook register paragraph and LeXcheXBadge deployment claims](tasks/gitbook-register-and-badge-corrections.md): docs-only correction, 2026-10-04.

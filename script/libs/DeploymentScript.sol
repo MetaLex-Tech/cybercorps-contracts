@@ -284,6 +284,27 @@ abstract contract DeploymentScript is Script {
         _setParamIfDifferent(auth, to, current, setter, value, description);
     }
 
+    /// @notice Sets a parameter on `to` when `getterCall` returns something other than `expected`.
+    /// @dev Use it for a getter and a setter that take a key, for example `getConfig(kind)` and
+    ///      `setConfig(kind, value)`. `expected` is the ABI encoding of the getter's return value.
+    ///      When `getterCall` reverts, the live implementation has no getter yet (the Safe must sign the upgrade
+    ///      that adds it), so the step always sets. See `execute` for who sends it.
+    function setParamIfDifferent(
+        address auth,
+        address to,
+        bytes memory getterCall,
+        bytes memory expected,
+        bytes memory setterCall,
+        string memory description
+    ) internal {
+        (bool success, bytes memory current) = to.staticcall(getterCall);
+        if (success && keccak256(current) == keccak256(expected)) {
+            console2.log(string.concat(SKIP, "[set param] ", description, " unchanged, skipping"));
+            return;
+        }
+        execute("[set param]", auth, to, setterCall, description);
+    }
+
     /// @notice Deploys a new reference implementation when the code changed, then sets it on the factory.
     /// @dev A factory keeps a reference implementation for the contracts that it creates. `setter` takes the new
     ///      implementation address as its only argument. See `execute` for who sends it.

@@ -1,76 +1,56 @@
 # Task: Signer conditions on creator-bound agreements
 
-- **Status:** Ready for review (uncommitted)
+- **Status:** Ready for review (uncommitted on top of wip commit 4d4ef689)
 - **Updated:** 2026-10-27 PDT
 - **Owner:** detoo with Claude Code
 - **Collaborators / boundaries:** PR #185 (creator-bound registry, not deployed); `ZKPassportFinalizer` stays unchanged and deployed
-- **Objective:** A creator can attach a third-party check to each party of a creator-bound agreement. The registry records a party's signature only when that party's check passes. `ZKPassportSignerCondition` is the first check.
-- **Out of scope:** conditions on `createContract` and standalone agreements; changes to `ZKPassportFinalizer`; deployment; webapp integration
-- **Canonical plan / sources:** this record; `src/CyberAgreementRegistry.sol`; `src/interfaces/ISignerCondition.sol`; lessons from `ICondition` and `ISecondaryTradingCondition`
+- **Objective:** A creator can attach conditions to each party of a creator-bound agreement. A party with conditions signs together with its evidence (for example a ZKPassport proof), and its signature covers the evidence. A relayer can settle the whole agreement in one transaction.
+- **Out of scope:** conditions on legacy (`createContract`, standalone) agreements; changes to `ZKPassportFinalizer`; deployment; webapp integration
+- **Canonical plan / sources:** this record; `src/CyberAgreementRegistry.sol`; `src/interfaces/ISignerConditions.sol`; `src/libs/SignerConditionLib.sol`; `src/libs/ZKPassportConditionLib.sol`
 - **Repository / branch:** cybercorps-contracts; base `develop` (0a598592), branch `feat/creator-bound-zkpassport-condition`
-- **Verified base / code head:** base 0a598592 plus uncommitted changes: `src/CyberAgreementRegistry.sol`, `src/ZKPassportSignerCondition.sol`, `src/interfaces/ISignerCondition.sol`, `test/CyberAgreementRegistryBoundTest.t.sol`, `test/ZKPassportSignerConditionTest.t.sol`, `script/deploy-bound-agreement-registry.s.sol`, `script/README-bound-agreement-upgrade.md`, this record
+- **Verified base / code head:** 4d4ef689 plus uncommitted changes: `src/CyberAgreementRegistry.sol` (conditions getters removed), `test/libs/CyberAgreementUtils.sol`, `test/CyberAgreementRegistrySignerConditionsTest.t.sol` (new), `notes/ai/CURRENT-STATE.md`, this record
 - **Worktree locator:** main checkout
 - **PR / artifact:** not yet created
 
 ## Design
 
-- Per-party `SignerCondition { condition, data }`. The creator sets it at creation. It goes into the `contractId`, so each signature covers it.
-- `signContractFor` calls `ISignerCondition.checkSigner(registry, contractId, party, data)` (view) before it records the signature. A false result reverts with `SignerConditionNotMet`.
-- New ABI is additive only: overloads of `createBoundContract` and `createBoundContractAndSignFor` with a `conditions` argument, `getSignerCondition`, `boundIdsOf`, `CONDITIONED_BOUND_AGREEMENT_DOMAIN`, event `SignerConditionSet`, three errors.
-- The bound creation code moves to the linked `CyberAgreementBound` library, because the registry had 238 B of EIP-170 margin.
-- `ZKPassportSignerCondition.submitProof` records a passport for the proof's bound sender and the `contractId` in the proof's custom data. Anyone can relay it, also before the agreement exists. `checkSigner` passes when the party has a record and the record matches the optional pin in `data`.
+- `SignerCondition { bytes32 kind; bytes params; }`. `conditions[i]` lists the conditions of `parties[i]`; all must pass. The conditions are part of the `contractId` (domain `ConditionedBoundAgreement.v1`). An empty outer list gives the PR #185 id.
+- Each kind defines the structs inside `params`, evidence, the `SignerConditionMet` result and the config. ZKPassport (`keccak256("MetaLeX.SignerCondition.ZKPassport.v1")`): `ZKPassportCondition { uniqueIdentifier }` (zero = any passport), `ZKPassportEvidence { proof }`, `ZKPassportResult { uniqueIdentifier }`, `ZKPassportConfig { verifier, domain, scope, devMode }`. A changed struct means a new kind.
+- A party with conditions signs with `signContractWithEvidenceFor` and the new EIP-712 type `SignatureWithEvidenceData` (`SignatureData` fields plus `bytes[] evidence`). All other signers keep `signContractFor` and `SignatureData`. `signContractFor` reverts `EvidenceRequired` for a party with conditions (one extra cold storage read on every legacy signature).
+- The logic and state are in linked libraries that run in the registry: `CyberAgreementBound` (creation, signing with evidence, config) with `SignerConditionLib` and `ZKPassportConditionLib` inlined. Their state is in namespaced slots, so the registry storage layout does not change.
+- Config per kind is set by `ADMIN_ROLE`. No duplicate-kind check. No stored result; the ZKPassport library keeps the reverse map `contractId => uniqueIdentifier => party` so one passport fills one party per agreement.
+- No conditions getter, to keep EIP-170 margin. Readers use `SignerConditionSet` events.
 
 ## Invariants
 
-1. Existing selectors, parameters and returns do not change. The existing bound functions keep their ID formula.
-2. Only the new bound overloads can store a condition. No function changes a stored condition.
-3. A party with a condition cannot get a signature recorded unless `checkSigner` returns true at that time. This applies to every caller of `signContractFor`, including relayers and the create-and-sign overload.
-4. An agreement with conditions has a different `contractId` from the same agreement without conditions, and the ID changes with any condition or its data.
-5. A condition contract must report `ISignerCondition` through ERC-165 at creation.
-6. One passport fills at most one party in one agreement. A pinned party passes only with its pinned passport.
+1. Legacy selectors, events, errors, signature type and behavior do not change. Storage layout does not change.
+2. Only bound creation can store conditions; nothing changes them later.
+3. A party with conditions gets a signature recorded only through the evidence path, after every condition passes in that call.
+4. The signature of a party with conditions covers each evidence item.
+5. One passport fills at most one party in an agreement; a pinned condition accepts only its passport.
 
-## Acceptance tests
+## Acceptance and current state
 
-| # | Case | Expected |
-| --- | --- | --- |
-| R1 | `boundIdsOf` with no conditions | Equals the PR #185 formula and the ID from the existing functions |
-| R2 | Conditioned create | Stores conditions, emits `SignerConditionSet` for each nonzero condition, ID from `boundIdsOf` |
-| R3 | ID depends on condition address and data | Different IDs |
-| R4 | Conditions length differs from parties | `SignerConditionsLengthMismatch` |
-| R5 | Condition is an EOA or does not support the interface | `InvalidSignerCondition` |
-| R6 | Party's check returns false | `signContractFor` reverts `SignerConditionNotMet` (direct and relayed) |
-| R7 | Creator's check returns false in create-and-sign | Whole call reverts, no agreement |
-| R8 | Check passes | Signature recorded; last signature finalizes |
-| R9 | Party with zero-address condition | Signs with no check |
-| R10 | Original `createContract` agreement | Signs as before; `getSignerCondition` empty |
-| Z1 | `submitProof` then create-and-sign in one flow | Creator's passport recorded; signature recorded |
-| Z2 | No proof | `SignerConditionNotMet` |
-| Z3 | Pin mismatch | `checkSigner` false |
-| Z4 | Same passport for a second party | `PassportAlreadyUsed` |
-| Z5 | Proof for another contractId, chain, scope, or dev mode | Refused |
-| Z6 | Second record for the same party | `AlreadyRecorded` |
-| Z7 | `checkSigner` from another registry | false |
-| Z8 | Relayer settles in one transaction: one `aggregate3` call with both proofs, create-and-sign for Alice, and the signatures of Bob and Chad | Agreement finalized; passports recorded |
-| Z9 | Same batch without one gated party's proof | Whole batch reverts; no agreement and no passport record stay |
+`test/CyberAgreementRegistrySignerConditionsTest.t.sol` (42 tests) covers: config (admin only, unknown kind, zero verifier); creation (events, id depends on conditions, same kind twice, length mismatch, unknown kind, bad params, kind not configured); signing (all parties then finalize, create-and-sign with and without creator evidence, `EvidenceRequired`, `NoSignerConditions` on a party without conditions and on a legacy agreement, evidence length, signature must cover the submitted evidence, legacy-type signature refused, delegate, party values mismatch, already signed, no agreement); ZKPassport checks (other agreement, chain, scope, dev mode both ways, not verified, zero helper, bound to another wallet, pin mismatch, passport used by another party); lifecycle (sign after expiry, void after expiry, void by proposer then sign refused, unanimous void, void after finalize refused); relayer settlement in one `aggregate3` transaction, and the whole batch reverts when one proof is invalid.
 
 ## Validation
 
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
-| Acceptance R1-R10 | `forge test ... --match-path test/CyberAgreementRegistryBoundTest.t.sol`, Forge 1.8.5, real registry, allow-list test condition | 20 passed (8 existing bound tests unchanged) |
-| Acceptance Z1-Z9 | `forge test ... --match-path test/ZKPassportSignerConditionTest.t.sol`, real registry, mock ZKPassport verifier, test copy of Multicall3 `aggregate3` | 22 passed |
-| Full unit suite | `forge test ... --nmc '(ForkTest\|AdhocTest)'`, Forge 1.8.5 | 1544 passed, 13 failed. All 13 also fail on base 0a598592 with Forge 1.8.5 (5 secondary gas guards, 6 footer/rendering script nonces, 2 bound deploy-script nonce checks). CI pins 1.7.1; not run on 1.7.1 |
-| Registry fork suites | `forge test ... --match-contract '(CreditFacilityFactoryForkTest\|RoundManagerForkTest\|CyberCorpUpgradeabilityForkTest\|ShareExtensionForkTest\|SAFORolloutForkTest)' --threads 1 --cups 10` | 17 passed, 1 skipped (skip pre-existing) |
-| ABI diff vs base | `forge inspect` methodIdentifiers, events, errors | Only additions; no selector, event or error removed or changed |
-| Storage layout vs base | `forge inspect storageLayout` | `signerConditions` at slot 10; `__gap` 40 -> 39; total unchanged |
-| Size | `forge build ... --sizes` | Registry 23,770 B (806 B margin, was 238 B); CyberAgreementBound 7,064 B; ZKPassportSignerCondition 7,089 B |
+| New and related suites | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --match-path 'test/{CyberAgreementRegistrySignerConditionsTest,CyberAgreementRegistryBoundTest,ZKPassportFinalizerTest}.t.sol'`, Forge 1.8.5; real registry, mock ZKPassport verifier, test copy of Multicall3 `aggregate3` | 97 passed |
+| Mutation checks | Removed the `EvidenceRequired` guard; removed the evidence from the digest | Both detected (2 and 12 failures) |
+| Full unit suite | `forge test ... --nmc '(ForkTest\|AdhocTest)'`, Forge 1.8.5 | 1556 passed, 13 failed; the same 13 fail on base 0a598592 with Forge 1.8.5. CI pins 1.7.1; not run on 1.7.1 |
+| Registry fork suites | `forge test ... --match-contract '(CreditFacilityFactoryForkTest\|RoundManagerForkTest\|CyberCorpUpgradeabilityForkTest\|ShareExtensionForkTest\|SAFORolloutForkTest)' --threads 1 --cups 10` | 17 passed, 1 skipped (pre-existing skip) |
+| ABI diff vs base | `forge inspect` methodIdentifiers, events, errors | Only additions |
+| Storage layout vs base | `forge inspect storageLayout` | Identical |
+| Size | `forge build ... --sizes` | Registry 22,942 B (1,634 B margin); CyberAgreementBound 13,187 B |
 
 ## Review and blockers
 
-- Independent external-model review: not started.
-- A condition contract's owner can change its code if it is upgradeable. The ID binds the address, not the code.
+- Independent external-model review: not started. No real ZKPassport proof has been used; no fork test against the canonical Multicall3.
+- The PR #185 Safe batches in `script/res/gnosis-batch-bound-registry-*.json` are stale; regenerate them at deployment time. The ZKPassport config must be set (`setSignerConditionConfig`) on each chain before conditioned agreements can be created.
 - Template squatting can still block a bound creation (existing PR #185 behavior).
 
 ## Next action and handoff
 
-User review of the uncommitted change; then commit, PR, and the required independent external-model review. The PR #185 Safe batches in `script/res/gnosis-batch-bound-registry-*.json` are now stale, because the registry implementation changed; regenerate them at deployment time.
+User review, then commit and PR. If a later registry change does not fit under EIP-170, move the bound and condition functions to an extension contract that the registry reaches through `fallback()`; keep new registry state in namespaced storage so the move needs no extra layout coupling.

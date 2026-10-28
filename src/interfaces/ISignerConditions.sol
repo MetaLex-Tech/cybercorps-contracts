@@ -41,25 +41,29 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity ^0.8.20;
 
-import {IERC165} from "openzeppelin-contracts/utils/introspection/IERC165.sol";
-
-/// @notice A third-party check that a party must pass before the registry records its signature.
-interface ISignerCondition is IERC165 {
-    /// @param registry The registry that records the signature.
-    /// @param contractId The agreement the party signs.
-    /// @param party The party that signs. A delegate can send the signature, but the check is for the party.
-    /// @param data The creator's parameters for this party. They are part of the agreement id.
-    /// @return True when the party can sign now.
-    function checkSigner(address registry, bytes32 contractId, address party, bytes calldata data)
-        external
-        view
-        returns (bool);
+/// @notice A check that a party must pass to sign a creator-bound agreement.
+/// @param kind The type of check, for example `keccak256("MetaLeX.SignerCondition.ZKPassport.v1")`.
+/// @param params The creator's settings for this check, as the struct that `kind` defines. They are part of
+/// the agreement id.
+struct SignerCondition {
+    bytes32 kind;
+    bytes params;
 }
 
-/// @notice The creator's check for one party.
-/// @param condition The check. `address(0)` means no check for this party.
-/// @param data The parameters that the check reads.
-struct SignerCondition {
-    ISignerCondition condition;
-    bytes data;
+/// @notice Events and errors of the signer conditions on creator-bound agreements.
+/// Each kind defines the structs inside `params`, evidence, `result` and `config`.
+interface ISignerConditions {
+    event SignerConditionSet(
+        bytes32 indexed contractId, address indexed party, uint256 index, bytes32 kind, bytes params
+    );
+    event SignerConditionMet(
+        bytes32 indexed contractId, address indexed party, uint256 index, bytes32 kind, bytes result
+    );
+    event SignerConditionConfigSet(bytes32 indexed kind, bytes config);
+
+    error SignerConditionsLengthMismatch();
+    error UnknownSignerConditionKind(bytes32 kind);
+    error EvidenceRequired();
+    error NoSignerConditions();
+    error EvidenceLengthMismatch();
 }

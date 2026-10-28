@@ -1,31 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {Test, Vm} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import "../src/interfaces/ICyberAgreementRegistry.sol";
-import {ISignerCondition, SignerCondition} from "../src/interfaces/ISignerCondition.sol";
-import {IERC165} from "openzeppelin-contracts/utils/introspection/IERC165.sol";
-
-/// @dev A third-party check that passes for the parties on its list.
-contract AllowListSignerCondition is ISignerCondition {
-    mapping(address => bool) public allowed;
-
-    function setAllowed(address party, bool _allowed) external {
-        allowed[party] = _allowed;
-    }
-
-    function checkSigner(address, bytes32, address party, bytes calldata) external view returns (bool) {
-        return allowed[party];
-    }
-
-    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-        return interfaceId == type(ISignerCondition).interfaceId || interfaceId == type(IERC165).interfaceId;
-    }
-}
+import {SignerCondition} from "../src/interfaces/ISignerConditions.sol";
 
 contract CyberAgreementRegistryBoundTest is Test {
     address alice;
@@ -35,7 +17,6 @@ contract CyberAgreementRegistryBoundTest is Test {
     address chad;
 
     CyberAgreementRegistry registry;
-    AllowListSignerCondition allowList;
     ICyberAgreementRegistry.Template template;
     string[] globalValues;
     address[] parties;
@@ -73,7 +54,6 @@ contract CyberAgreementRegistryBoundTest is Test {
         partyValues.push(["Alice", "alice@example.com"]);
         partyValues.push(["Bob", "bob@example.com"]);
         expiry = block.timestamp + 1 days;
-        allowList = new AllowListSignerCondition();
     }
 
     function _ids(address creator, uint256 salt) internal view returns (bytes32 templateId, bytes32 contractId) {
@@ -243,31 +223,11 @@ contract CyberAgreementRegistryBoundTest is Test {
         assertEq(registry.getContractJson(contractId), EXPECTED_JSON);
     }
 
-    // ── Signer conditions ────────────────────────────────────────────────────
-
-    /// @dev Alice has the allow-list check with `data`, Bob has none.
-    function _aliceGated(bytes memory data) internal view returns (SignerCondition[] memory conditions) {
-        conditions = new SignerCondition[](2);
-        conditions[0] = SignerCondition({condition: allowList, data: data});
-    }
-
-    function _bothGated() internal view returns (SignerCondition[] memory conditions) {
-        conditions = new SignerCondition[](2);
-        conditions[0] = SignerCondition({condition: allowList, data: ""});
-        conditions[1] = SignerCondition({condition: allowList, data: ""});
-    }
-
-    function _boundIdsOf(address creator, uint256 salt, SignerCondition[] memory conditions)
-        internal
-        view
-        returns (bytes32 templateId, bytes32 contractId)
-    {
-        return registry.boundIdsOf(creator, template, salt, globalValues, parties, partyValues, expiry, conditions);
-    }
-
     function test_boundIdsOf_noConditions_sameAsExistingFormula() public {
         (bytes32 expectedTemplateId, bytes32 expectedId) = _ids(alice, 1);
-        (bytes32 templateId, bytes32 contractId) = _boundIdsOf(alice, 1, new SignerCondition[](0));
+        (bytes32 templateId, bytes32 contractId) = registry.boundIdsOf(
+            alice, template, 1, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
+        );
         assertEq(templateId, expectedTemplateId);
         assertEq(contractId, expectedId);
 
@@ -276,166 +236,13 @@ contract CyberAgreementRegistryBoundTest is Test {
         assertEq(createdId, expectedId);
     }
 
-    function test_createBoundContract_withConditions() public {
-        SignerCondition[] memory conditions = _aliceGated("pin");
-        (bytes32 expectedTemplateId, bytes32 expectedId) = _boundIdsOf(alice, 1, conditions);
-        (, bytes32 plainId) = _ids(alice, 1);
-        assertNotEq(expectedId, plainId);
-
-        vm.expectEmit(address(registry));
-        emit ICyberAgreementRegistry.ContractCreated(expectedId, expectedTemplateId, parties);
-        vm.expectEmit(address(registry));
-        emit CyberAgreementRegistry.SignerConditionSet(expectedId, alice, address(allowList), "pin");
-        vm.recordLogs();
-        vm.prank(alice);
-        (bytes32 templateId, bytes32 contractId) =
-            registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, conditions);
-        assertEq(templateId, expectedTemplateId);
-        assertEq(contractId, expectedId);
-
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        uint256 conditionEvents;
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics[0] == CyberAgreementRegistry.SignerConditionSet.selector) conditionEvents++;
-        }
-        assertEq(conditionEvents, 1);
-
-        SignerCondition memory aliceCondition = registry.getSignerCondition(contractId, alice);
-        assertEq(address(aliceCondition.condition), address(allowList));
-        assertEq(aliceCondition.data, "pin");
-        SignerCondition memory bobCondition = registry.getSignerCondition(contractId, bob);
-        assertEq(address(bobCondition.condition), address(0));
-        assertEq(bobCondition.data, "");
-    }
-
     function test_createBoundContract_emptyConditions_sameAsNoConditions() public {
         (, bytes32 plainId) = _ids(alice, 1);
         vm.prank(alice);
-        (, bytes32 contractId) =
-            registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, new SignerCondition[](0));
+        (, bytes32 contractId) = registry.createBoundContract(
+            template, 1, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
+        );
         assertEq(contractId, plainId);
-    }
-
-    function test_boundIdsOf_dependsOnConditions() public {
-        AllowListSignerCondition otherCondition = new AllowListSignerCondition();
-        (, bytes32 id) = _boundIdsOf(alice, 1, _aliceGated("a"));
-        (, bytes32 otherData) = _boundIdsOf(alice, 1, _aliceGated("b"));
-        SignerCondition[] memory otherAddress = _aliceGated("a");
-        otherAddress[0].condition = otherCondition;
-        (, bytes32 otherAddressId) = _boundIdsOf(alice, 1, otherAddress);
-        (, bytes32 bothId) = _boundIdsOf(alice, 1, _bothGated());
-
-        assertNotEq(id, otherData);
-        assertNotEq(id, otherAddressId);
-        assertNotEq(id, bothId);
-    }
-
-    function test_RevertIf_createBoundContract_conditionsLengthMismatch() public {
-        SignerCondition[] memory conditions = new SignerCondition[](1);
-        conditions[0] = SignerCondition({condition: allowList, data: ""});
-        vm.expectRevert(CyberAgreementRegistry.SignerConditionsLengthMismatch.selector);
-        registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, conditions);
-    }
-
-    function test_RevertIf_createBoundContract_invalidCondition() public {
-        SignerCondition[] memory conditions = _aliceGated("");
-
-        conditions[0].condition = ISignerCondition(chad);
-        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.InvalidSignerCondition.selector, chad));
-        registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, conditions);
-
-        conditions[0].condition = ISignerCondition(address(registry));
-        vm.expectRevert(
-            abi.encodeWithSelector(CyberAgreementRegistry.InvalidSignerCondition.selector, address(registry))
-        );
-        registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, conditions);
-    }
-
-    function test_RevertIf_signContract_conditionNotMet() public {
-        vm.prank(alice);
-        (, bytes32 contractId) =
-            registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, _bothGated());
-        bytes memory bobSignature = _sign(contractId, 1, bobPrivateKey);
-
-        vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignerConditionNotMet.selector, allowList));
-        registry.signContract(contractId, partyValues[1], bobSignature, false, "");
-
-        vm.prank(chad);
-        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignerConditionNotMet.selector, allowList));
-        registry.signContractFor(bob, contractId, partyValues[1], bobSignature, false, "");
-
-        assertFalse(registry.hasSigned(contractId, bob));
-    }
-
-    function test_signContract_conditionMet_lastOneFinalizes() public {
-        vm.prank(alice);
-        (, bytes32 contractId) =
-            registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, _bothGated());
-        allowList.setAllowed(alice, true);
-        allowList.setAllowed(bob, true);
-        bytes memory aliceSignature = _sign(contractId, 0, alicePrivateKey);
-        bytes memory bobSignature = _sign(contractId, 1, bobPrivateKey);
-
-        vm.prank(chad);
-        registry.signContractFor(alice, contractId, partyValues[0], aliceSignature, false, "");
-        assertFalse(registry.isFinalized(contractId));
-        vm.prank(bob);
-        registry.signContract(contractId, partyValues[1], bobSignature, false, "");
-        assertTrue(registry.isFinalized(contractId));
-    }
-
-    function test_signContract_partyWithoutCondition_signsWithoutCheck() public {
-        vm.prank(alice);
-        (, bytes32 contractId) =
-            registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, _aliceGated(""));
-        bytes memory bobSignature = _sign(contractId, 1, bobPrivateKey);
-
-        vm.prank(chad);
-        registry.signContractFor(bob, contractId, partyValues[1], bobSignature, false, "");
-        assertTrue(registry.hasSigned(contractId, bob));
-    }
-
-    function test_createBoundContractAndSignFor_withConditions() public {
-        SignerCondition[] memory conditions = _aliceGated("");
-        (, bytes32 expectedId) = _boundIdsOf(alice, 1, conditions);
-        bytes memory aliceSignature = _sign(expectedId, 0, alicePrivateKey);
-        allowList.setAllowed(alice, true);
-
-        vm.prank(chad);
-        (, bytes32 contractId) = registry.createBoundContractAndSignFor(
-            template, 1, globalValues, parties, partyValues, expiry, conditions, aliceSignature
-        );
-        assertEq(contractId, expectedId);
-        assertTrue(registry.hasSigned(contractId, alice));
-    }
-
-    function test_RevertIf_createBoundContractAndSignFor_creatorConditionNotMet() public {
-        SignerCondition[] memory conditions = _aliceGated("");
-        (, bytes32 expectedId) = _boundIdsOf(alice, 1, conditions);
-        bytes memory aliceSignature = _sign(expectedId, 0, alicePrivateKey);
-
-        vm.prank(chad);
-        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignerConditionNotMet.selector, allowList));
-        registry.createBoundContractAndSignFor(
-            template, 1, globalValues, parties, partyValues, expiry, conditions, aliceSignature
-        );
-        assertEq(registry.getParties(expectedId).length, 0);
-    }
-
-    function test_createContract_hasNoSignerCondition() public {
-        bytes32 templateId = keccak256("plain-template");
-        vm.startPrank(alice);
-        registry.createTemplate(
-            templateId, template.title, template.legalContractUri, template.globalFields, template.partyFields
-        );
-        bytes32 contractId =
-            registry.createContract(templateId, 1, globalValues, parties, partyValues, bytes32(0), address(0), expiry);
-        registry.signContract(contractId, partyValues[0], _sign(contractId, 0, alicePrivateKey), false, "");
-        vm.stopPrank();
-
-        assertEq(address(registry.getSignerCondition(contractId, alice).condition), address(0));
-        assertTrue(registry.hasSigned(contractId, alice));
     }
 
     string constant EXPECTED_JSON =
