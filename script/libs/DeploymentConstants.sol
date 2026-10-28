@@ -138,7 +138,9 @@ library DeploymentConstants {
             // Historical proxies reproduced by bootstrap-robinhood.s.sol. This is a target
             // manifest, not evidence of deployment. No verifier/legacy condition is assumed.
             deployment = coreV2(ETH);
-            // Fresh pinned CREATE2 badge; historical badge payloads are not available.
+            // PRIOR badge targets only: colleague now owns badge/secondary deployment on 4663.
+            // Verify their actual addresses/receipts and replace these before final v5.
+            // The core-only bootstrap neither deploys nor relies on these badge targets.
             deployment.lexchexBadgeAuth = 0x8e50f5409f1DF3af22C68A1c63927a5585005DB7;
             deployment.lexchexBadge = 0xe1B94940a1926D3A836820F054b071815Aae964f;
             deployment.lexchexCondition = address(0);

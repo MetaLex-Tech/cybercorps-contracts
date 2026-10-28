@@ -28,6 +28,16 @@ contract BootstrapHarness is BootstrapRobinhoodScript {
         return _manifest();
     }
 
+    function provisionExternalBadgeFixture() external {
+        Creation[] memory entries = abi.decode(vm.parseJson(vm.readFile(MANIFEST), ".deployments"), (Creation[]));
+        for (uint256 i; i < entries.length; ++i) {
+            if (entries[i].sourceTx == bytes32(0)) {
+                _checkAddress(entries[i]);
+                _replay(entries[i], HISTORICAL_OWNER);
+            }
+        }
+    }
+
     function checkAddress(Creation memory entry) external pure {
         _checkAddress(entry);
     }
@@ -119,7 +129,7 @@ contract BootstrapRobinhoodTest is Test {
         bytes32 registryImpl = vm.load(core.cyberAgreementRegistry, IMPL_SLOT);
         bytes32 uriImpl = vm.load(core.uriBuilder, IMPL_SLOT);
         GnosisTransaction[] memory batch = script.runWithArgs(historicalOwner, config);
-        assertEq(batch.length, 15);
+        assertEq(batch.length, 14);
         string memory json = script.safeBatchJson();
         assertEq(vm.parseJsonString(json, ".chainId"), "46630");
         assertEq(vm.parseJsonAddress(json, ".meta.createdFromSafeAddress"), core.metalexSafe);
@@ -200,7 +210,7 @@ contract BootstrapRobinhoodTest is Test {
         uint64 nonce = vm.getNonce(historicalOwner);
         GnosisTransaction[] memory batch = script.runWithArgs(historicalOwner, config);
         assertEq(vm.getNonce(historicalOwner), nonce);
-        assertEq(batch.length, 14); // No downgrade/repeated upgrade call.
+        assertEq(batch.length, 13); // No downgrade/repeated upgrade call.
         script.simulateSafeBatch(config);
         _assertBridge();
     }
@@ -287,10 +297,57 @@ contract BootstrapRobinhoodTest is Test {
         script.runWithArgs(historicalOwner, config);
     }
 
-    function test_V5BadgeUpgradeAndMainnetHandoff_PreserveSafeAndIssuer() public {
+    function test_BootstrapDoesNotRequireOrDeployExternalBadge() public {
+        BootstrapRobinhoodScript.Creation[] memory entries = script.manifest();
+        assertEq(entries.length, 32);
+        for (uint256 i; i < entries.length; ++i) {
+            assertTrue(entries[i].sourceTx != bytes32(0));
+        }
+        GnosisTransaction[] memory batch = script.runWithArgs(historicalOwner, config);
+        for (uint256 i; i < batch.length; ++i) {
+            assertTrue(batch[i].to != core.lexchexBadge && batch[i].to != core.lexchexBadgeAuth);
+        }
+        script.simulateSafeBatch(config);
+        assertEq(core.lexchexBadge.code.length, 0);
+        assertEq(core.lexchexBadgeAuth.code.length, 0);
+        assertEq(address(0xD3E14fc6B2aE7f8fA2f6c8f16Ba27Cab52BE93B0).code.length, 0);
+        assertEq(address(0xa6E1aAe8F930E7fBB27c10C168aCC889551F2F1E).code.length, 0);
+        _assertBridge();
+    }
+
+    function test_BootstrapLeavesExistingExternalBadgeAndAuthUntouched() public {
+        // Reuse frozen badge payloads only as an independently provisioned local fixture.
+        // This is not evidence of the colleague's eventual mainnet addresses.
+        script.provisionExternalBadgeFixture();
+        vm.prank(core.metalexSafe);
+        (bool ok,) =
+            core.lexchexBadge.call(abi.encodeWithSignature("setIssuerKeys(address,uint256)", core.lexchexMinter, 1));
+        assertTrue(ok);
+        bytes32 implementation = vm.load(core.lexchexBadge, IMPL_SLOT);
+        bytes32 badgeCodeHash = core.lexchexBadge.codehash;
+        bytes32 authCodeHash = core.lexchexBadgeAuth.codehash;
+        uint256 safeRole = BorgAuth(core.lexchexBadgeAuth).userRoles(core.metalexSafe);
+        script.runWithArgs(historicalOwner, config);
+        script.simulateSafeBatch(config);
+        assertEq(vm.load(core.lexchexBadge, IMPL_SLOT), implementation);
+        assertEq(core.lexchexBadge.codehash, badgeCodeHash);
+        assertEq(core.lexchexBadgeAuth.codehash, authCodeHash);
+        assertEq(BorgAuth(core.lexchexBadgeAuth).userRoles(core.metalexSafe), safeRole);
+        assertEq(IRobinhoodBadge(core.lexchexBadge).issuerKeys(core.lexchexMinter), 1);
+    }
+
+    function test_V5ExternalBadgeUpgradeAndMainnetHandoff_PreserveSafeAndIssuer() public {
         vm.chainId(4663);
         script.runWithArgs(historicalOwner, config);
         script.simulateSafeBatch(config);
+        // The external deployment owns badge provisioning and minter issuer grants.
+        script.provisionExternalBadgeFixture();
+        uint256 issuerKeys = script.MINTER_ISSUER_KEYS();
+        vm.prank(core.metalexSafe);
+        (bool issuerSet,) = core.lexchexBadge.call(
+            abi.encodeWithSignature("setIssuerKeys(address,uint256)", core.lexchexMinter, issuerKeys)
+        );
+        assertTrue(issuerSet);
         BadgeUpgradeHarness upgrade = new BadgeUpgradeHarness();
         uint256 key = 0xA11CE;
         vm.deal(vm.addr(key), 100 ether);

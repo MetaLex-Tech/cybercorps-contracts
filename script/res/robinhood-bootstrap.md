@@ -1,20 +1,56 @@
 # Robinhood: original addresses -> intermediate bootstrap -> v5
 
+## Current split: colleague deploys secondary conditions and badge
+
+The October 28 ownership change supersedes the badge instructions in the historical
+October 23 plan below. **Our intermediate step is now 32 historical deployments
+and 14 initial Safe calls** (13 on a rerun after the bridge upgrade). It performs
+no badge deployment, upgrade, owner-role grant or issuer-key call and does not
+require a badge to exist. The colleague owns the badge AUTH/proxy and the entire
+secondary-condition group on **Robinhood mainnet, chain 4663**. These two deployment
+tracks can proceed independently; final v5 acceptance depends on both.
+
+The pasted `chainId: 84532` output is Base Sepolia reference material. Its shared
+badge AUTH `0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d` and proxy
+`0x114664773Ba721a6AA43890d5FDE7939aF37618F` are proposed reference addresses, not
+verified Robinhood deployments. The current Robinhood badge constants still hold
+the prior exception targets and **must be reconciled before final v5**. Secondary
+condition fields remain zero until the colleague's actual handoff is verified.
+The reference kill switch `0x4c3b9Ec3B6e416A64Fde4a17Ea856e1cf2fE0344` also differs
+from the repository's existing production condition constant; do not copy either
+as deployed Robinhood state or infer approval of its immutable admins.
+
+Obtain the colleague's exact source revision, chain ID, deployed address inventory,
+transaction hashes/receipts and Safe configuration batch. Verify badge AUTH pointer,
+Safe owner role, removal of unintended deployer authority, and the LeXcheX minter's
+issuer-key grant (accredited investor, investor type and investor jurisdiction).
+Check condition AUTH/registry/badge references, exact immutable kill-switch admins
+and the completed Safe-owned configuration calls. Update Robinhood constants only
+from that verified handoff, then rehearse the combined final stage.
+
+**The previously generated 15-call unsuffixed bootstrap JSON is stale for this
+split. Leave it as historical evidence and regenerate it from the revised script
+before any execution.** The 14-call `.simulation.json` remains review-only. Do not
+run the full v5 runner until the external inventory and final-stage integration
+have been completed; it currently includes the secondary-condition sub-script.
+
 ## October 28 intermediate setup on current develop
 
 Use branch `codex/robinhood-intermediate-20261028`, based on develop
 `0a598592e2b66a1754af81c3746e93b6c155e7c8`, for the intermediate step.
 The pinned manifest is byte-identical to prepared commit `4537d18`. The bootstrap
-deployment logic is unchanged; the October 28 follow-up labels its console output.
+now replays only its 32 historical entries; the four fresh badge entries remain
+in the manifest as provenance and are excluded from execution.
 This branch adds Robinhood constants, behavioral tests and a key-free
 rehearsal launcher. It does not include the separate final-stage refresh's
 `upgrade-robinhood.s.sol` wrapper or builder/JSON compatibility changes; use that
 prepared branch and revalidate current source when taking up the final step.
 
 The owner clarified on October 28 that matching is required for critical auths
-and proxies, not every implementation/library/condition. The owner explicitly
-retained the prior Robinhood-specific badge auth/proxy exception. Keep that
-exception separate from the original core and four shared factory proxy targets.
+and proxies, not every implementation/library/condition. The later owner
+instruction assigns badge AUTH/proxy and secondary conditions on Robinhood
+mainnet (4663) to a colleague. The earlier badge exception targets
+remain provisional constants only until that external handoff is verified.
 The later v5 proxy inventory still needs its own address review; this intermediate
 setup does not approve every future CREATE3 proxy divergence.
 
@@ -30,7 +66,7 @@ configure its RPC/token. The launcher checks the actual chain ID, pins Solidity
 0.8.28/Cancun and supplies the repository's explicit OpenZeppelin remappings.
 It reads no signing key and exposes no broadcast switch. The Solidity entrypoint
 is `PrepareRobinhoodIntermediateScript.prepare()`, which replays the deployments
-and impersonates the Safe locally to check the entire 15-call batch.
+and impersonates the Safe locally to check the entire 14-call batch.
 Its output is `gnosis-batch-bootstrap-robinhood-4663.simulation.json` under
 `script/res/`. **Do not import this simulation output into Safe.**
 
@@ -43,7 +79,7 @@ checks. Rehearsal uses the historical sender
 
 After independent review, real test-environment sign/simulate/submit acceptance
 and explicit live deployment authorization, the deployment operator uses the
-unchanged signing entrypoint:
+core-only signing entrypoint:
 
 ```powershell
 forge script script/bootstrap-robinhood.s.sol:BootstrapRobinhoodScript --rpc-url $env:ROBINHOOD_RPC_URL --sender 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B --use 0.8.28 --evm-version cancun --via-ir --offline -R '@openzeppelin/contracts/=dependencies/openzeppelin-contracts/contracts/' -R '@openzeppelin/contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/' --broadcast --slow
@@ -55,10 +91,11 @@ the rehearsal launcher also supports reading that one public setting from `.env`
 Do not use `--skip-simulation`. Save/check all replay and LeXcheX role-grant
 receipts. Only then import **that live run's**
 `script/res/gnosis-batch-bootstrap-robinhood-4663.json` into Safe
-`0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C`, and execute all 15 calls atomically.
+`0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C`, and execute all 14 calls atomically.
 Verify factory implementation `0x424ab1B1DA8b7B2FE13cA0A7ABC346b22efa9191`,
 the four factory references, stable whitelist, both 50-bps fees/recipients,
-LeXcheX roles and badge issuer keys against the simulated batch before v5.
+LeXcheX roles against the simulated batch. Badge issuer keys are a separate
+external-deployment acceptance check before v5.
 This setup grants no live deployment or signing approval.
 
 ### Reading the deployment logs
@@ -69,8 +106,8 @@ entry whose runtime was checked during this execution, either after replaying it
 or reusing an occupied matching address. Each entry now includes its contract name
 and role: proxy, implementation, library or AUTH. The shared factory, LeXcheX,
 minter and four historical extension proxy targets match the production addresses
-recorded for Ethereum/Base/Arbitrum in `DeploymentConstants`; the badge auth/proxy
-retain their approved Robinhood-specific exception. Historical implementations
+recorded for Ethereum/Base/Arbitrum in `DeploymentConstants`. The badge deployment
+is now outside this bootstrap. Historical implementations
 are bridge versions and need not equal the latest v5 implementations.
 These logs appear during dry runs too; successful chain receipts establish actual
 deployment. The Safe batch still must execute before the v5 step.

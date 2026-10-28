@@ -1,6 +1,6 @@
 # Task: Robinhood intermediate deployment setup
 
-- **Status:** Preparation complete, ready for review; no live signing or submission authorized.
+- **Status:** Core-only intermediate preparation complete, ready for review; external badge/secondary handoff and release gates pending. No live signing or submission authorized.
 - **Updated:** 2026-10-28 (America/New_York).
 - **Owner:** Current Codex chat, intermediate setup only. Prior Robinhood and other rollout ownership remains unchanged.
 - **Objective:** Make the prepared bridge available on current develop, rehearse it against fresh Robinhood state without a private key, and provide concrete deployment/Safe execution instructions.
@@ -10,6 +10,37 @@
 - **Scope:** Restore bootstrap source, manifest, tests and Robinhood constants; add a key-free preparation entrypoint and intermediate operator instructions. No protocol source changes, final v5 deployment, merge, external review or real transactions.
 
 ## Invariants and acceptance criteria established before implementation
+
+### Revised deployment split (October 28, before implementation)
+
+The user assigned secondary conditions **and badge AUTH/proxy on Robinhood mainnet
+(4663)** to a colleague. The pasted 84532 output is reference material, not Robinhood
+deployment evidence. This supersedes our responsibility to deploy the four fresh
+badge entries; whether the colleague reproduces the shared badge addresses must be
+verified from their actual mainnet handoff, not inferred from those logs.
+
+1. Intermediate bootstrap replays only the **32 historical** entries. Keep the
+   frozen 36-entry manifest byte-identical as provenance, skipping its four
+   zero-sourceTx badge entries. No duplicate badge deployment, upgrade, role or
+   issuer-key transaction is permitted in this stage.
+2. Bootstrap must succeed before the external badge exists and leave an already
+   deployed external badge/auth untouched. The first Safe batch has 14 calls;
+   reruns after the bridge Safe upgrade have 13. Core references, USDG, 50-bps
+   primary fees, LeXcheX roles and original core address/state invariants remain.
+3. Add behavioral coverage for absent external badge and an existing independently
+   provisioned badge/auth. Preserve historical replay, rerun and refusal coverage.
+4. Keep earlier badge address constants as prior targets pending verified external
+   addresses; they are **not approved final-stage input** after this ownership
+   change. Do not copy Base Sepolia's condition addresses, kill switch address or
+   proposed admins into Robinhood as deployed/approved facts.
+5. Regenerate the simulation-only batch and document that the user's pre-existing
+   15-call unsuffixed batch belongs to the old combined scope and must be regenerated.
+   Leave that user-owned file untouched.
+6. Final v5 must wait for the colleague's chain/address/receipt, auth/issuer and
+   immutable-admin handoff, verified constants and final-stage rehearsal. Existing
+   independent review and test-environment sign/simulate/submit gates remain.
+
+### Initial preparation criteria (historical where superseded above)
 
 1. Preserve historical bootstrap Solidity and pinned manifest byte-for-byte from `4537d18`; retain original proxies and historical factory targets.
 2. Preparation reads no private key, broadcasts nothing, simulates the complete Safe configuration and labels its JSON simulation-only.
@@ -43,7 +74,7 @@ Independent external-model review, source-chain provenance review and real test-
 
 ## Next action and handoff
 
-Review the [updated operator runbook](../../../script/res/robinhood-bootstrap.md) and simulation-only batch. After the existing release gates and explicit live authorization, the operator may broadcast the unchanged bootstrap entrypoint, confirm receipts, then sign and execute that live run's complete Safe batch atomically. Verify the listed on-chain postconditions before proceeding to v5. This chat owns only the intermediate setup; prior task and optional rollout ownership is unchanged.
+Review the [updated operator runbook](../../../script/res/robinhood-bootstrap.md) and simulation-only batch. After the existing release gates and explicit live authorization, the operator may broadcast the revised core-only bootstrap entrypoint, confirm receipts, then sign and execute that live run's complete 14-call Safe batch atomically. The old 15-call JSON must be regenerated. Verify the listed core postconditions and the colleague's independent badge/secondary handoff before proceeding to v5. This chat owns only the intermediate setup; the colleague owns the user-assigned badge/secondary deployment, while other prior rollout ownership is unchanged.
 
 ## October 28 follow-up: labeled deployment logs
 
@@ -67,3 +98,38 @@ change; final display-role refinements passed `forge build` for the bootstrap an
 `forge fmt --check`. Manifest SHA-256 remains
 `0e08923887062963553ad3d8a36e911c0e68cb05c46de075bbf304856d24f82a`.
 No new test was added for this display-only change, and no transaction was submitted.
+
+## Validated colleague deployment split
+
+Validated dirty code based on `9cef8f3`: the bootstrap filters its hash-pinned
+manifest to the 32 historical entries, omits the badge Safe-role requirement and
+issuer-key call/check, and remains independent of the external deployment. The
+36-entry manifest is unchanged; no protocol contract source changed. Robinhood
+badge address constants are explicitly marked prior targets awaiting the colleague's
+verified handoff, not approved final-v5 configuration.
+
+- **19 tests passed, 0 failed, 0 skipped** with the same pinned compiler/EVM and
+  explicit remappings as above. New regressions prove that no badge/auth/render/
+  implementation is deployed when absent, no badge transaction is queued, and an
+  independently provisioned badge's implementation, auth authority and issuer keys
+  remain untouched. Existing v5-core formation, refusal, rerun and separately
+  provisioned badge-upgrade/handoff cases pass.
+- Key-free core-only rehearsal at Robinhood **block 100370688 passed**. It replayed
+  32 deployments and simulated **14** Safe calls. The regenerated committed
+  `.simulation.json` has no old or shared badge destination. Estimated deployment
+  gas: **76,310,400**, **0.0032135836411104 ETH** at **0.042112001 gwei**; Safe
+  execution is separate. The source-state block is pinned; the fee quote came from
+  the RPC during rehearsal.
+- `forge fmt --check` and `git diff --check` passed. Frozen manifest SHA-256 remains
+  `0e08923887062963553ad3d8a36e911c0e68cb05c46de075bbf304856d24f82a`.
+- Initial allocating manifest filtering hit a compiler IR stack limit; stable
+  in-place compaction resolved compilation. A preliminary external-badge fixture
+  consumed its one-shot Safe prank on an intervening constant getter; reading the
+  constant before the prank corrected the fixture. These were local preparation
+  issues; no live contract was changed or transaction submitted.
+
+The pre-existing user-owned unsuffixed JSON still contains 15 calls and is left
+untouched as historical output. It must not be executed for the new split.
+External-model review, real test-environment sign/simulate/submit acceptance,
+colleague receipts/configuration verification, final-stage integration and explicit
+live authorization remain pending.

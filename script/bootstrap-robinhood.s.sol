@@ -31,6 +31,7 @@ interface IRobinhoodBadge {
 
 /// @notice Fresh-chain bridge from feat/new-chain-deploy to upgrade-v5.s.sol.
 /// @dev Deploys frozen historical CREATE2 payloads, then emits an atomic Safe configuration batch.
+///      Badge AUTH/proxy and secondary conditions are deployed separately by the colleague-owned rollout.
 ///      Execute that batch before v5. This is not a migration for chains with existing corps.
 ///      See script/res/robinhood-bootstrap.md. Never run with --skip-simulation.
 contract BootstrapRobinhoodScript is Script {
@@ -100,6 +101,7 @@ contract BootstrapRobinhoodScript is Script {
         delete calls;
         DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
         _preflight(core, sender, config);
+        console2.log("[scope] Core/LeXcheX only; badge AUTH/proxy and secondary conditions are deployed separately.");
         console2.log("[preserved] Core AUTH:", core.auth);
         console2.log("[preserved] CyberCorpFactory proxy:", core.cyberCorpFactory);
         console2.log("[preserved] CyberAgreementRegistry proxy:", core.cyberAgreementRegistry);
@@ -126,9 +128,6 @@ contract BootstrapRobinhoodScript is Script {
         _auth(core.lexchex, core.lexchexAuth);
         _auth(core.lexchexMinter, core.lexchexAuth);
         _validateManifestProxies(entries);
-        if (!_owner(BorgAuth(core.lexchexBadgeAuth), core.metalexSafe)) {
-            revert MissingOwner(core.lexchexBadgeAuth, core.metalexSafe);
-        }
 
         // This historical intermediate has the necessary setters, but not the v5 namespace guard.
         // Never substitute today's creation code: that would change the historical factory addresses.
@@ -163,10 +162,6 @@ contract BootstrapRobinhoodScript is Script {
         _queue(core.dealManagerFactory, abi.encodeWithSignature("setPlatformPayable(address)", config.feeRecipient));
         _queue(core.lexchexAuth, abi.encodeCall(BorgAuth.updateRole, (core.cyberCorpFactory, lexAuth.OWNER_ROLE())));
         _queue(core.lexchexAuth, abi.encodeCall(BorgAuth.updateRole, (core.lexchexMinter, lexAuth.ADMIN_ROLE())));
-        _queue(
-            core.lexchexBadge,
-            abi.encodeWithSignature("setIssuerKeys(address,uint256)", core.lexchexMinter, MINTER_ISSUER_KEYS)
-        );
         return calls;
     }
 
@@ -206,9 +201,6 @@ contract BootstrapRobinhoodScript is Script {
         BorgAuth lexAuth = BorgAuth(core.lexchexAuth);
         if (!_owner(lexAuth, core.cyberCorpFactory) || lexAuth.userRoles(core.lexchexMinter) != lexAuth.ADMIN_ROLE()) {
             revert WrongState(core.lexchexAuth);
-        }
-        if (IRobinhoodBadge(core.lexchexBadge).issuerKeys(core.lexchexMinter) != MINTER_ISSUER_KEYS) {
-            revert WrongState(core.lexchexBadge);
         }
     }
 
@@ -265,10 +257,20 @@ contract BootstrapRobinhoodScript is Script {
         }
     }
 
-    function _manifest() internal view returns (Creation[] memory) {
+    function _manifest() internal view returns (Creation[] memory entries) {
         string memory json = vm.readFile(MANIFEST);
         if (sha256(bytes(json)) != MANIFEST_SHA256) revert InvalidManifest();
-        return abi.decode(vm.parseJson(json, ".deployments"), (Creation[]));
+        entries = abi.decode(vm.parseJson(json, ".deployments"), (Creation[]));
+        // The four zero-sourceTx entries are the former fresh Robinhood badge deployment.
+        // Preserve their frozen provenance, but leave that entire deployment to its external owner.
+        uint256 count;
+        for (uint256 i; i < entries.length; ++i) {
+            if (entries[i].sourceTx != bytes32(0)) entries[count++] = entries[i];
+        }
+        // Shrink the in-memory array after stable compaction; no manifest bytes are modified.
+        assembly ("memory-safe") {
+            mstore(entries, count)
+        }
     }
 
     function _checkAddress(Creation memory entry) internal pure {
