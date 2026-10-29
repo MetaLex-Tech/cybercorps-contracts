@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {CyberAgreementJson, CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementBound, CyberAgreementJson, CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {DeploymentUtils} from "./libs/DeploymentUtils.sol";
@@ -12,7 +12,7 @@ import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UU
 import {ERC1967Utils} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Utils.sol";
 
 /// @notice Deploy the creator-bound registry implementation; export the upgrade for a separate Safe execution.
-/// @dev Forge deploys/links CyberAgreementJson using its configured sender/wallet. Only CREATE is broadcast here.
+/// @dev Forge deploys/links CyberAgreementBound and CyberAgreementJson using its configured sender/wallet. Only CREATE is broadcast here.
 ///      Writes Safe Transaction Builder JSON directly, like deploy-parentco-factory and DeploymentScript.finish.
 contract DeployBoundAgreementRegistryScript is Script {
     error WrongChain(uint256 expected, uint256 actual);
@@ -53,6 +53,8 @@ contract DeployBoundAgreementRegistryScript is Script {
         bytes32 versionHash = keccak256(bytes(registry.version()));
         address jsonLibrary = address(CyberAgreementJson);
         require(jsonLibrary.code.length > 0, "JSON library has no code");
+        address boundLibrary = address(CyberAgreementBound);
+        require(boundLibrary.code.length > 0, "Bound library has no code");
 
         // Even an owner deployer must submit the upgrade separately through the Safe.
         vm.broadcast(deployerPrivateKey);
@@ -80,6 +82,11 @@ contract DeployBoundAgreementRegistryScript is Script {
             registry.BOUND_TEMPLATE_DOMAIN() == keccak256("MetaLeX.CyberAgreementRegistry.BoundTemplate.v1"),
             "Wrong release"
         );
+        require(
+            registry.CONDITIONED_BOUND_AGREEMENT_DOMAIN()
+                == keccak256("MetaLeX.CyberAgreementRegistry.ConditionedBoundAgreement.v1"),
+            "Wrong release"
+        );
         // Exercise the external library through delegatecall from the upgraded proxy.
         require(bytes(registry.getContractJson(bytes32(0))).length > 0, "JSON rendering failed");
         require(vm.revertToStateAndDelete(snapshot), "Could not restore simulation state");
@@ -91,6 +98,7 @@ contract DeployBoundAgreementRegistryScript is Script {
         string memory path = string.concat(prefix, ".json");
         vm.writeFile(path, safeTxJson);
         console2.log("CyberAgreementJson:", jsonLibrary);
+        console2.log("CyberAgreementBound:", boundLibrary);
         console2.log("New implementation:", implementation);
         console2.log("Previous implementation (still active):", previous);
         console2.log("Registry proxy:", proxy);

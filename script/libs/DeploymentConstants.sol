@@ -19,6 +19,15 @@ library DeploymentConstants {
         revert UnsupportedChain(chainId);
     }
 
+    /// @notice The ZKPassport scope of MetaLeX agreements. A passport's unique identifier depends on the
+    ///         domain and the scope, so all ZKPassport checks of an app must use the same values.
+    string internal constant ZKPASSPORT_SCOPE = "cyberagreement-passport";
+
+    /// @notice The ZKPassport domain of the MetaLeX app on `chainId`. A testnet uses the preview app.
+    function zkpassportDomain(uint256 chainId) internal pure returns (string memory) {
+        return isTestnet(chainId) ? "preview.app.metalex.tech" : "app.metalex.tech";
+    }
+
     struct CoreDeployment {
         address metalexSafe;
         address auth;

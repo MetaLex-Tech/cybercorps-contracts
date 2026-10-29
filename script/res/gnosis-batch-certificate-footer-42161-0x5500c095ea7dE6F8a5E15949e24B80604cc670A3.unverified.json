@@ -1,1 +1,0 @@
-{"version":"1.0","chainId":"42161","createdAt":1791815944000,"meta":{"name":"Transactions Batch","description":"","txBuilderVersion":"","createdFromSafeAddress":"","createdFromOwnerAddress":"","checksum":""},"transactions":[{"to":"0x5500c095ea7dE6F8a5E15949e24B80604cc670A3","value":"0","data":"0x8a5dc5820000000000000000000000008da42149fcb887377c7e9ba1cd8841287d6336e5"}]}
