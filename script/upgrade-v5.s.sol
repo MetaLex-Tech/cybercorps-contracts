@@ -8,7 +8,6 @@ import {DeployBuildersScript} from "./deploy-builders.s.sol";
 import {DeployExtensionsV2Script} from "./deploy-extensions-v2.s.sol";
 import {DeployExtensionsV3Script} from "./deploy-extensions-v3.s.sol";
 import {DeploySecondaryConditionsScript} from "./deploy-secondary-conditions.s.sol";
-import {DeployZKPassportFinalizerScript} from "./deploy-zkpassport-finalizer.s.sol";
 import {UpgradeCoreScript} from "./upgrade-core.s.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {DeploymentScript} from "./libs/DeploymentScript.sol";
@@ -28,7 +27,6 @@ interface IUUPS {
 ///         - `DeployExtensionsV2Script`: the live V1 and V2 certificate extensions.
 ///         - `DeployExtensionsV3Script`: the V3 extensions.
 ///         - `DeploySecondaryConditionsScript`: the secondary-trading condition singletons.
-///         - `DeployZKPassportFinalizerScript`: the ZKPassport finalizer, on a chain with a ZKPassport verifier.
 /// @dev Run this on each production chain, or on a testnet as a rehearsal. A re-run does only the work
 ///      that is still open, so it can also bring a chain with an older or partial deployment up to date.
 ///      The recorded contracts come in their first version. The parts then upgrade them to the current code.
@@ -50,7 +48,6 @@ contract UpgradeV5Script is DeploymentScript {
     string private constant EXTENSIONS_V2_PROXY_SALT = "CyberCorpV5-ExtensionsV2.0.1";
     string private constant EXTENSIONS_V3_PROXY_SALT = "CyberCorpV5-ExtensionsV3";
     string private constant SECONDARY_CONDITIONS_PROXY_SALT = "CyberCorpV5-SecondaryConditionsV1.0.0";
-    string private constant ZKPASSPORT_FINALIZER_PROXY_SALT = "CyberCorpV5-ZKPassportFinalizerV1.0.1";
 
     /// @dev The implementations that a corp owner upgrades to. See `corpUpgradeCalls`.
     struct Implementations {
@@ -97,21 +94,6 @@ contract UpgradeV5Script is DeploymentScript {
             ),
             "secondary conditions"
         );
-        // The finalizer checks passport proofs, so a chain without a verifier has no finalizer.
-        if (core.zkpassportVerifier != address(0)) {
-            appendSafeTxs(
-                "[sub-script]",
-                (new DeployZKPassportFinalizerScript())
-                    .runWithArgs(
-                        block.chainid,
-                        ZKPASSPORT_FINALIZER_PROXY_SALT,
-                        DeploymentConstants.zkpassportDomain(block.chainid),
-                        DeploymentConstants.ZKPASSPORT_SCOPE,
-                        privateKey
-                    ),
-                "ZKPassport finalizer"
-            );
-        }
 
         // On a testnet the deployer keeps its roles, so that it can send the next rehearsal itself.
         if (!testnet) {

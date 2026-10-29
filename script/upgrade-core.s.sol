@@ -170,8 +170,7 @@ contract UpgradeCoreScript is DeploymentScript {
     }
 
     /// @notice Sets the config that the registry uses to check ZKPassport proofs. It applies to all agreements
-    ///         with a ZKPassport condition. It uses the same domain and scope as ZKPassportFinalizer, so a passport
-    ///         has the same unique identifier in both.
+    ///         with a ZKPassport condition.
     /// @dev A chain with no ZKPassport verifier gets no config. A creator cannot add a ZKPassport condition there.
     ///      A testnet gets dev mode, so a mock passport can sign there. A production chain does not.
     function setZKPassportConfig(uint256 chainId, DeploymentConstants.CoreDeployment memory core) internal {

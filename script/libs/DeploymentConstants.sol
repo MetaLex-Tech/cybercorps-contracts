@@ -47,7 +47,6 @@ library DeploymentConstants {
         address lexchexCondition;
         address zkpassportCondition;
         address zkpassportVerifier;
-        address zkpassportFinalizer;
     }
 
     struct ExtensionDeployment {
@@ -132,8 +131,7 @@ library DeploymentConstants {
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95, // difference from production chains
-                    zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8,
-                    zkpassportFinalizer: 0x83580c6c950802011C339b3adf13FB9e68B2f356
+                    zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8
                 });
         } else if (chainId == BASE_SEPOLIA) {
             return
@@ -154,8 +152,7 @@ library DeploymentConstants {
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: address(0), // no ZKPassport Verifier available
-                    zkpassportVerifier: address(0), // no ZKPassport Verifier available
-                    zkpassportFinalizer: address(0)
+                    zkpassportVerifier: address(0) // no ZKPassport Verifier available
                 });
         } else if (chainId == ARBITRUM) {
             return
@@ -176,8 +173,7 @@ library DeploymentConstants {
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: address(0), // TODO: not yet deployed on this chain
-                    zkpassportVerifier: address(0), // TODO: check if ZKPassport deployed a verifier on this chain
-                    zkpassportFinalizer: address(0)
+                    zkpassportVerifier: address(0) // TODO: check if ZKPassport deployed a verifier on this chain
                 });
         } else if (chainId == ETH || chainId == BASE || chainId == ROBINHOOD) {
             deployment = CoreDeployment({
@@ -197,14 +193,11 @@ library DeploymentConstants {
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xe71fE689bFAA4939A760EDF7e07f44372a43932A,
-                    zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8,
-                    zkpassportFinalizer: 0x83580c6c950802011C339b3adf13FB9e68B2f356
+                    zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8
                 });
             if (chainId == ROBINHOOD) {
                 // Not deployed on this chain. The NonUSNationalityCondition is deprecated.
                 deployment.zkpassportCondition = address(0);
-                // Not deployed on this chain yet. Upgrade-v5 deploys it at the same address (CREATE3).
-                deployment.zkpassportFinalizer = address(0);
             }
             return deployment;
         } else {

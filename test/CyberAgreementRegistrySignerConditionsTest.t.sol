@@ -13,12 +13,62 @@ import {
     ZKPassportResult
 } from "../src/libs/ZKPassportConditionLib.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {MockPassportHelper, MockPassportVerifier} from "./ZKPassportFinalizerTest.t.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {Test, Vm} from "forge-std/Test.sol";
 import {IMulticall3} from "forge-std/interfaces/IMulticall3.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
+
+/// @dev publicInputs[0..1] carry the domain and scope hashes. committedInputs is an abi-encoded BoundData.
+contract MockPassportHelper is IZKPassportHelper {
+    function verifyScopes(bytes32[] calldata publicInputs, string calldata domain, string calldata scope)
+        external
+        pure
+        returns (bool)
+    {
+        return publicInputs[0] == keccak256(bytes(domain)) && publicInputs[1] == keccak256(bytes(scope));
+    }
+
+    function getBoundData(bytes calldata committedInputs) external pure returns (BoundData memory) {
+        return abi.decode(committedInputs, (BoundData));
+    }
+
+    function getProofTimestamp(bytes32[] calldata) external pure returns (uint256) {
+        return 0;
+    }
+
+    function isNationalityOut(string[] memory, bytes calldata) external pure returns (bool) {
+        return true;
+    }
+
+    function enforceSanctionsRoot(uint256, bool, bytes calldata) external pure {}
+}
+
+/// @dev The proof bytes carry the passport id, so each test picks the passport per proof.
+contract MockPassportVerifier is IZKPassportVerifier {
+    bool public shouldVerify = true;
+    bool public shouldReturnZeroHelper;
+    IZKPassportHelper public helper;
+
+    constructor(IZKPassportHelper _helper) {
+        helper = _helper;
+    }
+
+    function setShouldVerify(bool _should) external {
+        shouldVerify = _should;
+    }
+
+    function setShouldReturnZeroHelper(bool _should) external {
+        shouldReturnZeroHelper = _should;
+    }
+
+    function verify(ProofVerificationParams calldata params) external view returns (bool, bytes32, IZKPassportHelper) {
+        bytes32 passportId = abi.decode(params.proofVerificationData.proof, (bytes32));
+        if (!shouldVerify) return (false, bytes32(0), IZKPassportHelper(address(0)));
+        if (shouldReturnZeroHelper) return (true, passportId, IZKPassportHelper(address(0)));
+        return (true, passportId, helper);
+    }
+}
 
 /// @dev Same behavior as the canonical Multicall3 `aggregate3`. A relayer sends one transaction
 /// that makes each call in order. A failed call with `allowFailure = false` reverts the whole batch.
