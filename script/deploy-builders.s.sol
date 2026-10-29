@@ -76,7 +76,7 @@ contract DeployBuildersScript is DeploymentScript {
             "[deploy contract]",
             "CertificateImageBuilderContract",
             type(CertificateImageBuilderContract).creationCode,
-            uriBuilder.imageBuilder()
+            _currentImageBuilder(uriBuilder)
         );
         // Case 4: the new image builder goes live in the same call as the new URI implementation.
         // Case 3: the current image builder stays, so the upgrade has no setter call.
@@ -85,5 +85,15 @@ contract DeployBuildersScript is DeploymentScript {
             : bytes("");
         upgradeProxy("[upgrade proxy]", core.auth, core.uriBuilder, "CertificateUriBuilder", uriImplementation, data);
         return safeTxs;
+    }
+
+    /// @notice The image builder that the URI builder uses now.
+    /// @dev A URI builder older than the image builder has no `imageBuilder` getter. It has no image builder,
+    ///      so the step returns zero and the upgrade sets a new image builder.
+    function _currentImageBuilder(CertificateUriBuilder uriBuilder) private view returns (address) {
+        (bool success, bytes memory result) =
+            address(uriBuilder).staticcall(abi.encodeWithSelector(uriBuilder.imageBuilder.selector));
+        if (!success) return address(0);
+        return abi.decode(result, (address));
     }
 }

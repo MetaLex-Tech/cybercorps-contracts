@@ -32,6 +32,7 @@ library DeploymentUtils {
     error Create3AddressMismatch(address expected, address deployed);
     error ExistingCreate3AddressMismatch(address existing, address expected);
     error ExistingCreate3AddressHasNoCode(address existing);
+    error ExistingAddressHasNoCode(address existing);
 
     struct SafeTxImport {
         string version;
@@ -102,20 +103,30 @@ library DeploymentUtils {
         if (deployed != expected) revert Create3AddressMismatch(expected, deployed);
     }
 
-    /// @notice Checks an existing address from DeploymentConstants before a deployment.
-    /// @dev A CREATE3 address is checked. A CREATE2 address or a zero address is not checked.
-    ///      Code at the CREATE3 address of the deployer and `saltStr` means that we deployed the contract
-    ///      with CREATE3, so the existing address must be that address. No code there means that the contract
-    ///      is not deployed with CREATE3, so the existing address must not be that address.
+    /// @notice Gives the contract that exists for an address from DeploymentConstants, or zero if none exists.
+    /// @dev Code at the CREATE3 address of the deployer and `saltStr` means that we deployed the contract
+    ///      with CREATE3. A zero `existing` then gives that address, so a re-run continues the work of an
+    ///      earlier run before DeploymentConstants records the address. Any other `existing` must be that address.
+    ///      No code there means that the contract is not deployed with CREATE3, so `existing` must not be that
+    ///      address. Any other non-zero `existing` must have code. A CREATE2 contract gets its code from
+    ///      `DeploymentScript.deployRecordedCreate2`, which must run first.
     ///      A failed check means that the script configuration is wrong.
-    function verifyExisting(address existing, address deployer, string memory saltStr) internal view {
+    function resolveExisting(address existing, address deployer, string memory saltStr)
+        internal
+        view
+        returns (address)
+    {
         address expected = computeCreate3Address(deployer, create3Salt(deployer, saltStr));
         if (expected.code.length != 0) {
+            if (existing == address(0)) return expected;
             if (existing != expected) revert ExistingCreate3AddressMismatch(existing, expected);
         } else if (existing == expected) {
             // If this happens, you have recorded the wrong address in DeploymentConstants
             revert ExistingCreate3AddressHasNoCode(existing);
+        } else if (existing != address(0) && existing.code.length == 0) {
+            revert ExistingAddressHasNoCode(existing);
         }
+        return existing;
     }
 
     /// @dev The first 20 bytes are the deployer, so only the deployer can use the salt.

@@ -16,13 +16,18 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 ///      - DeploymentConstants holds the address of each proxy, singleton and auth that exists.
 ///        A step keeps an existing address and does not deploy it again.
 ///      - We do not record implementation addresses in DeploymentConstants as they change frequently during development.
+///      Recorded CREATE2 contracts (`deployRecordedCreate2`):
+///      - Most contracts in DeploymentConstants came through the CREATE2 factory. A new chain gets them at the
+///        same addresses from the recorded bytes, before any other step reads DeploymentConstants.
 ///      New singletons, proxies and auths (`deployIfNotExist`):
 ///      - They use CREATE3 when their DeploymentConstants field is zero. The salt is `saltPrefix/saltName`.
 ///      - The address depends only on the deployer and the salt, not on the code. The same deployer key
 ///        gives the same address on each chain. Another deployer gets other addresses.
 ///      - Contracts deployed prior to this script are not necessarily all created using CREATE3.
 ///      - DeploymentConstants take precedence if the salt's CREATE3 disagree with it; however,
-///        if the salt's address has code, the existing address must be that address. See `DeploymentUtils.verifyExisting`.
+///        if the salt's address has code, the existing address must be that address.
+///      - A zero field whose salt's address has code takes that address. So a re-run after a partial or
+///        unrecorded run continues where it stopped. See `DeploymentUtils.resolveExisting`.
 ///      New implementations (`deployIfDifferent`):
 ///      - They use CREATE, so they need no salt.
 ///      - The step compares the new runtime code with the current implementation. It deploys only when
@@ -37,6 +42,15 @@ abstract contract DeploymentScript is Script {
     error ImplementationMismatch(address proxy, address expected);
     error ImplementationCreationFailed(string name);
     error ChainIdMismatch(uint256 chainId, uint256 connectedChainId);
+    error Create2DeploymentFailed(string name, address target);
+
+    /// @dev One CREATE2 deployment as it went to `CREATE2_FACTORY`: `data` is the salt, then the init code.
+    ///      The JSON keys sort as address, data, name, so the fields keep that order.
+    struct Create2Deployment {
+        address target;
+        bytes data;
+        string name;
+    }
 
     uint256 private deployerPrivateKey;
     address internal deployer;
@@ -107,9 +121,9 @@ abstract contract DeploymentScript is Script {
     }
 
     /// @notice Keeps an existing contract from DeploymentConstants as it is, or deploys a new one with CREATE3.
-    /// @dev The CREATE3 salt is `saltPrefix/saltName`. See `DeploymentUtils.verifyExisting` for the check of
-    ///      `existing`. A zero `existing` deploys `initCode`.
-    /// @return deployed The new contract, or `existing`.
+    /// @dev The CREATE3 salt is `saltPrefix/saltName`. See `resolveExisting` for how the step finds
+    ///      `existing`. When no contract exists, the step deploys `initCode`.
+    /// @return deployed The new contract, or the existing one.
     /// @return isNew True when the step deployed a new contract.
     function deployIfNotExist(
         string memory logLabel,
@@ -119,7 +133,7 @@ abstract contract DeploymentScript is Script {
         bytes memory initCode
     ) internal returns (address deployed, bool isNew) {
         string memory saltStr = string.concat(saltPrefix, "/", saltName);
-        DeploymentUtils.verifyExisting(existing, deployer, saltStr);
+        existing = resolveExisting(saltPrefix, saltName, existing);
         if (existing != address(0)) {
             console2.log(
                 string.concat(SKIP, logLabel, " ", saltName, " already exists, skipping: ", vm.toString(existing))
@@ -145,8 +159,8 @@ abstract contract DeploymentScript is Script {
         bytes memory creationCode,
         bytes memory initCall
     ) internal returns (address proxy, bool isNew) {
-        // Check `existing` before any implementation work, so a wrong address stops the run at once.
-        DeploymentUtils.verifyExisting(existing, deployer, string.concat(saltPrefix, "/", saltName));
+        // Find `existing` before any implementation work, so a wrong address stops the run at once.
+        existing = resolveExisting(saltPrefix, saltName, existing);
         (address implementation,) =
             deployIfDifferent("[deploy implementation]", saltName, creationCode, implementationOf(existing));
         return upgradeOrDeployProxyIfDiffImpl(auth, saltPrefix, saltName, existing, implementation, initCall);
@@ -369,6 +383,49 @@ abstract contract DeploymentScript is Script {
         );
     }
 
+    /// @notice Deploys each recorded CREATE2 contract that has no code on this chain.
+    /// @dev The other chains got these contracts through `CREATE2_FACTORY`. The address depends only on the salt
+    ///      and the init code, so the same bytes give the same address on each chain, from any sender.
+    ///      A new build gives other bytes, so the file at `path` holds the bytes that the other chains used.
+    ///      It lists each contract after the contracts that its init code uses.
+    ///      A contract deploys in the version that the other chains first had. The later steps upgrade it.
+    function deployRecordedCreate2(string memory logLabel, string memory path) internal {
+        Create2Deployment[] memory deployments =
+            abi.decode(vm.parseJson(vm.readFile(path), ".deployments"), (Create2Deployment[]));
+        uint256 existing;
+        for (uint256 i = 0; i < deployments.length; i++) {
+            Create2Deployment memory deployment = deployments[i];
+            if (deployment.target.code.length != 0) {
+                existing++;
+                continue;
+            }
+            vm.broadcast(deployerPrivateKey);
+            Address.functionCall(CREATE2_FACTORY, deployment.data);
+            // Other bytes deploy to another address, so no code here means that the record is wrong.
+            if (deployment.target.code.length == 0) revert Create2DeploymentFailed(deployment.name, deployment.target);
+            console2.log(
+                string.concat(
+                    RUN,
+                    logLabel,
+                    " deployed recorded ",
+                    deployment.name,
+                    " (CREATE2): ",
+                    vm.toString(deployment.target)
+                )
+            );
+        }
+        console2.log(
+            string.concat(
+                SKIP,
+                logLabel,
+                " recorded CREATE2 contracts that already exist: ",
+                vm.toString(existing),
+                " of ",
+                vm.toString(deployments.length)
+            )
+        );
+    }
+
     /// @notice Adds the Safe calls of a sub-script, in order.
     function appendSafeTxs(string memory logLabel, GnosisTransaction[] memory txs, string memory source) internal {
         for (uint256 i = 0; i < txs.length; i++) {
@@ -403,6 +460,16 @@ abstract contract DeploymentScript is Script {
         console2.log("==== JSON data end ====");
         vm.writeFile(jsonPath, safeTxJson);
         console2.log(string.concat(logLabel, " Safe tx JSON written to: ", jsonPath));
+    }
+
+    /// @notice The contract that exists for a DeploymentConstants field and the salt `saltPrefix/saltName`,
+    ///         or zero if none exists. See `DeploymentUtils.resolveExisting`.
+    function resolveExisting(string memory saltPrefix, string memory saltName, address existing)
+        internal
+        view
+        returns (address)
+    {
+        return DeploymentUtils.resolveExisting(existing, deployer, string.concat(saltPrefix, "/", saltName));
     }
 
     /// @notice The init code of an ERC-1967 proxy that runs `initCall` on `implementation`.

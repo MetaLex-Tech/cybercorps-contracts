@@ -79,6 +79,10 @@ contract DeploymentScriptHarness is DeploymentScript {
         return deployIfDifferent("[test]", name, creationCode, current);
     }
 
+    function deployRecordedCreate2Step(string memory path) external {
+        deployRecordedCreate2("[test]", path);
+    }
+
     function finishStep(string memory jsonPath) external {
         finish("[test]", jsonPath);
     }
@@ -100,6 +104,8 @@ contract DeploymentScriptForkTest is Test {
     address internal deployer = vm.addr(0xA11CE);
 
     string internal constant JSON_PATH = "script/res/test-deployment-script.json";
+    string internal constant RECORDED_PATH = "script/res/test-recorded-create2.json";
+    string internal constant WRONG_RECORDED_PATH = "script/res/test-wrong-recorded-create2.json";
 
     function setUp() public {
         // DeploymentScript uses cheatcodes: it computes addresses, broadcasts and runs the Safe calls with a prank.
@@ -207,11 +213,12 @@ contract DeploymentScriptForkTest is Test {
         }
     }
 
-    /// @dev A CREATE2 address is not checked, so it passes through.
+    /// @dev A CREATE2 address with code is not checked against a salt, so it passes through.
     function test_DeployIfNotExist_KeepsCreate2Address() public {
         for (uint256 i = 0; i < forks.length; i++) {
             vm.selectFork(forks[i]);
             address create2Address = makeAddr("create2 address");
+            vm.etch(create2Address, hex"00");
             (address deployed, bool isNew) =
                 harness.deployIfNotExistStep("prefix", "KillSwitchCondition", create2Address, "");
             assertEq(deployed, create2Address, chains[i]);
@@ -219,7 +226,58 @@ contract DeploymentScriptForkTest is Test {
         }
     }
 
-    /// @dev After a CREATE3 deployment, an existing address that differs, or a zero one, is a wrong configuration.
+    /// @dev A recorded CREATE2 contract must exist before a step reads it. See `deployRecordedCreate2`.
+    function test_RevertWhen_ExistingCreate2AddressHasNoCode() public {
+        for (uint256 i = 0; i < forks.length; i++) {
+            vm.selectFork(forks[i]);
+            address create2Address = makeAddr("create2 address");
+            vm.expectRevert(abi.encodeWithSelector(DeploymentUtils.ExistingAddressHasNoCode.selector, create2Address));
+            harness.deployIfNotExistStep("prefix", "KillSwitchCondition", create2Address, "");
+        }
+    }
+
+    /// @dev A re-run before DeploymentConstants records the address keeps the contract of the earlier run.
+    function test_DeployIfNotExist_ZeroExistingTakesDeployedCreate3Address() public {
+        for (uint256 i = 0; i < forks.length; i++) {
+            vm.selectFork(forks[i]);
+            (address expected,) = harness.deployIfNotExistStep(
+                "prefix",
+                "KillSwitchCondition",
+                address(0),
+                _killSwitchInitCode(makeAddr("metalex"), makeAddr("legion"))
+            );
+
+            // An empty init code shows that nothing deploys.
+            (address deployed, bool isNew) =
+                harness.deployIfNotExistStep("prefix", "KillSwitchCondition", address(0), "");
+            assertEq(deployed, expected, chains[i]);
+            assertFalse(isNew, chains[i]);
+        }
+    }
+
+    /// @dev A re-run upgrades the proxy of the earlier run, not a new one.
+    function test_UpgradeOrDeployProxy_ZeroExistingTakesDeployedProxy() public {
+        for (uint256 i = 0; i < forks.length; i++) {
+            vm.selectFork(forks[i]);
+            address auth = address(new BorgAuth(deployer));
+            bytes memory initCall = abi.encodeCall(EligibilityCondition.initialize, (auth));
+            (address proxy,) = harness.proxyWithCodeStep(
+                auth, "prefix", "EligibilityCondition", address(0), type(EligibilityCondition).creationCode, initCall
+            );
+            address implementation = _implementation(proxy);
+
+            uint256 nonce = vm.getNonce(deployer);
+            (address again, bool isNew) = harness.proxyWithCodeStep(
+                auth, "prefix", "EligibilityCondition", address(0), type(EligibilityCondition).creationCode, initCall
+            );
+            assertEq(again, proxy, chains[i]);
+            assertFalse(isNew, chains[i]);
+            assertEq(_implementation(proxy), implementation, chains[i]);
+            assertEq(vm.getNonce(deployer), nonce, chains[i]);
+        }
+    }
+
+    /// @dev After a CREATE3 deployment, an existing address that differs is a wrong configuration.
     function test_RevertWhen_ExistingIsNotTheDeployedCreate3Address() public {
         for (uint256 i = 0; i < forks.length; i++) {
             vm.selectFork(forks[i]);
@@ -236,11 +294,6 @@ contract DeploymentScriptForkTest is Test {
                 abi.encodeWithSelector(DeploymentUtils.ExistingCreate3AddressMismatch.selector, wrong, expected)
             );
             harness.deployIfNotExistStep("prefix", "KillSwitchCondition", wrong, "");
-
-            vm.expectRevert(
-                abi.encodeWithSelector(DeploymentUtils.ExistingCreate3AddressMismatch.selector, address(0), expected)
-            );
-            harness.deployIfNotExistStep("prefix", "KillSwitchCondition", address(0), "");
         }
     }
 
@@ -392,6 +445,43 @@ contract DeploymentScriptForkTest is Test {
         harness.finishStep(JSON_PATH);
     }
 
+    // ---- deployRecordedCreate2 ----
+
+    /// @dev The recorded bytes give the same address on each chain. A second run finds the code and sends nothing.
+    function test_DeployRecordedCreate2_DeploysThenKeeps() public {
+        bytes memory data = abi.encodePacked(bytes32("recorded"), type(EligibilityCondition).creationCode);
+        address target = vm.computeCreate2Address(
+            bytes32("recorded"), keccak256(type(EligibilityCondition).creationCode), CREATE2_FACTORY
+        );
+        _writeRecorded(RECORDED_PATH, target, data);
+        for (uint256 i = 0; i < forks.length; i++) {
+            vm.selectFork(forks[i]);
+            assertEq(target.code.length, 0, chains[i]);
+
+            harness.deployRecordedCreate2Step(RECORDED_PATH);
+            assertGt(target.code.length, 0, chains[i]);
+
+            uint256 nonce = vm.getNonce(deployer);
+            harness.deployRecordedCreate2Step(RECORDED_PATH);
+            assertEq(vm.getNonce(deployer), nonce, chains[i]);
+        }
+        vm.removeFile(RECORDED_PATH);
+    }
+
+    /// @dev Bytes that deploy to another address mean that the record is wrong.
+    function test_RevertWhen_RecordedCreate2GoesToAnotherAddress() public {
+        vm.selectFork(forks[0]);
+        address wrong = makeAddr("wrong");
+        _writeRecorded(
+            WRONG_RECORDED_PATH, wrong, abi.encodePacked(bytes32("recorded"), type(EligibilityCondition).creationCode)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(DeploymentScript.Create2DeploymentFailed.selector, "EligibilityCondition", wrong)
+        );
+        harness.deployRecordedCreate2Step(WRONG_RECORDED_PATH);
+        vm.removeFile(WRONG_RECORDED_PATH);
+    }
+
     function test_Finish_NoSafeTxs_WritesNothing() public {
         vm.selectFork(forks[0]);
         harness.finishStep(JSON_PATH);
@@ -538,6 +628,17 @@ contract DeploymentScriptForkTest is Test {
         auth = address(new BorgAuth(owner));
         implementation = address(new EligibilityCondition());
         proxy = address(new ERC1967Proxy(implementation, abi.encodeCall(EligibilityCondition.initialize, (auth))));
+    }
+
+    function _writeRecorded(string memory path, address target, bytes memory data) internal {
+        string memory json = string.concat(
+            '{"deployments":[{"address":"',
+            vm.toString(target),
+            '","data":"',
+            vm.toString(data),
+            '","name":"EligibilityCondition"}]}'
+        );
+        vm.writeFile(path, json);
     }
 
     function _expected(string memory saltStr) internal view returns (address) {

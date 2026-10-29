@@ -7,6 +7,7 @@ library DeploymentConstants {
     uint256 internal constant ETH = 1;
     uint256 internal constant BASE = 8453;
     uint256 internal constant ARBITRUM = 42161;
+    uint256 internal constant ROBINHOOD = 4663;
 
     uint256 internal constant ETH_SEPOLIA = 11155111;
     uint256 internal constant BASE_SEPOLIA = 84532;
@@ -15,7 +16,7 @@ library DeploymentConstants {
     ///         A production chain hands them off to the MetaLeX Safe.
     function isTestnet(uint256 chainId) internal pure returns (bool) {
         if (chainId == ETH_SEPOLIA || chainId == BASE_SEPOLIA) return true;
-        if (chainId == ETH || chainId == BASE || chainId == ARBITRUM) return false;
+        if (chainId == ETH || chainId == BASE || chainId == ARBITRUM || chainId == ROBINHOOD) return false;
         revert UnsupportedChain(chainId);
     }
 
@@ -178,7 +179,7 @@ library DeploymentConstants {
                     zkpassportVerifier: address(0), // TODO: check if ZKPassport deployed a verifier on this chain
                     zkpassportFinalizer: address(0)
                 });
-        } else if (chainId == ETH || chainId == BASE) {
+        } else if (chainId == ETH || chainId == BASE || chainId == ROBINHOOD) {
             deployment = CoreDeployment({
                     metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
                     auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
@@ -199,6 +200,12 @@ library DeploymentConstants {
                     zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8,
                     zkpassportFinalizer: 0x83580c6c950802011C339b3adf13FB9e68B2f356
                 });
+            if (chainId == ROBINHOOD) {
+                // Not deployed on this chain. The NonUSNationalityCondition is deprecated.
+                deployment.zkpassportCondition = address(0);
+                // Not deployed on this chain yet. Upgrade-v5 deploys it at the same address (CREATE3).
+                deployment.zkpassportFinalizer = address(0);
+            }
             return deployment;
         } else {
             revert UnsupportedChain(chainId);
@@ -231,9 +238,12 @@ library DeploymentConstants {
                 shareExtensionV3: 0xa21C434379CC44bfeD6e3c1342e49951804ec30f,
                 fundInterestExtensionV3: 0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15
             });
-        } else if (chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == ETH) {
+        } else if (
+            chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == ETH
+                || chainId == ROBINHOOD
+        ) {
             // The v5 rehearsal deployed the V3 proxies on Base Sepolia first. A new build gives new
-            // addresses, so a later chain gets these addresses only from a replay of that broadcast.
+            // addresses, so a later chain gets these addresses only from the recorded CREATE2 bytes.
             return ExtensionDeployment({
                 safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
                 safeExtensionV3: 0x740003076c9F16c4a364AE07f3770FB77899299b,
@@ -264,9 +274,12 @@ library DeploymentConstants {
         pure
         returns (SecondaryConditionDeployment memory deployment)
     {
-        if (chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == BASE || chainId == ETH) {
+        if (
+            chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == BASE || chainId == ETH
+                || chainId == ROBINHOOD
+        ) {
             // deployed with salt "CyberCorpV5-SecondaryConditionsV1.0.0"
-            return SecondaryConditionDeployment({
+            deployment = SecondaryConditionDeployment({
                 eligibility: 0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B,
                 usStateOfResidence: 0x1d4918a83E1F971317f0DD529f088B208Ec24d8C,
                 legionSoulbound: 0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04,
@@ -287,6 +300,11 @@ library DeploymentConstants {
                 killSwitch: 0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435,
                 timeSettlementPeriod: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
             });
+            if (chainId == ROBINHOOD) {
+                // Not deployed on this chain yet. Upgrade-v5 deploys it at the same address (CREATE3).
+                deployment.killSwitch = address(0);
+            }
+            return deployment;
         } else {
             revert UnsupportedChain(chainId);
         }
