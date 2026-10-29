@@ -1,6 +1,6 @@
 # Task: Robinhood intermediate deployment setup
 
-- **Status:** Core-only intermediate preparation complete, ready for review; external badge/secondary handoff and release gates pending. No live signing or submission authorized.
+- **Status:** Operator deployed the 32 historical bootstrap targets; RPC receipts/payloads confirmed. Explorer source available on all 32 (22 Exact Match, 10 Similar Match). Safe execution, external badge/secondary handoff and release gates remain separate and unconfirmed. This task performed no signing or chain transactions.
 - **Updated:** 2026-10-28 (America/New_York).
 - **Owner:** Current Codex chat, intermediate setup only. Prior Robinhood and other rollout ownership remains unchanged.
 - **Objective:** Make the prepared bridge available on current develop, rehearse it against fresh Robinhood state without a private key, and provide concrete deployment/Safe execution instructions.
@@ -152,3 +152,103 @@ signing or deployment retry was performed by this task.
 A local non-dry-run bootstrap artifact now contains 33 transactions and zero
 saved receipts. This does not establish that all transactions were or were not
 submitted; deployment status remains unconfirmed without RPC/receipt readback.
+
+## Post-deployment source verification (October 28)
+
+The user explicitly requested a PowerShell script and execution of explorer source
+verification after deployment. This authorizes publishing verification packages
+for this deployed bootstrap scope; it does not authorize signing, deployment,
+upgrades, Safe execution, private-source uploads outside that scope or external audits.
+The latest local bootstrap artifact now has 33 saved successful receipts; RPC
+confirmation is still required before explorer submission. The user's subsequent
+removal of the Etherscan table from `foundry.toml` is preserved.
+
+Acceptance criteria established before implementation:
+
+1. Select only the 32 historical entries from the unchanged hash-pinned manifest;
+   exclude the colleague's badge/secondary scope and original prerequisite stack.
+2. Read RPC chain 4663, confirm each actual deployment transaction targets the
+   deterministic factory with its exact manifest payload and a successful receipt,
+   and require code at the corresponding target before submission.
+3. Reuse already-public Ethereum explorer source/settings for those same CREATE2
+   addresses. Do not verify old bytecode using current checkout source. Recover
+   constructor arguments from the saved matching historical transactions and pin
+   a portable recipe inventory; similar-match source records can omit arguments.
+4. Use direct Etherscan V2 requests with explicit chainid to avoid the installed
+   Foundry chain-registry failure. Keep keys/RPC secrets out of output, tracked
+   files and saved state. Never request or use a transaction signing key.
+5. Provide prepare-only operation, resumable submission/status state and per-contract
+   outcomes. Do not label a queued request, similar source or a failed/pending
+   explorer response as fully verified. Preserve receipts and verification as
+   separate evidence. Check both success and refusal/error behavior locally.
+
+### Results and handoff
+
+[Per-contract verification report](robinhood-verification-20261028.json) records
+addresses, deployment transaction hashes, source-package hashes, compiler names,
+explorer outcomes and links. **All 32 actual replay transactions/receipts/payloads
+and target code were confirmed through Robinhood RPC.** The operator's broadcast
+artifact contains 33 successful saved receipts including its separate role-grant
+call. The regenerated unsuffixed Safe JSON now contains 14 calls; this verification
+did not execute or confirm execution of that batch.
+
+Ran `script/verify-robinhood-bootstrap.ps1` in prepare-only mode for all 32,
+submitted one public historical library package successfully, then submitted the
+remaining packages. A final `-StatusOnly` run confirmed **22 Exact Match source
+records and 10 Similar Match source records**; there are no remaining unverified,
+failed or pending entries in this scope. The ten are nine ERC1967 proxies and
+LeXcheX BorgAuth. Etherscan's verification queue replied `Already Verified` for
+them, and source readback confirmed the similar-match distinction. Do not describe
+them as exact constructor-argument verification. Etherscan restricts Similar Match
+reverification to whitelisted authors; upgrading those ten requires that external
+account/support step. No support message or ownership signature was sent.
+
+The script defaults to preparation, supports `-Submit` and `-StatusOnly`, reports
+exact/similar matches separately, and offers `-RequireExactMatch` to make similarity
+an incomplete result. After the owner's account gets Etherscan access,
+`-Submit -RetrySimilarMatch -RequireExactMatch` retries those entries. It excludes
+the colleague scope and original prerequisite deployment and does not load a
+signing key. Public source packages and resumable state stay under ignored
+`out/robinhood-verification/`; portable constructor recipes are committed with
+LF/hash protection. Existing user edits to `foundry.toml` and the generated Safe
+batch were preserved.
+
+Validation on dirty base `521e695c6390452d7134a681a051e181e03b729f`: PowerShell syntax
+and offline fixture checks passed for source/settings preservation, constructor
+arguments, credential exclusion, missing/URL-only source refusal, chain/routing
+override refusal, successful/reverted receipts, wrong payload, missing code,
+V2 POST query routing and exact/similar classification. The first POST exposed
+Etherscan's requirement that routing/auth stay in the query string; corrected and
+covered by a fixture. `Already Verified` with status zero is classified from actual
+source readback, rather than mislabeled as failed or exact. `git diff --check` and
+checks for configured secrets in new deliverables passed. No Solidity or deployment
+logic changed; no unrelated Solidity test suites were rerun.
+
+Next: the operator handles the separate Safe configuration and the colleague's
+badge/secondary handoff. Full source/ABI availability is established for these 32;
+exact upgrades for ten, external-model review, integration acceptance and final-v5
+readiness are not established by explorer verification.
+
+## October 28 default-branch contract synchronization check
+
+At the user's request before v5 upgrades, fetched the remote default branch.
+The remote has no `main`; its default is `develop`. Fresh `origin/develop` is
+`0a598592e2b66a1754af81c3746e93b6c155e7c8`, already an ancestor of this branch's
+`521e695c6390452d7134a681a051e181e03b729f` (four branch-only commits, zero missing
+default-branch commits). The complete `src/` tree and the v5/core/builders/V2/V3/
+secondary-condition entrypoints are identical to that default-branch revision.
+No merge or contract edit was necessary.
+
+Re-ran `test/BootstrapRobinhoodTest.t.sol` with offline Solidity 0.8.28, Cancun,
+one thread and the explicit OpenZeppelin remappings: **19 passed, 0 failed,
+0 skipped**, including v5 core formation, external-badge preservation/handoff,
+rerun and refusal cases. Tested code head is `521e695`; the pre-existing local
+`foundry.toml` deletion of the Robinhood Etherscan table was retained, and the
+user-owned unsuffixed mainnet batch was untouched. Removed only the new testnet
+simulation JSON generated by this test run. A nonfatal signature-cache permission
+warning occurred. This record update is local and uncommitted.
+
+This establishes source synchronization and local compatibility only. The
+colleague's verified badge/secondary handoff, final-stage rehearsal, independent
+review and test-environment sign/simulate/submit gates remain as recorded above;
+no release approval, signing or deployment was performed.

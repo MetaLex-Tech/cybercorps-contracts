@@ -131,6 +131,55 @@ routing only, not successful contract-source verification. No source upload or
 deployment retry was performed while diagnosing it. Source verification and
 successful deployment receipts remain separate evidence.
 
+### Verify the historical bootstrap after deployment
+
+Use the standalone PowerShell verifier after the bootstrap broadcast has receipts:
+
+```powershell
+# Confirm RPC receipts and prepare already-public historical packages without submission.
+./script/verify-robinhood-bootstrap.ps1
+
+# Submit to Etherscan V2 and poll; safe to rerun to resume unfinished requests.
+./script/verify-robinhood-bootstrap.ps1 -Submit
+
+# Read deployment/source status without submitting anything.
+./script/verify-robinhood-bootstrap.ps1 -StatusOnly
+```
+
+To select a single contract, append `-Address <address>`. It must be one of the
+32 historical manifest targets. This verifier does not sign or deploy and does
+not include the colleague-owned badge/secondary conditions or the original
+prerequisite stack. It needs only `ROBINHOOD_RPC_URL` and
+`ROBINHOOD_ETHERSCAN_API_KEY` (or the existing `ETHERSCAN_API_KEY`) from the local
+environment/ignored `.env`.
+
+The script confirms each transaction and successful receipt against the actual
+Robinhood RPC, checks its exact deterministic deployment payload and target code,
+then fetches the already-public verified Ethereum source/settings for that same
+address. The constructor arguments are frozen in
+`robinhood-bootstrap-verification.json`, recovered from the matching successful
+historical broadcasts and checked against the pinned manifest. Do not substitute
+the current checkout's contracts: several replayed versions predate today's source.
+The script uses direct Etherscan V2 requests with chain routing in the URL for
+both GET and POST, bypassing the old Foundry registry issue.
+
+Public source packages and resumable per-contract results are saved under ignored
+`out/robinhood-verification/`. `state.json` distinguishes prepared, pending,
+failed, similar-match and verified results; a queued request is not success.
+Only a successful explorer verification response or an exact explorer source
+record counts as `verified`. Automatic matches remain `similar-match`, including
+when the verification API returns `Already Verified` with status zero. Failed,
+unverified or pending entries cause a nonzero exit and can be resumed with the
+same command. Add `-RequireExactMatch` to also reject similar matches. The default
+accepts source availability while reporting exact and similar counts separately.
+Etherscan can restrict upgrades from Similar Match to Exact Match to
+[whitelisted contract authors](https://info.etherscan.com/update-on-similar-match-contract-verification/).
+After obtaining that access, use `-Submit -RetrySimilarMatch -RequireExactMatch`
+to retry those entries. The script does not contact Etherscan support or alter
+contract-account ownership to obtain access.
+Actual source submission publishes the already-public historical packages to
+the target explorer. It is separate from deployment and Safe execution.
+
 ## October 23 refresh
 
 Use branch `codex/robinhood-upgrade-refresh`, based on develop `d964679`.

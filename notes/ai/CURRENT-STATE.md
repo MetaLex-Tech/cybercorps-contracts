@@ -19,7 +19,7 @@ have one. Do not assume another checkout's files are present here.
 
 ## Shared tasks
 
-- [Robinhood intermediate deployment setup](tasks/robinhood-intermediate-20261028.md): October 28 core-only preparation; colleague owns badge/secondary deployment on 4663. Revised 32-deployment/14-call rehearsal and 19 tests passed; external handoff/review/signing gates pending, no live submission. Old 15-call batch must be regenerated.
+- [Robinhood intermediate deployment setup](tasks/robinhood-intermediate-20261028.md): October 28 operator deployment of 32 historical targets confirmed by RPC. Explorer source available: 22 Exact Match, 10 Similar Match. Separate 14-call Safe batch execution unconfirmed; colleague owns badge/secondary deployment on 4663; final-stage handoff/review/integration gates pending.
 
 - [Protocol and webapp documentation refresh](tasks/docs-protocol-webapp-20261027.md): October 27 source comparison and GitBook guide/reference updates; documentation only, review pending.
 
