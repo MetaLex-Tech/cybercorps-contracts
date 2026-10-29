@@ -81,5 +81,8 @@ jobs:
           RPC_URL_BASE: "${{ secrets.RPC_URL_BASE }}"
           RPC_URL_SEPOLIA: "${{ secrets.RPC_URL_SEPOLIA }}"
           RPC_URL_BASE_SEPOLIA: "${{ secrets.RPC_URL_BASE_SEPOLIA }}"
+          RPC_URL_ARBITRUM: "${{ secrets.RPC_URL_ARBITRUM }}"
+          RPC_URL_ROBINHOOD: "${{ secrets.RPC_URL_ROBINHOOD }}"
+          RPC_URL_ROBINHOOD_TESTNET: "${{ secrets.RPC_URL_ROBINHOOD_TESTNET }}"
         # `--threads 1` is used in combination with endpoint retry settings in foundry.toml to avoid getting rate limited
         run: forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --threads 1 --mc ForkTest --nmc AdhocTest

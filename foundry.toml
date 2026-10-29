@@ -16,10 +16,13 @@ fs_permissions = [
 ]
 
 [rpc_endpoints]
-ethereum        = { endpoint = "${RPC_URL_ETHEREUM}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
-base            = { endpoint = "${RPC_URL_BASE}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
-sepolia         = { endpoint = "${RPC_URL_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
-base_sepolia    = { endpoint = "${RPC_URL_BASE_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+ethereum          = { endpoint = "${RPC_URL_ETHEREUM}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+base              = { endpoint = "${RPC_URL_BASE}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+arbitrum          = { endpoint = "${RPC_URL_ARBITRUM}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+robinhood         = { endpoint = "${RPC_URL_ROBINHOOD}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+sepolia           = { endpoint = "${RPC_URL_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+base_sepolia      = { endpoint = "${RPC_URL_BASE_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+robinhood_testnet = { endpoint = "${RPC_URL_ROBINHOOD_TESTNET}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
 
 [profile.ci]
 # inherits [profile.default]
