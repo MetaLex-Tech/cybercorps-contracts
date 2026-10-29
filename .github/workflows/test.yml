@@ -24,10 +24,9 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          # Pinned. 1.8.0 probes the RPC with anvil_nodeInfo to detect the network family, and Alchemy
-          # answers HTTP 400, so every vm.createSelectFork fails. Unpinned, CI takes whatever stable is
-          # that day and fork tests break with no repo change. Raise this deliberately.
-          version: v1.7.1
+          # Pinned. Unpinned, CI takes whatever stable is that day, and tests can break with no repo change.
+          # Raise this deliberately.
+          version: v1.8.5
 
       - name: Show Forge version
         run: forge --version
@@ -47,10 +46,9 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          # Pinned. 1.8.0 probes the RPC with anvil_nodeInfo to detect the network family, and Alchemy
-          # answers HTTP 400, so every vm.createSelectFork fails. Unpinned, CI takes whatever stable is
-          # that day and fork tests break with no repo change. Raise this deliberately.
-          version: v1.7.1
+          # Pinned. Unpinned, CI takes whatever stable is that day, and tests can break with no repo change.
+          # Raise this deliberately.
+          version: v1.8.5
 
       - name: Show Forge version
         run: forge --version
@@ -70,10 +68,9 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          # Pinned. 1.8.0 probes the RPC with anvil_nodeInfo to detect the network family, and Alchemy
-          # answers HTTP 400, so every vm.createSelectFork fails. Unpinned, CI takes whatever stable is
-          # that day and fork tests break with no repo change. Raise this deliberately.
-          version: v1.7.1
+          # Pinned. Unpinned, CI takes whatever stable is that day, and tests can break with no repo change.
+          # Raise this deliberately.
+          version: v1.8.5
 
       - name: Show Forge version
         run: forge --version

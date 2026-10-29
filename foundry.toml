@@ -5,6 +5,10 @@ libs = ["lib", "dependencies"]
 optimizer = true
 optimizer_runs = 15
 via_ir = true
+# Run all calls of a test function in one transaction, not one transaction for each call.
+# The deploy-script tests need this. A fork test runs a full upgrade script, which uses more gas than one block holds.
+# Other script tests check that the deployer's nonce does not change. A transaction for each call changes it.
+isolate = false
 extra_output_files = ['abi']
 fs_permissions = [
     { access = "read-write", path = "./script/res" },

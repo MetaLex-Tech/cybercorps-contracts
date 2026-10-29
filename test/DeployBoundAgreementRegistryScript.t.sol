@@ -26,9 +26,14 @@ contract DeployBoundAgreementRegistryScriptTest is Test {
     BorgAuth auth;
     address owner;
     address previous;
+    address deployer;
     string PREFIX = "script/res/test-bound-registry-export";
 
     function setUp() public {
+        // The script reads the deployer key from the environment. Use a test key, never a real one.
+        uint256 deployerKey;
+        (deployer, deployerKey) = makeAddrAndKey("deployer");
+        vm.setEnv("PRIVATE_KEY_MAIN", vm.toString(deployerKey));
         vm.warp(1_700_000_000);
         vm.deal(address(this), 100 ether);
         owner = makeAddr("upgrade Safe");
@@ -42,7 +47,7 @@ contract DeployBoundAgreementRegistryScriptTest is Test {
 
     function testExportLeavesProxyUntouchedEvenWhenDeployerIsOwner() public {
         vm.prank(owner);
-        auth.updateRole(address(this), 99);
+        auth.updateRole(deployer, 99);
         address candidate = runner.runWithArgs(block.chainid, address(registry), owner, PREFIX);
         assertEq(runner.implementationOf(address(registry)), previous);
         assertNotEq(candidate, previous);
@@ -118,19 +123,20 @@ contract DeployBoundAgreementRegistryScriptTest is Test {
     }
 
     function testWrongChainRefusesBeforeDeployment() public {
-        uint64 nonce = vm.getNonce(address(this));
+        uint64 nonce = vm.getNonce(deployer);
         vm.expectRevert(
             abi.encodeWithSelector(DeployBoundAgreementRegistryScript.WrongChain.selector, 1, block.chainid)
         );
         runner.runWithArgs(1, address(registry), owner, PREFIX);
-        assertEq(vm.getNonce(address(this)), nonce);
+        assertEq(vm.getNonce(deployer), nonce);
     }
 
     function testUnauthorizedAuthorityRefusesBeforeDeployment() public {
-        uint64 nonce = vm.getNonce(address(this));
+        address stranger = makeAddr("stranger");
+        uint64 nonce = vm.getNonce(deployer);
         vm.expectRevert();
-        runner.runWithArgs(block.chainid, address(registry), makeAddr("stranger"), PREFIX);
-        assertEq(vm.getNonce(address(this)), nonce);
+        runner.runWithArgs(block.chainid, address(registry), stranger, PREFIX);
+        assertEq(vm.getNonce(deployer), nonce);
         assertEq(runner.implementationOf(address(registry)), previous);
     }
 
