@@ -112,6 +112,25 @@ are bridge versions and need not equal the latest v5 implementations.
 These logs appear during dry runs too; successful chain receipts establish actual
 deployment. The Safe batch still must execute before the v5 step.
 
+### Explorer verification with the installed Foundry build
+
+Foundry v1.2.0-rc `0a7b3f0` can report `Chain 4663 not supported` despite the
+chain-specific Etherscan table. Supply both flags explicitly with `--verify
+--verifier etherscan`:
+
+```powershell
+--etherscan-api-version v2 --verifier-url https://api.etherscan.io/v2/api
+```
+
+The project also sets `etherscan_api_version = "v2"`. The key is loaded from the
+ignored local environment, not committed to this repository. An explicit URL
+without V2 mode gets past the local chain registry but omits Etherscan's required
+chainid parameter. A read-only dummy `verify-check` with both options reached the
+Etherscan V2 endpoint and returned the expected invalid-GUID response. This checks
+routing only, not successful contract-source verification. No source upload or
+deployment retry was performed while diagnosing it. Source verification and
+successful deployment receipts remain separate evidence.
+
 ## October 23 refresh
 
 Use branch `codex/robinhood-upgrade-refresh`, based on develop `d964679`.

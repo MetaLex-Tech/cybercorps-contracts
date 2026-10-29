@@ -6,6 +6,7 @@ optimizer = true
 optimizer_runs = 15
 via_ir = true
 extra_output_files = ['abi']
+etherscan_api_version = "v2"
 fs_permissions = [
     { access = "read-write", path = "./script/res" },
     { access = "read", path = "./test/res" }
@@ -16,6 +17,9 @@ ethereum        = { endpoint = "${RPC_URL_ETHEREUM}", retries = 20, retry_backof
 base            = { endpoint = "${RPC_URL_BASE}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
 sepolia         = { endpoint = "${RPC_URL_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
 base_sepolia    = { endpoint = "${RPC_URL_BASE_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+
+[etherscan]
+robinhood = { key = "${ROBINHOOD_ETHERSCAN_API_KEY}", chain = 4663, url = "https://api.etherscan.io/v2/api" }
 
 [profile.ci]
 # inherits [profile.default]

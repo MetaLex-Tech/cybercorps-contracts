@@ -133,3 +133,22 @@ untouched as historical output. It must not be executed for the new split.
 External-model review, real test-environment sign/simulate/submit acceptance,
 colleague receipts/configuration verification, final-stage integration and explicit
 live authorization remain pending.
+
+## Foundry verification configuration follow-up
+
+The user reported missing Etherscan key and then `Chain 4663 not supported` while
+running the bootstrap with explicit `--verifier etherscan --verify`. Added the
+chain-specific key reference (actual key kept only in ignored `.env`), chain 4663
+V2 endpoint table and project V2 API default in `foundry.toml`.
+
+Read-only `forge verify-check` with a dummy GUID reproduced the unsupported-chain
+error on installed Foundry v1.2.0-rc `0a7b3f0`. Explicit verifier URL alone reached
+the endpoint but omitted chainid; explicit URL **and** `--etherscan-api-version v2`
+returned the expected invalid-GUID response. Both flags are documented in the
+runbook. Config parsing and `git diff --check` passed. This is routing validation,
+not full source verification; no private source was uploaded and no broadcast,
+signing or deployment retry was performed by this task.
+
+A local non-dry-run bootstrap artifact now contains 33 transactions and zero
+saved receipts. This does not establish that all transactions were or were not
+submitted; deployment status remains unconfirmed without RPC/receipt readback.
