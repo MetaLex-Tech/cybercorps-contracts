@@ -42,6 +42,10 @@
         CyberCertData[] memory certData
     ) external returns (bytes32 roundId);
 
+    function existingPrinterRoundVersion() external pure returns (uint256);
+    function previewExistingPrinterRound(Round memory draft) external view returns (bytes32 roundId, bytes32 configurationHash);
+    function createRoundWithExistingPrinter(Round memory draft, bytes32 expectedConfigurationHash) external returns (bytes32 roundId);
+
     function submitEOI(
         bytes32 roundId,
         EOI memory eoi,

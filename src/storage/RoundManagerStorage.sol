@@ -55,6 +55,13 @@ import "../storage/LexScrowStorage.sol";
 import "../storage/LedgerEntryTokenStorage.sol";
 import "../CyberCorpConstants.sol";
 
+interface IExistingStockPrinter is ILedgerEntryToken {
+    function securityType() external view returns (SecurityClass);
+    function securitySeries() external view returns (SecuritySeries);
+    function transferable() external view returns (bool);
+    function endorsementRequired() external view returns (bool);
+}
+
 interface ILexChexMinter {
     function requestMintFor(
         MintRequest calldata request,
@@ -206,6 +213,78 @@ library RoundManagerStorage {
         setRound(roundDraft.id, roundDraft);
 
         return roundDraft;
+    }
+
+    error InvalidExistingPrinter();
+    error ExistingPrinterConfigurationChanged();
+    error ExistingPrinterRoundExists();
+    error InvalidExistingPrinterSignature();
+
+    /// @dev Creation-time commitment only: does not freeze later owner-authorized printer updates.
+    function prepareExistingPrinterRound(Round memory draft)
+        public view returns (Round memory normalized, bytes32 configurationHash)
+    {
+        if (draft.certPrinter.length != 1 || draft.legalDetails.length != 1 ||
+            draft.extensionData.length != 1 || draft.pricePerUnit == 0) revert InvalidExistingPrinter();
+        IIssuanceManager manager = getIssuanceManager();
+        address corp = LexScrowStorage.getCorp();
+        address printerAddress = draft.certPrinter[0];
+        if (!manager.isPrinter(printerAddress) || manager.CORP() != corp) revert InvalidExistingPrinter();
+        IExistingStockPrinter printer = IExistingStockPrinter(printerAddress);
+        if (printer.issuanceManager() != address(manager)) revert InvalidExistingPrinter();
+        uint256 classId = manager.getPrinterClassId(printerAddress);
+        if (classId == 0) revert InvalidExistingPrinter();
+        SecurityClassInfo memory classInfo = manager.getSecurityClass(classId);
+        SecurityClass securityType = printer.securityType();
+        SecuritySeries series = printer.securitySeries();
+        if ((securityType != SecurityClass.CommonStock && securityType != SecurityClass.PreferredStock) ||
+            classInfo.classType != securityType || draft.seriesType != series) revert InvalidExistingPrinter();
+        (address extension, bytes memory seriesData) = printer.getSeriesInfo();
+        uint256 legendCount = printer.getDefaultRestrictiveLegendCount();
+        bytes32 legendsHash;
+        for (uint256 i; i < legendCount; ++i) {
+            legendsHash = keccak256(abi.encode(legendsHash, printer.getDefaultRestrictiveLegendAt(i)));
+        }
+        configurationHash = keccak256(abi.encode(
+            corp, address(manager), printerAddress, classId, classInfo, securityType, series,
+            extension, seriesData, printer.certificateUri(), printer.defaultLegend(), legendsHash,
+            manager.getCertPrinterBeaconImplementation(), manager.uriBuilder(),
+            printer.name(), printer.symbol(), printer.transferable(), printer.legalTransferable(),
+            printer.endorsementRequired(), printer.lookThroughBadge()
+        ));
+        draft.id = bytes32(0);
+        draft.raised = 0;
+        draft.escrowedSignature = bytes("");
+        draft.primarySecurityClass = securityType;
+        draft.primarySecuritySeries = series;
+        // The existing EIP-712 authorization signs this ID. Domain separation prevents
+        // old create-new-printer authorizations from being used for the reuse path.
+        draft.id = keccak256(abi.encode(
+            keccak256("cybercorp.round.existing-stock-printer.v1"),
+            block.chainid, address(this), corp, configurationHash, draft
+        ));
+        return (draft, configurationHash);
+    }
+
+    function createRoundWithExistingPrinter(Round memory draft, bytes32 expectedConfigurationHash)
+        external returns (Round memory normalized)
+    {
+        bytes memory signature = draft.escrowedSignature;
+        if (signature.length == 0) revert InvalidExistingPrinterSignature();
+        bytes32 configurationHash;
+        (normalized, configurationHash) = prepareExistingPrinterRound(draft);
+        if (configurationHash != expectedConfigurationHash) revert ExistingPrinterConfigurationChanged();
+        if (getRound(normalized.id).id != bytes32(0)) revert ExistingPrinterRoundExists();
+        if (!verifyEscrowedSignature(normalized.authorityOfficer, EscrowedSignatureData({
+            roundId: normalized.id, seriesType: uint8(normalized.seriesType),
+            raiseCap: normalized.raiseCap, minTicket: normalized.minTicket, maxTicket: normalized.maxTicket,
+            roundType: uint8(normalized.roundType), startTime: normalized.startTime, endTime: normalized.endTime,
+            templateId: normalized.templateId, paymentToken: normalized.paymentToken,
+            pricePerUnit: normalized.pricePerUnit, valuation: normalized.valuation,
+            companyAddress: LexScrowStorage.getCorp()
+        }), signature)) revert InvalidExistingPrinterSignature();
+        normalized.escrowedSignature = signature;
+        setRound(normalized.id, normalized);
     }
 
     /// @notice Submits an Expression of Interest for a round
@@ -595,7 +674,7 @@ library RoundManagerStorage {
         address signer,
         EscrowedSignatureData memory data,
         bytes memory signature
-    ) external view returns (bool) {
+    ) public view returns (bool) {
         bytes32 structHash = keccak256(
             abi.encode(
                 ESCROWEDSIGNATUREDATA_TYPEHASH,

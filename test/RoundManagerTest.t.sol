@@ -801,26 +801,26 @@ contract RoundManagerTest is Test {
     MockPaymentToken public paymentToken;
 
     address public owner;
-    uint256 private ownerPrivKey;
+    uint256 internal ownerPrivKey;
     address public investor;
-    uint256 private investorPrivKey;
+    uint256 internal investorPrivKey;
     address public investor2;
-    uint256 private investor2PrivKey;
+    uint256 internal investor2PrivKey;
     address public corpOwner;
-    uint256 private corpOwnerPrivKey;
+    uint256 internal corpOwnerPrivKey;
 
     // Infra
-    CyberAgreementRegistry private registry;
-    CyberCorpFactory private corpFactory;
-    address private corp;
-    address private auth;
-    address private issuance;
-    address private dealManager;
-    address private roundManager;
-    address private uriBuilder;
-    address private rmFactory;
-    address private helper;
-    string[] private testRoundPartyValues;
+    CyberAgreementRegistry internal registry;
+    CyberCorpFactory internal corpFactory;
+    address internal corp;
+    address internal auth;
+    address internal issuance;
+    address internal dealManager;
+    address internal roundManager;
+    address internal uriBuilder;
+    address internal rmFactory;
+    address internal helper;
+    string[] internal testRoundPartyValues;
     // EIP-712 constants for RoundManager escrow signature
     bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
