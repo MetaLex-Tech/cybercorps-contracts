@@ -1,6 +1,79 @@
 # Robinhood: original addresses -> intermediate bootstrap -> v5
 
-## Current split: colleague deploys secondary conditions and badge
+## October 30 final v5 sequence after develop synchronization
+
+This section supersedes the earlier preparation instructions below. The branch
+now incorporates develop `7ce4e1c825998de5cf309e620d1e9d8e0d1b543d`. Use the current
+`script/upgrade-v5.s.sol:UpgradeV5Script` entrypoint. It replays missing historical
+CREATE2 targets before upgrading, and all **99** recorded targets already had
+code at Robinhood block **101730171**. The intermediate factory upgrade/wiring
+and shared badge setup are present; the mainnet constants now use the shared
+badge auth/proxy, extensions and conditions from upstream.
+
+The owner explicitly chose to reuse kill switch
+`0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435`. Its observed MetaLeX admin is
+Safe `0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C`, Legion admin is
+`0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf`, and it is not raised.
+No new kill-switch admin environment variables are required for this existing
+instance. The old badge exception/fresh-CREATE3 plan is historical.
+
+1. **Confirm the exact release inputs.** `PRIVATE_KEY_MAIN` must belong to the
+   intended deployment operator. The example uses the historical deployer
+   `0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B`. The ignored local
+   `RPC_URL_ROBINHOOD` setting is configured from the existing endpoint so the
+   upstream `robinhood` RPC alias works. Confirm network **4663**, fresh Safe
+   authority/state, adequate gas funding and the existing kill-switch admins.
+   Complete the required independent review and real test-environment
+   sign/simulate/submit success/refusal acceptance before a live release.
+2. **Run the complete final dry run**, using exactly the chosen deployer:
+
+   ```powershell
+   forge script script/upgrade-v5.s.sol:UpgradeV5Script `
+     --rpc-url robinhood `
+     --sender 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B `
+     --use 0.8.28 --evm-version cancun --via-ir --offline `
+     -R '@openzeppelin/contracts/=dependencies/openzeppelin-contracts/contracts/' `
+     -R '@openzeppelin/contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/'
+   ```
+
+   Review deployments, implementation/factory references and the generated
+   `script/res/gnosis-batch-upgrade-v5-4663.json`. The local fork rehearsal
+   generated **23 Safe calls**; this is a reference count for its pinned state
+   and toy sender, not a requirement that overrides changes in actual state.
+   A dry-run batch is for review only and cannot be executed before its
+   referenced implementation/library deployments have successful receipts.
+3. **After release acceptance, the operator broadcasts** the same command with
+   `--broadcast --slow` appended. Do not use `--skip-simulation`. Keep source
+   verification separate if the old Foundry explorer integration blocks it.
+   Save/check every deployment and direct admin-call receipt. Record any new
+   proxy/singleton address in constants before rerunning; implementation/library
+   addresses belong in the release evidence rather than stable proxy fields.
+4. **Execute that actual broadcast run's final Safe JSON atomically** from
+   `0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C`. Collect the required owners'
+   signatures, simulate and execute the entire ordered batch. Use the file
+   produced by the operator's actual run, not the committed historical batch
+   or the local fork's archived output. This is the step that activates the
+   Safe-controlled upgrades and configuration.
+5. **Verify the resulting state and complete any ownership handoff.** Confirm
+   the proxy addresses and AUTH pointers, new implementations/references, USDG,
+   retained **50 bps** primary fees and **500 bps** secondary fees, certificate
+   URI/image builder, badge issuer keys and Safe authority. The registry update
+   also sets production ZKPassport config: verifier from constants, domain
+   `app.metalex.tech`, scope `cyberagreement-passport`, dev mode false. Confirm
+   the kill switch/admins were retained. If the operator still owns an auth,
+   re-simulate the runner and complete its conditional handoff only after the
+   Safe owns it; do not blindly repeat a broadcast. Finish app formation,
+   signing/issuance and certificate-rendering acceptance before enabling use.
+
+The final sequence passed a local fork rehearsal using only public toy key
+`0xA11CE` and Safe impersonation, plus the merged unit checks. That does not
+establish real signer/quorum control, external-model review or deployment
+approval. No live v5 transaction or Safe execution was performed by this task.
+The bootstrap-only PowerShell verifier below covers the 32 historical targets;
+new final-stage implementations/libraries need verification from their actual
+build/deployment artifacts. Never rerun the intermediate downgrade step after v5.
+
+## October 28 deployment split (historical)
 
 The October 28 ownership change supersedes the badge instructions in the historical
 October 23 plan below. **Our intermediate step is now 32 historical deployments
@@ -34,7 +107,7 @@ before any execution.** The 14-call `.simulation.json` remains review-only. Do n
 run the full v5 runner until the external inventory and final-stage integration
 have been completed; it currently includes the secondary-condition sub-script.
 
-## October 28 intermediate setup on current develop
+## October 28 intermediate setup (historical)
 
 Use branch `codex/robinhood-intermediate-20261028`, based on develop
 `0a598592e2b66a1754af81c3746e93b6c155e7c8`, for the intermediate step.

@@ -127,6 +127,41 @@ library CyberAgreementUtils {
         return _signTypedData(vm, _domainSeparator, structHash, privKey);
     }
 
+    function signAgreementWithEvidenceTypedData(
+        Vm vm,
+        bytes32 _domainSeparator,
+        bytes32 _typeHash,
+        bytes32 contractId,
+        address signer,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        bytes[] memory evidence,
+        uint256 privKey
+    ) internal pure returns (bytes memory signature) {
+        bytes32[] memory evidenceHashes = new bytes32[](evidence.length);
+        for (uint256 i = 0; i < evidence.length; i++) {
+            evidenceHashes[i] = keccak256(evidence[i]);
+        }
+        bytes32 structHash = keccak256(
+            abi.encode(
+                _typeHash,
+                contractId,
+                signer,
+                keccak256(bytes(legalContractUri)),
+                _hashStringArray(globalFields),
+                _hashStringArray(partyFields),
+                _hashStringArray(globalValues),
+                _hashStringArray(partyValues),
+                keccak256(abi.encodePacked(evidenceHashes))
+            )
+        );
+
+        return _signTypedData(vm, _domainSeparator, structHash, privKey);
+    }
+
     function signVoidAgreementTypedData(
         Vm vm,
         bytes32 _domainSeparator,

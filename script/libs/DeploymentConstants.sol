@@ -21,6 +21,15 @@ library DeploymentConstants {
         revert UnsupportedChain(chainId);
     }
 
+    /// @notice The ZKPassport scope of MetaLeX agreements. A passport's unique identifier depends on the
+    ///         domain and the scope, so all ZKPassport checks of an app must use the same values.
+    string internal constant ZKPASSPORT_SCOPE = "cyberagreement-passport";
+
+    /// @notice The ZKPassport domain of the MetaLeX app on `chainId`. A testnet uses the preview app.
+    function zkpassportDomain(uint256 chainId) internal pure returns (string memory) {
+        return isTestnet(chainId) ? "preview.app.metalex.tech" : "app.metalex.tech";
+    }
+
     /// @notice Original deployment, before the Robinhood bootstrap replaces factory references.
     struct OriginalDeployment {
         address auth;
@@ -66,7 +75,6 @@ library DeploymentConstants {
         address lexchexCondition;
         address zkpassportCondition;
         address zkpassportVerifier;
-        address zkpassportFinalizer;
     }
 
     struct ExtensionDeployment {
@@ -127,114 +135,104 @@ library DeploymentConstants {
 
     /// @notice Latest CyberCorps V2 deployment constants.
     /// @dev Source: script/res/deployment-addresses.md
-    function coreV2(uint256 chainId)
-        internal
-        pure
-        returns (CoreDeployment memory deployment)
-    {
-        if (chainId == ROBINHOOD || chainId == ROBINHOOD_TESTNET) {
+    function coreV2(uint256 chainId) internal pure returns (CoreDeployment memory deployment) {
+        if (chainId == ROBINHOOD_TESTNET) {
             // Original mainnet deployment is recorded separately in robinhoodOriginal().
             // Keep these post-bootstrap targets: the legacy factories are not upgradeable proxies.
             // Historical proxies reproduced by bootstrap-robinhood.s.sol. This is a target
             // manifest, not evidence of deployment. No verifier/legacy condition is assumed.
             deployment = coreV2(ETH);
-            // PRIOR badge targets only: colleague now owns badge/secondary deployment on 4663.
-            // Verify their actual addresses/receipts and replace these before final v5.
-            // The core-only bootstrap neither deploys nor relies on these badge targets.
+            // Historical testnet fixture targets; mainnet uses the shared deployment below.
             deployment.lexchexBadgeAuth = 0x8e50f5409f1DF3af22C68A1c63927a5585005DB7;
             deployment.lexchexBadge = 0xe1B94940a1926D3A836820F054b071815Aae964f;
             deployment.lexchexCondition = address(0);
             deployment.zkpassportCondition = address(0);
             deployment.zkpassportVerifier = address(0);
-            deployment.zkpassportFinalizer = address(0);
             return deployment;
         } else if (chainId == ETH_SEPOLIA) {
-            return
-                CoreDeployment({
-                    metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
-                    auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
-                    cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
-                    issuanceManagerFactory: 0xD353972D7955F421d94d0eA8c42c88c417F7155A,
-                    cyberCorpSingleFactory: 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4,
-                    dealManagerFactory: 0x3982b078f2ac306219c9540Ebc908360a960C251,
-                    roundManagerFactory: 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9,
-                    cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
-                    uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
-                    lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
-                    lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d,
-                    lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
-                    lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
-                    lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
-                    lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
-                    zkpassportCondition: 0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95, // difference from production chains
-                    zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8,
-                    zkpassportFinalizer: 0x83580c6c950802011C339b3adf13FB9e68B2f356
-                });
+            return CoreDeployment({
+                metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
+                auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
+                cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
+                issuanceManagerFactory: 0xD353972D7955F421d94d0eA8c42c88c417F7155A,
+                cyberCorpSingleFactory: 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4,
+                dealManagerFactory: 0x3982b078f2ac306219c9540Ebc908360a960C251,
+                roundManagerFactory: 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9,
+                cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
+                uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
+                lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d,
+                lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
+                lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
+                lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
+                zkpassportCondition: 0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95, // difference from production chains
+                zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8
+            });
         } else if (chainId == BASE_SEPOLIA) {
-            return
-                CoreDeployment({
-                    metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
-                    auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
-                    cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
-                    issuanceManagerFactory: 0xbbD386D237f3b407E6511A52488850b1Da0cCad2, // different from all other chains
-                    cyberCorpSingleFactory: 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4,
-                    dealManagerFactory: 0x3982b078f2ac306219c9540Ebc908360a960C251,
-                    roundManagerFactory: 0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34, // different from all other chains
-                    cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
-                    uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
-                    lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
-                    lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d,
-                    lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
-                    lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
-                    lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
-                    lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
-                    zkpassportCondition: address(0), // no ZKPassport Verifier available
-                    zkpassportVerifier: address(0), // no ZKPassport Verifier available
-                    zkpassportFinalizer: address(0)
-                });
+            return CoreDeployment({
+                metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
+                auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
+                cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
+                issuanceManagerFactory: 0xbbD386D237f3b407E6511A52488850b1Da0cCad2, // different from all other chains
+                cyberCorpSingleFactory: 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4,
+                dealManagerFactory: 0x3982b078f2ac306219c9540Ebc908360a960C251,
+                roundManagerFactory: 0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34, // different from all other chains
+                cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
+                uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
+                lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d,
+                lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
+                lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
+                lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
+                zkpassportCondition: address(0), // no ZKPassport Verifier available
+                zkpassportVerifier: address(0) // no ZKPassport Verifier available
+            });
         } else if (chainId == ARBITRUM) {
-            return
-                CoreDeployment({
-                    metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
-                    auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
-                    cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
-                    issuanceManagerFactory: 0xD353972D7955F421d94d0eA8c42c88c417F7155A,
-                    cyberCorpSingleFactory: 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4,
-                    dealManagerFactory: 0x3982b078f2ac306219c9540Ebc908360a960C251,
-                    roundManagerFactory: 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9,
-                    cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
-                    uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
-                    lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
-                    lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d, // TODO: the deployer still owns it. Give it to metalexSafe, then drop the deployer role
-                    lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
-                    lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
-                    lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
-                    lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
-                    zkpassportCondition: address(0), // TODO: not yet deployed on this chain
-                    zkpassportVerifier: address(0), // TODO: check if ZKPassport deployed a verifier on this chain
-                    zkpassportFinalizer: address(0)
-                });
-        } else if (chainId == ETH || chainId == BASE) {
+            return CoreDeployment({
+                metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
+                auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
+                cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
+                issuanceManagerFactory: 0xD353972D7955F421d94d0eA8c42c88c417F7155A,
+                cyberCorpSingleFactory: 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4,
+                dealManagerFactory: 0x3982b078f2ac306219c9540Ebc908360a960C251,
+                roundManagerFactory: 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9,
+                cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
+                uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
+                lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d, // TODO: the deployer still owns it. Give it to metalexSafe, then drop the deployer role
+                lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
+                lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
+                lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
+                zkpassportCondition: address(0), // TODO: not yet deployed on this chain
+                zkpassportVerifier: address(0) // TODO: check if ZKPassport deployed a verifier on this chain
+            });
+        } else if (chainId == ETH || chainId == BASE || chainId == ROBINHOOD) {
             deployment = CoreDeployment({
-                    metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
-                    auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
-                    cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
-                    issuanceManagerFactory: 0xD353972D7955F421d94d0eA8c42c88c417F7155A,
-                    cyberCorpSingleFactory: 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4,
-                    dealManagerFactory: 0x3982b078f2ac306219c9540Ebc908360a960C251,
-                    roundManagerFactory: 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9,
-                    cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
-                    uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
-                    lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
-                    lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d, // TODO: the deployer still owns it. Give it to metalexSafe, then drop the deployer role
-                    lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
-                    lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
-                    lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
-                    lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
-                    zkpassportCondition: 0xe71fE689bFAA4939A760EDF7e07f44372a43932A,
-                    zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8,
-                    zkpassportFinalizer: 0x83580c6c950802011C339b3adf13FB9e68B2f356
-                });
+                metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
+                auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
+                cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
+                issuanceManagerFactory: 0xD353972D7955F421d94d0eA8c42c88c417F7155A,
+                cyberCorpSingleFactory: 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4,
+                dealManagerFactory: 0x3982b078f2ac306219c9540Ebc908360a960C251,
+                roundManagerFactory: 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9,
+                cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
+                uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
+                lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                lexchexBadgeAuth: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d, // TODO: the deployer still owns it. Give it to metalexSafe, then drop the deployer role
+                lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                lexchexBadge: 0x114664773Ba721a6AA43890d5FDE7939aF37618F,
+                lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
+                lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
+                zkpassportCondition: 0xe71fE689bFAA4939A760EDF7e07f44372a43932A,
+                zkpassportVerifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8
+            });
+            if (chainId == ROBINHOOD) {
+                // Not deployed on this chain. The NonUSNationalityCondition is deprecated.
+                deployment.zkpassportCondition = address(0);
+            }
             return deployment;
         } else {
             revert UnsupportedChain(chainId);
@@ -242,12 +240,8 @@ library DeploymentConstants {
     }
 
     /// @notice Certificate extension proxies.
-    function extensions(uint256 chainId)
-        internal
-        pure
-        returns (ExtensionDeployment memory deployment)
-    {
-        if (chainId == ROBINHOOD || chainId == ROBINHOOD_TESTNET) {
+    function extensions(uint256 chainId) internal pure returns (ExtensionDeployment memory deployment) {
+        if (chainId == ROBINHOOD_TESTNET) {
             // The bridge replays these four historical proxies. V3 has no archived replay
             // payload here, so the v5 runner creates it with CREATE3. Record those addresses
             // (and the ShareExtension/secondary addresses) after the first run before rerunning v5.
@@ -276,9 +270,12 @@ library DeploymentConstants {
                 shareExtensionV3: 0xa21C434379CC44bfeD6e3c1342e49951804ec30f,
                 fundInterestExtensionV3: 0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15
             });
-        } else if (chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == ETH) {
+        } else if (
+            chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == ETH
+                || chainId == ROBINHOOD
+        ) {
             // The v5 rehearsal deployed the V3 proxies on Base Sepolia first. A new build gives new
-            // addresses, so a later chain gets these addresses only from a replay of that broadcast.
+            // addresses, so a later chain gets these addresses only from the recorded CREATE2 bytes.
             return ExtensionDeployment({
                 safeExtension: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8,
                 safeExtensionV3: 0x740003076c9F16c4a364AE07f3770FB77899299b,
@@ -309,12 +306,16 @@ library DeploymentConstants {
         pure
         returns (SecondaryConditionDeployment memory deployment)
     {
-        if (chainId == ROBINHOOD || chainId == ROBINHOOD_TESTNET) {
-            // Fresh CREATE3 deployments. Do not claim historical addresses exist on this chain.
+        if (chainId == ROBINHOOD_TESTNET) {
+            // No public deployment is asserted by the local historical fixture.
             return deployment;
-        } else if (chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == BASE || chainId == ETH) {
+        }
+        if (
+            chainId == BASE_SEPOLIA || chainId == ETH_SEPOLIA || chainId == ARBITRUM || chainId == BASE
+                || chainId == ETH || chainId == ROBINHOOD
+        ) {
             // deployed with salt "CyberCorpV5-SecondaryConditionsV1.0.0"
-            return SecondaryConditionDeployment({
+            deployment = SecondaryConditionDeployment({
                 eligibility: 0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B,
                 usStateOfResidence: 0x1d4918a83E1F971317f0DD529f088B208Ec24d8C,
                 legionSoulbound: 0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04,
@@ -335,16 +336,15 @@ library DeploymentConstants {
                 killSwitch: 0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435,
                 timeSettlementPeriod: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
             });
+            // Robinhood's shared kill switch was read from chain and explicitly selected
+            // for reuse on 2026-10-30; do not deploy a second instance with different admins.
+            return deployment;
         } else {
             revert UnsupportedChain(chainId);
         }
     }
 
-    function umia(uint256 chainId)
-        internal
-        pure
-        returns (UmiaDeployment memory deployment)
-    {
+    function umia(uint256 chainId) internal pure returns (UmiaDeployment memory deployment) {
         if (chainId == ETH) {
             return UmiaDeployment({
                 parentCoFactory: 0x5c6D411600774c8fE1Aa805d78F03202d7FCD47F,
@@ -369,41 +369,23 @@ library DeploymentConstants {
     }
 
     /// @notice Pump stack proxies. The pump stack exists on Base only.
-    function pump(uint256 chainId)
-        internal
-        pure
-        returns (PumpDeployment memory deployment)
-    {
+    function pump(uint256 chainId) internal pure returns (PumpDeployment memory deployment) {
         if (chainId == BASE) {
-            return PumpDeployment({
-                pumpCorpFactory: 0xe73Ea052c2891cE1668742142a6634Df09c88512
-            });
+            return PumpDeployment({pumpCorpFactory: 0xe73Ea052c2891cE1668742142a6634Df09c88512});
         } else {
             revert UnsupportedChain(chainId);
         }
     }
 
-    function deps(uint256 chainId)
-        internal
-        pure
-        returns (Deps memory deps)
-    {
+    function deps(uint256 chainId) internal pure returns (Deps memory deps) {
         if (chainId == ETH) {
-            return Deps({
-                usdc: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
-            });
+            return Deps({usdc: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48});
         } else if (chainId == BASE) {
-            return Deps({
-                usdc: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
-            });
+            return Deps({usdc: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913});
         } else if (chainId == ETH_SEPOLIA) {
-            return Deps({
-                usdc: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
-            });
+            return Deps({usdc: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238});
         } else if (chainId == BASE_SEPOLIA) {
-            return Deps({
-                usdc: 0x036CbD53842c5426634e7929541eC2318f3dCF7e
-            });
+            return Deps({usdc: 0x036CbD53842c5426634e7929541eC2318f3dCF7e});
         } else {
             revert UnsupportedChain(chainId);
         }

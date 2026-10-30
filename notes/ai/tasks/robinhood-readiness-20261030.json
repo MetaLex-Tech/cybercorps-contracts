@@ -1,0 +1,548 @@
+{
+  "observedAtUtc": "2026-10-30T12:34:33.431633+00:00",
+  "chainId": 4663,
+  "blockNumber": 101730171,
+  "upstream": "7ce4e1c825998de5cf309e620d1e9d8e0d1b543d",
+  "code": [
+    {
+      "name": "coreAUTH",
+      "address": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+      "codeBytes": 2188
+    },
+    {
+      "name": "IssuanceManagerFactory",
+      "address": "0xa32547aadaa4975082d729c79e79dbae4385ebcf",
+      "codeBytes": 3267
+    },
+    {
+      "name": "CyberCertPrinter",
+      "address": "0x016c3a68c3a82179b4e63871c7730aaa272c9638",
+      "codeBytes": 24504
+    },
+    {
+      "name": "CyberCorpSingleFactory",
+      "address": "0xc8e084d3f8b3b326fcc894c7afd28f4904196406",
+      "codeBytes": 2896
+    },
+    {
+      "name": "DealManagerFactory",
+      "address": "0x975df8a99c895d04ae158f8c91ba562fce3ecda3",
+      "codeBytes": 2895
+    },
+    {
+      "name": "CyberAgreementRegistry",
+      "address": "0x387ec9c5ffc830be868328d32b599395785f45db",
+      "codeBytes": 17230
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xa9e808b8ecbb60bb19abf026b5b863215bc4c134",
+      "codeBytes": 130
+    },
+    {
+      "name": "TokenWarrantExtension",
+      "address": "0x487e2e68a945a4bf99da64bdf51ee5e12656e199",
+      "codeBytes": 5014
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xbad0b411c37cff66e4c0b7764db2d499ea757bb4",
+      "codeBytes": 130
+    },
+    {
+      "name": "CertificateUriBuilder",
+      "address": "0x3b93dbb163f9acd500552fc22063744a27c5767b",
+      "codeBytes": 12553
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x5500c095ea7de6f8a5e15949e24b80604cc670a3",
+      "codeBytes": 130
+    },
+    {
+      "name": "CyberCorpFactory",
+      "address": "0xa150525ded1aa387e160fdf4b45e975acd02e156",
+      "codeBytes": 12728
+    },
+    {
+      "name": "corporateFactory",
+      "address": "0x51413048f3dfc4516e95bc8e249341b1d53b6cb2",
+      "codeBytes": 130
+    },
+    {
+      "name": "SAFTEExtension",
+      "address": "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84",
+      "codeBytes": 4560
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xc23fff0b06ae5ebea862611f489b1329108ce603",
+      "codeBytes": 130
+    },
+    {
+      "name": "SAFTExtension",
+      "address": "0x481adae8392002d0195abc251d4dc7ba6bb82334",
+      "codeBytes": 4027
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x109d2a13932be393011835b308f81ce1992e365b",
+      "codeBytes": 130
+    },
+    {
+      "name": "BorgAuth",
+      "address": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+      "codeBytes": 2188
+    },
+    {
+      "name": "LeXcheX",
+      "address": "0x25077c9c742b64ee5498bf3b6630761221bfdbb1",
+      "codeBytes": 18144
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xc8db0c3f47656aee725b0ad1835f9a3fbd0a0b62",
+      "codeBytes": 130
+    },
+    {
+      "name": "LeXcheXMinter",
+      "address": "0x2f693344e6a66ddd2c63ba2e9019db760912a7a3",
+      "codeBytes": 8550
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x0dd1a2a89ec172ac322b6a7a6c869180cbd0f960",
+      "codeBytes": 130
+    },
+    {
+      "name": "LexChexCondition",
+      "address": "0x4a08547d57c8d01e59ba8f884ab90cee0d6d5b42",
+      "codeBytes": 2311
+    },
+    {
+      "name": "SAFTEExtension",
+      "address": "0xaf1467e9722bc975a15964604a19fb8bf78874aa",
+      "codeBytes": 4747
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xe070eda75695be3ed4b9ec3719b76dd36794787c",
+      "codeBytes": 130
+    },
+    {
+      "name": "CyberCertPrinterStorage",
+      "address": "0xba0ed45ee8e8cf898fbd96a4d02d89086039788e",
+      "codeBytes": 2694
+    },
+    {
+      "name": "RoundManagerStorage",
+      "address": "0x313867e932f6e2b2650d284924d5441aa73beb27",
+      "codeBytes": 17276
+    },
+    {
+      "name": "EIP712Lib",
+      "address": "0x1847706c845a2c2d1c4a0021d6befcfc69df59f2",
+      "codeBytes": 1298
+    },
+    {
+      "name": "RoundManagerFactory",
+      "address": "0x3a9afe6c6088200c9cbff947cae8b08578c8b965",
+      "codeBytes": 5199
+    },
+    {
+      "name": "RoundManager",
+      "address": "0x13eaf896e8c77fec3778aa890be4319985b3a3dc",
+      "codeBytes": 21777
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xc9d5d0dedd124f9351e5880469f25ab41869aeb9",
+      "codeBytes": 130
+    },
+    {
+      "name": "CyberCorp",
+      "address": "0x2a7ccabaa3c14e7f666585f1c10ee47859ca2e75",
+      "codeBytes": 11922
+    },
+    {
+      "name": "CyberCorpSingleFactory",
+      "address": "0x03a69668b95d823e51dc1263baf67f0d8f414df1",
+      "codeBytes": 3915
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xbe0d3d13aa07501beac9b72de9e9292e66c7a5c4",
+      "codeBytes": 130
+    },
+    {
+      "name": "IssuanceManager",
+      "address": "0xdf7994f7a12482c473c3bbf51d9a0ff4572f4f30",
+      "codeBytes": 19241
+    },
+    {
+      "name": "CyberCertPrinter",
+      "address": "0x4e41811f6b5765fa3b2f0821665d80a98a4a17c0",
+      "codeBytes": 22938
+    },
+    {
+      "name": "CyberScrip",
+      "address": "0x50a8e54717d34ac4da4f84f34fc892a6d190143e",
+      "codeBytes": 6809
+    },
+    {
+      "name": "IssuanceManagerFactory",
+      "address": "0xc7a2542e932a26b6a5eab1cb5a439398aad9e2e8",
+      "codeBytes": 5192
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xd353972d7955f421d94d0ea8c42c88c417f7155a",
+      "codeBytes": 130
+    },
+    {
+      "name": "DealManager",
+      "address": "0x33318de307e76daf8e04338890164618d6cf70eb",
+      "codeBytes": 23590
+    },
+    {
+      "name": "DealManagerFactory",
+      "address": "0xcda33cb998b87f7f2f7263c665bfbb49861d55b5",
+      "codeBytes": 4764
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x3982b078f2ac306219c9540ebc908360a960c251",
+      "codeBytes": 130
+    },
+    {
+      "name": "SAFEExtension",
+      "address": "0x1b9028a0c923af310bcae0c36368f5a5ee2c5f07",
+      "codeBytes": 2843
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xb2e732d29b89ec36a8dd23cfd32901056b6579c8",
+      "codeBytes": 130
+    },
+    {
+      "name": "SAFTExtensionV2",
+      "address": "0xd3f06454ac5ce568b681917e6384f00324e2114b",
+      "codeBytes": 4341
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x37c2a0e801e569e01f0972186af4db01409e92c1",
+      "codeBytes": 130
+    },
+    {
+      "name": "SAFTEExtensionV2",
+      "address": "0x4368a497ae22dd2016e88fd94c32370fae3906c6",
+      "codeBytes": 5081
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x4acdc8618bf2c3d760a357ec11a8290c79f5b41a",
+      "codeBytes": 130
+    },
+    {
+      "name": "TokenWarrantExtensionV2",
+      "address": "0x33c392287357c9de564001754a26a318b5c3c7a5",
+      "codeBytes": 5362
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xf5a9984dfca4d6dd55d6151f0cd2f4af9522bc8f",
+      "codeBytes": 130
+    },
+    {
+      "name": "ShareExtension",
+      "address": "0x9a62d7f39f9cd714fc2e047b87dcbdf9eed822ce",
+      "codeBytes": 20736
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x80e8205b74e3e9882c3c57aa0b36cd465e7a4b81",
+      "codeBytes": 130
+    },
+    {
+      "name": "ACESAFEExtensionV3",
+      "address": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+      "codeBytes": 7300
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x9a8ef946f18c4296e50f8df0c97b5cf5d1b5ecd2",
+      "codeBytes": 130
+    },
+    {
+      "name": "SAFEExtensionV3",
+      "address": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+      "codeBytes": 6985
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x740003076c9f16c4a364ae07f3770fb77899299b",
+      "codeBytes": 130
+    },
+    {
+      "name": "SAFTExtensionV3",
+      "address": "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8",
+      "codeBytes": 8244
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x2bf1b2f8f6009c5524886243ce4f2ef34e3d4957",
+      "codeBytes": 130
+    },
+    {
+      "name": "SAFTEExtensionV3",
+      "address": "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40",
+      "codeBytes": 8782
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xe79c2b4a35b2509b27686d025fb8fbab2ca49406",
+      "codeBytes": 130
+    },
+    {
+      "name": "TokenWarrantExtensionV3",
+      "address": "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c",
+      "codeBytes": 9231
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x3bdb711517eebd6a88d9aa30b141adc43bab033e",
+      "codeBytes": 130
+    },
+    {
+      "name": "ShareExtensionV3",
+      "address": "0xee07f530bc87ea3f1737b38d76c80ce891ee4165",
+      "codeBytes": 23741
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xa21c434379cc44bfed6e3c1342e49951804ec30f",
+      "codeBytes": 130
+    },
+    {
+      "name": "FundInterestExtensionV3",
+      "address": "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c",
+      "codeBytes": 9660
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x2322d1dcc199d7a9ee60f331ca9d76d244f09a15",
+      "codeBytes": 130
+    },
+    {
+      "name": "badgeAuth",
+      "address": "0x197333fc7a828e623fbfcf88ecdc976136f0cf1d",
+      "codeBytes": 2188
+    },
+    {
+      "name": "LeXcheXBadge",
+      "address": "0xf2fed468afa26a9c11ba8ce5995543eb9e3b308b",
+      "codeBytes": 19885
+    },
+    {
+      "name": "badgeProxy",
+      "address": "0x114664773ba721a6aa43890d5fde7939af37618f",
+      "codeBytes": 130
+    },
+    {
+      "name": "EligibilityCondition",
+      "address": "0xc94211fe38c5e6573713702f54b2b1b1ca29d86e",
+      "codeBytes": 4719
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x64f43cefc89279ab6a529eb4c7432cf4b37f3e4b",
+      "codeBytes": 130
+    },
+    {
+      "name": "USStateOfResidenceCondition",
+      "address": "0x6b896856612b4f45c01ddda4db01dbce681e06f2",
+      "codeBytes": 6637
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x1d4918a83e1f971317f0dd529f088b208ec24d8c",
+      "codeBytes": 130
+    },
+    {
+      "name": "LegionSoulboundCondition",
+      "address": "0x2b301a98f7ee3776bfa22ae57497f359512871d8",
+      "codeBytes": 7876
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x3b96b3a385009b4d0c523dfd6d5b4cf5365e2a04",
+      "codeBytes": 130
+    },
+    {
+      "name": "HolderCapCondition",
+      "address": "0xd6c4ff2ec0fd80e7f3221787e7b714d9fc13a6c0",
+      "codeBytes": 6183
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xa8422d5ffe6b697152aee19d13910302de1e0576",
+      "codeBytes": 130
+    },
+    {
+      "name": "CFIUSCondition",
+      "address": "0x8961c3370b0021507af598af633363a0e9c6db2b",
+      "codeBytes": 7836
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x89fa72549b5fadf209377d5348c30bca4c7e0462",
+      "codeBytes": 130
+    },
+    {
+      "name": "Section4a7DisclosureCondition",
+      "address": "0xc492f904a81c8b0d64737171f2d5d4acda65a580",
+      "codeBytes": 7142
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x42c9e2dade9669c725d88b78cd0e545fd9e7f723",
+      "codeBytes": 130
+    },
+    {
+      "name": "Rule144DisclosureCondition",
+      "address": "0x76c85c9060f19bb5dff58917e35657da33c5c685",
+      "codeBytes": 5348
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x7e30ef03a0c4c7094d464b714e2480ef30088629",
+      "codeBytes": 130
+    },
+    {
+      "name": "HoldingPeriodCondition",
+      "address": "0x0f9397aeaaecbf28b1390b721cad93d1b4fa529b",
+      "codeBytes": 5341
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xc5417d7dde94310ba334e31517defed0aa0ed81f",
+      "codeBytes": 130
+    },
+    {
+      "name": "LegalOpinionCondition",
+      "address": "0xe33f3eb6638c52ab3b87aa3290d032aa678bd329",
+      "codeBytes": 5919
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xd27317aed94be6d310ea6b8c4e08360957ff24e3",
+      "codeBytes": 130
+    },
+    {
+      "name": "RegSDistributionComplianceCondition",
+      "address": "0x7baaacf95f71b328d7249dff40120f8eacb74097",
+      "codeBytes": 4978
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xe8a325ba2df0ba3e08a55b3e3f2bbbbc9354cebb",
+      "codeBytes": 130
+    },
+    {
+      "name": "GPLPApprovalCondition",
+      "address": "0x4d1cfa1cf02994c94c1bb525fd2e83fbada05658",
+      "codeBytes": 3259
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x4be9eaff732f4ba3f1fc6359a2f0858f70637c69",
+      "codeBytes": 130
+    },
+    {
+      "name": "LexChexBadgeKindCondition",
+      "address": "0xcfbe52a7df301edd3b26518ffd53da6cb44c8bfb",
+      "codeBytes": 7005
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xedac303cafdedd92ab6fbecfaffc0a648d9157a1",
+      "codeBytes": 130
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xe4bcf1c4ea266bbd7f3c58a3aa02c43b5cdc9875",
+      "codeBytes": 130
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x8a617187af27a98c89548dffd886eeab0de0936f",
+      "codeBytes": 130
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0xe2aac5187058a5c97da7e6d3d6f9d5811124dcbb",
+      "codeBytes": 130
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x0f2952dcf0279782e6048d2800ee3bead9f59f33",
+      "codeBytes": 130
+    },
+    {
+      "name": "ERC1967Proxy",
+      "address": "0x089b4dba2e3eb49f875c0d7f92a06276b204870f",
+      "codeBytes": 130
+    },
+    {
+      "name": "TimeSettlementPeriodCondition",
+      "address": "0x1e466ecbbc41f6777c4458f8880e62dbf1d08fad",
+      "codeBytes": 1768
+    },
+    {
+      "name": "priorBadgeAuth",
+      "address": "0x8e50f5409f1df3af22c68a1c63927a5585005db7",
+      "codeBytes": 0
+    },
+    {
+      "name": "priorBadgeProxy",
+      "address": "0xe1b94940a1926d3a836820f054b071815aae964f",
+      "codeBytes": 0
+    },
+    {
+      "name": "zkpassportVerifier",
+      "address": "0x1d000001000efd9a6371f4d90bb8920d5431c0d8",
+      "codeBytes": 4951
+    },
+    {
+      "name": "referenceKillSwitch",
+      "address": "0x4c3b9ec3b6e416a64fde4a17ea856e1cf2fe0344",
+      "codeBytes": 0
+    },
+    {
+      "name": "productionKillSwitch",
+      "address": "0x456edafb7283db8fda2a5b3ece576d9292512435",
+      "codeBytes": 2067
+    }
+  ],
+  "calls": {
+    "coreSafeRole": "0x00000000000000000000000000000000000000000000000000000000000000c8",
+    "lexSafeRole": "0x0000000000000000000000000000000000000000000000000000000000000063",
+    "badgeSafeRole": "0x0000000000000000000000000000000000000000000000000000000000000063",
+    "issuanceFactory": "0x000000000000000000000000d353972d7955f421d94d0ea8c42c88c417f7155a",
+    "singleFactory": "0x000000000000000000000000be0d3d13aa07501beac9b72de9e9292e66c7a5c4",
+    "dealFactory": "0x0000000000000000000000003982b078f2ac306219c9540ebc908360a960c251",
+    "roundFactory": "0x000000000000000000000000c9d5d0dedd124f9351e5880469f25ab41869aeb9",
+    "factoryStable": "0x0000000000000000000000005fc5360d0400a0fd4f2af552add042d716f1d168",
+    "factoryLexAuth": "0x000000000000000000000000eadead5c4a6747d4959489742c143bcdb95a01c2",
+    "badgeAUTH": "0x000000000000000000000000197333fc7a828e623fbfcf88ecdc976136f0cf1d",
+    "badgeMinterIssuerKeys": "0x0000000000000000000000000000000000000000000000000000000000010003",
+    "killMetalexAdmin": "0x00000000000000000000000068ab3f79622cbe74c9683aa54d7e1bbdcae8003c",
+    "killLegionAdmin": "0x0000000000000000000000005ff4e90efa2b88cf3ca92d63d244a78a88219abf",
+    "killRaised": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "primaryRoundFee": "0x0000000000000000000000000000000000000000000000000000000000000032",
+    "primaryDealFee": "0x0000000000000000000000000000000000000000000000000000000000000032",
+    "factoryImplementation": "0x000000000000000000000000424ab1b1da8b7b2fe13ca0a7abc346b22efa9191"
+  },
+  "submittedTransactions": false
+}

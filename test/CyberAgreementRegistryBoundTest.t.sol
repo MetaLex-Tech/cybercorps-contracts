@@ -7,6 +7,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import "../src/interfaces/ICyberAgreementRegistry.sol";
+import {SignerCondition} from "../src/interfaces/ISignerConditions.sol";
 
 contract CyberAgreementRegistryBoundTest is Test {
     address alice;
@@ -220,6 +221,28 @@ contract CyberAgreementRegistryBoundTest is Test {
         vm.stopPrank();
 
         assertEq(registry.getContractJson(contractId), EXPECTED_JSON);
+    }
+
+    function test_boundIdsOf_noConditions_sameAsExistingFormula() public {
+        (bytes32 expectedTemplateId, bytes32 expectedId) = _ids(alice, 1);
+        (bytes32 templateId, bytes32 contractId) = registry.boundIdsOf(
+            alice, template, 1, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
+        );
+        assertEq(templateId, expectedTemplateId);
+        assertEq(contractId, expectedId);
+
+        vm.prank(alice);
+        (, bytes32 createdId) = registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
+        assertEq(createdId, expectedId);
+    }
+
+    function test_createBoundContract_emptyConditions_sameAsNoConditions() public {
+        (, bytes32 plainId) = _ids(alice, 1);
+        vm.prank(alice);
+        (, bytes32 contractId) = registry.createBoundContract(
+            template, 1, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
+        );
+        assertEq(contractId, plainId);
     }
 
     string constant EXPECTED_JSON =

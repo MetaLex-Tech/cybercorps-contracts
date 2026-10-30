@@ -222,7 +222,7 @@ The protocol has been used or piloted across Delaware C-corps, Delaware LLCs, Ca
 ### Prerequisites
 
 - [Foundry](https://book.getfoundry.sh/)
-- `RPC_URL_ETHEREUM`, `RPC_URL_BASE`, `RPC_URL_SEPOLIA` and `RPC_URL_BASE_SEPOLIA` environment variables (set in `.env`; only required for fork tests)
+- `RPC_URL_ETHEREUM`, `RPC_URL_BASE`, `RPC_URL_ARBITRUM`, `RPC_URL_ROBINHOOD`, `RPC_URL_SEPOLIA`, `RPC_URL_BASE_SEPOLIA` and `RPC_URL_ROBINHOOD_TESTNET` environment variables (set in `.env`; only required for fork tests)
 
 ### Build
 

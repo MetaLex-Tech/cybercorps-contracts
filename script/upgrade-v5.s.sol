@@ -19,19 +19,28 @@ interface IUUPS {
     function upgradeToAndCall(address newImplementation, bytes calldata data) external payable;
 }
 
-/// @notice Runs the whole v5 release. Each part has its own script, which can also run alone:
+/// @notice Runs the whole v5 release. First it deploys the recorded CREATE2 contracts that the chain does not
+///         have yet, so each contract gets the same address as on the other chains. Then each part runs.
+///         Each part has its own script, which can also run alone on a chain that has the recorded contracts:
 ///         - `UpgradeCoreScript`: the core singletons.
 ///         - `DeployBuildersScript`: the certificate URI builder and image builder, switched in one call.
 ///         - `DeployExtensionsV2Script`: the live V1 and V2 certificate extensions.
 ///         - `DeployExtensionsV3Script`: the V3 extensions.
 ///         - `DeploySecondaryConditionsScript`: the secondary-trading condition singletons.
-/// @dev Run this once per production chain, or on a testnet as a rehearsal.
+/// @dev Run this on each production chain, or on a testnet as a rehearsal. A re-run does only the work
+///      that is still open, so it can also bring a chain with an older or partial deployment up to date.
+///      The recorded contracts come in their first version. The parts then upgrade them to the current code.
 ///      This script writes one Safe batch JSON for the calls of all parts. See `DeploymentScript`.
-///      On a production chain, it also moves the owner role of each core auth from the
-///      deployer to the Safe. See `DeploymentScript.handOffAuthOwner`.
+///      On a production chain, it also moves the owner role of the core auth and the LeXcheX auth from the
+///      deployer to the Safe. See `DeploymentScript.handOffAuthOwner`. `DeploySecondaryConditionsScript`
+///      moves the badge auth.
 ///      Corp upgrades intentionally are not broadcast here:
 ///      `corpUpgradeCalls` returns the six calls that a corp owner must execute in one Safe batch.
 contract UpgradeV5Script is DeploymentScript {
+    /// @dev The salt and init code of each CREATE2 contract in DeploymentConstants, and of each contract
+    ///      that its init code uses. See `DeploymentScript.deployRecordedCreate2`.
+    string private constant CREATE2_DEPLOYMENTS_PATH = "script/res/create2-deployments.json";
+
     // The proxy salt applies only to a contract whose DeploymentConstants field is zero.
     // The script deploys that contract with CREATE3, so its address depends only on the deployer and the salt.
     // If the field has an address, the script uses that address and ignores the salt.
@@ -61,6 +70,8 @@ contract UpgradeV5Script is DeploymentScript {
         initDeployment("[config]", block.chainid, privateKey, core.metalexSafe);
         console2.log("[config] AUTH:", core.auth);
 
+        deployRecordedCreate2("[deploy recorded]", CREATE2_DEPLOYMENTS_PATH);
+
         // Each called script returns the calls that only the Safe can do.
         appendSafeTxs("[sub-script]", (new UpgradeCoreScript()).runWithArgs(block.chainid, privateKey), "core");
         appendSafeTxs(
@@ -88,7 +99,6 @@ contract UpgradeV5Script is DeploymentScript {
         if (!testnet) {
             handOffAuthOwner("[hand off auth]", core.auth, "core AUTH");
             handOffAuthOwner("[hand off auth]", core.lexchexAuth, "LeXcheX AUTH");
-            handOffAuthOwner("[hand off auth]", core.lexchexBadgeAuth, "LeXcheX badge AUTH");
         }
 
         finish(

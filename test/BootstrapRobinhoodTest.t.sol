@@ -49,8 +49,11 @@ contract BootstrapHarness is BootstrapRobinhoodScript {
 }
 
 contract BadgeUpgradeHarness is DeploySecondaryConditionsScript {
-    function upgradeBadge(uint256 key) external returns (GnosisTransaction[] memory) {
-        DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
+    function upgradeBadge(uint256 key, DeploymentConstants.CoreDeployment memory core)
+        external
+        returns (GnosisTransaction[] memory)
+    {
+        // This test uses the frozen historical fixture; the live fork checks shared mainnet addresses.
         initDeployment("[test badge]", block.chainid, key, core.metalexSafe);
         require(_badge(core, block.chainid, "CyberCorpV5-SecondaryConditionsV1.0.0") == core.lexchexBadge);
         handOffAuthOwner("[test handoff]", core.lexchexBadgeAuth, "badge");
@@ -351,7 +354,7 @@ contract BootstrapRobinhoodTest is Test {
         BadgeUpgradeHarness upgrade = new BadgeUpgradeHarness();
         uint256 key = 0xA11CE;
         vm.deal(vm.addr(key), 100 ether);
-        GnosisTransaction[] memory batch = upgrade.upgradeBadge(key);
+        GnosisTransaction[] memory batch = upgrade.upgradeBadge(key, core);
         for (uint256 i; i < batch.length; ++i) {
             assertEq(batch[i].to, core.lexchexBadge, "must not remove Safe ownership");
             vm.prank(core.metalexSafe);

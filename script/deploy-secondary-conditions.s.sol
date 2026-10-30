@@ -31,6 +31,7 @@ import {TimeSettlementPeriodCondition} from "../src/libs/conditions/secondary/Ti
 import {USStateOfResidenceCondition} from "../src/libs/conditions/secondary/USStateOfResidenceCondition.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {DeploymentScript} from "./libs/DeploymentScript.sol";
+import {DeploymentUtils} from "./libs/DeploymentUtils.sol";
 import {GnosisTransaction} from "./libs/safe.sol";
 import {console2} from "forge-std/Script.sol";
 
@@ -213,7 +214,9 @@ contract DeploySecondaryConditionsScript is DeploymentScript {
             "[deploy implementation]",
             "LexChexBadgeKindCondition",
             type(LexChexBadgeKindCondition).creationCode,
-            implementationOf(existing.accreditedInvestor)
+            implementationOf(
+                resolveExisting(ctx.proxySaltStr, "AccreditedInvestor (K_ACCREDITED)", existing.accreditedInvestor)
+            )
         );
         _badgeKind(
             ctx, "AccreditedInvestor (K_ACCREDITED)", existing.accreditedInvestor, implementation, K_ACCREDITED, false
@@ -259,8 +262,9 @@ contract DeploySecondaryConditionsScript is DeploymentScript {
         Context memory ctx,
         DeploymentConstants.SecondaryConditionDeployment memory existing
     ) internal {
+        address killSwitch = resolveExisting(ctx.proxySaltStr, "KillSwitchCondition", existing.killSwitch);
         bytes memory killSwitchInitCode;
-        if (existing.killSwitch == address(0)) {
+        if (killSwitch == address(0)) {
             // The two admin keys are the whole governance of the kill switch, so both are explicit.
             address metalexKillAdmin = vm.envAddress("KILL_SWITCH_METALEX_ADMIN");
             address legionKillAdmin = vm.envAddress("KILL_SWITCH_LEGION_ADMIN");
@@ -269,9 +273,7 @@ contract DeploySecondaryConditionsScript is DeploymentScript {
             killSwitchInitCode =
                 abi.encodePacked(type(KillSwitchCondition).creationCode, abi.encode(metalexKillAdmin, legionKillAdmin));
         }
-        deployIfNotExist(
-            "[deploy condition]", ctx.proxySaltStr, "KillSwitchCondition", existing.killSwitch, killSwitchInitCode
-        );
+        deployIfNotExist("[deploy condition]", ctx.proxySaltStr, "KillSwitchCondition", killSwitch, killSwitchInitCode);
         deployIfNotExist(
             "[deploy condition]",
             ctx.proxySaltStr,
@@ -285,7 +287,8 @@ contract DeploySecondaryConditionsScript is DeploymentScript {
     ///      badge first. It gets its own BorgAuth: the minter holds ADMIN on `lexchexAuth`, and a
     ///      shared auth would make the badge issuer grants meaningless.
     ///      An existing badge takes the new code. Its upgrade needs the owner role on the badge auth.
-    ///      On a production chain the deployer gives a new badge auth to the MetaLeX Safe, then drops its
+    ///      Each setup step reads the chain state, so a re-run does only the steps that are still open.
+    ///      On a production chain the deployer gives the badge auth to the MetaLeX Safe, then drops its
     ///      own role. On a testnet the deployer keeps it.
     function _badge(DeploymentConstants.CoreDeployment memory core, uint256 chainId, string memory proxySaltStr)
         internal
@@ -298,8 +301,7 @@ contract DeploySecondaryConditionsScript is DeploymentScript {
             core.lexchexBadgeAuth,
             abi.encodePacked(type(BorgAuth).creationCode, abi.encode(deployer))
         );
-        bool isNew;
-        (badge, isNew) = upgradeOrDeployProxyIfDiffImpl(
+        (badge,) = upgradeOrDeployProxyIfDiffImpl(
             badgeAuth,
             proxySaltStr,
             "LeXcheXBadge",
@@ -307,18 +309,19 @@ contract DeploySecondaryConditionsScript is DeploymentScript {
             type(LeXcheXBadge).creationCode,
             abi.encodeCall(LeXcheXBadge.initialize, (badgeAuth))
         );
-        if (!isNew) return badge;
 
         // The v1 minter bridges an accreditation into a badge credential.
-        execute(
-            "[set up badge]",
+        setParamIfDifferent(
             badgeAuth,
             badge,
+            abi.encodeCall(LeXcheXBadge.issuerKeys, (core.lexchexMinter)),
+            abi.encode(MINTER_ISSUER_KEYS),
             abi.encodeCall(LeXcheXBadge.setIssuerKeys, (core.lexchexMinter, MINTER_ISSUER_KEYS)),
-            "setting the LeXcheX minter issuer keys on LeXcheXBadge"
+            "LeXcheX minter issuer keys on LeXcheXBadge"
         );
 
-        if (!DeploymentConstants.isTestnet(chainId)) {
+        if (DeploymentConstants.isTestnet(chainId)) return badge;
+        if (!DeploymentUtils.hasOwnerRole(badgeAuth, safe)) {
             execute(
                 "[set up badge]",
                 badgeAuth,
@@ -326,6 +329,9 @@ contract DeploySecondaryConditionsScript is DeploymentScript {
                 abi.encodeCall(BorgAuth.updateRole, (safe, BorgAuth(badgeAuth).OWNER_ROLE())),
                 "giving the Safe the owner role on LeXcheXBadge AUTH"
             );
+        }
+        // Only the deployer can drop its own role, so this call never goes to the Safe.
+        if (DeploymentUtils.hasOwnerRole(badgeAuth, deployer)) {
             execute(
                 "[set up badge]",
                 badgeAuth,

@@ -5,6 +5,10 @@ libs = ["lib", "dependencies"]
 optimizer = true
 optimizer_runs = 15
 via_ir = true
+# Run all calls of a test function in one transaction, not one transaction for each call.
+# The deploy-script tests need this. A fork test runs a full upgrade script, which uses more gas than one block holds.
+# Other script tests check that the deployer's nonce does not change. A transaction for each call changes it.
+isolate = false
 extra_output_files = ['abi']
 etherscan_api_version = "v2"
 fs_permissions = [
@@ -13,10 +17,13 @@ fs_permissions = [
 ]
 
 [rpc_endpoints]
-ethereum        = { endpoint = "${RPC_URL_ETHEREUM}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
-base            = { endpoint = "${RPC_URL_BASE}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
-sepolia         = { endpoint = "${RPC_URL_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
-base_sepolia    = { endpoint = "${RPC_URL_BASE_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+ethereum          = { endpoint = "${RPC_URL_ETHEREUM}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+base              = { endpoint = "${RPC_URL_BASE}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+arbitrum          = { endpoint = "${RPC_URL_ARBITRUM}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+robinhood         = { endpoint = "${RPC_URL_ROBINHOOD}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+sepolia           = { endpoint = "${RPC_URL_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+base_sepolia      = { endpoint = "${RPC_URL_BASE_SEPOLIA}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+robinhood_testnet = { endpoint = "${RPC_URL_ROBINHOOD_TESTNET}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
 
 [etherscan]
 robinhood = { key = "${ROBINHOOD_ETHERSCAN_API_KEY}", chain = 4663, url = "https://api.etherscan.io/v2/api" }
