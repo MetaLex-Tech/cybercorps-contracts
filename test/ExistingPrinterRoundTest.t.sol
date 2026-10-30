@@ -134,7 +134,7 @@ contract ExistingPrinterRoundTest is RoundManagerTest {
     function test_existingPrinterRejectsNonOwnerAndForeignPrinter() public {
         (Round memory draft, bytes32 configHash) = signReuse(reuseDraft());
         vm.prank(investor);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSignature("BorgAuth_NotAuthorized(uint256,address)", 99, investor));
         RoundManager(roundManager).createRoundWithExistingPrinter(draft, configHash);
         draft.certPrinter[0] = address(paymentToken);
         vm.expectRevert(RoundManagerStorage.InvalidExistingPrinter.selector);
@@ -162,9 +162,77 @@ contract ExistingPrinterRoundTest is RoundManagerTest {
         RoundManager(roundManager).previewExistingPrinterRound(draft);
     }
 
+    function test_existingPrinterRejectsManagerMismatch() public {
+        Round memory draft = reuseDraft();
+        vm.mockCall(draft.certPrinter[0], abi.encodeWithSelector(ILedgerEntryToken.issuanceManager.selector), abi.encode(address(0x1234)));
+        vm.expectRevert(RoundManagerStorage.InvalidExistingPrinter.selector);
+        RoundManager(roundManager).previewExistingPrinterRound(draft);
+    }
+
+    function test_existingPrinterRejectsEndorsementChange() public {
+        (Round memory draft, bytes32 configHash) = signReuse(reuseDraft());
+        bool prior = IExistingStockPrinter(draft.certPrinter[0]).endorsementRequired();
+        vm.mockCall(draft.certPrinter[0], abi.encodeWithSelector(IExistingStockPrinter.endorsementRequired.selector), abi.encode(!prior));
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManagerStorage.ExistingPrinterConfigurationChanged.selector);
+        RoundManager(roundManager).createRoundWithExistingPrinter(draft, configHash);
+    }
+
+    function createReuseFixture() internal {
+        (Round memory draft, bytes32 configHash) = signReuse(reuseDraft());
+        vm.prank(corpOwner);
+        roundId = RoundManager(roundManager).createRoundWithExistingPrinter(draft, configHash);
+    }
+
+    function test_existingPrinterRejectRefund() public {
+        createReuseFixture();
+        test_RejectEOI_RefundsAndVoids();
+    }
+
+    function test_existingPrinterRecallRefund() public {
+        createReuseFixture();
+        test_RecallEOI_RefundsAndVoids();
+    }
+
+    function test_existingPrinterRaiseCap() public {
+        createReuseFixture();
+        test_MultipleAllocations_RespectRaiseCap();
+    }
+
+    function test_existingPrinterFCFS() public {
+        Round memory draft = reuseDraft();
+        draft.roundType = RoundType.FCFS;
+        bytes32 configHash;
+        (draft, configHash) = signReuse(draft);
+        vm.prank(corpOwner);
+        bytes32 id = RoundManager(roundManager).createRoundWithExistingPrinter(draft, configHash);
+        deal(address(paymentToken), address(this), 20000e6);
+        CyberCorpHelper.submitFCFSRoundEOIAndAssertFinalized(RoundManager(roundManager), registry, draft.templateId, address(paymentToken), 6, id, corpOwner);
+        assertEq(ILedgerEntryToken(draft.certPrinter[0]).totalSupply(), 1);
+    }
+
+    function test_existingPrinterRejectsBadgeChange() public {
+        (Round memory draft, bytes32 configHash) = signReuse(reuseDraft());
+        vm.prank(corpOwner);
+        ILedgerEntryToken(draft.certPrinter[0]).setLookThroughBadge(address(0x1234));
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManagerStorage.ExistingPrinterConfigurationChanged.selector);
+        RoundManager(roundManager).createRoundWithExistingPrinter(draft, configHash);
+    }
+
+    function test_existingPrinterRejectsSeriesDataChange() public {
+        (Round memory draft, bytes32 configHash) = signReuse(reuseDraft());
+        vm.prank(corpOwner);
+        ILedgerEntryToken(draft.certPrinter[0]).setSeriesData(hex"1234");
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManagerStorage.ExistingPrinterConfigurationChanged.selector);
+        RoundManager(roundManager).createRoundWithExistingPrinter(draft, configHash);
+    }
+
     function test_existingPrinterEncodingVector() public {
         Round memory draft = reuseDraft();
         (bytes32 id, bytes32 configurationHash) = RoundManager(roundManager).previewExistingPrinterRound(draft);
+        assertEq(id, bytes32(0x19edabb5ce8ae5cc0e2126ab7bdeaf96dc885d116e1616b205a3188c7aebe7a9));
         emit log_named_bytes("round encoding vector", abi.encode(draft, configurationHash, id, block.chainid, roundManager, corp, uint8(SecurityClass.CommonStock)));
     }
 

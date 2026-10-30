@@ -27,3 +27,13 @@ Independent Claude reviews found no critical/high contract issue, two medium con
 Commitment boundary: deployed printers have no public getters for global/per-token transfer hooks; the hash does not promise to bind inaccessible hook mappings, future per-token overrides or later owner-authorized mutations. Public class/series settings, default legends, global transfer/registration flags, endorsement/badge/renderer addresses and printer beacon implementation are included. Existing owner metadata setters, including primary classification, retain their existing behavior. No new LET getters, lifecycle locks or global share-cap ledger added.
 
 Next: finish fork test and independent follow-up; review PR surfaces and affected-flow browser acceptance before merge eligibility. Neither implementation is deployed; saved production raise draft must remain unchanged.
+
+## Follow-up checkpoint
+
+Verified isolated fork at Ethereum block 26308939 passes upgrade, preview, signed reuse-round creation, EOI and allocation on the actual existing Preferred printer (1 test, 0 failures). This is Foundry execution, not browser sign/simulate/RPC-submit acceptance. No live writes. Contract code parent 16c8b77; frontend parent 8d717158a9e.
+
+Independent follow-up confirmed previous seven corrections but found a blocking integration assumption: RoundCreated overwrites CyberCertPrinter.roundId, and round views filter by that field. Reuse needs per-round printer membership and agreement-scoped certificate views. Indexing source changes require owner approval; requested in this chat, still pending. No indexer code modified. Keep both PRs unmerged and feature disabled until this is resolved and affected-flow acceptance passes.
+
+Added fixed Solidity/browser hash assertion, reuse-specific refund/cap/FCFS and configuration-refusal tests, exact owner error, and explicit qualifier clearing. Expanded tests in progress. Existing fork Preferred path supplies actual Preferred coverage. forge-std local dependency dirt is excluded from all commits; no submodule change in PR. New errors are in the additive ABI actually used by the new path. No additional contract capability requested.
+
+PRs: contracts https://github.com/MetaLex-Tech/cybercorps-contracts/pull/191 and webapp https://github.com/MetaLex-Tech/metalex-webapp/pull/2161. Expanded contract suite: 27 passed, 0 failed; browser fixed-vector tests: 3 passed; app TypeScript passed after selection fix. Independent follow-up’s indexing blocker remains open. Both PRs on explicit merge hold.
