@@ -1,7 +1,7 @@
 # Task: synchronize and prepare the final Robinhood v5 step
 
 - **Owner:** Current Codex chat; final-step preparation only. Colleague badge/secondary ownership is retained.
-- **Status:** Merge resolution and final-stage preparation validated; completing local merge commit. Live signing, deployment and Safe execution remain outside this request.
+- **Status:** Local merge and final-stage preparation complete. Live signing, deployment and Safe execution remain outside this request.
 - **Date:** 2026-10-30 (America/New_York).
 - **Branch:** `codex/robinhood-intermediate-20261028`.
 - **Base:** `3b0f1e749a4bba0de2382eab3e3481d5562229ac`.
@@ -90,6 +90,11 @@ from the fetched upstream. No older refresh runner/helper was copied over them.
   chain addresses/state and the exact fetched upstream revision.
 
 ## Operator handoff
+
+Validated code is saved in merge commit
+`13ea54eaf1ae9d40931a290503702dcc14744353`, with parents `3b0f1e7` and `7ce4e1c`.
+The fetched upstream is an ancestor of that commit. This final status update is
+documentation only; the tests cover that merge's code. Nothing was pushed.
 
 Follow the October 30 section at the top of the [runbook](../../../script/res/robinhood-bootstrap.md):
 operator-specific full dry run, release acceptance, operator broadcast, confirmation
