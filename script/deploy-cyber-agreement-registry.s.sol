@@ -2,7 +2,8 @@
 pragma solidity ^0.8.28;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryRouter} from "../src/CyberAgreementRegistryRouter.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
 /// @notice Deploys a new CyberAgreementRegistry implementation via CREATE2.
@@ -11,7 +12,7 @@ contract DeployCyberAgreementRegistryScript is Script {
     string internal constant DEFAULT_SALT_STRING =
         "MetaLex.CyberAgreementRegistry.UpgradeV3.2.0";
 
-    function run() public returns (CyberAgreementRegistry implementation) {
+    function run() public returns (CyberAgreementRegistryRouter implementation) {
         return
             runWithArgs(
                 DEFAULT_SALT_STRING,
@@ -22,7 +23,7 @@ contract DeployCyberAgreementRegistryScript is Script {
     function runWithArgs(
         string memory saltStr,
         uint256 deployerPrivateKey
-    ) public returns (CyberAgreementRegistry implementation) {
+    ) public returns (CyberAgreementRegistryRouter implementation) {
         bytes32 salt = keccak256(bytes(saltStr));
         address deployer = vm.addr(deployerPrivateKey);
 
@@ -43,7 +44,7 @@ contract DeployCyberAgreementRegistryScript is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        implementation = new CyberAgreementRegistry{salt: salt}();
+        implementation = CyberAgreementRegistryDeployment.deployRouter(salt);
 
         vm.stopBroadcast();
 

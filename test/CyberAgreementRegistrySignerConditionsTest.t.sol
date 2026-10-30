@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import "../src/interfaces/ICyberAgreementRegistry.sol";
 import {ISignerConditions, SignerCondition} from "../src/interfaces/ISignerConditions.sol";
 import "../src/interfaces/IZKPassportVerifier.sol";
@@ -148,7 +149,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         return CyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
-                    address(new CyberAgreementRegistry()),
+                    address(CyberAgreementRegistryDeployment.deployRouter()),
                     abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )
@@ -825,7 +826,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             address(registry),
             false,
             abi.encodeCall(
-                CyberAgreementRegistry.signContractFor,
+                ICyberAgreementRegistry.signContractFor,
                 (bob, contractId, partyValues[1], _signLegacy(contractId, 1, bobKey), false, "")
             )
         );

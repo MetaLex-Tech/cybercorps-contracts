@@ -9,6 +9,7 @@ import {DeploymentConstants} from "../script//libs/DeploymentConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
@@ -318,7 +319,7 @@ contract ShareExtensionForkTest is Test {
         registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
-                    address(new CyberAgreementRegistry()),
+                    address(CyberAgreementRegistryDeployment.deployRouter()),
                     abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(bootstrapAuth))
                 )
             )

@@ -6,6 +6,7 @@ import {console} from "forge-std/console.sol";
 import {Vm} from "forge-std/Test.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
@@ -116,7 +117,7 @@ contract PublicRoundTestDeploy is Script {
         // Upgradeable singletons
         address registry = address(
             new ERC1967Proxy{salt: salt}(
-                address(new CyberAgreementRegistry{salt: salt}()),
+                address(CyberAgreementRegistryDeployment.deployRouter(salt)),
                 abi.encodeWithSelector(
                     CyberAgreementRegistry.initialize.selector,
                     address(auth)

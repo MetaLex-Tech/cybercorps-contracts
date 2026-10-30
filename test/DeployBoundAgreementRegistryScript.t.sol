@@ -4,7 +4,8 @@ pragma solidity ^0.8.28;
 import {DeployBoundAgreementRegistryScript} from "../script/deploy-bound-agreement-registry.s.sol";
 
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
-import {CyberAgreementJson, CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {Test} from "forge-std/Test.sol";
@@ -38,7 +39,7 @@ contract DeployBoundAgreementRegistryScriptTest is Test {
         vm.deal(address(this), 100 ether);
         owner = makeAddr("upgrade Safe");
         auth = new BorgAuth(owner);
-        previous = address(new CyberAgreementRegistry());
+        previous = address(CyberAgreementRegistryDeployment.deployRouter());
         registry = CyberAgreementRegistry(
             address(new ERC1967Proxy(previous, abi.encodeCall(CyberAgreementRegistry.initialize, (address(auth)))))
         );

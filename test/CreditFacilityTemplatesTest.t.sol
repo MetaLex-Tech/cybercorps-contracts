@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CreditFacilityTemplates} from "../script/libs/CreditFacilityTemplates.sol";
 
@@ -33,7 +34,7 @@ contract CreditFacilityTemplatesTest is Test {
         registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
-                    address(new CyberAgreementRegistry()),
+                    address(CyberAgreementRegistryDeployment.deployRouter()),
                     abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )

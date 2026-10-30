@@ -5,6 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
@@ -268,7 +269,7 @@ contract UpgradePublicRoundsScript is Script {
 
         // 8) upgrade CyberAgreementRegistry
         address newRegistryImpl = address(
-            new CyberAgreementRegistry{salt: salt}()
+            CyberAgreementRegistryDeployment.deployRouter(salt)
         );
         console.log(
             "New CyberAgreementRegistry implementation:",

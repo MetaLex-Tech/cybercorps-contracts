@@ -17,6 +17,7 @@ import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -150,7 +151,7 @@ library CyberCorpHelper {
         registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy{salt: SALT}(
-                    address(new CyberAgreementRegistry{salt: SALT}()),
+                    address(CyberAgreementRegistryDeployment.deployRouter(SALT)),
                     abi.encodeWithSelector(
                         CyberAgreementRegistry.initialize.selector,
                         address(bootstrapAuth)

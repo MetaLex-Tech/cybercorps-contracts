@@ -12,6 +12,7 @@ import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
@@ -58,7 +59,7 @@ contract BaseScript is Script {
         address agreementRegistryImplementation = 0xeE244A549838BE9c234BFF0F8B5A947a328A882c;
 
          //new implementation
-        address newAgreementRegistry = address(new CyberAgreementRegistry());
+        address newAgreementRegistry = address(CyberAgreementRegistryDeployment.deployRouter());
         CyberAgreementRegistry(agreementRegistryImplementation).upgradeToAndCall(newAgreementRegistry, "");
         
         return;*/
@@ -122,7 +123,7 @@ contract BaseScript is Script {
         //address tokenWarrantExtension = address(new TokenWarrantExtension{salt: salt}());
 
         address registry = address(new ERC1967Proxy{salt: salt}(
-           address(new CyberAgreementRegistry{salt: salt}()),
+           address(CyberAgreementRegistryDeployment.deployRouter(salt)),
            abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
         ));
 

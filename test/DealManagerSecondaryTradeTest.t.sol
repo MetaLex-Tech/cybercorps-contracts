@@ -43,6 +43,7 @@ pragma solidity 0.8.28;
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -261,7 +262,7 @@ contract DealManagerSecondaryTradeTest is Test {
         registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
-                    address(new CyberAgreementRegistry()),
+                    address(CyberAgreementRegistryDeployment.deployRouter()),
                     abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )

@@ -12,6 +12,7 @@ import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
@@ -107,7 +108,7 @@ contract BaseScript is Script {
 
         address registry = address(
             new ERC1967Proxy{salt: salt}(
-                address(new CyberAgreementRegistry{salt: salt}()),
+                address(CyberAgreementRegistryDeployment.deployRouter(salt)),
                 abi.encodeWithSelector(
                     CyberAgreementRegistry.initialize.selector,
                     address(auth)

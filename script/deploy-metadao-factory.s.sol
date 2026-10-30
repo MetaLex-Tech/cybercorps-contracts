@@ -7,6 +7,7 @@ import {console} from "forge-std/console.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -104,7 +105,7 @@ contract DeployScript is Script {
         address dealManagerFactory = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
 
         // upgrade CyberAgreementRegistry
-        address newAgreementRegistryImplementation = address(new CyberAgreementRegistry{salt: salt}());
+        address newAgreementRegistryImplementation = address(CyberAgreementRegistryDeployment.deployRouter(salt));
         CyberAgreementRegistry(registry).upgradeToAndCall(newAgreementRegistryImplementation, "");
 
         MetaDAOFactory metaDAOFactory = MetaDAOFactory(

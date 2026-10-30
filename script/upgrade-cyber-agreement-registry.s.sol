@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
 contract UpgradeCyberAgreementRegistryScript is Script {
@@ -30,7 +31,7 @@ contract UpgradeCyberAgreementRegistryScript is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         address newRegistryImpl = address(
-            new CyberAgreementRegistry{salt: salt}()
+            CyberAgreementRegistryDeployment.deployRouter(salt)
         );
         console2.log(
             "New CyberAgreementRegistry implementation: %s",

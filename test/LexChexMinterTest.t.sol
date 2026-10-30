@@ -42,6 +42,7 @@ pragma solidity 0.8.28;
 
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
@@ -110,7 +111,7 @@ contract LexChexMinterTest is Test {
         coreAuth = new BorgAuth(owner);
 
         registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
-            address(new CyberAgreementRegistry{salt: salt}()),
+            address(CyberAgreementRegistryDeployment.deployRouter(salt)),
             abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(coreAuth))
         )));
 

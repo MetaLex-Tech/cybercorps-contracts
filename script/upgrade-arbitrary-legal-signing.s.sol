@@ -3,6 +3,7 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 
 contract UpgradeArbitraryLegalSigningScript is Script {
     function run() public {
@@ -31,7 +32,7 @@ contract UpgradeArbitraryLegalSigningScript is Script {
 
         // 1) upgrade CyberAgreementRegistry
         address newRegistryImpl = address(
-            new CyberAgreementRegistry{salt: salt}()
+            CyberAgreementRegistryDeployment.deployRouter(salt)
         );
         console2.log(
             "New CyberAgreementRegistry implementation:",

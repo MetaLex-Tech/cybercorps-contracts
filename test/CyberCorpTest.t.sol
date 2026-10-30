@@ -52,6 +52,7 @@ import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
@@ -213,7 +214,7 @@ contract CyberCorpForkTest is Test {
         // Deploy upgradeable singletons
 
         registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
-            address(new CyberAgreementRegistry{salt: salt}()),
+            address(CyberAgreementRegistryDeployment.deployRouter(salt)),
             abi.encodeWithSelector(
                 CyberAgreementRegistry.initialize.selector,
                 address(auth)
@@ -880,7 +881,7 @@ contract CyberCorpForkTest is Test {
         BorgAuth auth = new BorgAuth(testAddress);
         // auth.initialize();
         CyberAgreementRegistry registrya = CyberAgreementRegistry(address(new ERC1967Proxy(
-            address(new CyberAgreementRegistry()),
+            address(CyberAgreementRegistryDeployment.deployRouter()),
             abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
         )));
         string[] memory globalFields = new string[](1);
@@ -2990,7 +2991,7 @@ contract CyberCorpForkTest is Test {
 
     function testUpgradeCyberAgreementRegistry() public {
         // Deploy initial implementation and proxy
-        address registryImplementation = address(new CyberAgreementRegistry());
+        address registryImplementation = address(CyberAgreementRegistryDeployment.deployRouter());
         bytes memory initData = abi.encodeWithSelector(
             CyberAgreementRegistry.initialize.selector,
             address(auth)
@@ -3016,7 +3017,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // Deploy new implementation
-        address newImplementation = address(new CyberAgreementRegistry());
+        address newImplementation = address(CyberAgreementRegistryDeployment.deployRouter());
 
         // Upgrade to new implementation without initialization data
 
@@ -3678,7 +3679,7 @@ contract CyberCorpForkTest is Test {
         // First give the test contract the OWNER_ROLE (99)
         address registry = 0x9d4EFe86964eb038848D7aD4d208AAdEA7282516;
         // Deploy new implementation
-        address newImplementation = address(new CyberAgreementRegistry());
+        address newImplementation = address(CyberAgreementRegistryDeployment.deployRouter());
 
         // Get the current registry address from the factory
         //address registryAddr = cyberCorpFactory.registryAddress();

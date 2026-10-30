@@ -43,6 +43,7 @@ pragma solidity 0.8.28;
 
 import {Vm} from "forge-std/Test.sol";
 import {CyberAgreementRegistry} from "../../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../../script/libs/CyberAgreementRegistryDeployment.sol";
 
 interface IRegistryUUPS {
     function upgradeToAndCall(address newImplementation, bytes calldata data) external payable;
@@ -55,7 +56,7 @@ library CyberAgreementUtils {
     /// on-chain code and every signature fails to verify. Upgrading makes the fork exercise the
     /// implementation under test rather than pinning tests to the old preimage.
     function upgradeRegistry(Vm vm, address registry, address owner) internal {
-        address newImpl = address(new CyberAgreementRegistry());
+        address newImpl = address(CyberAgreementRegistryDeployment.deployRouter());
         vm.prank(owner);
         IRegistryUUPS(registry).upgradeToAndCall(newImpl, "");
     }

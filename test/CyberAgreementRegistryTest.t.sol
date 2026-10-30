@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import "../src/interfaces/ICyberAgreementRegistry.sol";
 
@@ -48,7 +49,7 @@ contract CyberAgreementRegistryTest is Test {
         registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy{salt: coreSalt}(
-                    address(new CyberAgreementRegistry{salt: coreSalt}()),
+                    address(CyberAgreementRegistryDeployment.deployRouter(coreSalt)),
                     abi.encodeWithSelector(
                         CyberAgreementRegistry.initialize.selector,
                         address(coreAuth)
