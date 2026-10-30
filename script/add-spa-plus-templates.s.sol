@@ -2,7 +2,7 @@
 pragma solidity ^0.8.18;
 
 import {Script} from "forge-std/Script.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 
 contract AddSpaPlusTemplatesScript is Script {
     address internal constant REGISTRY =
@@ -18,56 +18,56 @@ contract AddSpaPlusTemplatesScript is Script {
         string[] memory globalFieldsSaft = _globalFieldsSaft();
         string[] memory partyFields = _partyFields();
 
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             bytes32(bytes("mlx_safe_reg_d_v1_3")),
             "mlx_safe_reg_d_v1_3",
             "IPFS://bafybeih7l2kxncjuwrfgv5gnmpcik43dnn4pxpe4it4u7ti2hgfgrlot2a",
             globalFieldsSafe,
             partyFields
         );
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             bytes32(bytes("mlx_safe_reg_s_v1_3")),
             "mlx_safe_reg_s_v1_3",
             "IPFS://bafybeieh7jn553jmrjmwee3dsvwf5hkedomey2vhubc3mumlewfpumvlae",
             globalFieldsSafe,
             partyFields
         );
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             bytes32(bytes("mlx_safe_tw_reg_d_v1_3")),
             "mlx_safe_tw_reg_d_v1_3",
             "IPFS://bafybeiaw3pwov3ahg4bk2hte2hu4pwv34nndoguxyk3umq6f5su3kod6ay",
             globalFieldsSafeTokenWarrant,
             partyFields
         );
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             bytes32(bytes("mlx_safe_tw_reg_s_v1_3")),
             "mlx_safe_tw_reg_s_v1_3",
             "IPFS://bafybeicto2raupsj5ad7snxvhmmll2plwyploqho4fg2cibnn2fuhlm2d4",
             globalFieldsSafeTokenWarrant,
             partyFields
         );
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             bytes32(bytes("mlx_safte_reg_d_v1_3")),
             "mlx_safte_reg_d_v1_3",
             "IPFS://bafybeiag7xatsusb24evnpyj6ztf62kix36dgbsp3kbazfyvr273ph56ay",
             globalFieldsSafte,
             partyFields
         );
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             bytes32(bytes("mlx_safte_reg_s_v1_3")),
             "mlx_safte_reg_s_v1_3",
             "IPFS://bafybeia43r7e566s2jlq4gtaasmtybutujy7fuizhw3fycxtwnstfbkeia",
             globalFieldsSafte,
             partyFields
         );
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             bytes32(bytes("mlx_saft_reg_d_v1_3")),
             "mlx_saft_reg_d_v1_3",
             "IPFS://bafybeieoljri2rwuv35rymjd654sr3u46kbcao7mymseqobfo7x6lxgdcy",
             globalFieldsSaft,
             partyFields
         );
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             bytes32(bytes("mlx_saft_reg_s_v1_3")),
             "mlx_saft_reg_s_v1_3",
             "IPFS://bafybeibwrz3rttteguo5ccoh5x7ndwdu6hyhy7i3iraii5c5ml4pfv73t4",

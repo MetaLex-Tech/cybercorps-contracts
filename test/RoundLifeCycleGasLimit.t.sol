@@ -6,7 +6,7 @@ import {RoundLib, Round, RoundType} from "../src/libs/RoundLib.sol";
 import {CyberCertData, EOI} from "../src/storage/RoundManagerStorage.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {ShareExtension} from "../src/storage/extensions/ShareExtension.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
@@ -41,7 +41,7 @@ contract RoundLifeCycleGasLimitTest is Test {
     uint256 constant EOI_AMOUNT     =     2_000_000_000;
 
     // ── State ─────────────────────────────────────────────────────────────────
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
     CyberCorpFactory corpFactory;
     MockERC20 usdc;
     ShareExtension shareExtension;

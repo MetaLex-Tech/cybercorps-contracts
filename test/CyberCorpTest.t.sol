@@ -51,7 +51,8 @@ import {IssuanceManagerFactory, IssuanceManager} from "../src/IssuanceManagerFac
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
@@ -91,7 +92,7 @@ contract CyberCorpForkTest is Test {
     //     Counter public counter;
 
     CyberCorpFactory cyberCorpFactory;
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
     uint256 testPrivateKey;
     address testAddress;
     BorgAuth auth;
@@ -212,10 +213,10 @@ contract CyberCorpForkTest is Test {
 
         // Deploy upgradeable singletons
 
-        registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
-            address(new CyberAgreementRegistry{salt: salt}()),
+        registry = ICyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
+            address(CyberAgreementRegistryDeployment.deployRouter(salt)),
             abi.encodeWithSelector(
-                CyberAgreementRegistry.initialize.selector,
+                ICyberAgreementRegistry.initialize.selector,
                 address(auth)
             )
         )));
@@ -879,9 +880,9 @@ contract CyberCorpForkTest is Test {
         vm.startPrank(testAddress);
         BorgAuth auth = new BorgAuth(testAddress);
         // auth.initialize();
-        CyberAgreementRegistry registrya = CyberAgreementRegistry(address(new ERC1967Proxy(
-            address(new CyberAgreementRegistry()),
-            abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+        ICyberAgreementRegistry registrya = ICyberAgreementRegistry(address(new ERC1967Proxy(
+            address(CyberAgreementRegistryDeployment.deployRouter()),
+            abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(auth))
         )));
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -1214,7 +1215,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // Try to sign and finalize with wrong passphrase
-        vm.expectRevert(CyberAgreementRegistry.InvalidSecret.selector); // Expect revert due to invalid secret
+        vm.expectRevert(ICyberAgreementRegistry.InvalidSecret.selector); // Expect revert due to invalid secret
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             id,
@@ -2388,7 +2389,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // Try to sign with invalid secret - should fail
-        vm.expectRevert(CyberAgreementRegistry.InvalidSecret.selector);
+        vm.expectRevert(ICyberAgreementRegistry.InvalidSecret.selector);
         IDealManager(dealManagerAddr).signDealAndPay(
             newPartyAddr,
             id,
@@ -2990,15 +2991,15 @@ contract CyberCorpForkTest is Test {
 
     function testUpgradeCyberAgreementRegistry() public {
         // Deploy initial implementation and proxy
-        address registryImplementation = address(new CyberAgreementRegistry());
+        address registryImplementation = address(CyberAgreementRegistryDeployment.deployRouter());
         bytes memory initData = abi.encodeWithSelector(
-            CyberAgreementRegistry.initialize.selector,
+            ICyberAgreementRegistry.initialize.selector,
             address(auth)
         );
         address registryAddr = address(
             new ERC1967Proxy(registryImplementation, initData)
         );
-        CyberAgreementRegistry registry = CyberAgreementRegistry(registryAddr);
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(registryAddr);
 
         // Create a test template to verify functionality
         string[] memory globalFields = new string[](1);
@@ -3016,17 +3017,17 @@ contract CyberCorpForkTest is Test {
         );
 
         // Deploy new implementation
-        address newImplementation = address(new CyberAgreementRegistry());
+        address newImplementation = address(CyberAgreementRegistryDeployment.deployRouter());
 
         // Upgrade to new implementation without initialization data
 
         // Non-owner should not be able to upgrade it
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.OWNER_ROLE(), address(this)));
-        CyberAgreementRegistry(registryAddr).upgradeToAndCall(newImplementation, "");
+        ICyberAgreementRegistry(registryAddr).upgradeToAndCall(newImplementation, "");
 
         // Owner should be able to upgrade it
         vm.prank(multisig);
-        CyberAgreementRegistry(registryAddr).upgradeToAndCall(
+        ICyberAgreementRegistry(registryAddr).upgradeToAndCall(
             newImplementation,
             ""
         );
@@ -3678,7 +3679,7 @@ contract CyberCorpForkTest is Test {
         // First give the test contract the OWNER_ROLE (99)
         address registry = 0x9d4EFe86964eb038848D7aD4d208AAdEA7282516;
         // Deploy new implementation
-        address newImplementation = address(new CyberAgreementRegistry());
+        address newImplementation = address(CyberAgreementRegistryDeployment.deployRouter());
 
         // Get the current registry address from the factory
         //address registryAddr = cyberCorpFactory.registryAddress();
@@ -3687,16 +3688,16 @@ contract CyberCorpForkTest is Test {
 
 
         vm.startPrank(multisig);
-        CyberAgreementRegistry(registry).upgradeToAndCall(
+        ICyberAgreementRegistry(registry).upgradeToAndCall(
             newImplementation,
             ""
         );
         //get the template
-        (string memory template, string memory title) = CyberAgreementRegistry(registry).templates(bytes32(uint256(1)));
+        (string memory template, string memory title) = ICyberAgreementRegistry(registry).templates(bytes32(uint256(1)));
         console.log("template: ", template);
         console.log("title: ", title);
 
-        (string memory legalContractUri, string memory titleA, string[] memory globalFields, string[] memory signerFields) = CyberAgreementRegistry(registry).getTemplateDetails(bytes32(uint256(1)));
+        (string memory legalContractUri, string memory titleA, string[] memory globalFields, string[] memory signerFields) = ICyberAgreementRegistry(registry).getTemplateDetails(bytes32(uint256(1)));
         console.log("legalContractUri: ", legalContractUri);
         console.log("title: ", titleA);
     }
@@ -4286,7 +4287,7 @@ contract CyberCorpForkTest is Test {
 
         // Verify the deal was created in the registry
         assertTrue(
-            CyberAgreementRegistry(registry).hasSigned(id, testAddress),
+            ICyberAgreementRegistry(registry).hasSigned(id, testAddress),
             "Deal should be signed by the proposer"
         );
 
@@ -4450,7 +4451,7 @@ contract CyberCorpForkTest is Test {
 
         // Verify the deal was created in the registry
         assertTrue(
-            CyberAgreementRegistry(registry).hasSigned(id, testAddress),
+            ICyberAgreementRegistry(registry).hasSigned(id, testAddress),
             "Deal should be signed by the proposer"
         );
 
@@ -5613,7 +5614,7 @@ contract CyberCorpForkTest is Test {
 
         // Try to sign with expired delegation - should fail
         vm.startPrank(delegateAddr);
-        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector); // Should revert due to expired delegation
+        vm.expectRevert(ICyberAgreementRegistry.SignatureVerificationFailed.selector); // Should revert due to expired delegation
         registry.signContractFor(
             principalAddr,
             contractId,

@@ -2,7 +2,8 @@
 pragma solidity 0.8.28;
 
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CompanyOfficer, CyberCertData, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
@@ -123,11 +124,11 @@ contract CyberCorpUpgradeabilityForkTest is Test {
 
         metalexAuth = new BorgAuth(metalex);
 
-        CyberAgreementRegistry registry = CyberAgreementRegistry(
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy{salt: salt}(
-                    address(new CyberAgreementRegistry{salt: salt}()),
-                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(metalexAuth))
+                    address(CyberAgreementRegistryDeployment.deployRouter(salt)),
+                    abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(metalexAuth))
                 )
             )
         );

@@ -1,32 +1,32 @@
-/*    .o.                                                                                             
-     .888.                                                                                            
-    .8"888.                                                                                           
-   .8' `888.                                                                                          
-  .88ooo8888.                                                                                         
- .8'     `888.                                                                                        
-o88o     o8888o                                                                                       
-                                                                                                      
-                                                                                                      
-                                                                                                      
-ooo        ooooo               .             ooooo                  ooooooo  ooooo                    
-`88.       .888'             .o8             `888'                   `8888    d8'                     
- 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P                       
- 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'                        
- 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.                       
- 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b                      
-o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o                    
-                                                                                                      
-                                                                                                      
-                                                                                                      
-  .oooooo.                .o8                            .oooooo.                                     
- d8P'  `Y8b              "888                           d8P'  `Y8b                                    
-888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
-888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
-888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
-`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
- `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
-             .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+/*    .o.
+     .888.
+    .8"888.
+   .8' `888.
+  .88ooo8888.
+ .8'     `888.
+o88o     o8888o
+
+
+
+ooo        ooooo               .             ooooo                  ooooooo  ooooo
+`88.       .888'             .o8             `888'                   `8888    d8'
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o
+
+
+
+  .oooooo.                .o8                            .oooooo.
+ d8P'  `Y8b              "888                           d8P'  `Y8b
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o.
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
+             .o..P'                                                                     888
+             `Y8P'                                                                     o888o
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -34,152 +34,43 @@ are copyright MetaLeX Labs, Inc., a Delaware corporation.
 
 All rights reserved.
 
-The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published, 
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published,
 distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
-mechanical, including photocopying, recording, or by any information storage and retrieval system, 
+mechanical, including photocopying, recording, or by any information storage and retrieval system,
 except with the express prior written permission of the copyright holder.*/
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "./libs/auth.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "./libs/JsonLib.sol";
-import "./interfaces/ICyberAgreementRegistry.sol";
-import {ISignerConditions, SignerCondition} from "./interfaces/ISignerConditions.sol";
-import {SignerConditionLib} from "./libs/SignerConditionLib.sol";
+import {ICyberAgreementRegistry} from "./interfaces/ICyberAgreementRegistry.sol";
+import {CyberAgreementRegistryLib} from "./libs/CyberAgreementRegistryLib.sol";
+import {BorgAuthACL} from "./libs/auth.sol";
+import {CyberAgreementBoundFacet} from "./registry/CyberAgreementBoundFacet.sol";
+import {CyberAgreementFacet} from "./registry/CyberAgreementFacet.sol";
+import {CyberAgreementViewFacet} from "./registry/CyberAgreementViewFacet.sol";
+import {CyberAgreementRegistryStorage} from "./storage/CyberAgreementRegistryStorage.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {Proxy} from "@openzeppelin/contracts/proxy/Proxy.sol";
 
-contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
-    ICyberAgreementRegistry, ISignerConditions
-{
-    using ECDSA for bytes32;
-    // Domain information
-    string public constant name = "CyberAgreementRegistry";
-    string public version;
-    bytes32 public DOMAIN_SEPARATOR;
-    // The live proxy wrote the signature type hash here. Keep the slot so the layout does not
-    // move. The type hash is a constant now.
-    bytes32 private __deprecatedSignatureTypehash;
-    bytes32 public VOIDSIGNATUREDATA_TYPEHASH;
+/// @title CyberAgreementRegistry
+/// @notice The implementation behind the registry proxy. It holds initialize, upgrade and auth. It sends every
+/// other call to the facet that holds the function. The facets run in the proxy's storage.
+/// @dev The facets are fixed for one router. To change a facet, deploy the new facet and a new router that uses
+/// it, then upgrade the proxy to the new router.
+contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL, Proxy {
+    // CyberAgreementRegistryStorage keeps its struct in these slots. Keep them so no inherited
+    // variable uses them.
+    uint256[49] private __reservedForStorageData;
 
-    // Type hash for AgreementData. It binds the signer, so a delegate signature counts for one
-    // party only.
-    bytes32 public constant SIGNATUREDATA_TYPEHASH = keccak256(
-        "SignatureData(bytes32 contractId,address signer,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
-    );
-
-    bytes32 public constant BOUND_TEMPLATE_DOMAIN = CyberAgreementBound.BOUND_TEMPLATE_DOMAIN;
-    bytes32 public constant BOUND_AGREEMENT_DOMAIN = CyberAgreementBound.BOUND_AGREEMENT_DOMAIN;
-    bytes32 public constant CONDITIONED_BOUND_AGREEMENT_DOMAIN = CyberAgreementBound.CONDITIONED_BOUND_AGREEMENT_DOMAIN;
-    // Type hash for a party with signer conditions. It is SignatureData plus the evidence, so the
-    // signature covers the evidence too.
-    bytes32 public constant SIGNATUREWITHEVIDENCEDATA_TYPEHASH = CyberAgreementBound.SIGNATUREWITHEVIDENCEDATA_TYPEHASH;
-
-
-    struct AgreementData {
-        bytes32 templateId; // ID of the template this contract uses
-        string[] globalValues; // Values for the global fields
-        address[] parties; // List of parties who should sign. Use zeroAddress for unknown counterparty
-        mapping(address => string[]) partyValues; // Each signer's field data
-        mapping(address => uint256) signedAt; // Timestamp when each party signed (0 if unsigned)
-        uint256 numSignatures; // Number of parties who have signed
-        address finalizer;
-        bool finalized;
-        bool voided;
-        bytes32 secretHash;
-        uint256 expiry;
-        address[] voidRequestedBy;
-    }
-
-    // This data is what is signed by each party
-    struct SignatureData {
-        bytes32 contractId;
-        // The party the signature consents for. A delegate can sign for more than one party, so
-        // the payload must say which one, or the same signature counts for all of them.
-        address signer;
-        string legalContractUri;
-        string[] globalFields;
-        string[] partyFields;
-        string[] globalValues;
-        string[] partyValues;
-    }
-
-    struct VoidSignatureData {
-        bytes32 contractId;
-        address party;
-    }
-
-    struct Delegation { 
-        address delegate;
-        uint256 expiry;
-    }
-
-    // Closed Agreement Data
-    mapping(bytes32 => string[]) public closedAgreementValues;
-
-    // Mapping of templateId => template data
-    mapping(bytes32 => Template) public templates;
-
-    // Mapping of contractId => contract data
-    mapping(bytes32 => AgreementData) public agreements;
-
-    // A mapping connecting an address to all the agreements they are a party to
-    mapping(address => bytes32[]) public agreementsForParty;
-
-    mapping(address => Delegation) public delegations;
-
-    // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40)
-    uint256[40] private __gap;
-
-
-
-
-    event VoidRequested(bytes32 indexed contractId, address indexed party);
-
-    event ContractVoided(
-        bytes32 indexed contractId,
-        address[] voidSigners,
-        uint256 timestamp
-    );
-
-    event ContractFinalized(
-        bytes32 indexed contractId,
-        address finalizer,
-        uint256 timestamp
-    );
-
-
-    event DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
-    event DelegationRevoked(address indexed delegator, address indexed delegate);
-
-    error TemplateAlreadyExists();
-    error TemplateDoesNotExist();
-    error ContractAlreadyExists();
-    error ContractDoesNotExist();
-    error NotAParty();
-    error SignatureVerificationFailed();
-    error AlreadySigned();
-    error MismatchedFieldsLength();
-    error FirstPartyZeroAddress();
-    error DuplicateParty();
-    error TitleEmpty();
-    error InvalidPartyCount();
-    error ClosedAgreementPartyValueMismatch();
-    error ContractAlreadyVoided();
-    error NotFinalizer();
-    error ContractAlreadyFinalized();
-    error ContractNotFullySigned();
-    error ContractExpired();
-    error InvalidSecret();
-    error MismatchedPartyValuesLength();
-    error FinalizerNotDefined();
-    error DelegateZeroAddress();
-    error DelegateIsSelf();
-    error ExpiryNotInFuture();
+    address private immutable agreementFacet;
+    address private immutable boundFacet;
+    address private immutable viewFacet;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
+    constructor(address _agreementFacet, address _boundFacet, address _viewFacet) {
+        agreementFacet = _agreementFacet;
+        boundFacet = _boundFacet;
+        viewFacet = _viewFacet;
         _disableInitializers();
     }
 
@@ -187,1415 +78,107 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
 
-        version = "1";
-        DOMAIN_SEPARATOR = keccak256(
+        CyberAgreementRegistryStorage.StorageData storage s = CyberAgreementRegistryStorage.getStorageData();
+        s.version = "1";
+        s.domainSeparator = keccak256(
             abi.encode(
-                keccak256(
-                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-                ),
-                keccak256(bytes(name)),
-                keccak256(bytes(version)),
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(CyberAgreementRegistryLib.NAME)),
+                keccak256(bytes(s.version)),
                 block.chainid,
                 address(this)
             )
         );
-
-        VOIDSIGNATUREDATA_TYPEHASH = keccak256(
-            "VoidSignatureData(bytes32 contractId,address party)"
-        );
     }
 
-    /// @notice allows only when finalizer is not defined, or msg.sender is the finalizer
-    modifier onlyFinalizerIfSet(bytes32 contractId) {
+    /// @notice The facet that holds the function with `selector`. Zero if no facet holds it.
+    function facetOf(bytes4 selector) public view returns (address) {
         if (
-            agreements[contractId].finalizer != msg.sender &&
-            agreements[contractId].finalizer != address(0)
-        ) revert NotFinalizer();
-        _;
-    }
+            selector == CyberAgreementFacet.createTemplate.selector
+                || selector == CyberAgreementFacet.createContract.selector
+                || selector == CyberAgreementFacet.createStandaloneContractAndSign.selector
+                || selector == CyberAgreementFacet.createStandaloneContractAndSignFor.selector
+                || selector == CyberAgreementFacet.signContract.selector
+                || selector == CyberAgreementFacet.signContractFor.selector
+                || selector == CyberAgreementFacet.signContractWithEscrow.selector
+                || selector == CyberAgreementFacet.voidContractFor.selector
+                || selector == CyberAgreementFacet.finalizeContract.selector
+                || selector == CyberAgreementFacet.setDelegation.selector
+                || selector == CyberAgreementFacet.revokeDelegation.selector
+        ) return agreementFacet;
 
-    /// @notice allows only when finalizer is defined, and msg.sender is the finalizer
-    modifier onlyDefinedFinalizer(bytes32 contractId) {
         if (
-            agreements[contractId].finalizer == address(0)
-        ) revert FinalizerNotDefined();
-        if (
-            agreements[contractId].finalizer != msg.sender
-        ) revert NotFinalizer();
-        _;
-    }
-
-    /// @notice Create a new agreement template. Only the owner can do it externally; however, the registry itself can
-    /// do it as well for just-in-time operations.
-    function createTemplate(
-        bytes32 templateId,
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields
-    ) external {
-        _createTemplate(
-            templateId,
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        );
-    }
-
-    function createContract(
-        bytes32 templateId,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        bytes32 secretHash,
-        address finalizer,
-        uint256 expiry
-    ) public returns (bytes32 contractId) {
-        // It is critical to bind `secretHash` and `finalizer` into the id: the finalizer
-        // controls settlement and the secretHash gates who may sign, so omitting them would
-        // let a front-runner seize the same id with hostile terms and bind signers to an
-        // agreement they never authorized.
-        // `expiry` is deliberately NOT bound: callers derive it from block.timestamp at
-        // creation time, which a party signing off-chain cannot predict, so including it
-        // would make every presigned signature unverifiable.
-        // TODO: an off-chain indexer that derives contractId (rather than reading the
-        // ContractCreated event) must include these two fields.
-        contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
-        );
-        if (agreements[contractId].parties.length > 0) {
-            revert ContractAlreadyExists();
-        }
-
-        Template storage template = templates[templateId];
-        if (bytes(template.legalContractUri).length == 0) {
-            revert TemplateDoesNotExist();
-        }
-
-        if (globalValues.length != template.globalFields.length) {
-            revert MismatchedFieldsLength();
-        }
-
-        if (parties[0] == address(0)) {
-            revert FirstPartyZeroAddress();
-        }
-
-        /*for (uint256 i = 0; i < parties.length; i++) {
-            for (uint256 j = i + 1; j < parties.length; j++) {
-                if (parties[i] == parties[j]) {
-                    revert DuplicateParty();
-                }
-            }
-        }*/
-
-        AgreementData storage agreementData = agreements[contractId];
-        agreementData.templateId = templateId;
-        agreementData.globalValues = globalValues;
-        agreementData.parties = parties;
-        agreementData.finalizer = finalizer;
-        agreementData.expiry = expiry;
-        agreementData.secretHash = secretHash;
-
-        //check all arrays inside partyValues are the same length
-        for (uint256 i = 0; i < partyValues.length; i++) {
-            if (partyValues[i].length != template.partyFields.length) {
-                revert MismatchedFieldsLength();
-            }
-            //matching address cannot be 0
-            if (parties[i] == address(0)) {
-                revert FirstPartyZeroAddress();
-            }
-            //set agreement partyValues
-            agreements[contractId].partyValues[parties[i]] = partyValues[i];
-        }
-
-        emit ContractCreated(contractId, templateId, parties);
-
-        // Add to the party's list of agreements
-        for (uint256 i = 0; i < parties.length; i++) {
-            agreementsForParty[parties[i]].push(contractId);
-        }
-    }
-
-    /// @notice See `createStandaloneContractAndSignFor()`
-    function createStandaloneContractAndSign(
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        bytes calldata signature
-    ) external returns (bytes32 contractId) {
-        return createStandaloneContractAndSignFor(
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            expiry,
-            msg.sender, // signer
-            signature
-        );
-    }
-
-    /// @notice Create a standalone agreement that:
-    /// - Proposer can prepare & sign an agreement in one tx. For single-party agreements that means one tx and done
-    /// - Standalone means it creates its own template just-in-time if needed. No more waiting for admin to create the template for you
-    /// - Takes `salt` so agreement IDs are deterministic. You can also create identical agreements with distinct IDs if needed
-    ///
-    /// Note `finalizer` is intentionally fixed at `address(0)` because other values require
-    /// tighter integration with vetted smart contracts, which does not fit our use cases here
-    function createStandaloneContractAndSignFor(
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        address signer,
-        bytes calldata signature
-    ) public returns (bytes32 contractId) {
-        // Derive template ID
-        bytes32 templateId = keccak256(abi.encode(
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        ));
-
-        // Create the template if needed
-        if (bytes(templates[templateId].legalContractUri).length == 0) {
-            _createTemplate(
-                templateId,
-                title,
-                legalContractUri,
-                globalFields,
-                partyFields
-            );
-        }
-
-        contractId = createContract(
-            templateId,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            "", // secretHash
-            address(0), // fixed finalizer, see notice above
-            expiry
-        );
-
-        signContractFor(
-            signer,
-            contractId,
-            partyValues[0], // proposer
-            signature,
-            false, // proposer should explicitly add himself to the parties
-            "" // secret
-        );
-    }
-
-    /// @notice Create a template and an unsigned agreement whose ids are bound to
-    /// `msg.sender` and every stored term. Exact parties only; no secret or finalizer.
-    function createBoundContract(
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry
-    ) external returns (bytes32 templateId, bytes32 contractId) {
-        return _createBoundContract(
-            msg.sender, template, salt, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
-        );
-    }
-
-    /// @notice See `createBoundContract()`. Each party must also pass its conditions to sign.
-    /// @param conditions `conditions[i]` lists the conditions of `parties[i]`. They are part of the
-    /// agreement id. An empty list gives the same agreement as `createBoundContract()` without conditions.
-    function createBoundContract(
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions
-    ) external returns (bytes32 templateId, bytes32 contractId) {
-        return _createBoundContract(
-            msg.sender, template, salt, globalValues, parties, partyValues, expiry, conditions
-        );
-    }
-
-    /// @notice See `createBoundContract()`. Bound to `parties[0]` and records their signature.
-    function createBoundContractAndSignFor(
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        bytes calldata creatorSignature
-    ) external returns (bytes32 templateId, bytes32 contractId) {
-        return _createBoundContractAndSignFor(
-            template,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            expiry,
-            new SignerCondition[][](0),
-            new bytes[](0),
-            creatorSignature
-        );
-    }
-
-    /// @notice See `createBoundContractAndSignFor()` and the `createBoundContract()` with conditions.
-    /// @param creatorEvidence Empty when `parties[0]` has no conditions. Otherwise see
-    /// `signContractWithEvidenceFor()`.
-    function createBoundContractAndSignFor(
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions,
-        bytes[] memory creatorEvidence,
-        bytes calldata creatorSignature
-    ) external returns (bytes32 templateId, bytes32 contractId) {
-        return _createBoundContractAndSignFor(
-            template, salt, globalValues, parties, partyValues, expiry, conditions, creatorEvidence, creatorSignature
-        );
-    }
-
-    /// @notice The ids that a bound creation by `creator` gives. Clients use it to know the
-    /// agreement id before creation, for example to put it in a proof.
-    function boundIdsOf(
-        address creator,
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions
-    ) external pure returns (bytes32 templateId, bytes32 contractId) {
-        return CyberAgreementBound.boundIds(
-            creator, template, salt, globalValues, parties, partyValues, expiry, conditions
-        );
-    }
-
-    /// @notice Sign for a party with signer conditions. The party passes each condition with its evidence
-    /// in this call. The signature uses `SIGNATUREWITHEVIDENCEDATA_TYPEHASH`, so it covers the evidence.
-    /// @param evidence `evidence[j]` is for the party's condition `j`, as the struct that its kind defines.
-    function signContractWithEvidenceFor(
-        address signer,
-        bytes32 contractId,
-        string[] memory partyValues,
-        bytes[] memory evidence,
-        bytes calldata signature
-    ) public {
-        CyberAgreementBound.signWithEvidence(
-            agreements, templates, delegations, DOMAIN_SEPARATOR, signer, contractId, partyValues, evidence, signature
-        );
-    }
-
-    /// @notice Set the config of a condition kind, as the struct that the kind defines. It applies to all
-    /// agreements.
-    function setSignerConditionConfig(bytes32 kind, bytes calldata config) external onlyAdmin {
-        CyberAgreementBound.setSignerConditionConfig(kind, config);
-    }
-
-    function getSignerConditionConfig(bytes32 kind) external view returns (bytes memory) {
-        return CyberAgreementBound.getSignerConditionConfig(kind);
-    }
-
-    function signContract(
-        bytes32 contractId,
-        string[] memory partyValues,
-        bytes calldata signature,
-        bool fillUnallocated, // to fill a 0 address or not
-        string memory secret
-    ) external {
-        signContractFor(
-            msg.sender,
-            contractId,
-            partyValues,
-            signature,
-            fillUnallocated,
-            secret
-        );
-    }
-
-    function setDelegation(address delegate, uint256 expiry) external {
-        if (delegate == address(0)) revert DelegateZeroAddress();
-        if (delegate == msg.sender) revert DelegateIsSelf();
-        if (expiry != 0 && expiry <= block.timestamp) revert ExpiryNotInFuture();
-        
-        delegations[msg.sender] = Delegation({delegate: delegate, expiry: expiry});
-        emit DelegationSet(msg.sender, delegate, expiry);
-    }
-
-    /**
-     * @dev Revoke delegation for the caller
-     */
-    function revokeDelegation() external {
-        address delegate = delegations[msg.sender].delegate;
-        delete delegations[msg.sender];
-        emit DelegationRevoked(msg.sender, delegate);
-    }
-
-    /**
-     * @dev Get delegation info for a given address
-     * @param delegator The address to check for delegation
-     * @return delegate The delegate address
-     * @return expiry The expiry timestamp (0 if no expiry)
-     */
-    function getDelegation(address delegator) external view returns (address delegate, uint256 expiry) {
-        Delegation storage delegation = delegations[delegator];
-        return (delegation.delegate, delegation.expiry);
-    }
-
-    /**
-     * @dev Check if a delegation is valid (not expired)
-     * @param delegator The delegator address
-     * @return True if delegation exists and is not expired
-     */
-    function isValidDelegation(address delegator) external view returns (bool) {
-        Delegation storage delegation = delegations[delegator];
-        return delegation.delegate != address(0) && 
-               (delegation.expiry == 0 || delegation.expiry > block.timestamp);
-    }
-
-    /**
-     * @dev Check if an address is a valid delegate for a given delegator
-     * @param delegator The delegator address
-     * @param delegate The delegate address to check
-     * @return True if the delegate is valid and not expired
-     */
-    function isValidDelegate(address delegator, address delegate) external view returns (bool) {
-        Delegation storage delegation = delegations[delegator];
-        return delegation.delegate == delegate && 
-               (delegation.expiry == 0 || delegation.expiry > block.timestamp);
-    }
-
-    function signContractFor(
-        address signer,
-        bytes32 contractId,
-        string[] memory partyValues,
-        bytes calldata signature,
-        bool fillUnallocated, // to fill a 0 address or not
-        string memory secret
-    ) public {
-        // A party with signer conditions signs with evidence. See `signContractWithEvidenceFor()`.
-        if (SignerConditionLib.conditionsOf(contractId, signer).length != 0) revert EvidenceRequired();
-
-        AgreementData storage agreementData = agreements[contractId];
-        Template memory template = templates[agreementData.templateId];
-        if (agreementData.parties.length == 0) revert ContractDoesNotExist();
-        if (agreementData.signedAt[signer] != 0) revert AlreadySigned();
-        if (isVoided(contractId)) revert ContractAlreadyVoided();
-        if (agreementData.finalized) revert ContractAlreadyFinalized();
-        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp)
-            revert ContractExpired();
-
-        if (!isParty(contractId, signer)) {
-            if (
-                agreementData.secretHash > 0 &&
-                keccak256(abi.encode(secret)) != agreementData.secretHash
-            ) revert InvalidSecret();
-            // Not a named party, so check if there's an open slot
-            uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
-            if (firstOpenPartyIndex == 0 || !fillUnallocated)
-                revert NotAParty();
-            // There is a spare slot, assign the sender to this slot.
-            agreementData.parties[firstOpenPartyIndex] = signer;
-            agreementsForParty[agreementData.parties[firstOpenPartyIndex]].push(
-                    contractId
-                );
-        }
-
-        //verify if the contract is closed
-        if (agreementData.partyValues[signer].length > 0) {
-            //check that the submitted partyValues match
-            if (
-                keccak256(abi.encode(agreementData.partyValues[signer])) !=
-                keccak256(abi.encode(partyValues))
-            ) {
-                revert ClosedAgreementPartyValueMismatch();
-            }
-        }
-
-        // Verify the signature
-        if (
-            !_verifySignature(
-                signer,
-                SignatureData({
-                    contractId: contractId,
-                    signer: signer,
-                    legalContractUri: template.legalContractUri,
-                    globalFields: template.globalFields,
-                    partyFields: template.partyFields,
-                    globalValues: agreementData.globalValues,
-                    partyValues: partyValues
-                }),
-                signature
-            )
-        ) {
-            revert SignatureVerificationFailed();
-        }
-
-        if(
-            address(0) != agreementData.finalizer && // if finalizer is undefined, as long as the signature is valid we still allow it
-            msg.sender != agreementData.finalizer &&
-            msg.sender != signer
-        )
-            revert NotFinalizer();
-    
-        if (partyValues.length != template.partyFields.length)
-            revert MismatchedFieldsLength();
-
-        uint256 timestamp = block.timestamp;
-
-        agreementData.partyValues[signer] = partyValues;
-        agreementData.signedAt[signer] = timestamp;
-        uint256 totalSignatures = ++agreementData.numSignatures;
-
-        emit AgreementSigned(contractId, signer, timestamp);
-
-        if (totalSignatures == agreementData.parties.length) {
-            if (agreementData.finalizer == address(0)) {
-                agreementData.finalized = true;
-                emit ContractFinalized(contractId, msg.sender, timestamp);
-            }
-
-            emit ContractFullySigned(contractId, timestamp);
-        }
-    }
-
-    /// @notice Sign a contract with escrow signatures. It relies on the finalizer to enforce proper access control.
-    /// As a result, the finalizer is required to be a predefined smart contract.
-    /// @dev See `test_RevertIf_signContractWithEscrowUndefinedFinalizer` for how it prevent exploits
-    function signContractWithEscrow(
-        address escrowSigner,
-        bytes32 contractId,
-        string[] memory partyValues,
-        bytes calldata signature,
-        bool fillUnallocated, // to fill a 0 address or not
-        string memory secret
-    ) onlyDefinedFinalizer(contractId) external {
-        AgreementData storage agreementData = agreements[contractId];
-        Template memory template = templates[agreementData.templateId];
-        if (agreementData.parties.length == 0) revert ContractDoesNotExist();
-        if (agreementData.signedAt[escrowSigner] != 0) revert AlreadySigned();
-        if (isVoided(contractId)) revert ContractAlreadyVoided();
-        if (agreementData.finalized) revert ContractAlreadyFinalized();
-        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp)
-            revert ContractExpired();
-
-        if (!isParty(contractId, escrowSigner)) {
-            if (
-                agreementData.secretHash > 0 &&
-                keccak256(abi.encode(secret)) != agreementData.secretHash
-            ) revert InvalidSecret();
-            // Not a named party, so check if there's an open slot
-            uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
-            if (firstOpenPartyIndex == 0 || !fillUnallocated)
-                revert NotAParty();
-            // There is a spare slot, assign the sender to this slot.
-            agreementData.parties[firstOpenPartyIndex] = escrowSigner;
-            agreementsForParty[agreementData.parties[firstOpenPartyIndex]].push(
-                    contractId
-                );
-        }
-
-        //verify if the contract is closed
-        if (agreementData.partyValues[escrowSigner].length > 0) {
-            //check that the submitted partyValues match
-            if (
-                keccak256(abi.encode(agreementData.partyValues[escrowSigner])) !=
-                keccak256(abi.encode(partyValues))
-            ) {
-                revert ClosedAgreementPartyValueMismatch();
-            }
-        }
-
-        if (partyValues.length != template.partyFields.length)
-            revert MismatchedFieldsLength();
-
-        uint256 timestamp = block.timestamp;
-
-        agreementData.partyValues[escrowSigner] = partyValues;
-        agreementData.signedAt[escrowSigner] = timestamp;
-        uint256 totalSignatures = ++agreementData.numSignatures;
-
-        emit AgreementSigned(contractId, escrowSigner, timestamp);
-
-        if (totalSignatures == agreementData.parties.length) {
-            emit ContractFullySigned(contractId, timestamp);
-        }
-    }
-
-    function voidContractFor(
-        bytes32 contractId,
-        address party,
-        bytes calldata signature
-    ) public {
-        //make sure the party is a party to the contract
-        if (!isParty(contractId, party)) revert NotAParty();
-
-        AgreementData storage agreementData = agreements[contractId];
-        if (agreementData.finalized) revert ContractAlreadyFinalized();
-
-        //verify the signature
-        if(msg.sender != agreementData.finalizer) 
-            if (
-                !_verifyVoidSignature(
-                    party,
-                    VoidSignatureData({contractId: contractId, party: party}),
-                    signature
-                )
-            ) {
-                    revert SignatureVerificationFailed();
-            }
-
-        for (uint256 i = 0; i < agreementData.voidRequestedBy.length; i++) {
-            if (agreementData.voidRequestedBy[i] == party)
-                revert ContractAlreadyVoided();
-        }
-
-        agreementData.voidRequestedBy.push(party);
-        emit VoidRequested(contractId, party);
-
-        // Unanimity is measured against allocated (nonzero) party slots: unfilled address(0)
-        // slots in open agreements can never submit a void request (isParty rejects them), so
-        // requiring raw parties.length would leave a no-deadline open agreement un-voidable
-        // even with every actual party's consent. parties[0] is enforced nonzero at creation,
-        // so allocatedParties >= 1 and equality implies at least one request.
-        uint256 allocatedParties = 0;
-        for (uint256 i = 0; i < agreementData.parties.length; i++) {
-            if (agreementData.parties[i] != address(0)) allocatedParties++;
-        }
-
-        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp) {
-            agreementData.voided = true;
-        } else if (
-            agreementData.voidRequestedBy.length == allocatedParties
-        ) {
-            agreementData.voided = true;
-        } else if (
-            agreementData.parties[0] == party &&
-            agreementData.numSignatures == 1
-        ) {
-            agreementData.voided = true;
-        }
-
-        if (agreementData.voided)
-            emit ContractVoided(
-                contractId,
-                agreementData.voidRequestedBy,
-                block.timestamp
-            );
-    }
-
-    function finalizeContract(
-        bytes32 contractId
-    ) public onlyFinalizerIfSet(contractId) {
-        AgreementData storage agreementData = agreements[contractId];
-        if (agreementData.finalized) revert ContractAlreadyFinalized();
-        if (agreementData.parties.length == 0) revert ContractDoesNotExist();
-        if (!allPartiesSigned(contractId)) revert ContractNotFullySigned();
-        if (isVoided(contractId)) revert ContractAlreadyVoided();
-        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp)
-            revert ContractExpired();
-
-        agreementData.finalized = true;
-        emit ContractFinalized(contractId, msg.sender, block.timestamp);
-    }
-
-    function getParties(
-        bytes32 contractId
-    ) external view returns (address[] memory) {
-        return agreements[contractId].parties;
-    }
-
-    function hasSigned(
-        bytes32 contractId,
-        address signer
-    ) external view returns (bool) {
-        if (signer == address(0)) revert NotAParty();
-        return agreements[contractId].signedAt[signer] != 0;
-    }
-
-    function getSignatureTimestamp(
-        bytes32 contractId,
-        address signer
-    ) external view returns (uint256) {
-        return agreements[contractId].signedAt[signer];
-    }
-
-    function allPartiesSigned(bytes32 contractId) public view returns (bool) {
-        return
-            agreements[contractId].numSignatures ==
-            agreements[contractId].parties.length;
-    }
-
-    function getContractDetails(
-        bytes32 contractId
-    )
-        external
-        view
-        returns (
-            bytes32 templateId,
-            string memory legalContractUri,
-            string[] memory globalFields,
-            string[] memory partyFields,
-            string[] memory globalValues,
-            address[] memory parties,
-            string[][] memory partyValues,
-            uint256[] memory signedAt,
-            uint256 numSignatures,
-            bool isComplete
-        )
-    {
-        AgreementData storage agreementData = agreements[contractId];
-        Template memory template = templates[agreementData.templateId];
-
-        if (agreementData.parties.length == 0) revert ContractDoesNotExist();
-
-        // Collect all party values and timestamps
-        string[][] memory allPartyValues = new string[][](
-            agreementData.parties.length
-        );
-        uint256[] memory allSignedAt = new uint256[](
-            agreementData.parties.length
-        );
-
-        for (uint256 i = 0; i < agreementData.parties.length; i++) {
-            address party = agreementData.parties[i];
-            allPartyValues[i] = agreementData.partyValues[party];
-            allSignedAt[i] = agreementData.signedAt[party];
-        }
-
-        return (
-            agreementData.templateId,
-            template.legalContractUri,
-            template.globalFields,
-            template.partyFields,
-            agreementData.globalValues,
-            agreementData.parties,
-            allPartyValues,
-            allSignedAt,
-            agreementData.numSignatures,
-            agreementData.numSignatures == agreementData.parties.length
-        );
-    }
-
-    function getTemplateDetails(
-        bytes32 templateId
-    )
-        external
-        view
-        returns (
-            string memory legalContractUri,
-            string memory title,
-            string[] memory globalFields,
-            string[] memory signerFields
-        )
-    {
-        Template storage template = templates[templateId];
-        if (bytes(template.legalContractUri).length == 0)
-            revert TemplateDoesNotExist();
-
-        return (
-            template.legalContractUri,
-            template.title,
-            template.globalFields,
-            template.partyFields
-        );
-    }
-
-    function getSignerValues(
-        bytes32 contractId,
-        address signer
-    ) external view returns (string[] memory signerValues) {
-        AgreementData storage agreementData = agreements[contractId];
-        return (agreementData.partyValues[signer]);
-    }
-
-    // This makes fetching all agreements for a party easier from a client, as the
-    // default getter requires an index
-    function getAgreementsForParty(
-        address party
-    ) external view returns (bytes32[] memory) {
-        return agreementsForParty[party];
-    }
-
-    function isParty(
-        bytes32 contractId,
-        address user
-    ) internal view returns (bool) {
-        if (user == address(0)) {
-            return false;
-        }
-        
-        // Check direct party membership
-        address[] memory parties = agreements[contractId].parties;
-        for (uint256 i = 0; i < parties.length; i++) {
-            if (parties[i] == user) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    function getFirstOpenPartyIndex(
-        bytes32 contractId
-    ) internal view returns (uint256) {
-        AgreementData storage agreementData = agreements[contractId];
-        for (uint256 i = 0; i < agreementData.parties.length; i++) {
-            if (agreementData.parties[i] == address(0)) {
-                return i;
-            }
-        }
-        // NOTE: 0 can never be an open party
-        return 0;
-    }
-
-    function getVoidRequestedBy(
-        bytes32 contractId
-    ) external view returns (address[] memory) {
-        return agreements[contractId].voidRequestedBy;
-    }
-
-    function getContractJson(
-        bytes32 contractId
-    ) external view returns (string memory) {
-        return CyberAgreementJson.render(agreements[contractId], templates);
-    }
-
-    function _createTemplate(
-        bytes32 templateId,
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields
-    ) internal {
-        CyberAgreementBound.createTemplate(templates, templateId, title, legalContractUri, globalFields, partyFields);
-    }
-
-    function _createBoundContract(
-        address creator,
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions
-    ) private returns (bytes32 templateId, bytes32 contractId) {
-        return CyberAgreementBound.create(
-            templates,
-            agreements,
-            agreementsForParty,
-            creator,
-            template,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            expiry,
-            conditions
-        );
-    }
-
-    function _createBoundContractAndSignFor(
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions,
-        bytes[] memory creatorEvidence,
-        bytes calldata creatorSignature
-    ) private returns (bytes32 templateId, bytes32 contractId) {
-        if (parties.length == 0) revert InvalidPartyCount();
-        (templateId, contractId) = _createBoundContract(
-            parties[0], template, salt, globalValues, parties, partyValues, expiry, conditions
-        );
-        if (creatorEvidence.length == 0) {
-            signContractFor(parties[0], contractId, partyValues[0], creatorSignature, false, "");
-        } else {
-            signContractWithEvidenceFor(parties[0], contractId, partyValues[0], creatorEvidence, creatorSignature);
-        }
-    }
-
-    function _verifySignature(
-        address signer,
-        SignatureData memory data,
-        bytes memory signature
-    ) internal view returns (bool) {
-        // Hash the data (AgreementData) according to EIP-712
-        bytes32 digest = _hashTypedDataV4(data);
-
-        // Recover the signer address
-        address recoveredSigner = digest.recover(signature);
-        
-        // Check direct signature
-        if (recoveredSigner == signer) {
-            return true;
-        }
-        
-        // Check delegation signature
-        Delegation storage delegation = delegations[signer];
-        if (delegation.delegate == recoveredSigner && 
-            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    // Helper function to hash the typed data (SignatureData) according to EIP-712
-    function _hashTypedDataV4(
-        SignatureData memory data
-    ) internal view returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(
-                    "\x19\x01",
-                    DOMAIN_SEPARATOR,
-                    keccak256(
-                        abi.encode(
-                            SIGNATUREDATA_TYPEHASH,
-                            data.contractId,
-                            data.signer,
-                            keccak256(bytes(data.legalContractUri)),
-                            _hashStringArray(data.globalFields),
-                            _hashStringArray(data.partyFields),
-                            _hashStringArray(data.globalValues),
-                            _hashStringArray(data.partyValues)
+            // createBoundContract and createBoundContractAndSignFor are overloaded, so `.selector` cannot name them.
+            selector
+                    == bytes4(
+                        keccak256(
+                            "createBoundContract((string,string,string[],string[]),uint256,string[],address[],string[][],uint256)"
                         )
                     )
-                )
-            );
-    }
-
-    // Helper function to hash string arrays
-    function _hashStringArray(
-        string[] memory array
-    ) internal pure returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](array.length);
-        for (uint256 i = 0; i < array.length; i++) {
-            hashes[i] = keccak256(bytes(array[i]));
-        }
-        return keccak256(abi.encodePacked(hashes));
-    }
-
-    function _bytes32ToString(bytes32 _bytes32) public pure returns (string memory) {
-        return CyberAgreementJson.bytes32ToString(_bytes32);
-    }
-
-    function isFinalized(bytes32 contractId) external view returns (bool) {
-        return agreements[contractId].finalized;
-    }
-
-    function isVoided(bytes32 contractId) public view returns (bool) {
-        return agreements[contractId].voided;
-    }
-
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal virtual override onlyOwner {}
-
-    function _verifyVoidSignature(
-        address signer,
-        VoidSignatureData memory data,
-        bytes memory signature
-    ) internal view returns (bool) {
-        // Hash the data (VoidSignatureData) according to EIP-712
-        bytes32 digest = _hashVoidTypedDataV4(data);
-
-        // Recover the signer address
-        address recoveredSigner = digest.recover(signature);
-        
-        // Check direct signature
-        if (recoveredSigner == signer) {
-            return true;
-        }
-        
-        // Check delegation signature
-        Delegation storage delegation = delegations[signer];
-        if (delegation.delegate == recoveredSigner && 
-            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    // Helper function to hash the typed data (VoidSignatureData) according to EIP-712
-    function _hashVoidTypedDataV4(
-        VoidSignatureData memory data
-    ) internal view returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(
-                    "\x19\x01",
-                    DOMAIN_SEPARATOR,
-                    keccak256(
-                        abi.encode(
-                            VOIDSIGNATUREDATA_TYPEHASH,
-                            data.contractId,
-                            data.party
+                || selector
+                    == bytes4(
+                        keccak256(
+                            "createBoundContract((string,string,string[],string[]),uint256,string[],address[],string[][],uint256,(bytes32,bytes)[][])"
                         )
                     )
-                )
-            );
-    }
-}
-
-/// @notice Template and creator-bound agreement creation, signer conditions, and signing with evidence.
-/// The registry delegatecalls it, so it writes the registry's storage and emits the registry's events.
-library CyberAgreementBound {
-    bytes32 internal constant BOUND_TEMPLATE_DOMAIN =
-        keccak256("MetaLeX.CyberAgreementRegistry.BoundTemplate.v1");
-    bytes32 internal constant BOUND_AGREEMENT_DOMAIN =
-        keccak256("MetaLeX.CyberAgreementRegistry.BoundAgreement.v1");
-    bytes32 internal constant CONDITIONED_BOUND_AGREEMENT_DOMAIN =
-        keccak256("MetaLeX.CyberAgreementRegistry.ConditionedBoundAgreement.v1");
-    bytes32 internal constant SIGNATUREWITHEVIDENCEDATA_TYPEHASH = keccak256(
-        "SignatureWithEvidenceData(bytes32 contractId,address signer,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues,bytes[] evidence)"
-    );
-
-    function createTemplate(
-        mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
-        bytes32 templateId,
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields
-    ) public {
-        if (bytes(templates[templateId].legalContractUri).length > 0) {
-            revert CyberAgreementRegistry.TemplateAlreadyExists();
-        }
-
-        if (bytes(title).length == 0) {
-            revert CyberAgreementRegistry.TitleEmpty();
-        }
-
-        templates[templateId] = ICyberAgreementRegistry.Template({
-            legalContractUri: legalContractUri,
-            title: title,
-            globalFields: globalFields,
-            partyFields: partyFields
-        });
-
-        emit ICyberAgreementRegistry.TemplateCreated(
-            templateId,
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        );
-    }
-
-    /// @notice Create a template and an unsigned agreement whose ids bind `creator`, every
-    /// stored term and the conditions. Exact parties only; no secret or finalizer.
-    function create(
-        mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
-        mapping(bytes32 => CyberAgreementRegistry.AgreementData) storage agreements,
-        mapping(address => bytes32[]) storage agreementsForParty,
-        address creator,
-        ICyberAgreementRegistry.Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions
-    ) external returns (bytes32 templateId, bytes32 contractId) {
-        if (bytes(template.legalContractUri).length == 0) revert CyberAgreementRegistry.TemplateDoesNotExist();
-        if (parties.length == 0) revert CyberAgreementRegistry.InvalidPartyCount();
-        if (partyValues.length != parties.length) revert CyberAgreementRegistry.MismatchedPartyValuesLength();
-        if (globalValues.length != template.globalFields.length) revert CyberAgreementRegistry.MismatchedFieldsLength();
-        if (expiry != 0 && expiry <= block.timestamp) revert CyberAgreementRegistry.ExpiryNotInFuture();
-        for (uint256 i = 0; i < parties.length; i++) {
-            if (parties[i] == address(0)) revert CyberAgreementRegistry.FirstPartyZeroAddress();
-            if (partyValues[i].length != template.partyFields.length) revert CyberAgreementRegistry.MismatchedFieldsLength();
-            for (uint256 j = 0; j < i; j++) {
-                if (parties[i] == parties[j]) revert CyberAgreementRegistry.DuplicateParty();
-            }
-        }
-        SignerConditionLib.checkLength(conditions, parties.length);
-
-        (templateId, contractId) = boundIds(
-            creator, template, salt, globalValues, parties, partyValues, expiry, conditions
-        );
-
-        createTemplate(
-            templates,
-            templateId,
-            template.title,
-            template.legalContractUri,
-            template.globalFields,
-            template.partyFields
-        );
-
-        CyberAgreementRegistry.AgreementData storage agreementData = agreements[contractId];
-        if (agreementData.parties.length > 0) revert CyberAgreementRegistry.ContractAlreadyExists();
-        agreementData.templateId = templateId;
-        agreementData.globalValues = globalValues;
-        agreementData.parties = parties;
-        agreementData.expiry = expiry;
-        for (uint256 i = 0; i < parties.length; i++) {
-            agreementData.partyValues[parties[i]] = partyValues[i];
-        }
-
-        emit ICyberAgreementRegistry.ContractCreated(contractId, templateId, parties);
-
-        SignerConditionLib.set(contractId, parties, conditions);
-
-        for (uint256 i = 0; i < parties.length; i++) {
-            agreementsForParty[parties[i]].push(contractId);
-        }
-    }
-
-    /// @dev With no conditions, the ids are the same as before conditions existed.
-    function boundIds(
-        address creator,
-        ICyberAgreementRegistry.Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions
-    ) public pure returns (bytes32 templateId, bytes32 contractId) {
-        templateId = keccak256(abi.encode(
-            BOUND_TEMPLATE_DOMAIN,
-            creator,
-            salt,
-            template.title,
-            template.legalContractUri,
-            template.globalFields,
-            template.partyFields
-        ));
-        bytes32 terms = keccak256(abi.encode(
-            creator,
-            templateId,
-            salt,
-            globalValues,
-            parties,
-            keccak256(abi.encode(partyValues)),
-            expiry
-        ));
-        if (conditions.length == 0) {
-            contractId = keccak256(abi.encode(BOUND_AGREEMENT_DOMAIN, terms));
-        } else {
-            contractId = keccak256(abi.encode(
-                CONDITIONED_BOUND_AGREEMENT_DOMAIN,
-                terms,
-                keccak256(abi.encode(conditions))
-            ));
-        }
-    }
-
-    /// @notice Sign for a party with signer conditions. The party must pass each condition with its
-    /// evidence. The signature covers the evidence. A bound agreement has no finalizer, open slot or secret.
-    function signWithEvidence(
-        mapping(bytes32 => CyberAgreementRegistry.AgreementData) storage agreements,
-        mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
-        mapping(address => CyberAgreementRegistry.Delegation) storage delegations,
-        bytes32 domainSeparator,
-        address signer,
-        bytes32 contractId,
-        string[] memory partyValues,
-        bytes[] memory evidence,
-        bytes memory signature
-    ) external {
-        CyberAgreementRegistry.AgreementData storage agreementData = agreements[contractId];
-        if (agreementData.parties.length == 0) revert CyberAgreementRegistry.ContractDoesNotExist();
-        if (agreementData.signedAt[signer] != 0) revert CyberAgreementRegistry.AlreadySigned();
-        if (agreementData.voided) revert CyberAgreementRegistry.ContractAlreadyVoided();
-        if (agreementData.finalized) revert CyberAgreementRegistry.ContractAlreadyFinalized();
-        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp) {
-            revert CyberAgreementRegistry.ContractExpired();
-        }
-
-        // Only the named parties of a bound agreement have conditions.
-        uint256 conditionCount = SignerConditionLib.conditionsOf(contractId, signer).length;
-        if (conditionCount == 0) revert ISignerConditions.NoSignerConditions();
-        if (evidence.length != conditionCount) revert ISignerConditions.EvidenceLengthMismatch();
-
-        // A bound agreement stores the values of every party at creation.
-        if (keccak256(abi.encode(agreementData.partyValues[signer])) != keccak256(abi.encode(partyValues))) {
-            revert CyberAgreementRegistry.ClosedAgreementPartyValueMismatch();
-        }
-
-        ICyberAgreementRegistry.Template memory template = templates[agreementData.templateId];
-        bytes32 digest = keccak256(abi.encodePacked(
-            "\x19\x01",
-            domainSeparator,
-            keccak256(abi.encode(
-                SIGNATUREWITHEVIDENCEDATA_TYPEHASH,
-                contractId,
-                signer,
-                keccak256(bytes(template.legalContractUri)),
-                _hashStringArray(template.globalFields),
-                _hashStringArray(template.partyFields),
-                _hashStringArray(agreementData.globalValues),
-                _hashStringArray(partyValues),
-                _hashBytesArray(evidence)
-            ))
-        ));
-        address recovered = ECDSA.recover(digest, signature);
-        CyberAgreementRegistry.Delegation storage delegation = delegations[signer];
-        if (
-            recovered != signer
-                && !(delegation.delegate == recovered
-                    && (delegation.expiry == 0 || delegation.expiry > block.timestamp))
+                || selector
+                    == bytes4(
+                        keccak256(
+                            "createBoundContractAndSignFor((string,string,string[],string[]),uint256,string[],address[],string[][],uint256,bytes)"
+                        )
+                    )
+                || selector
+                    == bytes4(
+                        keccak256(
+                            "createBoundContractAndSignFor((string,string,string[],string[]),uint256,string[],address[],string[][],uint256,(bytes32,bytes)[][],bytes[],bytes)"
+                        )
+                    ) || selector == CyberAgreementBoundFacet.boundIdsOf.selector
+                || selector == CyberAgreementBoundFacet.signContractWithEvidenceFor.selector
+                || selector == CyberAgreementBoundFacet.setSignerConditionConfig.selector
+                || selector == CyberAgreementBoundFacet.getSignerConditionConfig.selector
         ) {
-            revert CyberAgreementRegistry.SignatureVerificationFailed();
+            return boundFacet;
         }
 
-        SignerConditionLib.verifyAll(contractId, signer, evidence);
+        if (
+            selector == ICyberAgreementRegistry.name.selector
+                || selector == ICyberAgreementRegistry.SIGNATUREDATA_TYPEHASH.selector
+                || selector == ICyberAgreementRegistry.VOIDSIGNATUREDATA_TYPEHASH.selector
+                || selector == ICyberAgreementRegistry.BOUND_TEMPLATE_DOMAIN.selector
+                || selector == ICyberAgreementRegistry.BOUND_AGREEMENT_DOMAIN.selector
+                || selector == ICyberAgreementRegistry.CONDITIONED_BOUND_AGREEMENT_DOMAIN.selector
+                || selector == ICyberAgreementRegistry.SIGNATUREWITHEVIDENCEDATA_TYPEHASH.selector
+                || selector == CyberAgreementViewFacet.version.selector
+                || selector == CyberAgreementViewFacet.DOMAIN_SEPARATOR.selector
+                || selector == CyberAgreementViewFacet.templates.selector
+                || selector == CyberAgreementViewFacet.agreements.selector
+                || selector == CyberAgreementViewFacet.agreementsForParty.selector
+                || selector == CyberAgreementViewFacet.delegations.selector
+                || selector == CyberAgreementViewFacet.getDelegation.selector
+                || selector == CyberAgreementViewFacet.isValidDelegation.selector
+                || selector == CyberAgreementViewFacet.isValidDelegate.selector
+                || selector == CyberAgreementViewFacet.getParties.selector
+                || selector == CyberAgreementViewFacet.hasSigned.selector
+                || selector == CyberAgreementViewFacet.getSignatureTimestamp.selector
+                || selector == CyberAgreementViewFacet.allPartiesSigned.selector
+                || selector == CyberAgreementViewFacet.getContractDetails.selector
+                || selector == CyberAgreementViewFacet.getTemplateDetails.selector
+                || selector == CyberAgreementViewFacet.getSignerValues.selector
+                || selector == CyberAgreementViewFacet.getAgreementsForParty.selector
+                || selector == CyberAgreementViewFacet.getVoidRequestedBy.selector
+                || selector == CyberAgreementViewFacet.isFinalized.selector
+                || selector == CyberAgreementViewFacet.isVoided.selector
+                || selector == CyberAgreementViewFacet.getContractJson.selector
+                || selector == CyberAgreementViewFacet._bytes32ToString.selector
+        ) return viewFacet;
 
-        uint256 timestamp = block.timestamp;
-        agreementData.signedAt[signer] = timestamp;
-        uint256 totalSignatures = ++agreementData.numSignatures;
-        emit ICyberAgreementRegistry.AgreementSigned(contractId, signer, timestamp);
-
-        if (totalSignatures == agreementData.parties.length) {
-            agreementData.finalized = true;
-            emit CyberAgreementRegistry.ContractFinalized(contractId, msg.sender, timestamp);
-            emit ICyberAgreementRegistry.ContractFullySigned(contractId, timestamp);
-        }
+        return address(0);
     }
 
-    function setSignerConditionConfig(bytes32 kind, bytes memory config) external {
-        SignerConditionLib.setConfig(kind, config);
+    function _implementation() internal view override returns (address facet) {
+        facet = facetOf(msg.sig);
+        if (facet == address(0)) revert ICyberAgreementRegistry.FunctionNotFound(msg.sig);
     }
 
-    function getSignerConditionConfig(bytes32 kind) external view returns (bytes memory) {
-        return SignerConditionLib.getConfig(kind);
-    }
-
-    function _hashStringArray(string[] memory array) private pure returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](array.length);
-        for (uint256 i = 0; i < array.length; i++) {
-            hashes[i] = keccak256(bytes(array[i]));
-        }
-        return keccak256(abi.encodePacked(hashes));
-    }
-
-    function _hashBytesArray(bytes[] memory array) private pure returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](array.length);
-        for (uint256 i = 0; i < array.length; i++) {
-            hashes[i] = keccak256(array[i]);
-        }
-        return keccak256(abi.encodePacked(hashes));
-    }
-}
-
-library CyberAgreementJson {
-    function render(
-        CyberAgreementRegistry.AgreementData storage agreementData,
-        mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates
-    ) external view returns (string memory) {
-        ICyberAgreementRegistry.Template storage template = templates[agreementData.templateId];
-
-        // Start with basic fields
-        string memory json = string(
-            abi.encodePacked(
-                '{"templateId": "',
-                bytes32ToString(agreementData.templateId), // Corrected to use agreementData.templateId
-                '", "title": "',
-                JsonLib.jsonEscape(template.title),
-                '", "legalContractUri": "',
-                JsonLib.jsonEscape(template.legalContractUri),
-                '", "ContractFields": {'
-            )
-        );
-
-        // Add global fields and values as key-value pairs
-        if (template.globalFields.length > 0) {
-            for (uint256 i = 0; i < template.globalFields.length; i++) {
-                json = string.concat(
-                    json,
-                    '"',
-                    JsonLib.jsonEscape(template.globalFields[i]),
-                    '": "',
-                    JsonLib.jsonEscape(agreementData.globalValues[i]),
-                    '"'
-                );
-                if (i + 1 < template.globalFields.length) {
-                    json = string.concat(json, ",");
-                }
-            }
-        }
-        json = string.concat(json, '}, "parties": {');
-
-        // Add parties and their values as key-value pairs
-        if (agreementData.parties.length > 0) {
-            for (uint256 i = 0; i < agreementData.parties.length; i++) {
-                address party = agreementData.parties[i];
-                json = string.concat(
-                    json,
-                    '"',
-                    _addressToString(party),
-                    '": {'
-                );
-
-                // Add party fields and values
-                if (template.partyFields.length > 0) {
-                    string[] memory values = agreementData.partyValues[party];
-                    for (uint256 j = 0; j < template.partyFields.length; j++) {
-                        json = string.concat(
-                            json,
-                            '"',
-                            JsonLib.jsonEscape(template.partyFields[j]),
-                            '": "'
-                        );
-                        if (values.length > j) {
-                            json = string.concat(json, JsonLib.jsonEscape(values[j]));
-                        }
-                        json = string.concat(json, '"');
-                        if (j + 1 < template.partyFields.length) {
-                            json = string.concat(json, ",");
-                        }
-                    }
-                }
-
-                // Add signature timestamp
-                if (template.partyFields.length > 0) {
-                    json = string.concat(json, ",");
-                }
-                json = string.concat(
-                    json,
-                    '"signedAt": ',
-                    _uint256ToString(agreementData.signedAt[party])
-                );
-                json = string.concat(json, "}");
-
-                if (i + 1 < agreementData.parties.length) {
-                    json = string.concat(json, ",");
-                }
-            }
-        }
-
-        // Add metadata
-        json = string.concat(
-            json,
-            '}, "numSignatures": ',
-            _uint256ToString(agreementData.numSignatures)
-        );
-        json = string.concat(
-            json,
-            ', "isComplete": ',
-            agreementData.numSignatures == agreementData.parties.length
-                ? "true"
-                : "false"
-        );
-        // Add voided status
-        json = string.concat(
-            json,
-            ', "voided": ',
-            agreementData.voided ? "true" : "false"
-        );
-        // loop and add voidRequestedBy
-        json = string.concat(json, ', "voidRequestedBy": [');
-        for (uint256 i = 0; i < agreementData.voidRequestedBy.length; i++) {
-            json = string.concat(
-                json,
-                '"',
-                _addressToString(agreementData.voidRequestedBy[i]),
-                '"'
-            );
-            if (i + 1 < agreementData.voidRequestedBy.length) {
-                json = string.concat(json, ",");
-            }
-        }
-        json = string.concat(json, "]");
-        // add finalized status
-        json = string.concat(
-            json,
-            ', "finalized": ',
-            agreementData.finalized ? "true" : "false"
-        );
-        json = string.concat(json, "}");
-        return json;
-    }
-
-    function bytes32ToString(bytes32 _bytes32) internal pure returns (string memory) {
-        bytes memory bytesArray = new bytes(66); // 0x prefix + 64 hex chars
-        bytesArray[0] = "0";
-        bytesArray[1] = "x";
-
-        for (uint256 i = 0; i < 32; i++) {
-            uint8 byteValue = uint8(_bytes32[i]);
-            // High nibble (first hex char)
-            uint8 highNibble = (byteValue >> 4) & 0x0F;
-            bytesArray[2 + i * 2] = bytes1(highNibble < 10 ? 48 + highNibble : 87 + highNibble);
-            // Low nibble (second hex char)
-            uint8 lowNibble = byteValue & 0x0F;
-            bytesArray[3 + i * 2] = bytes1(lowNibble < 10 ? 48 + lowNibble : 87 + lowNibble);
-        }
-        return string(bytesArray);
-    }
-
-    // Helper function to convert address to string
-    function _addressToString(
-        address _addr
-    ) internal pure returns (string memory) {
-        bytes memory s = new bytes(40);
-        for (uint256 i = 0; i < 20; i++) {
-            bytes1 b = bytes1(uint8(uint160(_addr) >> (8 * (19 - i))));
-            uint8 hi = uint8(b) >> 4;
-            uint8 lo = uint8(b) & 0x0f;
-            s[2 * i] = bytes1(hi + (hi < 10 ? 48 : 87));
-            s[2 * i + 1] = bytes1(lo + (lo < 10 ? 48 : 87));
-        }
-        return string(abi.encodePacked("0x", s));
-    }
-
-    // Helper function to convert uint256 to string
-    function _uint256ToString(
-        uint256 _i
-    ) internal pure returns (string memory) {
-        if (_i == 0) {
-            return "0";
-        }
-        uint256 j = _i;
-        uint256 len;
-        while (j != 0) {
-            len++;
-            j /= 10;
-        }
-        bytes memory bstr = new bytes(len);
-        uint256 k = len;
-        while (_i != 0) {
-            k = k - 1;
-            uint8 temp = uint8(48 + (_i % 10));
-            bytes1 b1 = bytes1(temp);
-            bstr[k] = b1;
-            _i /= 10;
-        }
-        return string(bstr);
-    }
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }

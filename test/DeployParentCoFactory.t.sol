@@ -6,7 +6,7 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {DeployParentCoFactoryScript} from "../script/deploy-parentco-factory.s.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {ParentCoFactory} from "../src/ParentCoFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
@@ -16,7 +16,7 @@ contract DeployParentCoFactoryForkTest is Test {
     DeploymentConstants.CoreDeployment coreDeployment;
     DeploymentConstants.Deps deps;
 
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
 
     address deployer;
     uint256 deployerPrivKey;
@@ -51,7 +51,7 @@ contract DeployParentCoFactoryForkTest is Test {
         coreDeployment = DeploymentConstants.coreV2(block.chainid);
         deps = DeploymentConstants.deps(block.chainid);
 
-        registry = CyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
+        registry = ICyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
         CyberAgreementUtils.upgradeRegistry(vm, address(registry), coreDeployment.metalexSafe);
 
         (deployer, deployerPrivKey) = makeAddrAndKey("deployer");

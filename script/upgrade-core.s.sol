@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
@@ -16,6 +17,9 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {ZKPassportConditionLib, ZKPassportConfig} from "../src/libs/ZKPassportConditionLib.sol";
+import {CyberAgreementBoundFacet} from "../src/registry/CyberAgreementBoundFacet.sol";
+import {CyberAgreementFacet} from "../src/registry/CyberAgreementFacet.sol";
+import {CyberAgreementViewFacet} from "../src/registry/CyberAgreementViewFacet.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {DeploymentScript} from "./libs/DeploymentScript.sol";
 import {GnosisTransaction} from "./libs/safe.sol";
@@ -163,10 +167,47 @@ contract UpgradeCoreScript is DeploymentScript {
     /// @dev The config call goes after the upgrade, because only the new implementation has the setter. Both use
     ///      the same auth, so both go to the deployer or both go to the Safe, in this order.
     function upgradeCyberAgreementRegistry(uint256 chainId, DeploymentConstants.CoreDeployment memory core) internal {
+        address registry = core.cyberAgreementRegistry;
+        address agreementFacet = deployRegistryFacet(
+            registry,
+            "CyberAgreementFacet",
+            type(CyberAgreementFacet).creationCode,
+            CyberAgreementFacet.createContract.selector
+        );
+        address boundFacet = deployRegistryFacet(
+            registry,
+            "CyberAgreementBoundFacet",
+            type(CyberAgreementBoundFacet).creationCode,
+            CyberAgreementBoundFacet.boundIdsOf.selector
+        );
+        address viewFacet = deployRegistryFacet(
+            registry,
+            "CyberAgreementViewFacet",
+            type(CyberAgreementViewFacet).creationCode,
+            CyberAgreementViewFacet.getParties.selector
+        );
         upgradeProxy(
-            core.auth, core.cyberAgreementRegistry, "CyberAgreementRegistry", type(CyberAgreementRegistry).creationCode
+            core.auth,
+            registry,
+            "CyberAgreementRegistry",
+            abi.encodePacked(
+                type(CyberAgreementRegistry).creationCode, abi.encode(agreementFacet, boundFacet, viewFacet)
+            )
         );
         setZKPassportConfig(chainId, core);
+    }
+
+    /// @notice Deploys a registry facet when its code differs from the facet that the registry uses for `selector`.
+    /// @dev The registry has `facetOf` only after the router is live. Before that, no facet exists, so the step
+    ///      deploys one. Same facets give the same router code, so a later run deploys nothing.
+    function deployRegistryFacet(address registry, string memory name, bytes memory creationCode, bytes4 selector)
+        internal
+        returns (address facet)
+    {
+        (bool success, bytes memory result) =
+            registry.staticcall(abi.encodeCall(ICyberAgreementRegistry.facetOf, (selector)));
+        address current = success ? abi.decode(result, (address)) : address(0);
+        (facet,) = deployIfDifferent("[deploy implementation]", name, creationCode, current);
     }
 
     /// @notice Sets the config that the registry uses to check ZKPassport proofs. It applies to all agreements
@@ -189,9 +230,9 @@ contract UpgradeCoreScript is DeploymentScript {
         setParamIfDifferent(
             core.auth,
             core.cyberAgreementRegistry,
-            abi.encodeCall(CyberAgreementRegistry.getSignerConditionConfig, (ZKPassportConditionLib.KIND)),
+            abi.encodeCall(ICyberAgreementRegistry.getSignerConditionConfig, (ZKPassportConditionLib.KIND)),
             abi.encode(config), // the getter returns `config` as ABI-encoded bytes
-            abi.encodeCall(CyberAgreementRegistry.setSignerConditionConfig, (ZKPassportConditionLib.KIND, config)),
+            abi.encodeCall(ICyberAgreementRegistry.setSignerConditionConfig, (ZKPassportConditionLib.KIND, config)),
             "CyberAgreementRegistry ZKPassport config"
         );
     }

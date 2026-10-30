@@ -16,7 +16,8 @@ import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -136,7 +137,7 @@ library CyberCorpHelper {
 
     // Infra helpers copied from above
     function deployRegistryAndFactories(address owner) internal returns (
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         CyberCorpFactory corpFactory,
         address issuanceManagerFactory,
         address cyberCorpSingleFactory,
@@ -147,12 +148,12 @@ library CyberCorpHelper {
     ) {
         BorgAuth bootstrapAuth = new BorgAuth{salt: SALT}(owner);
 
-        registry = CyberAgreementRegistry(
+        registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy{salt: SALT}(
-                    address(new CyberAgreementRegistry{salt: SALT}()),
+                    address(CyberAgreementRegistryDeployment.deployRouter(SALT)),
                     abi.encodeWithSelector(
-                        CyberAgreementRegistry.initialize.selector,
+                        ICyberAgreementRegistry.initialize.selector,
                         address(bootstrapAuth)
                     )
                 )
@@ -270,7 +271,7 @@ library CyberCorpHelper {
         }
     }
 
-    function createTemplate(CyberAgreementRegistry registry) internal {
+    function createTemplate(ICyberAgreementRegistry registry) internal {
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field";
         string[] memory partyFields = new string[](2);
@@ -516,7 +517,7 @@ library CyberCorpHelper {
 
     function submitEOI(
         RoundManager rm,
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 roundId,
         uint256 salt,
         uint256 minAmount,
@@ -561,7 +562,7 @@ library CyberCorpHelper {
 
     function submitFCFSRoundEOIAndAssertFinalized(
         RoundManager rm,
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 templateId,
         address paymentToken,
         uint8 payDec,
@@ -730,7 +731,7 @@ library CyberCorpHelper {
     }
 
     function computeEOISignature(
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 templateId,
         uint256 salt,
         string[] memory globalValues,
@@ -810,7 +811,7 @@ contract RoundManagerTest is Test {
     uint256 private corpOwnerPrivKey;
 
     // Infra
-    CyberAgreementRegistry private registry;
+    ICyberAgreementRegistry private registry;
     CyberCorpFactory private corpFactory;
     address private corp;
     address private auth;
@@ -1183,7 +1184,7 @@ contract RoundManagerTest is Test {
         vm.startPrank(round.authorityOfficer);
         vm.expectRevert(
             abi.encodeWithSelector(
-                CyberAgreementRegistry.SignatureVerificationFailed.selector
+                ICyberAgreementRegistry.SignatureVerificationFailed.selector
             )
         );
         registry.signContractFor(
@@ -2008,7 +2009,7 @@ contract RoundManagerTest is Test {
 
         // Corp owner can no longer call `reject()` because it would try to void the agreement again
         vm.prank(corpOwner);
-        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        vm.expectRevert(ICyberAgreementRegistry.ContractAlreadyVoided.selector);
         RoundManager(roundManager).reject(agreementId);
 
         // Instead, he could choose to skip voiding the agreement
@@ -2086,7 +2087,7 @@ contract RoundManagerTest is Test {
 
         // Investor can no longer call `recall()` because it would try to void the agreement again
         vm.prank(investor);
-        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        vm.expectRevert(ICyberAgreementRegistry.ContractAlreadyVoided.selector);
         RoundManager(roundManager).recallEOI(agreementId);
 
         // Instead, he could choose to skip voiding the agreement
@@ -2732,7 +2733,7 @@ contract RoundManagerFCFSTest is Test {
     function test_UpgradedInfra_FCFS_AutoAllocates() public {
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             address cyberCorpSingleFactory,
@@ -2801,7 +2802,7 @@ contract RoundManagerFCFSTest is Test {
     function test_FCFS_CreateRound_RequiresEscrowSignature() public {
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             ,
@@ -2892,7 +2893,7 @@ contract RoundManagerFCFSTest is Test {
     function test_FCFS_SubmitEOI_AutoAllocates_FinalizesAndMints() public {
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             ,
@@ -2994,7 +2995,7 @@ contract RoundManagerFCFSTest is Test {
     function test_FCFS_RefundsExcessPayment() public {
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             ,
@@ -3064,7 +3065,7 @@ contract RoundManagerFCFSTest is Test {
     function test_FCFS_SubmitEOI_InvalidAmount_Reverts() public {
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             ,
@@ -3143,7 +3144,7 @@ contract RoundManagerFCFSTest is Test {
     {
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             ,
@@ -3288,7 +3289,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
     function test_CyberCorpFactory_DeployCorp_And_CreatePublicRound() public {
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             address cyberCorpSingleFactory,

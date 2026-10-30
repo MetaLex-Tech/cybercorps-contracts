@@ -11,7 +11,8 @@ import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
@@ -58,8 +59,8 @@ contract BaseScript is Script {
         address agreementRegistryImplementation = 0xeE244A549838BE9c234BFF0F8B5A947a328A882c;
 
          //new implementation
-        address newAgreementRegistry = address(new CyberAgreementRegistry());
-        CyberAgreementRegistry(agreementRegistryImplementation).upgradeToAndCall(newAgreementRegistry, "");
+        address newAgreementRegistry = address(CyberAgreementRegistryDeployment.deployRouter());
+        ICyberAgreementRegistry(agreementRegistryImplementation).upgradeToAndCall(newAgreementRegistry, "");
         
         return;*/
 
@@ -122,8 +123,8 @@ contract BaseScript is Script {
         //address tokenWarrantExtension = address(new TokenWarrantExtension{salt: salt}());
 
         address registry = address(new ERC1967Proxy{salt: salt}(
-           address(new CyberAgreementRegistry{salt: salt}()),
-           abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+           address(CyberAgreementRegistryDeployment.deployRouter(salt)),
+           abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(auth))
         ));
 
         address tokenWarrantExtension = address(new ERC1967Proxy{salt: salt}(
@@ -179,7 +180,7 @@ contract BaseScript is Script {
         partyFieldsSafeT[3] = "investorType";
         partyFieldsSafeT[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(2)), "SAFE+T", "https://ipfs.io/ipfs/bafybeig6hszt562xsvcyumiph4kz5u5stgecpusbjw6hiycgxth42afezq", globalFieldsSafeT, partyFieldsSafeT);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(2)), "SAFE+T", "https://ipfs.io/ipfs/bafybeig6hszt562xsvcyumiph4kz5u5stgecpusbjw6hiycgxth42afezq", globalFieldsSafeT, partyFieldsSafeT);
 
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
@@ -196,7 +197,7 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeig6hszt562xsvcyumiph4kz5u5stgecpusbjw6hiycgxth42afezq", globalFieldsSafe, partyFieldsSafe);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeig6hszt562xsvcyumiph4kz5u5stgecpusbjw6hiycgxth42afezq", globalFieldsSafe, partyFieldsSafe);
 
         auth.updateRole(address(multisig), 200);
 

@@ -24,7 +24,7 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundLib} from "../src/libs/RoundLib.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
@@ -133,7 +133,7 @@ contract CyberScripUpgradeForkTest is Test {
         CyberCorpFactory corpFactory = CyberCorpFactory(
             deployment.cyberCorpFactory
         );
-        CyberAgreementRegistry registry = CyberAgreementRegistry(
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(
             deployment.cyberAgreementRegistry
         );
         RoundManagerFactory rmFactory = RoundManagerFactory(
@@ -1248,7 +1248,7 @@ contract CyberScripUpgradeForkTest is Test {
     }
 
     function _computeEOISignature(
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 templateId,
         uint256 salt,
         string[] memory globalValues,
@@ -1288,7 +1288,7 @@ contract CyberScripUpgradeForkTest is Test {
     }
 
     function _computeAgreementSignature(
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 templateId,
         uint256 salt,
         string[] memory globalValues,
@@ -1393,7 +1393,7 @@ contract CyberScripUpgradeForkTest is Test {
         CyberCorpFactory corpFactory = CyberCorpFactory(
             deployment.cyberCorpFactory
         );
-        CyberAgreementRegistry registry = CyberAgreementRegistry(
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(
             deployment.cyberAgreementRegistry
         );
         RoundManagerFactory rmFactory = RoundManagerFactory(

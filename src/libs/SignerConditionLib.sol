@@ -41,7 +41,7 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import {ISignerConditions, SignerCondition} from "../interfaces/ISignerConditions.sol";
+import {ICyberAgreementRegistry} from "../interfaces/ICyberAgreementRegistry.sol";
 import {ZKPassportConditionLib} from "./ZKPassportConditionLib.sol";
 
 /// @title SignerConditionLib
@@ -49,31 +49,31 @@ import {ZKPassportConditionLib} from "./ZKPassportConditionLib.sol";
 /// It runs inside the registry, so its state is in the registry's storage.
 library SignerConditionLib {
     struct SignerConditionStorage {
-        mapping(bytes32 => mapping(address => SignerCondition[])) conditions; // contractId => party => conditions
+        mapping(bytes32 => mapping(address => ICyberAgreementRegistry.SignerCondition[])) conditions; // contractId => party => conditions
     }
 
     bytes32 private constant STORAGE_POSITION = keccak256("metalex.agreements.signer-conditions.storage.v1");
 
-    function conditionsOf(bytes32 contractId, address party) internal view returns (SignerCondition[] storage) {
+    function conditionsOf(bytes32 contractId, address party) internal view returns (ICyberAgreementRegistry.SignerCondition[] storage) {
         return _storage().conditions[contractId][party];
     }
 
     /// @dev An empty list means no conditions. Otherwise each party has one list.
-    function checkLength(SignerCondition[][] memory conditions, uint256 partyCount) internal pure {
+    function checkLength(ICyberAgreementRegistry.SignerCondition[][] memory conditions, uint256 partyCount) internal pure {
         if (conditions.length != 0 && conditions.length != partyCount) {
-            revert ISignerConditions.SignerConditionsLengthMismatch();
+            revert ICyberAgreementRegistry.SignerConditionsLengthMismatch();
         }
     }
 
     /// @notice Store `conditions[i]` for `parties[i]`. Each condition must have a known kind and valid params.
-    function set(bytes32 contractId, address[] memory parties, SignerCondition[][] memory conditions) internal {
+    function set(bytes32 contractId, address[] memory parties, ICyberAgreementRegistry.SignerCondition[][] memory conditions) internal {
         SignerConditionStorage storage $ = _storage();
         for (uint256 i = 0; i < conditions.length; i++) {
             for (uint256 j = 0; j < conditions[i].length; j++) {
-                SignerCondition memory condition = conditions[i][j];
+                ICyberAgreementRegistry.SignerCondition memory condition = conditions[i][j];
                 _validateParams(condition.kind, condition.params);
                 $.conditions[contractId][parties[i]].push(condition);
-                emit ISignerConditions.SignerConditionSet(contractId, parties[i], j, condition.kind, condition.params);
+                emit ICyberAgreementRegistry.SignerConditionSet(contractId, parties[i], j, condition.kind, condition.params);
             }
         }
     }
@@ -81,16 +81,16 @@ library SignerConditionLib {
     /// @notice Check each condition of `party` with its evidence. `evidence[j]` is for condition `j`.
     /// Revert unless all pass.
     function verifyAll(bytes32 contractId, address party, bytes[] memory evidence) internal {
-        SignerCondition[] storage conditions = _storage().conditions[contractId][party];
+        ICyberAgreementRegistry.SignerCondition[] storage conditions = _storage().conditions[contractId][party];
         for (uint256 j = 0; j < conditions.length; j++) {
             bytes32 kind = conditions[j].kind;
             bytes memory result;
             if (kind == ZKPassportConditionLib.KIND) {
                 result = ZKPassportConditionLib.verify(contractId, party, conditions[j].params, evidence[j]);
             } else {
-                revert ISignerConditions.UnknownSignerConditionKind(kind);
+                revert ICyberAgreementRegistry.UnknownSignerConditionKind(kind);
             }
-            emit ISignerConditions.SignerConditionMet(contractId, party, j, kind, result);
+            emit ICyberAgreementRegistry.SignerConditionMet(contractId, party, j, kind, result);
         }
     }
 
@@ -98,21 +98,21 @@ library SignerConditionLib {
         if (kind == ZKPassportConditionLib.KIND) {
             ZKPassportConditionLib.setConfig(config);
         } else {
-            revert ISignerConditions.UnknownSignerConditionKind(kind);
+            revert ICyberAgreementRegistry.UnknownSignerConditionKind(kind);
         }
-        emit ISignerConditions.SignerConditionConfigSet(kind, config);
+        emit ICyberAgreementRegistry.SignerConditionConfigSet(kind, config);
     }
 
     function getConfig(bytes32 kind) internal view returns (bytes memory) {
         if (kind == ZKPassportConditionLib.KIND) return ZKPassportConditionLib.getConfig();
-        revert ISignerConditions.UnknownSignerConditionKind(kind);
+        revert ICyberAgreementRegistry.UnknownSignerConditionKind(kind);
     }
 
     function _validateParams(bytes32 kind, bytes memory params) private view {
         if (kind == ZKPassportConditionLib.KIND) {
             ZKPassportConditionLib.validateParams(params);
         } else {
-            revert ISignerConditions.UnknownSignerConditionKind(kind);
+            revert ICyberAgreementRegistry.UnknownSignerConditionKind(kind);
         }
     }
 

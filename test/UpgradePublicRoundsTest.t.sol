@@ -9,7 +9,7 @@ import {UpgradePublicRoundsScript} from "../script/upgrade-public-rounds.s.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -66,9 +66,9 @@ contract UpgradePublicRoundsForkTest is Test {
 
         // Simulate granting the test deployer admin access so it can perform upgrades
         vm.startPrank(metalexSafe);
-        CyberAgreementRegistry(registry).AUTH().updateRole(
+        ICyberAgreementRegistry(registry).AUTH().updateRole(
             deployer,
-            CyberAgreementRegistry(registry).AUTH().OWNER_ROLE()
+            ICyberAgreementRegistry(registry).AUTH().OWNER_ROLE()
         );
         BorgAuth(deployedLexChexAddrAuth).updateRole(
             deployer,
@@ -125,7 +125,7 @@ contract UpgradePublicRoundsForkTest is Test {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(
+        ICyberAgreementRegistry(registry).createTemplate(
             templateId,
             "SAFE",
             "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi",
@@ -413,7 +413,7 @@ contract UpgradePublicRoundsForkTest is Test {
             ,
             string[] memory globalFields,
             string[] memory partyFields
-        ) = CyberAgreementRegistry(registry).getTemplateDetails(
+        ) = ICyberAgreementRegistry(registry).getTemplateDetails(
             templateId
         );
 
@@ -427,7 +427,7 @@ contract UpgradePublicRoundsForkTest is Test {
         );
 
         bytes memory signature = _computeEOISignature(
-            CyberAgreementRegistry(registry),
+            ICyberAgreementRegistry(registry),
             templateId,
             block.timestamp,
             roundPartyValues,
@@ -512,7 +512,7 @@ contract UpgradePublicRoundsForkTest is Test {
 
         // Build signature for template id 1
         bytes memory signature2 = _computeEOISignature(
-            CyberAgreementRegistry(registry),
+            ICyberAgreementRegistry(registry),
             templateId,
             block.timestamp,
             roundPartyValues,
@@ -562,7 +562,7 @@ contract UpgradePublicRoundsForkTest is Test {
         partyFields[0] = "Officer Name";
         partyFields[1] = "Officer Title";
         vm.prank(metalexSafe);
-        CyberAgreementRegistry(registry).createTemplate(
+        ICyberAgreementRegistry(registry).createTemplate(
             templateId,
             "Test",
             "ipfs://template",
@@ -703,7 +703,7 @@ contract UpgradePublicRoundsForkTest is Test {
 
         // Attach a valid LeXcheX mint payload aligned to template 400 so auto-mint can succeed
         {
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(leXcheXMinter.dealRegistry());
+            ICyberAgreementRegistry lxRegistry = ICyberAgreementRegistry(leXcheXMinter.dealRegistry());
 
             bytes32 lxTemplateId = bytes32(uint256(400));
             uint256 lxSalt = block.timestamp;
@@ -773,7 +773,7 @@ contract UpgradePublicRoundsForkTest is Test {
             globalValues,
             partyValues,
             CyberCorpHelper.computeEOISignature(
-                CyberAgreementRegistry(registry),
+                ICyberAgreementRegistry(registry),
                 templateId,
                 salt,
                 globalValues,
@@ -793,7 +793,7 @@ contract UpgradePublicRoundsForkTest is Test {
     }
 
     function _computeEOISignature(
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 templateId,
         uint256 salt,
         string[] memory globalValues,

@@ -2,7 +2,8 @@
 pragma solidity ^0.8.28;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
 contract UpgradeCyberAgreementRegistryScript is Script {
@@ -17,7 +18,7 @@ contract UpgradeCyberAgreementRegistryScript is Script {
         console2.log("deployer: %s", deployer);
         console2.log("registry proxy: %s", registryProxy);
 
-        CyberAgreementRegistry registry = CyberAgreementRegistry(registryProxy);
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(registryProxy);
         BorgAuth auth = BorgAuth(registry.AUTH());
         console2.log("auth: %s", address(auth));
 
@@ -30,7 +31,7 @@ contract UpgradeCyberAgreementRegistryScript is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         address newRegistryImpl = address(
-            new CyberAgreementRegistry{salt: salt}()
+            CyberAgreementRegistryDeployment.deployRouter(salt)
         );
         console2.log(
             "New CyberAgreementRegistry implementation: %s",

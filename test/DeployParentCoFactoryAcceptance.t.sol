@@ -6,7 +6,7 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {DeployParentCoFactoryScript} from "../script/deploy-parentco-factory.s.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {ParentCoFactory} from "../src/ParentCoFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
@@ -17,7 +17,7 @@ contract DeployParentCoFactoryAcceptanceForkTest is Test {
     DeploymentConstants.UmiaDeployment umiaDeployment;
     DeploymentConstants.Deps deps;
 
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
 
     ParentCoFactory parentCoFactory;
     CompanyOfficer[] parentCoOfficers;
@@ -41,7 +41,7 @@ contract DeployParentCoFactoryAcceptanceForkTest is Test {
         (subCorpPayable, ) = makeAddrAndKey("subCorpPayable");
         (subCorpOfficer, subCorpOfficerPrivKey) = makeAddrAndKey("subCorpOfficer");
 
-        registry = CyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
+        registry = ICyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
         CyberAgreementUtils.upgradeRegistry(vm, address(registry), coreDeployment.metalexSafe);
 
         parentCoFactory = ParentCoFactory(umiaDeployment.parentCoFactory);
