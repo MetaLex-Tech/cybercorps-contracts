@@ -5,7 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {Vm} from "forge-std/Test.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -119,7 +119,7 @@ contract PublicRoundTestDeploy is Script {
             new ERC1967Proxy{salt: salt}(
                 address(CyberAgreementRegistryDeployment.deployRouter(salt)),
                 abi.encodeWithSelector(
-                    CyberAgreementRegistry.initialize.selector,
+                    ICyberAgreementRegistry.initialize.selector,
                     address(auth)
                 )
             )
@@ -164,7 +164,7 @@ contract PublicRoundTestDeploy is Script {
         string[] memory partyFields = new string[](2);
         partyFields[0] = "Officer Name";
         partyFields[1] = "Officer Title";
-        CyberAgreementRegistry(registry).createTemplate(
+        ICyberAgreementRegistry(registry).createTemplate(
             templateId,
             "FCFS-Test",
             "ipfs://template",
@@ -186,7 +186,7 @@ contract PublicRoundTestDeploy is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(
+        ICyberAgreementRegistry(registry).createTemplate(
             bytes32(uint256(1)),
             "SAFE",
             "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi",
@@ -394,7 +394,7 @@ contract PublicRoundTestDeploy is Script {
 
         bytes memory signature = _computeEOISignature(
             vm,
-            CyberAgreementRegistry(registry),
+            ICyberAgreementRegistry(registry),
             bytes32(uint256(1)),
             block.timestamp,
             safeGlobalValues,
@@ -420,7 +420,7 @@ contract PublicRoundTestDeploy is Script {
 
     function _computeEOISignature(
         Vm vm,
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 templateId,
         uint256 salt,
         string[] memory globalValues,

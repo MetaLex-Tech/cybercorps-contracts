@@ -17,7 +17,7 @@ import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -85,7 +85,7 @@ contract RoundManagerFCFSForkTest is Test {
         // This test uses CreateLexChexRound to include the LexChex condition
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             ,
@@ -182,7 +182,7 @@ contract RoundManagerFCFSForkTest is Test {
     function test_FCFS_PublicRound_IndividualOver200k_LexChexRequired() public {
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             ,
@@ -252,7 +252,7 @@ contract RoundManagerFCFSForkTest is Test {
          // Attach a valid LeXcheX mint payload aligned to template 400 so auto-mint can succeed
         {
             LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
+            ICyberAgreementRegistry lxRegistry = ICyberAgreementRegistry(minter.dealRegistry());
 
             bytes32 lxTemplateId = bytes32(uint256(400));
             uint256 lxSalt = block.timestamp;
@@ -343,7 +343,7 @@ contract RoundManagerFCFSForkTest is Test {
         // This test uses CreateLexChexRound to include the LexChex condition
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             ,
@@ -410,7 +410,7 @@ contract RoundManagerFCFSForkTest is Test {
         // Attach a valid LeXcheX mint payload aligned to template 400 to avoid MismatchedFieldsLength if auto-mint is ever triggered
         {
             LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
+            ICyberAgreementRegistry lxRegistry = ICyberAgreementRegistry(minter.dealRegistry());
 
             bytes32 lxTemplateId = bytes32(uint256(400));
             uint256 lxSalt = block.timestamp;
@@ -468,7 +468,7 @@ contract RoundManagerFCFSForkTest is Test {
         {
             // Resolve LexChexMinter and its registry on the fork
             LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
+            ICyberAgreementRegistry lxRegistry = ICyberAgreementRegistry(minter.dealRegistry());
 
             // Template and values
             bytes32 lxTemplateId = bytes32(uint256(400));
@@ -564,7 +564,7 @@ contract RoundManagerFCFSForkTest is Test {
         // This test uses CreateLexChexRound to include the LexChex condition
         address me = address(this);
         (
-            CyberAgreementRegistry registry,
+            ICyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
             ,
             ,
@@ -631,7 +631,7 @@ contract RoundManagerFCFSForkTest is Test {
         // LexChex Details setup (boilerplate to pass validation if minting were attempted)
         {
             LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
+            ICyberAgreementRegistry lxRegistry = ICyberAgreementRegistry(minter.dealRegistry());
             bytes32 lxTemplateId = bytes32(uint256(400));
             uint256 lxSalt = block.timestamp;
             (string memory legalUri, , string[] memory lxGlFields, string[] memory lxPartyFields) = lxRegistry.getTemplateDetails(lxTemplateId);
@@ -734,7 +734,7 @@ contract RoundManagerFCFSForkTest is Test {
         // Update LexChex details for Investor 2
         {
             LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
+            ICyberAgreementRegistry lxRegistry = ICyberAgreementRegistry(minter.dealRegistry());
             bytes32 lxTemplateId = bytes32(uint256(400));
             uint256 lxSalt = block.timestamp + 1;
             (string memory legalUri, , string[] memory lxGlFields, string[] memory lxPartyFields) = lxRegistry.getTemplateDetails(lxTemplateId);
@@ -831,7 +831,7 @@ contract RoundManagerFCFSForkTest is Test {
         address officer  = vm.addr(OFFICER_PK);
         address investor = vm.addr(INVESTOR_PK);
 
-        CyberAgreementRegistry registry = CyberAgreementRegistry(net.cyberAgreementRegistry);
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(net.cyberAgreementRegistry);
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(net.cyberCorpFactory);
         // deployCyberCorpAndCreateRound now takes the officer's metadata signature, so the
         // deployed implementation is behind this branch. Upgrade it on the fork first.
@@ -1040,7 +1040,7 @@ contract RoundManagerFCFSForkTest is Test {
         assertGt(escrow.corpAssets.length, 0, "allocation should mint corp-side assets");
     }
 
-    function _createFcfsTemplate(CyberAgreementRegistry registry, address metalexSafe, bytes32 templateId) internal {
+    function _createFcfsTemplate(ICyberAgreementRegistry registry, address metalexSafe, bytes32 templateId) internal {
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Jurisdiction";
 

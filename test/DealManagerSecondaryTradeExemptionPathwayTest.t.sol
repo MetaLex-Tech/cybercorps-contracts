@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
@@ -129,7 +129,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     MockCorpWithAuth public corp;
     IssuanceManager public im;
     ILedgerEntryToken public certPrinter;
-    CyberAgreementRegistry public registry;
+    ICyberAgreementRegistry public registry;
     DealManagerFactory public dmFactory;
     DealManager public dm;
     LeXcheXBadge public badge;
@@ -184,11 +184,11 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         im.initialize(address(auth), address(corp), address(new MockUriBuilderForIM()), address(imFactory));
 
         // Real CyberAgreementRegistry with a one-party-field template (for the §4(a)(7) ack).
-        registry = CyberAgreementRegistry(
+        registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
                     address(CyberAgreementRegistryDeployment.deployRouter()),
-                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+                    abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )
         );

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {CyberAgreementRegistry} from "../../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../../script/libs/CyberAgreementRegistryDeployment.sol";
 import {BorgAuth} from "../../src/libs/auth.sol";
 import {Script} from "forge-std/Script.sol";
@@ -37,11 +37,11 @@ contract BoundRegistryUpgradeRehearsal is Script {
         RehearsalUpgradeAuthority authority = new RehearsalUpgradeAuthority(owner);
         BorgAuth auth = new BorgAuth(address(authority));
         // The rehearsal runner subsequently grants the deployer owner access through the authority.
-        CyberAgreementRegistry registry = CyberAgreementRegistry(
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
                     address(CyberAgreementRegistryDeployment.deployRouter()),
-                    abi.encodeCall(CyberAgreementRegistry.initialize, (address(auth)))
+                    abi.encodeCall(ICyberAgreementRegistry.initialize, (address(auth)))
                 )
             )
         );

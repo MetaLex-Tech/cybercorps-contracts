@@ -2,12 +2,12 @@
 pragma solidity 0.8.28;
 
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
-import {CyberAgreementRegistryRouter} from "../src/CyberAgreementRegistryRouter.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {Test} from "forge-std/Test.sol";
 
-// Checks the router table against the ABIs in the build output.
+// Checks the router table and the interface against the ABIs in the build output.
 contract CyberAgreementRegistryRoutingTest is Test {
-    CyberAgreementRegistryRouter router = CyberAgreementRegistryDeployment.deployRouter();
+    CyberAgreementRegistry router = CyberAgreementRegistryDeployment.deployRouter();
 
     function testEveryFacetSelectorRoutesToItsFacet() public view {
         address agreementFacet = _routeAll(_selectorsOf("CyberAgreementFacet"));
@@ -17,7 +17,7 @@ contract CyberAgreementRegistryRoutingTest is Test {
     }
 
     function testNoFacetHoldsARouterSelector() public view {
-        string[] memory routerSignatures = _signaturesOf("CyberAgreementRegistryRouter");
+        string[] memory routerSignatures = _signaturesOf("CyberAgreementRegistry");
         for (uint256 i = 0; i < routerSignatures.length; i++) {
             assertEq(router.facetOf(bytes4(keccak256(bytes(routerSignatures[i])))), address(0), routerSignatures[i]);
         }
@@ -25,13 +25,94 @@ contract CyberAgreementRegistryRoutingTest is Test {
 
     function testEveryLiveSelectorIsServed() public view {
         string[] memory liveSignatures = _liveSignatures();
-        string[] memory routerSignatures = _signaturesOf("CyberAgreementRegistryRouter");
+        string[] memory routerSignatures = _signaturesOf("CyberAgreementRegistry");
         for (uint256 i = 0; i < liveSignatures.length; i++) {
             bool served = router.facetOf(bytes4(keccak256(bytes(liveSignatures[i])))) != address(0);
             for (uint256 j = 0; j < routerSignatures.length && !served; j++) {
                 served = keccak256(bytes(liveSignatures[i])) == keccak256(bytes(routerSignatures[j]));
             }
             assertTrue(served, liveSignatures[i]);
+        }
+    }
+
+    function testInterfaceDeclaresExactlyTheImplementationFunctions() public view {
+        _assertSameSet(_signaturesOf("ICyberAgreementRegistry"), _implementationEntries("function"), "function");
+    }
+
+    function testInterfaceDeclaresExactlyTheImplementationEvents() public view {
+        _assertSameSet(_abiEntriesOf("ICyberAgreementRegistry", "event"), _implementationEntries("event"), "event");
+    }
+
+    function testInterfaceDeclaresExactlyTheImplementationErrors() public view {
+        _assertSameSet(_abiEntriesOf("ICyberAgreementRegistry", "error"), _implementationEntries("error"), "error");
+    }
+
+    function _implementationEntries(string memory kind) private view returns (string[] memory entries) {
+        string[4] memory names =
+            ["CyberAgreementRegistry", "CyberAgreementFacet", "CyberAgreementBoundFacet", "CyberAgreementViewFacet"];
+        for (uint256 i = 0; i < names.length; i++) {
+            string[] memory more = _isFunction(kind) ? _signaturesOf(names[i]) : _abiEntriesOf(names[i], kind);
+            entries = _concat(entries, more);
+        }
+    }
+
+    /// @dev Builds `name(type,...)` for each ABI entry of `kind`.
+    function _abiEntriesOf(string memory name, string memory kind) private view returns (string[] memory entries) {
+        string memory abiJson =
+            string.concat('{"abi":', vm.readFile(string.concat("out/", name, ".sol/", name, ".abi.json")), "}");
+        string[] memory found = new string[](256);
+        uint256 count;
+        for (uint256 i = 0; vm.keyExistsJson(abiJson, _key(i, "")); i++) {
+            if (keccak256(bytes(vm.parseJsonString(abiJson, _key(i, ".type")))) != keccak256(bytes(kind))) continue;
+            string memory signature = string.concat(vm.parseJsonString(abiJson, _key(i, ".name")), "(");
+            for (
+                uint256 j = 0; vm.keyExistsJson(abiJson, _key(i, string.concat(".inputs[", vm.toString(j), "]"))); j++) {
+                string memory inputType =
+                    vm.parseJsonString(abiJson, _key(i, string.concat(".inputs[", vm.toString(j), "].type")));
+                signature = string.concat(signature, j == 0 ? "" : ",", inputType);
+            }
+            found[count++] = string.concat(signature, ")");
+        }
+        entries = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            entries[i] = found[i];
+        }
+    }
+
+    function _key(uint256 index, string memory path) private pure returns (string memory) {
+        return string.concat(".abi[", vm.toString(index), "]", path);
+    }
+
+    function _isFunction(string memory kind) private pure returns (bool) {
+        return keccak256(bytes(kind)) == keccak256("function");
+    }
+
+    /// @dev Keeps duplicates. The set checks do not count them.
+    function _concat(string[] memory a, string[] memory b) private pure returns (string[] memory result) {
+        result = new string[](a.length + b.length);
+        for (uint256 i = 0; i < a.length; i++) {
+            result[i] = a[i];
+        }
+        for (uint256 i = 0; i < b.length; i++) {
+            result[a.length + i] = b[i];
+        }
+    }
+
+    function _contains(string[] memory set, string memory item) private pure returns (bool) {
+        for (uint256 i = 0; i < set.length; i++) {
+            if (keccak256(bytes(set[i])) == keccak256(bytes(item))) return true;
+        }
+        return false;
+    }
+
+    function _assertSameSet(string[] memory declared, string[] memory implemented, string memory kind) private pure {
+        for (uint256 i = 0; i < implemented.length; i++) {
+            assertTrue(_contains(declared, implemented[i]), string.concat(kind, " not in interface: ", implemented[i]));
+        }
+        for (uint256 i = 0; i < declared.length; i++) {
+            assertTrue(
+                _contains(implemented, declared[i]), string.concat(kind, " not in implementation: ", declared[i])
+            );
         }
     }
 

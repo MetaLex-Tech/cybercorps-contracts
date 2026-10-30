@@ -42,7 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import {Vm} from "forge-std/Test.sol";
-import {CyberAgreementRegistry} from "../../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../../script/libs/CyberAgreementRegistryDeployment.sol";
 
 interface IRegistryUUPS {

@@ -41,7 +41,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
@@ -85,7 +85,7 @@ contract LexChexMinterTest is Test {
     ERC20 paymentToken2 = new PaymentToken(0, 18);
 
     BorgAuth coreAuth;
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
     LeXcheX public lexchex;
     LeXcheXMinter public lexchexMinter;
 
@@ -110,9 +110,9 @@ contract LexChexMinterTest is Test {
 
         coreAuth = new BorgAuth(owner);
 
-        registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
+        registry = ICyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
             address(CyberAgreementRegistryDeployment.deployRouter(salt)),
-            abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(coreAuth))
+            abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(coreAuth))
         )));
 
         lexchex = LeXcheX(address(new ERC1967Proxy{salt: salt}(
@@ -448,7 +448,7 @@ contract LexChexMinterTest is Test {
         );
 
         // Request should fail
-        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector));
+        vm.expectRevert(abi.encodeWithSelector(ICyberAgreementRegistry.SignatureVerificationFailed.selector));
         vm.prank(agent);
         lexchexMinter.requestMint(
             request,

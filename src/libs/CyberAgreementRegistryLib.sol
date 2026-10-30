@@ -41,9 +41,7 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import {CyberAgreementRegistry} from "../CyberAgreementRegistry.sol";
 import {ICyberAgreementRegistry} from "../interfaces/ICyberAgreementRegistry.sol";
-import {ISignerConditions} from "../interfaces/ISignerConditions.sol";
 import {CyberAgreementRegistryStorage} from "../storage/CyberAgreementRegistryStorage.sol";
 import {SignerConditionLib} from "./SignerConditionLib.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -101,11 +99,11 @@ library CyberAgreementRegistryLib {
         mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates =
             CyberAgreementRegistryStorage.getStorageData().templates;
         if (bytes(templates[templateId].legalContractUri).length > 0) {
-            revert CyberAgreementRegistry.TemplateAlreadyExists();
+            revert ICyberAgreementRegistry.TemplateAlreadyExists();
         }
 
         if (bytes(title).length == 0) {
-            revert CyberAgreementRegistry.TitleEmpty();
+            revert ICyberAgreementRegistry.TitleEmpty();
         }
 
         templates[templateId] = ICyberAgreementRegistry.Template({
@@ -126,26 +124,26 @@ library CyberAgreementRegistryLib {
         CyberAgreementRegistryStorage.StorageData storage s = CyberAgreementRegistryStorage.getStorageData();
         // A party with signer conditions signs with evidence. See `signContractWithEvidenceFor()`.
         if (SignerConditionLib.conditionsOf(contractId, signer).length != 0) {
-            revert ISignerConditions.EvidenceRequired();
+            revert ICyberAgreementRegistry.EvidenceRequired();
         }
 
         CyberAgreementRegistryStorage.AgreementData storage agreementData = s.agreements[contractId];
         ICyberAgreementRegistry.Template memory template = s.templates[agreementData.templateId];
-        if (agreementData.parties.length == 0) revert CyberAgreementRegistry.ContractDoesNotExist();
-        if (agreementData.signedAt[signer] != 0) revert CyberAgreementRegistry.AlreadySigned();
-        if (agreementData.voided) revert CyberAgreementRegistry.ContractAlreadyVoided();
-        if (agreementData.finalized) revert CyberAgreementRegistry.ContractAlreadyFinalized();
+        if (agreementData.parties.length == 0) revert ICyberAgreementRegistry.ContractDoesNotExist();
+        if (agreementData.signedAt[signer] != 0) revert ICyberAgreementRegistry.AlreadySigned();
+        if (agreementData.voided) revert ICyberAgreementRegistry.ContractAlreadyVoided();
+        if (agreementData.finalized) revert ICyberAgreementRegistry.ContractAlreadyFinalized();
         if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp) {
-            revert CyberAgreementRegistry.ContractExpired();
+            revert ICyberAgreementRegistry.ContractExpired();
         }
 
         if (!isParty(contractId, signer)) {
             if (agreementData.secretHash > 0 && keccak256(abi.encode(secret)) != agreementData.secretHash) {
-                revert CyberAgreementRegistry.InvalidSecret();
+                revert ICyberAgreementRegistry.InvalidSecret();
             }
             // Not a named party, so check if there's an open slot
             uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
-            if (firstOpenPartyIndex == 0 || !fillUnallocated) revert CyberAgreementRegistry.NotAParty();
+            if (firstOpenPartyIndex == 0 || !fillUnallocated) revert ICyberAgreementRegistry.NotAParty();
             // There is a spare slot, assign the sender to this slot.
             agreementData.parties[firstOpenPartyIndex] = signer;
             s.agreementsForParty[agreementData.parties[firstOpenPartyIndex]].push(contractId);
@@ -155,7 +153,7 @@ library CyberAgreementRegistryLib {
         if (agreementData.partyValues[signer].length > 0) {
             //check that the submitted partyValues match
             if (keccak256(abi.encode(agreementData.partyValues[signer])) != keccak256(abi.encode(partyValues))) {
-                revert CyberAgreementRegistry.ClosedAgreementPartyValueMismatch();
+                revert ICyberAgreementRegistry.ClosedAgreementPartyValueMismatch();
             }
         }
 
@@ -173,17 +171,17 @@ library CyberAgreementRegistryLib {
                 }),
                 signature
             )) {
-            revert CyberAgreementRegistry.SignatureVerificationFailed();
+            revert ICyberAgreementRegistry.SignatureVerificationFailed();
         }
 
         if (
             address(0) != agreementData.finalizer // if finalizer is undefined, as long as the signature is valid we still allow it
                 && msg.sender != agreementData.finalizer && msg.sender != signer
         ) {
-            revert CyberAgreementRegistry.NotFinalizer();
+            revert ICyberAgreementRegistry.NotFinalizer();
         }
 
-        if (partyValues.length != template.partyFields.length) revert CyberAgreementRegistry.MismatchedFieldsLength();
+        if (partyValues.length != template.partyFields.length) revert ICyberAgreementRegistry.MismatchedFieldsLength();
 
         uint256 timestamp = block.timestamp;
 
@@ -196,7 +194,7 @@ library CyberAgreementRegistryLib {
         if (totalSignatures == agreementData.parties.length) {
             if (agreementData.finalizer == address(0)) {
                 agreementData.finalized = true;
-                emit CyberAgreementRegistry.ContractFinalized(contractId, msg.sender, timestamp);
+                emit ICyberAgreementRegistry.ContractFinalized(contractId, msg.sender, timestamp);
             }
 
             emit ICyberAgreementRegistry.ContractFullySigned(contractId, timestamp);

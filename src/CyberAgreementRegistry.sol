@@ -39,212 +39,146 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system,
 except with the express prior written permission of the copyright holder.*/
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {ICyberAgreementRegistry} from "./interfaces/ICyberAgreementRegistry.sol";
-import {ISignerConditions, SignerCondition} from "./interfaces/ISignerConditions.sol";
-import {BorgAuth} from "./libs/auth.sol";
+import {CyberAgreementRegistryLib} from "./libs/CyberAgreementRegistryLib.sol";
+import {BorgAuthACL} from "./libs/auth.sol";
+import {CyberAgreementBoundFacet} from "./registry/CyberAgreementBoundFacet.sol";
+import {CyberAgreementFacet} from "./registry/CyberAgreementFacet.sol";
+import {CyberAgreementViewFacet} from "./registry/CyberAgreementViewFacet.sol";
+import {CyberAgreementRegistryStorage} from "./storage/CyberAgreementRegistryStorage.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {Proxy} from "@openzeppelin/contracts/proxy/Proxy.sol";
 
 /// @title CyberAgreementRegistry
-/// @notice The full interface of the agreement registry. Callers use this type for the proxy.
-/// `CyberAgreementRegistryRouter` is the implementation. It sends each call to the facet that holds the function.
-interface CyberAgreementRegistry is ICyberAgreementRegistry, ISignerConditions {
-    event VoidRequested(bytes32 indexed contractId, address indexed party);
+/// @notice The implementation behind the registry proxy. It holds initialize, upgrade and auth. It sends every
+/// other call to the facet that holds the function. The facets run in the proxy's storage.
+/// @dev The facets are fixed for one router. To change a facet, deploy the new facet and a new router that uses
+/// it, then upgrade the proxy to the new router.
+contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL, Proxy {
+    // CyberAgreementRegistryStorage keeps its struct in these slots. Keep them so no inherited
+    // variable uses them.
+    uint256[49] private __reservedForStorageData;
 
-    event ContractVoided(bytes32 indexed contractId, address[] voidSigners, uint256 timestamp);
+    address private immutable agreementFacet;
+    address private immutable boundFacet;
+    address private immutable viewFacet;
 
-    event ContractFinalized(bytes32 indexed contractId, address finalizer, uint256 timestamp);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor(address _agreementFacet, address _boundFacet, address _viewFacet) {
+        agreementFacet = _agreementFacet;
+        boundFacet = _boundFacet;
+        viewFacet = _viewFacet;
+        _disableInitializers();
+    }
 
-    event DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
-    event DelegationRevoked(address indexed delegator, address indexed delegate);
+    function initialize(address _auth) public initializer {
+        __UUPSUpgradeable_init();
+        __BorgAuthACL_init(_auth);
 
-    error TemplateAlreadyExists();
-    error TemplateDoesNotExist();
-    error ContractAlreadyExists();
-    error ContractDoesNotExist();
-    error NotAParty();
-    error SignatureVerificationFailed();
-    error AlreadySigned();
-    error MismatchedFieldsLength();
-    error FirstPartyZeroAddress();
-    error DuplicateParty();
-    error TitleEmpty();
-    error InvalidPartyCount();
-    error ClosedAgreementPartyValueMismatch();
-    error ContractAlreadyVoided();
-    error NotFinalizer();
-    error ContractAlreadyFinalized();
-    error ContractNotFullySigned();
-    error ContractExpired();
-    error InvalidSecret();
-    error MismatchedPartyValuesLength();
-    error FinalizerNotDefined();
-    error DelegateZeroAddress();
-    error DelegateIsSelf();
-    error ExpiryNotInFuture();
-
-    // Router
-
-    function initialize(address _auth) external;
+        CyberAgreementRegistryStorage.StorageData storage s = CyberAgreementRegistryStorage.getStorageData();
+        s.version = "1";
+        s.domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(CyberAgreementRegistryLib.NAME)),
+                keccak256(bytes(s.version)),
+                block.chainid,
+                address(this)
+            )
+        );
+    }
 
     /// @notice The facet that holds the function with `selector`. Zero if no facet holds it.
-    function facetOf(bytes4 selector) external view returns (address);
+    function facetOf(bytes4 selector) public view returns (address) {
+        if (
+            selector == CyberAgreementFacet.createTemplate.selector
+                || selector == CyberAgreementFacet.createContract.selector
+                || selector == CyberAgreementFacet.createStandaloneContractAndSign.selector
+                || selector == CyberAgreementFacet.createStandaloneContractAndSignFor.selector
+                || selector == CyberAgreementFacet.signContract.selector
+                || selector == CyberAgreementFacet.signContractFor.selector
+                || selector == CyberAgreementFacet.signContractWithEscrow.selector
+                || selector == CyberAgreementFacet.voidContractFor.selector
+                || selector == CyberAgreementFacet.finalizeContract.selector
+                || selector == CyberAgreementFacet.setDelegation.selector
+                || selector == CyberAgreementFacet.revokeDelegation.selector
+        ) return agreementFacet;
 
-    function AUTH() external view returns (BorgAuth);
+        if (
+            // createBoundContract and createBoundContractAndSignFor are overloaded, so `.selector` cannot name them.
+            selector
+                    == bytes4(
+                        keccak256(
+                            "createBoundContract((string,string,string[],string[]),uint256,string[],address[],string[][],uint256)"
+                        )
+                    )
+                || selector
+                    == bytes4(
+                        keccak256(
+                            "createBoundContract((string,string,string[],string[]),uint256,string[],address[],string[][],uint256,(bytes32,bytes)[][])"
+                        )
+                    )
+                || selector
+                    == bytes4(
+                        keccak256(
+                            "createBoundContractAndSignFor((string,string,string[],string[]),uint256,string[],address[],string[][],uint256,bytes)"
+                        )
+                    )
+                || selector
+                    == bytes4(
+                        keccak256(
+                            "createBoundContractAndSignFor((string,string,string[],string[]),uint256,string[],address[],string[][],uint256,(bytes32,bytes)[][],bytes[],bytes)"
+                        )
+                    ) || selector == CyberAgreementBoundFacet.boundIdsOf.selector
+                || selector == CyberAgreementBoundFacet.signContractWithEvidenceFor.selector
+                || selector == CyberAgreementBoundFacet.setSignerConditionConfig.selector
+                || selector == CyberAgreementBoundFacet.getSignerConditionConfig.selector
+        ) {
+            return boundFacet;
+        }
 
-    function userRoles(address user) external view returns (uint256);
+        if (
+            selector == ICyberAgreementRegistry.name.selector
+                || selector == ICyberAgreementRegistry.SIGNATUREDATA_TYPEHASH.selector
+                || selector == ICyberAgreementRegistry.VOIDSIGNATUREDATA_TYPEHASH.selector
+                || selector == ICyberAgreementRegistry.BOUND_TEMPLATE_DOMAIN.selector
+                || selector == ICyberAgreementRegistry.BOUND_AGREEMENT_DOMAIN.selector
+                || selector == ICyberAgreementRegistry.CONDITIONED_BOUND_AGREEMENT_DOMAIN.selector
+                || selector == ICyberAgreementRegistry.SIGNATUREWITHEVIDENCEDATA_TYPEHASH.selector
+                || selector == CyberAgreementViewFacet.version.selector
+                || selector == CyberAgreementViewFacet.DOMAIN_SEPARATOR.selector
+                || selector == CyberAgreementViewFacet.templates.selector
+                || selector == CyberAgreementViewFacet.agreements.selector
+                || selector == CyberAgreementViewFacet.agreementsForParty.selector
+                || selector == CyberAgreementViewFacet.delegations.selector
+                || selector == CyberAgreementViewFacet.getDelegation.selector
+                || selector == CyberAgreementViewFacet.isValidDelegation.selector
+                || selector == CyberAgreementViewFacet.isValidDelegate.selector
+                || selector == CyberAgreementViewFacet.getParties.selector
+                || selector == CyberAgreementViewFacet.hasSigned.selector
+                || selector == CyberAgreementViewFacet.getSignatureTimestamp.selector
+                || selector == CyberAgreementViewFacet.allPartiesSigned.selector
+                || selector == CyberAgreementViewFacet.getContractDetails.selector
+                || selector == CyberAgreementViewFacet.getTemplateDetails.selector
+                || selector == CyberAgreementViewFacet.getSignerValues.selector
+                || selector == CyberAgreementViewFacet.getAgreementsForParty.selector
+                || selector == CyberAgreementViewFacet.getVoidRequestedBy.selector
+                || selector == CyberAgreementViewFacet.isFinalized.selector
+                || selector == CyberAgreementViewFacet.isVoided.selector
+                || selector == CyberAgreementViewFacet.getContractJson.selector
+                || selector == CyberAgreementViewFacet._bytes32ToString.selector
+        ) return viewFacet;
 
-    function UPGRADE_INTERFACE_VERSION() external view returns (string memory);
+        return address(0);
+    }
 
-    function proxiableUUID() external view returns (bytes32);
+    function _implementation() internal view override returns (address facet) {
+        facet = facetOf(msg.sig);
+        if (facet == address(0)) revert ICyberAgreementRegistry.FunctionNotFound(msg.sig);
+    }
 
-    function upgradeToAndCall(address newImplementation, bytes memory data) external payable;
-
-    // CyberAgreementFacet
-
-    function createStandaloneContractAndSign(
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        bytes calldata signature
-    ) external returns (bytes32 contractId);
-
-    function createStandaloneContractAndSignFor(
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        address signer,
-        bytes calldata signature
-    ) external returns (bytes32 contractId);
-
-    function setDelegation(address delegate, uint256 expiry) external;
-
-    function revokeDelegation() external;
-
-    // CyberAgreementBoundFacet
-
-    function createBoundContract(
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry
-    ) external returns (bytes32 templateId, bytes32 contractId);
-
-    function createBoundContract(
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions
-    ) external returns (bytes32 templateId, bytes32 contractId);
-
-    function createBoundContractAndSignFor(
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        bytes calldata creatorSignature
-    ) external returns (bytes32 templateId, bytes32 contractId);
-
-    function createBoundContractAndSignFor(
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions,
-        bytes[] memory creatorEvidence,
-        bytes calldata creatorSignature
-    ) external returns (bytes32 templateId, bytes32 contractId);
-
-    function boundIdsOf(
-        address creator,
-        Template memory template,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        SignerCondition[][] memory conditions
-    ) external pure returns (bytes32 templateId, bytes32 contractId);
-
-    function signContractWithEvidenceFor(
-        address signer,
-        bytes32 contractId,
-        string[] memory partyValues,
-        bytes[] memory evidence,
-        bytes calldata signature
-    ) external;
-
-    function setSignerConditionConfig(bytes32 kind, bytes calldata config) external;
-
-    function getSignerConditionConfig(bytes32 kind) external view returns (bytes memory);
-
-    // CyberAgreementViewFacet
-
-    function name() external view returns (string memory);
-
-    function version() external view returns (string memory);
-
-    function DOMAIN_SEPARATOR() external view returns (bytes32);
-
-    function SIGNATUREDATA_TYPEHASH() external view returns (bytes32);
-
-    function VOIDSIGNATUREDATA_TYPEHASH() external view returns (bytes32);
-
-    function SIGNATUREWITHEVIDENCEDATA_TYPEHASH() external view returns (bytes32);
-
-    function BOUND_TEMPLATE_DOMAIN() external view returns (bytes32);
-
-    function BOUND_AGREEMENT_DOMAIN() external view returns (bytes32);
-
-    function CONDITIONED_BOUND_AGREEMENT_DOMAIN() external view returns (bytes32);
-
-    function templates(bytes32 templateId) external view returns (string memory legalContractUri, string memory title);
-
-    function agreements(bytes32 contractId)
-        external
-        view
-        returns (
-            bytes32 templateId,
-            uint256 numSignatures,
-            address finalizer,
-            bool finalized,
-            bool voided,
-            bytes32 secretHash,
-            uint256 expiry
-        );
-
-    function agreementsForParty(address party, uint256 index) external view returns (bytes32);
-
-    function delegations(address delegator) external view returns (address delegate, uint256 expiry);
-
-    function getDelegation(address delegator) external view returns (address delegate, uint256 expiry);
-
-    function isValidDelegation(address delegator) external view returns (bool);
-
-    function isValidDelegate(address delegator, address delegate) external view returns (bool);
-
-    function getVoidRequestedBy(bytes32 contractId) external view returns (address[] memory);
-
-    function _bytes32ToString(bytes32 _bytes32) external pure returns (string memory);
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }

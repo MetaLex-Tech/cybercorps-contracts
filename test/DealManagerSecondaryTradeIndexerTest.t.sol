@@ -41,7 +41,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
@@ -236,7 +236,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     SecERC20Mock public paymentToken;
     ILedgerEntryToken public certPrinter;
     IssuanceManager public im;
-    CyberAgreementRegistry public registry;
+    ICyberAgreementRegistry public registry;
     MockCyberCorpForIM public corp;
     DealManagerFactory public dmFactory;
     DealManager public dm;
@@ -278,11 +278,11 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         im = IssuanceManager(imFactory.deployIssuanceManager(imSalt));
         im.initialize(address(auth), address(corp), address(new MockUriBuilderForIM()), address(imFactory));
 
-        registry = CyberAgreementRegistry(
+        registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
                     address(CyberAgreementRegistryDeployment.deployRouter()),
-                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+                    abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )
         );

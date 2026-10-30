@@ -6,7 +6,7 @@ import {console} from "forge-std/console.sol";
 
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
@@ -40,7 +40,7 @@ contract DeployScript is Script {
     }
 
     function run() public returns (
-        CyberAgreementRegistry registry, 
+        ICyberAgreementRegistry registry, 
         MetaDAOFactory metaDAOFactory
     ) {
         return runWithArgs(
@@ -56,7 +56,7 @@ contract DeployScript is Script {
         address corpPayable,
         address officerAddress,
         bytes memory metadaoEscrowSig
-    ) public returns (CyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
+    ) public returns (ICyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
         // Other configs
         string memory metaDAOOfficerName = "MetaDAO LLC, a Marshall Islands DAO limited liability company"; 
         string memory metaDAOOfficerContact = "market.governed.civilization@metadao.fi PO Box 852, Long Island Rd, Majuro, Marshall Islands MH 96960"; 
@@ -106,7 +106,7 @@ contract DeployScript is Script {
 
         // upgrade CyberAgreementRegistry
         address newAgreementRegistryImplementation = address(CyberAgreementRegistryDeployment.deployRouter(salt));
-        CyberAgreementRegistry(registry).upgradeToAndCall(newAgreementRegistryImplementation, "");
+        ICyberAgreementRegistry(registry).upgradeToAndCall(newAgreementRegistryImplementation, "");
 
         MetaDAOFactory metaDAOFactory = MetaDAOFactory(
             address(
@@ -172,11 +172,11 @@ contract DeployScript is Script {
 
         vm.stopBroadcast();
 
-        return (CyberAgreementRegistry(registry), metaDAOFactory);
+        return (ICyberAgreementRegistry(registry), metaDAOFactory);
     }
 
     function _formatEscrowAgreementTypedDataJson(
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         string memory contractUri,
         string[] memory partyFields,
         string[] memory partyValues

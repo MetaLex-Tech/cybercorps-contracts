@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import "../src/interfaces/ICyberAgreementRegistry.sol";
@@ -22,7 +22,7 @@ contract CyberAgreementRegistryTest is Test {
     bytes32 coreSalt = keccak256("CyberAgreementRegistryTest");
     
     BorgAuth coreAuth;
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
 
     string testTitle = "Test agreement";
     string testLegalContractUri = "ipfs://template";
@@ -46,12 +46,12 @@ contract CyberAgreementRegistryTest is Test {
 
         coreAuth = new BorgAuth{salt: coreSalt}(deployer);
 
-        registry = CyberAgreementRegistry(
+        registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy{salt: coreSalt}(
                     address(CyberAgreementRegistryDeployment.deployRouter(coreSalt)),
                     abi.encodeWithSelector(
-                        CyberAgreementRegistry.initialize.selector,
+                        ICyberAgreementRegistry.initialize.selector,
                         address(coreAuth)
                     )
                 )
@@ -230,7 +230,7 @@ contract CyberAgreementRegistryTest is Test {
                 chadPrivateKey
             );
 
-            vm.expectRevert(CyberAgreementRegistry.NotAParty.selector);
+            vm.expectRevert(ICyberAgreementRegistry.NotAParty.selector);
             vm.prank(chad);
             registry.signContract(
                 agreementId,
@@ -275,7 +275,7 @@ contract CyberAgreementRegistryTest is Test {
             bobPrivateKey
         );
 
-        vm.expectRevert(CyberAgreementRegistry.NotAParty.selector);
+        vm.expectRevert(ICyberAgreementRegistry.NotAParty.selector);
         vm.prank(chad);
         registry.signContract(
             agreementId,
@@ -286,7 +286,7 @@ contract CyberAgreementRegistryTest is Test {
         );
 
         // using `fallUnallocated = true` should not work either
-        vm.expectRevert(CyberAgreementRegistry.NotAParty.selector);
+        vm.expectRevert(ICyberAgreementRegistry.NotAParty.selector);
         vm.prank(chad);
         registry.signContract(
             agreementId,
@@ -357,7 +357,7 @@ contract CyberAgreementRegistryTest is Test {
         );
 
         // Bob should not be able to fake alice's escrow signature
-        vm.expectRevert(CyberAgreementRegistry.FinalizerNotDefined.selector);
+        vm.expectRevert(ICyberAgreementRegistry.FinalizerNotDefined.selector);
         vm.prank(bob);
         registry.signContractWithEscrow(
             alice,
@@ -710,7 +710,7 @@ contract CyberAgreementRegistryTest is Test {
 
         // alice to delegate to bob
         vm.expectEmit(true, true, true, true);
-        emit CyberAgreementRegistry.DelegationSet(alice, bob, block.timestamp + 10);
+        emit ICyberAgreementRegistry.DelegationSet(alice, bob, block.timestamp + 10);
         registry.setDelegation(bob, block.timestamp + 10);
         assertTrue(registry.isValidDelegate(alice, bob), "alice should've delegated to bob");
         (address delegate, uint256 expiry) = registry.getDelegation(alice);
@@ -766,7 +766,7 @@ contract CyberAgreementRegistryTest is Test {
         registry.setDelegation(bob, block.timestamp + 10);
 
         vm.expectEmit(true, true, true, true);
-        emit CyberAgreementRegistry.DelegationRevoked(alice, bob);
+        emit ICyberAgreementRegistry.DelegationRevoked(alice, bob);
         registry.revokeDelegation();
 
         assertFalse(registry.isValidDelegate(alice, bob), "alice should not have delegated to bob");
@@ -789,7 +789,7 @@ contract CyberAgreementRegistryTest is Test {
             testPartyValues[0],
             bobPrivateKey
         );
-        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.expectRevert(ICyberAgreementRegistry.SignatureVerificationFailed.selector);
         vm.startPrank(bob);
         registry.signContractFor(
             alice,
@@ -873,7 +873,7 @@ contract CyberAgreementRegistryTest is Test {
         );
 
         vm.prank(bob);
-        vm.expectRevert(CyberAgreementRegistry.NotAParty.selector);
+        vm.expectRevert(ICyberAgreementRegistry.NotAParty.selector);
         registry.signContractFor(
             bob,
             agreementId,
@@ -1197,7 +1197,7 @@ contract CyberAgreementRegistryTest is Test {
 
         // The victim's own creation reverts rather than silently adopting the attacker's terms
         vm.prank(alice);
-        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyExists.selector);
+        vm.expectRevert(ICyberAgreementRegistry.ContractAlreadyExists.selector);
         registry.createStandaloneContractAndSign(
             testTitle, testLegalContractUri, testGlobalFields, testPartyFields,
             salt, testGlobalValues, parties, partyValues, expiry, aliceSig
@@ -1308,7 +1308,7 @@ contract CyberAgreementRegistryTest is Test {
 
         // The same signature must not sign for Chad.
         vm.prank(deployer);
-        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.expectRevert(ICyberAgreementRegistry.SignatureVerificationFailed.selector);
         registry.signContractFor(chad, agreementId, testPartyValues[0], bobSignature, false, "");
 
         assertFalse(registry.hasSigned(agreementId, chad), "chad must not be signed");

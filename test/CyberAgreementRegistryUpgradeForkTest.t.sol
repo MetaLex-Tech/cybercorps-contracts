@@ -3,8 +3,8 @@ pragma solidity 0.8.28;
 
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
+import {IBorgAuthACL} from "../src/libs/auth.sol";
 import {UpgradeCoreRegistryHarness} from "./createx/UpgradeCoreRegistryForkTest.t.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {Test} from "forge-std/Test.sol";
@@ -18,7 +18,7 @@ contract CyberAgreementRegistryUpgradeForkTest is Test {
     bytes32 internal constant LIVE_AGREEMENT_ID = 0x78f6ea3db4c0a2d53384b845ccdaa42419787e6c12fa618594eba1704f10dd84;
     uint256 internal constant DEPLOYER_KEY = 0xA11CE;
 
-    CyberAgreementRegistry internal registry;
+    ICyberAgreementRegistry internal registry;
     address internal oldImplementation;
     address internal liveParty;
     bytes32 internal liveTemplateId;
@@ -46,7 +46,7 @@ contract CyberAgreementRegistryUpgradeForkTest is Test {
     function setUp() public {
         vm.createSelectFork("base", PINNED_BLOCK);
         DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
-        registry = CyberAgreementRegistry(core.cyberAgreementRegistry);
+        registry = ICyberAgreementRegistry(core.cyberAgreementRegistry);
         oldImplementation = _implementation();
         domainSeparator = registry.DOMAIN_SEPARATOR();
         signatureTypehash = registry.SIGNATUREDATA_TYPEHASH();
@@ -71,7 +71,7 @@ contract CyberAgreementRegistryUpgradeForkTest is Test {
     function test_UpgradeSwitchesProxyToRouter() public view {
         assertNotEq(_implementation(), oldImplementation);
         assertNotEq(registry.facetOf(ICyberAgreementRegistry.createContract.selector), address(0));
-        assertNotEq(registry.facetOf(CyberAgreementRegistry.boundIdsOf.selector), address(0));
+        assertNotEq(registry.facetOf(ICyberAgreementRegistry.boundIdsOf.selector), address(0));
         assertNotEq(registry.facetOf(ICyberAgreementRegistry.getContractJson.selector), address(0));
     }
 
@@ -172,19 +172,19 @@ contract CyberAgreementRegistryUpgradeForkTest is Test {
         liveParty = registry.getParties(LIVE_AGREEMENT_ID)[0];
         (liveTemplateId,,,,,,,,,) = registry.getContractDetails(LIVE_AGREEMENT_ID);
 
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.version, ()));
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.name, ()));
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.AUTH, ()));
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.DOMAIN_SEPARATOR, ()));
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.SIGNATUREDATA_TYPEHASH, ()));
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.VOIDSIGNATUREDATA_TYPEHASH, ()));
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.templates, (liveTemplateId)));
+        liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.version, ()));
+        liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.name, ()));
+        liveViewCalls.push(abi.encodeCall(IBorgAuthACL.AUTH, ()));
+        liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.DOMAIN_SEPARATOR, ()));
+        liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.SIGNATUREDATA_TYPEHASH, ()));
+        liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.VOIDSIGNATUREDATA_TYPEHASH, ()));
+        liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.templates, (liveTemplateId)));
         liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.getTemplateDetails, (liveTemplateId)));
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.agreements, (LIVE_AGREEMENT_ID)));
+        liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.agreements, (LIVE_AGREEMENT_ID)));
         liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.getContractDetails, (LIVE_AGREEMENT_ID)));
         liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.getParties, (LIVE_AGREEMENT_ID)));
         liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.getContractJson, (LIVE_AGREEMENT_ID)));
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.getVoidRequestedBy, (LIVE_AGREEMENT_ID)));
+        liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.getVoidRequestedBy, (LIVE_AGREEMENT_ID)));
         liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.isFinalized, (LIVE_AGREEMENT_ID)));
         liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.isVoided, (LIVE_AGREEMENT_ID)));
         liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.allPartiesSigned, (LIVE_AGREEMENT_ID)));
@@ -194,7 +194,7 @@ contract CyberAgreementRegistryUpgradeForkTest is Test {
         );
         liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.getSignerValues, (LIVE_AGREEMENT_ID, liveParty)));
         liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.getAgreementsForParty, (liveParty)));
-        liveViewCalls.push(abi.encodeCall(CyberAgreementRegistry.delegations, (liveParty)));
+        liveViewCalls.push(abi.encodeCall(ICyberAgreementRegistry.delegations, (liveParty)));
 
         for (uint256 i = 0; i < liveViewCalls.length; i++) {
             (bool success, bytes memory result) = address(registry).staticcall(liveViewCalls[i]);

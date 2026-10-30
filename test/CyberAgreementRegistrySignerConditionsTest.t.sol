@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import "../src/interfaces/ICyberAgreementRegistry.sol";
-import {ISignerConditions, SignerCondition} from "../src/interfaces/ISignerConditions.sol";
 import "../src/interfaces/IZKPassportVerifier.sol";
 import {
     ZKPassportCondition,
@@ -107,7 +106,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
     uint256 chadKey;
 
     BorgAuth auth;
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
     MockPassportVerifier verifier;
 
     ICyberAgreementRegistry.Template template;
@@ -145,12 +144,12 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    function _deployRegistry() internal returns (CyberAgreementRegistry) {
-        return CyberAgreementRegistry(
+    function _deployRegistry() internal returns (ICyberAgreementRegistry) {
+        return ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
                     address(CyberAgreementRegistryDeployment.deployRouter()),
-                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+                    abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )
         );
@@ -165,27 +164,27 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         values[0] = value;
     }
 
-    function _zkp(bytes32 uniqueIdentifier) internal pure returns (SignerCondition memory) {
-        return SignerCondition({kind: ZKPASSPORT, params: abi.encode(ZKPassportCondition(uniqueIdentifier))});
+    function _zkp(bytes32 uniqueIdentifier) internal pure returns (ICyberAgreementRegistry.SignerCondition memory) {
+        return ICyberAgreementRegistry.SignerCondition({kind: ZKPASSPORT, params: abi.encode(ZKPassportCondition(uniqueIdentifier))});
     }
 
-    function _list(SignerCondition memory condition) internal pure returns (SignerCondition[] memory list) {
-        list = new SignerCondition[](1);
+    function _list(ICyberAgreementRegistry.SignerCondition memory condition) internal pure returns (ICyberAgreementRegistry.SignerCondition[] memory list) {
+        list = new ICyberAgreementRegistry.SignerCondition[](1);
         list[0] = condition;
     }
 
     /// @dev Alice needs any passport, Bob has no condition, Chad needs PASSPORT_C.
-    function _conditions() internal pure returns (SignerCondition[][] memory conditions) {
-        conditions = new SignerCondition[][](3);
+    function _conditions() internal pure returns (ICyberAgreementRegistry.SignerCondition[][] memory conditions) {
+        conditions = new ICyberAgreementRegistry.SignerCondition[][](3);
         conditions[0] = _list(_zkp(bytes32(0)));
         conditions[2] = _list(_zkp(PASSPORT_C));
     }
 
-    function _id(SignerCondition[][] memory conditions) internal view returns (bytes32 contractId) {
+    function _id(ICyberAgreementRegistry.SignerCondition[][] memory conditions) internal view returns (bytes32 contractId) {
         (, contractId) = registry.boundIdsOf(alice, template, 1, globalValues, parties, partyValues, expiry, conditions);
     }
 
-    function _create(SignerCondition[][] memory conditions) internal returns (bytes32 contractId) {
+    function _create(ICyberAgreementRegistry.SignerCondition[][] memory conditions) internal returns (bytes32 contractId) {
         vm.prank(alice);
         (, contractId) =
             registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, conditions);
@@ -321,7 +320,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         registry.setSignerConditionConfig(ZKPASSPORT, config);
 
         vm.expectEmit(address(registry));
-        emit ISignerConditions.SignerConditionConfigSet(ZKPASSPORT, config);
+        emit ICyberAgreementRegistry.SignerConditionConfigSet(ZKPASSPORT, config);
         vm.prank(deployer);
         registry.setSignerConditionConfig(ZKPASSPORT, config);
         assertEq(registry.getSignerConditionConfig(ZKPASSPORT), config);
@@ -330,13 +329,13 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
     function test_RevertIf_SetConfig_UnknownKind() public {
         bytes32 kind = keccak256("unknown");
         vm.prank(deployer);
-        vm.expectRevert(abi.encodeWithSelector(ISignerConditions.UnknownSignerConditionKind.selector, kind));
+        vm.expectRevert(abi.encodeWithSelector(ICyberAgreementRegistry.UnknownSignerConditionKind.selector, kind));
         registry.setSignerConditionConfig(kind, _config(address(verifier), false));
     }
 
     function test_RevertIf_SetConfig_ZeroVerifier() public {
         vm.prank(deployer);
-        vm.expectRevert(ZKPassportConditionLib.InvalidVerifier.selector);
+        vm.expectRevert(ICyberAgreementRegistry.InvalidVerifier.selector);
         registry.setSignerConditionConfig(ZKPASSPORT, _config(address(0), false));
     }
 
@@ -345,14 +344,14 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
     function test_Create_EmitsConditionsAndUsesConditionedId() public {
         bytes32 expectedId = _id(_conditions());
         (, bytes32 plainId) = registry.boundIdsOf(
-            alice, template, 1, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
+            alice, template, 1, globalValues, parties, partyValues, expiry, new ICyberAgreementRegistry.SignerCondition[][](0)
         );
         assertNotEq(expectedId, plainId);
 
         vm.expectEmit(address(registry));
-        emit ISignerConditions.SignerConditionSet(expectedId, alice, 0, ZKPASSPORT, _zkp(bytes32(0)).params);
+        emit ICyberAgreementRegistry.SignerConditionSet(expectedId, alice, 0, ZKPASSPORT, _zkp(bytes32(0)).params);
         vm.expectEmit(address(registry));
-        emit ISignerConditions.SignerConditionSet(expectedId, chad, 0, ZKPASSPORT, _zkp(PASSPORT_C).params);
+        emit ICyberAgreementRegistry.SignerConditionSet(expectedId, chad, 0, ZKPASSPORT, _zkp(PASSPORT_C).params);
         vm.recordLogs();
         bytes32 contractId = _create();
         assertEq(contractId, expectedId);
@@ -360,7 +359,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         uint256 conditionEvents;
         for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics[0] == ISignerConditions.SignerConditionSet.selector) conditionEvents++;
+            if (logs[i].topics[0] == ICyberAgreementRegistry.SignerConditionSet.selector) conditionEvents++;
         }
         assertEq(conditionEvents, 2);
     }
@@ -368,9 +367,9 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
     function test_Create_IdDependsOnConditions() public view {
         bytes32 id = _id(_conditions());
 
-        SignerCondition[][] memory otherPin = _conditions();
+        ICyberAgreementRegistry.SignerCondition[][] memory otherPin = _conditions();
         otherPin[2] = _list(_zkp(PASSPORT_X));
-        SignerCondition[][] memory bobGated = _conditions();
+        ICyberAgreementRegistry.SignerCondition[][] memory bobGated = _conditions();
         bobGated[1] = _list(_zkp(bytes32(0)));
 
         assertNotEq(id, _id(otherPin));
@@ -378,8 +377,8 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
     }
 
     function test_Create_SameKindTwiceForOneParty() public {
-        SignerCondition[][] memory conditions = _conditions();
-        conditions[0] = new SignerCondition[](2);
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions = _conditions();
+        conditions[0] = new ICyberAgreementRegistry.SignerCondition[](2);
         conditions[0][0] = _zkp(bytes32(0));
         conditions[0][1] = _zkp(PASSPORT_A);
         bytes32 contractId = _create(conditions);
@@ -394,33 +393,33 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
     }
 
     function test_RevertIf_Create_ConditionsLengthMismatch() public {
-        SignerCondition[][] memory conditions = new SignerCondition[][](2);
-        vm.expectRevert(ISignerConditions.SignerConditionsLengthMismatch.selector);
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions = new ICyberAgreementRegistry.SignerCondition[][](2);
+        vm.expectRevert(ICyberAgreementRegistry.SignerConditionsLengthMismatch.selector);
         _create(conditions);
     }
 
     function test_RevertIf_Create_UnknownKind() public {
-        SignerCondition[][] memory conditions = _conditions();
-        conditions[1] = _list(SignerCondition({kind: bytes32(0), params: ""}));
-        vm.expectRevert(abi.encodeWithSelector(ISignerConditions.UnknownSignerConditionKind.selector, bytes32(0)));
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions = _conditions();
+        conditions[1] = _list(ICyberAgreementRegistry.SignerCondition({kind: bytes32(0), params: ""}));
+        vm.expectRevert(abi.encodeWithSelector(ICyberAgreementRegistry.UnknownSignerConditionKind.selector, bytes32(0)));
         _create(conditions);
     }
 
     function test_RevertIf_Create_InvalidZKPassportParams() public {
-        SignerCondition[][] memory conditions = _conditions();
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions = _conditions();
         conditions[0][0].params = "";
-        vm.expectRevert(ZKPassportConditionLib.InvalidZKPassportConditionParams.selector);
+        vm.expectRevert(ICyberAgreementRegistry.InvalidZKPassportConditionParams.selector);
         _create(conditions);
 
         conditions[0][0].params = abi.encode(PASSPORT_A, PASSPORT_C);
-        vm.expectRevert(ZKPassportConditionLib.InvalidZKPassportConditionParams.selector);
+        vm.expectRevert(ICyberAgreementRegistry.InvalidZKPassportConditionParams.selector);
         _create(conditions);
     }
 
     function test_RevertIf_Create_ZKPassportNotConfigured() public {
         vm.prank(deployer);
         registry = _deployRegistry();
-        vm.expectRevert(ZKPassportConditionLib.ZKPassportNotConfigured.selector);
+        vm.expectRevert(ICyberAgreementRegistry.ZKPassportNotConfigured.selector);
         _create();
     }
 
@@ -430,7 +429,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         bytes32 contractId = _create();
 
         vm.expectEmit(address(registry));
-        emit ISignerConditions.SignerConditionMet(
+        emit ICyberAgreementRegistry.SignerConditionMet(
             contractId, alice, 0, ZKPASSPORT, abi.encode(ZKPassportResult(PASSPORT_A))
         );
         _relayWithEvidence(contractId, 0, aliceKey, PASSPORT_A);
@@ -456,8 +455,8 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
     }
 
     function test_CreateAndSign_CreatorWithoutConditions_SignsWithoutEvidence() public {
-        SignerCondition[][] memory conditions = _conditions();
-        conditions[0] = new SignerCondition[](0);
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions = _conditions();
+        conditions[0] = new ICyberAgreementRegistry.SignerCondition[](0);
         bytes32 expectedId = _id(conditions);
         bytes memory signature = _signLegacy(expectedId, 0, aliceKey);
 
@@ -473,7 +472,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         bytes memory signature = _signLegacy(expectedId, 0, aliceKey);
 
         vm.prank(relayer);
-        vm.expectRevert(ISignerConditions.EvidenceRequired.selector);
+        vm.expectRevert(ICyberAgreementRegistry.EvidenceRequired.selector);
         registry.createBoundContractAndSignFor(
             template, 1, globalValues, parties, partyValues, expiry, _conditions(), new bytes[](0), signature
         );
@@ -484,11 +483,11 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         bytes memory signature = _signLegacy(contractId, 0, aliceKey);
 
         vm.prank(alice);
-        vm.expectRevert(ISignerConditions.EvidenceRequired.selector);
+        vm.expectRevert(ICyberAgreementRegistry.EvidenceRequired.selector);
         registry.signContract(contractId, partyValues[0], signature, false, "");
 
         vm.prank(relayer);
-        vm.expectRevert(ISignerConditions.EvidenceRequired.selector);
+        vm.expectRevert(ICyberAgreementRegistry.EvidenceRequired.selector);
         registry.signContractFor(alice, contractId, partyValues[0], signature, false, "");
     }
 
@@ -499,7 +498,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             1,
             bobKey,
             _evidence(contractId, PASSPORT_X, bob),
-            abi.encodeWithSelector(ISignerConditions.NoSignerConditions.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.NoSignerConditions.selector)
         );
     }
 
@@ -518,7 +517,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             _evidence(contractId, PASSPORT_A, alice),
-            abi.encodeWithSelector(ISignerConditions.NoSignerConditions.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.NoSignerConditions.selector)
         );
 
         _relayLegacy(contractId, 0, aliceKey);
@@ -534,14 +533,14 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             new bytes[](0),
-            abi.encodeWithSelector(ISignerConditions.EvidenceLengthMismatch.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.EvidenceLengthMismatch.selector)
         );
 
         bytes[] memory twoItems = new bytes[](2);
         twoItems[0] = evidence[0];
         twoItems[1] = evidence[0];
         _expectRevertOnRelay(
-            contractId, 0, aliceKey, twoItems, abi.encodeWithSelector(ISignerConditions.EvidenceLengthMismatch.selector)
+            contractId, 0, aliceKey, twoItems, abi.encodeWithSelector(ICyberAgreementRegistry.EvidenceLengthMismatch.selector)
         );
     }
 
@@ -552,7 +551,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         bytes memory signature = _signWithEvidence(contractId, 0, aliceKey, signedEvidence);
 
         vm.prank(relayer);
-        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.expectRevert(ICyberAgreementRegistry.SignatureVerificationFailed.selector);
         registry.signContractWithEvidenceFor(alice, contractId, partyValues[0], otherEvidence, signature);
     }
 
@@ -562,7 +561,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         bytes memory signature = _signLegacy(contractId, 0, aliceKey);
 
         vm.prank(relayer);
-        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.expectRevert(ICyberAgreementRegistry.SignatureVerificationFailed.selector);
         registry.signContractWithEvidenceFor(alice, contractId, partyValues[0], evidence, signature);
     }
 
@@ -587,7 +586,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             _evidence(contractId, PASSPORT_A, alice),
-            abi.encodeWithSelector(CyberAgreementRegistry.ClosedAgreementPartyValueMismatch.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.ClosedAgreementPartyValueMismatch.selector)
         );
     }
 
@@ -599,7 +598,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             _evidence(contractId, PASSPORT_A, alice),
-            abi.encodeWithSelector(CyberAgreementRegistry.AlreadySigned.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.AlreadySigned.selector)
         );
     }
 
@@ -610,7 +609,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             _evidence(contractId, PASSPORT_A, alice),
-            abi.encodeWithSelector(CyberAgreementRegistry.ContractDoesNotExist.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.ContractDoesNotExist.selector)
         );
     }
 
@@ -623,7 +622,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             _evidence(keccak256("other"), PASSPORT_A, alice),
-            abi.encodeWithSelector(ZKPassportConditionLib.InvalidBoundContractId.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.InvalidBoundContractId.selector)
         );
     }
 
@@ -637,7 +636,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             evidence,
-            abi.encodeWithSelector(ZKPassportConditionLib.InvalidBoundChainId.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.InvalidBoundChainId.selector)
         );
     }
 
@@ -649,7 +648,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             )
         );
         _expectRevertOnRelay(
-            contractId, 0, aliceKey, evidence, abi.encodeWithSelector(ZKPassportConditionLib.InvalidScope.selector)
+            contractId, 0, aliceKey, evidence, abi.encodeWithSelector(ICyberAgreementRegistry.InvalidScope.selector)
         );
     }
 
@@ -659,7 +658,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             _proof(PASSPORT_A, alice, block.chainid, Strings.toHexString(uint256(contractId), 32), DOMAIN, true)
         );
         _expectRevertOnRelay(
-            contractId, 0, aliceKey, evidence, abi.encodeWithSelector(ZKPassportConditionLib.DevModeProof.selector)
+            contractId, 0, aliceKey, evidence, abi.encodeWithSelector(ICyberAgreementRegistry.DevModeProof.selector)
         );
     }
 
@@ -685,7 +684,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             _evidence(contractId, PASSPORT_A, alice),
-            abi.encodeWithSelector(ZKPassportConditionLib.InvalidProof.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.InvalidProof.selector)
         );
     }
 
@@ -697,7 +696,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             _evidence(contractId, PASSPORT_A, alice),
-            abi.encodeWithSelector(ZKPassportConditionLib.InvalidProof.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.InvalidProof.selector)
         );
     }
 
@@ -708,7 +707,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             _evidence(contractId, PASSPORT_A, chad),
-            abi.encodeWithSelector(ZKPassportConditionLib.InvalidBoundSender.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.InvalidBoundSender.selector)
         );
     }
 
@@ -719,12 +718,12 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             2,
             chadKey,
             _evidence(contractId, PASSPORT_X, chad),
-            abi.encodeWithSelector(ZKPassportConditionLib.UniqueIdentifierMismatch.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.UniqueIdentifierMismatch.selector)
         );
     }
 
     function test_RevertIf_Proof_PassportUsedByAnotherParty() public {
-        SignerCondition[][] memory conditions = _conditions();
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions = _conditions();
         conditions[2] = _list(_zkp(bytes32(0)));
         bytes32 contractId = _create(conditions);
         _relayWithEvidence(contractId, 0, aliceKey, PASSPORT_A);
@@ -734,7 +733,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             2,
             chadKey,
             _evidence(contractId, PASSPORT_A, chad),
-            abi.encodeWithSelector(ZKPassportConditionLib.UniqueIdentifierAlreadyUsed.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.UniqueIdentifierAlreadyUsed.selector)
         );
     }
 
@@ -748,7 +747,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             0,
             aliceKey,
             _evidence(contractId, PASSPORT_A, alice),
-            abi.encodeWithSelector(CyberAgreementRegistry.ContractExpired.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.ContractExpired.selector)
         );
     }
 
@@ -773,7 +772,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             2,
             chadKey,
             _evidence(contractId, PASSPORT_C, chad),
-            abi.encodeWithSelector(CyberAgreementRegistry.ContractAlreadyVoided.selector)
+            abi.encodeWithSelector(ICyberAgreementRegistry.ContractAlreadyVoided.selector)
         );
     }
 
@@ -795,7 +794,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         bytes memory signature = CyberAgreementUtils.signVoidAgreementTypedData(
             vm, registry.DOMAIN_SEPARATOR(), registry.VOIDSIGNATUREDATA_TYPEHASH(), contractId, alice, aliceKey
         );
-        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyFinalized.selector);
+        vm.expectRevert(ICyberAgreementRegistry.ContractAlreadyFinalized.selector);
         registry.voidContractFor(contractId, alice, signature);
     }
 
@@ -834,7 +833,7 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
             address(registry),
             false,
             abi.encodeCall(
-                CyberAgreementRegistry.signContractWithEvidenceFor,
+                ICyberAgreementRegistry.signContractWithEvidenceFor,
                 (
                     chad,
                     contractId,

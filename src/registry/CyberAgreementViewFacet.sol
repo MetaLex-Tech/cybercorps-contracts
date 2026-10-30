@@ -41,7 +41,6 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import {CyberAgreementRegistry} from "../CyberAgreementRegistry.sol";
 import {ICyberAgreementRegistry} from "../interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryLib} from "../libs/CyberAgreementRegistryLib.sol";
 import {JsonLib} from "../libs/JsonLib.sol";
@@ -151,7 +150,7 @@ contract CyberAgreementViewFacet {
     }
 
     function hasSigned(bytes32 contractId, address signer) external view returns (bool) {
-        if (signer == address(0)) revert CyberAgreementRegistry.NotAParty();
+        if (signer == address(0)) revert ICyberAgreementRegistry.NotAParty();
         return CyberAgreementRegistryStorage.getStorageData().agreements[contractId].signedAt[signer] != 0;
     }
 
@@ -185,7 +184,7 @@ contract CyberAgreementViewFacet {
         CyberAgreementRegistryStorage.AgreementData storage agreementData = s.agreements[contractId];
         ICyberAgreementRegistry.Template memory template = s.templates[agreementData.templateId];
 
-        if (agreementData.parties.length == 0) revert CyberAgreementRegistry.ContractDoesNotExist();
+        if (agreementData.parties.length == 0) revert ICyberAgreementRegistry.ContractDoesNotExist();
 
         // Collect all party values and timestamps
         string[][] memory allPartyValues = new string[][](agreementData.parties.length);
@@ -223,7 +222,7 @@ contract CyberAgreementViewFacet {
     {
         ICyberAgreementRegistry.Template storage template =
             CyberAgreementRegistryStorage.getStorageData().templates[templateId];
-        if (bytes(template.legalContractUri).length == 0) revert CyberAgreementRegistry.TemplateDoesNotExist();
+        if (bytes(template.legalContractUri).length == 0) revert ICyberAgreementRegistry.TemplateDoesNotExist();
 
         return (template.legalContractUri, template.title, template.globalFields, template.partyFields);
     }

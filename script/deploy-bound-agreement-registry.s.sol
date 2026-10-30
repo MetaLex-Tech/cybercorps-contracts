@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
@@ -44,7 +44,7 @@ contract DeployBoundAgreementRegistryScript is Script {
         require(proxy.code.length > 0, "Registry proxy has no code");
         address previous = implementationOf(proxy);
         require(previous.code.length > 0, "Registry is not an implementation proxy");
-        CyberAgreementRegistry registry = CyberAgreementRegistry(proxy);
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(proxy);
         address auth = address(registry.AUTH());
         require(auth.code.length > 0, "Registry AUTH has no code");
         require(authority != address(0), "Zero upgrade authority");

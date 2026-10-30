@@ -4,11 +4,10 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import "../src/interfaces/ICyberAgreementRegistry.sol";
-import {SignerCondition} from "../src/interfaces/ISignerConditions.sol";
 
 contract CyberAgreementRegistryBoundTest is Test {
     address alice;
@@ -17,7 +16,7 @@ contract CyberAgreementRegistryBoundTest is Test {
     uint256 bobPrivateKey;
     address chad;
 
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
     ICyberAgreementRegistry.Template template;
     string[] globalValues;
     address[] parties;
@@ -33,11 +32,11 @@ contract CyberAgreementRegistryBoundTest is Test {
 
         vm.startPrank(deployer);
         BorgAuth auth = new BorgAuth(deployer);
-        registry = CyberAgreementRegistry(
+        registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
                     address(CyberAgreementRegistryDeployment.deployRouter()),
-                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+                    abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )
         );
@@ -171,7 +170,7 @@ contract CyberAgreementRegistryBoundTest is Test {
         (, bytes32 expectedId) = _ids(alice, 1);
         bytes memory bobSignature = _sign(expectedId, 0, bobPrivateKey);
 
-        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.expectRevert(ICyberAgreementRegistry.SignatureVerificationFailed.selector);
         registry.createBoundContractAndSignFor(template, 1, globalValues, parties, partyValues, expiry, bobSignature);
     }
 
@@ -181,7 +180,7 @@ contract CyberAgreementRegistryBoundTest is Test {
         registry.createTemplate(templateId, "Other", "ipfs://other", template.globalFields, template.partyFields);
 
         vm.startPrank(alice);
-        vm.expectRevert(CyberAgreementRegistry.TemplateAlreadyExists.selector);
+        vm.expectRevert(ICyberAgreementRegistry.TemplateAlreadyExists.selector);
         registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
         registry.createBoundContract(template, 2, globalValues, parties, partyValues, expiry);
         vm.stopPrank();
@@ -190,20 +189,20 @@ contract CyberAgreementRegistryBoundTest is Test {
     function test_RevertIf_createBoundContract_invalidInput() public {
         vm.startPrank(alice);
 
-        vm.expectRevert(CyberAgreementRegistry.ExpiryNotInFuture.selector);
+        vm.expectRevert(ICyberAgreementRegistry.ExpiryNotInFuture.selector);
         registry.createBoundContract(template, 1, globalValues, parties, partyValues, block.timestamp);
 
         parties[1] = alice;
-        vm.expectRevert(CyberAgreementRegistry.DuplicateParty.selector);
+        vm.expectRevert(ICyberAgreementRegistry.DuplicateParty.selector);
         registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
 
         parties[1] = address(0);
-        vm.expectRevert(CyberAgreementRegistry.FirstPartyZeroAddress.selector);
+        vm.expectRevert(ICyberAgreementRegistry.FirstPartyZeroAddress.selector);
         registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
 
         parties[1] = bob;
         partyValues.pop();
-        vm.expectRevert(CyberAgreementRegistry.MismatchedPartyValuesLength.selector);
+        vm.expectRevert(ICyberAgreementRegistry.MismatchedPartyValuesLength.selector);
         registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
 
         vm.stopPrank();
@@ -227,7 +226,7 @@ contract CyberAgreementRegistryBoundTest is Test {
     function test_boundIdsOf_noConditions_sameAsExistingFormula() public {
         (bytes32 expectedTemplateId, bytes32 expectedId) = _ids(alice, 1);
         (bytes32 templateId, bytes32 contractId) = registry.boundIdsOf(
-            alice, template, 1, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
+            alice, template, 1, globalValues, parties, partyValues, expiry, new ICyberAgreementRegistry.SignerCondition[][](0)
         );
         assertEq(templateId, expectedTemplateId);
         assertEq(contractId, expectedId);
@@ -241,7 +240,7 @@ contract CyberAgreementRegistryBoundTest is Test {
         (, bytes32 plainId) = _ids(alice, 1);
         vm.prank(alice);
         (, bytes32 contractId) = registry.createBoundContract(
-            template, 1, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
+            template, 1, globalValues, parties, partyValues, expiry, new ICyberAgreementRegistry.SignerCondition[][](0)
         );
         assertEq(contractId, plainId);
     }

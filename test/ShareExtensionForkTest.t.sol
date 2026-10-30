@@ -8,7 +8,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {DeploymentConstants} from "../script//libs/DeploymentConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -79,7 +79,7 @@ contract ShareExtensionForkTest is Test {
     BorgAuth internal bootstrapAuth;
     BorgAuth internal extensionAuth;
     BorgAuth internal lexchexAuth;
-    CyberAgreementRegistry internal registry;
+    ICyberAgreementRegistry internal registry;
     CyberCorpFactory internal corpFactory;
     RoundManager internal roundManager;
     IIssuanceManager internal issuanceManager;
@@ -316,11 +316,11 @@ contract ShareExtensionForkTest is Test {
     function _deployFactories() internal {
         bootstrapAuth = new BorgAuth(address(this));
 
-        registry = CyberAgreementRegistry(
+        registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
                     address(CyberAgreementRegistryDeployment.deployRouter()),
-                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(bootstrapAuth))
+                    abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(bootstrapAuth))
                 )
             )
         );

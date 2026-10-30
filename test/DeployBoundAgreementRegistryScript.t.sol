@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {DeployBoundAgreementRegistryScript} from "../script/deploy-bound-agreement-registry.s.sol";
 
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
@@ -23,7 +23,7 @@ contract TestBoundRegistryScript is DeployBoundAgreementRegistryScript {
 
 contract DeployBoundAgreementRegistryScriptTest is Test {
     DeployBoundAgreementRegistryScript runner;
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
     BorgAuth auth;
     address owner;
     address previous;
@@ -40,8 +40,8 @@ contract DeployBoundAgreementRegistryScriptTest is Test {
         owner = makeAddr("upgrade Safe");
         auth = new BorgAuth(owner);
         previous = address(CyberAgreementRegistryDeployment.deployRouter());
-        registry = CyberAgreementRegistry(
-            address(new ERC1967Proxy(previous, abi.encodeCall(CyberAgreementRegistry.initialize, (address(auth)))))
+        registry = ICyberAgreementRegistry(
+            address(new ERC1967Proxy(previous, abi.encodeCall(ICyberAgreementRegistry.initialize, (address(auth)))))
         );
         runner = new TestBoundRegistryScript();
     }
@@ -175,7 +175,7 @@ contract DeployBoundAgreementRegistryScriptTest is Test {
             vm.etch(core.cyberAgreementRegistry, address(registry).code);
             vm.store(core.cyberAgreementRegistry, ERC1967Utils.IMPLEMENTATION_SLOT, bytes32(uint256(uint160(previous))));
             BorgAuth chainAuth = new BorgAuth(core.metalexSafe);
-            CyberAgreementRegistry(core.cyberAgreementRegistry).initialize(address(chainAuth));
+            ICyberAgreementRegistry(core.cyberAgreementRegistry).initialize(address(chainAuth));
             address candidate = runner.runForChain(chains[i]);
             string memory prefix = runner.outputPrefix(chains[i]);
             string memory batch = vm.readFile(string.concat(prefix, ".json"));

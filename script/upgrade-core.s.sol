@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {CyberAgreementRegistryRouter} from "../src/CyberAgreementRegistryRouter.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -191,7 +191,7 @@ contract UpgradeCoreScript is DeploymentScript {
             registry,
             "CyberAgreementRegistry",
             abi.encodePacked(
-                type(CyberAgreementRegistryRouter).creationCode, abi.encode(agreementFacet, boundFacet, viewFacet)
+                type(CyberAgreementRegistry).creationCode, abi.encode(agreementFacet, boundFacet, viewFacet)
             )
         );
         setZKPassportConfig(chainId, core);
@@ -205,7 +205,7 @@ contract UpgradeCoreScript is DeploymentScript {
         returns (address facet)
     {
         (bool success, bytes memory result) =
-            registry.staticcall(abi.encodeCall(CyberAgreementRegistry.facetOf, (selector)));
+            registry.staticcall(abi.encodeCall(ICyberAgreementRegistry.facetOf, (selector)));
         address current = success ? abi.decode(result, (address)) : address(0);
         (facet,) = deployIfDifferent("[deploy implementation]", name, creationCode, current);
     }
@@ -230,9 +230,9 @@ contract UpgradeCoreScript is DeploymentScript {
         setParamIfDifferent(
             core.auth,
             core.cyberAgreementRegistry,
-            abi.encodeCall(CyberAgreementRegistry.getSignerConditionConfig, (ZKPassportConditionLib.KIND)),
+            abi.encodeCall(ICyberAgreementRegistry.getSignerConditionConfig, (ZKPassportConditionLib.KIND)),
             abi.encode(config), // the getter returns `config` as ABI-encoded bytes
-            abi.encodeCall(CyberAgreementRegistry.setSignerConditionConfig, (ZKPassportConditionLib.KIND, config)),
+            abi.encodeCall(ICyberAgreementRegistry.setSignerConditionConfig, (ZKPassportConditionLib.KIND, config)),
             "CyberAgreementRegistry ZKPassport config"
         );
     }

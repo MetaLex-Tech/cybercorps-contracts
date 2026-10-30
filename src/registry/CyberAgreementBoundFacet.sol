@@ -41,9 +41,7 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import {CyberAgreementRegistry} from "../CyberAgreementRegistry.sol";
 import {ICyberAgreementRegistry} from "../interfaces/ICyberAgreementRegistry.sol";
-import {ISignerConditions, SignerCondition} from "../interfaces/ISignerConditions.sol";
 import {CyberAgreementRegistryLib} from "../libs/CyberAgreementRegistryLib.sol";
 import {SignerConditionLib} from "../libs/SignerConditionLib.sol";
 import {BorgAuth} from "../libs/auth.sol";
@@ -57,7 +55,7 @@ contract CyberAgreementBoundFacet {
     /// @dev The router holds BorgAuthACL. This facet reads AUTH through the router, so it does not
     /// depend on the router's storage layout.
     modifier onlyAdmin() {
-        BorgAuth auth = CyberAgreementRegistry(address(this)).AUTH();
+        BorgAuth auth = ICyberAgreementRegistry(address(this)).AUTH();
         auth.onlyRole(auth.ADMIN_ROLE(), msg.sender);
         _;
     }
@@ -73,7 +71,7 @@ contract CyberAgreementBoundFacet {
         uint256 expiry
     ) external returns (bytes32 templateId, bytes32 contractId) {
         return _create(
-            msg.sender, template, salt, globalValues, parties, partyValues, expiry, new SignerCondition[][](0)
+            msg.sender, template, salt, globalValues, parties, partyValues, expiry, new ICyberAgreementRegistry.SignerCondition[][](0)
         );
     }
 
@@ -87,7 +85,7 @@ contract CyberAgreementBoundFacet {
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[][] memory conditions
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions
     ) external returns (bytes32 templateId, bytes32 contractId) {
         return _create(msg.sender, template, salt, globalValues, parties, partyValues, expiry, conditions);
     }
@@ -109,7 +107,7 @@ contract CyberAgreementBoundFacet {
             parties,
             partyValues,
             expiry,
-            new SignerCondition[][](0),
+            new ICyberAgreementRegistry.SignerCondition[][](0),
             new bytes[](0),
             creatorSignature
         );
@@ -125,7 +123,7 @@ contract CyberAgreementBoundFacet {
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[][] memory conditions,
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions,
         bytes[] memory creatorEvidence,
         bytes calldata creatorSignature
     ) external returns (bytes32 templateId, bytes32 contractId) {
@@ -145,7 +143,7 @@ contract CyberAgreementBoundFacet {
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[][] memory conditions
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions
     ) public pure returns (bytes32 templateId, bytes32 contractId) {
         templateId = keccak256(
             abi.encode(
@@ -187,22 +185,22 @@ contract CyberAgreementBoundFacet {
     ) public {
         CyberAgreementRegistryStorage.StorageData storage s = CyberAgreementRegistryStorage.getStorageData();
         CyberAgreementRegistryStorage.AgreementData storage agreementData = s.agreements[contractId];
-        if (agreementData.parties.length == 0) revert CyberAgreementRegistry.ContractDoesNotExist();
-        if (agreementData.signedAt[signer] != 0) revert CyberAgreementRegistry.AlreadySigned();
-        if (agreementData.voided) revert CyberAgreementRegistry.ContractAlreadyVoided();
-        if (agreementData.finalized) revert CyberAgreementRegistry.ContractAlreadyFinalized();
+        if (agreementData.parties.length == 0) revert ICyberAgreementRegistry.ContractDoesNotExist();
+        if (agreementData.signedAt[signer] != 0) revert ICyberAgreementRegistry.AlreadySigned();
+        if (agreementData.voided) revert ICyberAgreementRegistry.ContractAlreadyVoided();
+        if (agreementData.finalized) revert ICyberAgreementRegistry.ContractAlreadyFinalized();
         if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp) {
-            revert CyberAgreementRegistry.ContractExpired();
+            revert ICyberAgreementRegistry.ContractExpired();
         }
 
         // Only the named parties of a bound agreement have conditions.
         uint256 conditionCount = SignerConditionLib.conditionsOf(contractId, signer).length;
-        if (conditionCount == 0) revert ISignerConditions.NoSignerConditions();
-        if (evidence.length != conditionCount) revert ISignerConditions.EvidenceLengthMismatch();
+        if (conditionCount == 0) revert ICyberAgreementRegistry.NoSignerConditions();
+        if (evidence.length != conditionCount) revert ICyberAgreementRegistry.EvidenceLengthMismatch();
 
         // A bound agreement stores the values of every party at creation.
         if (keccak256(abi.encode(agreementData.partyValues[signer])) != keccak256(abi.encode(partyValues))) {
-            revert CyberAgreementRegistry.ClosedAgreementPartyValueMismatch();
+            revert ICyberAgreementRegistry.ClosedAgreementPartyValueMismatch();
         }
 
         ICyberAgreementRegistry.Template memory template = s.templates[agreementData.templateId];
@@ -222,7 +220,7 @@ contract CyberAgreementBoundFacet {
             )
         );
         if (!CyberAgreementRegistryLib.isSignerOrDelegate(signer, ECDSA.recover(digest, signature))) {
-            revert CyberAgreementRegistry.SignatureVerificationFailed();
+            revert ICyberAgreementRegistry.SignatureVerificationFailed();
         }
 
         SignerConditionLib.verifyAll(contractId, signer, evidence);
@@ -234,7 +232,7 @@ contract CyberAgreementBoundFacet {
 
         if (totalSignatures == agreementData.parties.length) {
             agreementData.finalized = true;
-            emit CyberAgreementRegistry.ContractFinalized(contractId, msg.sender, timestamp);
+            emit ICyberAgreementRegistry.ContractFinalized(contractId, msg.sender, timestamp);
             emit ICyberAgreementRegistry.ContractFullySigned(contractId, timestamp);
         }
     }
@@ -259,24 +257,24 @@ contract CyberAgreementBoundFacet {
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[][] memory conditions
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions
     ) private returns (bytes32 templateId, bytes32 contractId) {
         if (bytes(template.legalContractUri).length == 0) {
-            revert CyberAgreementRegistry.TemplateDoesNotExist();
+            revert ICyberAgreementRegistry.TemplateDoesNotExist();
         }
-        if (parties.length == 0) revert CyberAgreementRegistry.InvalidPartyCount();
-        if (partyValues.length != parties.length) revert CyberAgreementRegistry.MismatchedPartyValuesLength();
+        if (parties.length == 0) revert ICyberAgreementRegistry.InvalidPartyCount();
+        if (partyValues.length != parties.length) revert ICyberAgreementRegistry.MismatchedPartyValuesLength();
         if (globalValues.length != template.globalFields.length) {
-            revert CyberAgreementRegistry.MismatchedFieldsLength();
+            revert ICyberAgreementRegistry.MismatchedFieldsLength();
         }
-        if (expiry != 0 && expiry <= block.timestamp) revert CyberAgreementRegistry.ExpiryNotInFuture();
+        if (expiry != 0 && expiry <= block.timestamp) revert ICyberAgreementRegistry.ExpiryNotInFuture();
         for (uint256 i = 0; i < parties.length; i++) {
-            if (parties[i] == address(0)) revert CyberAgreementRegistry.FirstPartyZeroAddress();
+            if (parties[i] == address(0)) revert ICyberAgreementRegistry.FirstPartyZeroAddress();
             if (partyValues[i].length != template.partyFields.length) {
-                revert CyberAgreementRegistry.MismatchedFieldsLength();
+                revert ICyberAgreementRegistry.MismatchedFieldsLength();
             }
             for (uint256 j = 0; j < i; j++) {
-                if (parties[i] == parties[j]) revert CyberAgreementRegistry.DuplicateParty();
+                if (parties[i] == parties[j]) revert ICyberAgreementRegistry.DuplicateParty();
             }
         }
         SignerConditionLib.checkLength(conditions, parties.length);
@@ -290,7 +288,7 @@ contract CyberAgreementBoundFacet {
 
         CyberAgreementRegistryStorage.StorageData storage s = CyberAgreementRegistryStorage.getStorageData();
         CyberAgreementRegistryStorage.AgreementData storage agreementData = s.agreements[contractId];
-        if (agreementData.parties.length > 0) revert CyberAgreementRegistry.ContractAlreadyExists();
+        if (agreementData.parties.length > 0) revert ICyberAgreementRegistry.ContractAlreadyExists();
         agreementData.templateId = templateId;
         agreementData.globalValues = globalValues;
         agreementData.parties = parties;
@@ -315,11 +313,11 @@ contract CyberAgreementBoundFacet {
         address[] memory parties,
         string[][] memory partyValues,
         uint256 expiry,
-        SignerCondition[][] memory conditions,
+        ICyberAgreementRegistry.SignerCondition[][] memory conditions,
         bytes[] memory creatorEvidence,
         bytes calldata creatorSignature
     ) private returns (bytes32 templateId, bytes32 contractId) {
-        if (parties.length == 0) revert CyberAgreementRegistry.InvalidPartyCount();
+        if (parties.length == 0) revert ICyberAgreementRegistry.InvalidPartyCount();
         (templateId, contractId) =
             _create(parties[0], template, salt, globalValues, parties, partyValues, expiry, conditions);
         if (creatorEvidence.length == 0) {

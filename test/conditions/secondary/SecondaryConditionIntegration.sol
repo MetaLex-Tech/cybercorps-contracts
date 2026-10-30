@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import {ERC1967Proxy} from "../../../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {CyberAgreementRegistry} from "../../../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../../../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../../../script/libs/CyberAgreementRegistryDeployment.sol";
 import {SecurityClass, SecuritySeries} from "../../../src/CyberCorpConstants.sol";
 import {CyberScrip} from "../../../src/CyberScrip.sol";
@@ -64,7 +64,7 @@ abstract contract SecondaryConditionIntegrationBase is Test {
     BorgAuth internal auth;
     IssuanceManager internal im;
     ILedgerEntryToken internal printer;
-    CyberAgreementRegistry internal registry;
+    ICyberAgreementRegistry internal registry;
     SpvFixture internal corp;
     DealManager internal dm;
     DealManagerFactory internal dmFactory;
@@ -142,11 +142,11 @@ abstract contract SecondaryConditionIntegrationBase is Test {
         im = IssuanceManager(imFactory.deployIssuanceManager(keccak256("SecondaryConditionIntegration.im")));
         im.initialize(address(auth), address(corp), address(new MockUriBuilderForIM()), address(imFactory));
 
-        registry = CyberAgreementRegistry(
+        registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
                     address(CyberAgreementRegistryDeployment.deployRouter()),
-                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+                    abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )
         );

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {CyberAgreementRegistryRouter} from "../src/CyberAgreementRegistryRouter.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
@@ -12,7 +12,7 @@ contract DeployCyberAgreementRegistryScript is Script {
     string internal constant DEFAULT_SALT_STRING =
         "MetaLex.CyberAgreementRegistry.UpgradeV3.2.0";
 
-    function run() public returns (CyberAgreementRegistryRouter implementation) {
+    function run() public returns (CyberAgreementRegistry implementation) {
         return
             runWithArgs(
                 DEFAULT_SALT_STRING,
@@ -23,7 +23,7 @@ contract DeployCyberAgreementRegistryScript is Script {
     function runWithArgs(
         string memory saltStr,
         uint256 deployerPrivateKey
-    ) public returns (CyberAgreementRegistryRouter implementation) {
+    ) public returns (CyberAgreementRegistry implementation) {
         bytes32 salt = keccak256(bytes(saltStr));
         address deployer = vm.addr(deployerPrivateKey);
 

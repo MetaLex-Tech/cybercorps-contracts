@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementRegistryDeployment} from "../script/libs/CyberAgreementRegistryDeployment.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CreditFacilityTemplates} from "../script/libs/CreditFacilityTemplates.sol";
@@ -24,18 +24,18 @@ contract TemplateEnsurer {
 ///   deployment paths apply (script and one-transaction deployer): an identical
 ///   registration is reused, anything else at the same id is refused.
 contract CreditFacilityTemplatesTest is Test {
-    CyberAgreementRegistry internal registry;
+    ICyberAgreementRegistry internal registry;
     TemplateEnsurer internal ensurer;
     address internal deployer = makeAddr("deployer");
 
     function setUp() public {
         vm.startPrank(deployer);
         BorgAuth auth = new BorgAuth(deployer);
-        registry = CyberAgreementRegistry(
+        registry = ICyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
                     address(CyberAgreementRegistryDeployment.deployRouter()),
-                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+                    abi.encodeWithSelector(ICyberAgreementRegistry.initialize.selector, address(auth))
                 )
             )
         );
