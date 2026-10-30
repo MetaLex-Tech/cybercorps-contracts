@@ -226,6 +226,27 @@ contract RoundManager is
         return round.id;
     }
 
+    /// @notice Versioned capability; older managers do not expose this selector.
+    function existingPrinterRoundVersion() external pure returns (uint256) { return 1; }
+
+    /// @notice Preview the exact round ID and current printer configuration before officer signing.
+    function previewExistingPrinterRound(Round memory draft)
+        external view returns (bytes32 roundId, bytes32 configurationHash)
+    {
+        Round memory normalized;
+        (normalized, configurationHash) = RoundManagerStorage.prepareExistingPrinterRound(draft);
+        return (normalized.id, configurationHash);
+    }
+
+    /// @notice Create a stock round on one existing classified printer without creating another printer.
+    function createRoundWithExistingPrinter(Round memory draft, bytes32 expectedConfigurationHash)
+        external onlyOwner returns (bytes32)
+    {
+        Round memory round = RoundManagerStorage.createRoundWithExistingPrinter(draft, expectedConfigurationHash);
+        emit RoundCreated(round.id, LexScrowStorage.getCorp(), round, round.publicRound);
+        return round.id;
+    }
+
     // ===============
     // Round metadata
     // ===============
