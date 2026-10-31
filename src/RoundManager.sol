@@ -163,9 +163,27 @@ contract RoundManager is
         Round memory roundDraft,
         CyberCertData[] memory certData
     ) external onlyOwner returns (bytes32) {
+        _validateRound(roundDraft, certData.length);
+        return _emitRoundCreated(RoundManagerStorage.createRound(LexScrowStorage.getCorp(), roundDraft, certData));
+    }
+
+    /// @notice Creates a new fundraising round that issues from existing certificate printers
+    /// @param roundDraft partially-filled round info created by RoundLib
+    /// @param certPrinters existing certificate printers of this cyberCORP
+    /// @return roundId ID of the created round
+    function createRoundWithPrinters(
+        Round memory roundDraft,
+        address[] memory certPrinters
+    ) external onlyOwner returns (bytes32) {
+        _validateRound(roundDraft, certPrinters.length);
+        return _emitRoundCreated(RoundManagerStorage.createRoundWithPrinters(roundDraft, certPrinters));
+    }
+
+    /// @dev Checks the draft, sets its id and verifies the escrowed signature
+    function _validateRound(Round memory roundDraft, uint256 certCount) private view {
         // Validate lengths of per-cert details
-        if (roundDraft.legalDetails.length != certData.length) revert InvalidCert();
-        if (roundDraft.extensionData.length != certData.length) revert InvalidCert();
+        if (roundDraft.legalDetails.length != certCount) revert InvalidCert();
+        if (roundDraft.extensionData.length != certCount) revert InvalidCert();
         if (roundDraft.escrowedSignature.length == 0) revert InvalidEscrowedSignature();
         if (roundDraft.pricePerUnit == 0) revert InvalidAmount();
 
@@ -209,16 +227,12 @@ contract RoundManager is
             }),
             roundDraft.escrowedSignature
         )) revert InvalidEscrowedSignature();
+    }
 
-        Round memory round = RoundManagerStorage.createRound(
-            corp,
-            roundDraft,
-            certData
-        );
-
+    function _emitRoundCreated(Round memory round) private returns (bytes32) {
         emit RoundCreated(
             round.id,
-            corp,
+            LexScrowStorage.getCorp(),
             round,
             round.publicRound
         );

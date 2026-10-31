@@ -2684,6 +2684,107 @@ contract RoundManagerTest is Test {
         );
     }
 
+    function draftRoundWithPrinters(uint256 certCount, uint256 pricePerUnit) internal view returns (Round memory) {
+        (bytes memory escrowedSig, ) = CyberCorpHelper.computeEscrowSignature(
+            roundManager,
+            SecuritySeries.SeriesSeed,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            RoundType.FounderApproved,
+            block.timestamp,
+            block.timestamp + 30 days,
+            CyberCorpHelper.TEMPLATE_ID,
+            address(paymentToken),
+            pricePerUnit,
+            VALUATION,
+            corpOwnerPrivKey,
+            corp
+        );
+
+        return RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesSeed,
+                    RoundType.FounderApproved,
+                    false,
+                    true,
+                    false,
+                    RAISE_CAP,
+                    MIN_TICKET,
+                    MAX_TICKET,
+                    address(paymentToken),
+                    pricePerUnit,
+                    VALUATION,
+                    block.timestamp,
+                    block.timestamp + 30 days
+                )
+                .setAgreement(
+                    CyberCorpHelper.TEMPLATE_ID,
+                    corpOwner,
+                    "Officer",
+                    "CEO",
+                    new string[](certCount),
+                    testRoundPartyValues,
+                    new bytes[](certCount),
+                    new address[](0),
+                    escrowedSig
+                );
+    }
+
+    function test_CreateRoundWithPrinters_IssuesFromExistingPrinter() public {
+        address[] memory certPrinters = RoundManager(roundManager).getRound(roundId).certPrinter;
+        LedgerEntryToken printer = LedgerEntryToken(certPrinters[0]);
+
+        // First round issues certificate 0 to the investor
+        vm.startPrank(investor);
+        (bytes32 agreementId1, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager), registry, roundId, 1, 5_000 * 10 ** 6, 7_500 * 10 ** 6, corpOwner, investorPrivKey
+        );
+        vm.stopPrank();
+        vm.prank(corpOwner);
+        RoundManager(roundManager).allocate(agreementId1, 7_500 * 10 ** 6);
+
+        // Second round at a new price uses the same printer
+        Round memory draft = draftRoundWithPrinters(certPrinters.length, 2 * PRICE_PER_UNIT);
+        vm.prank(corpOwner);
+        bytes32 roundId2 = RoundManager(roundManager).createRoundWithPrinters(draft, certPrinters);
+        assertNotEq(roundId2, roundId);
+        Round memory round2 = RoundManager(roundManager).getRound(roundId2);
+        assertEq(round2.certPrinter.length, 1);
+        assertEq(round2.certPrinter[0], address(printer));
+        (SecurityClass cls, SecuritySeries series) = RoundManager(roundManager).getPrimarySecurity(roundId2);
+        assertEq(uint256(cls), uint256(printer.securityType()));
+        assertEq(uint256(series), uint256(printer.securitySeries()));
+
+        // Second round issues certificate 1 on the same printer to investor2
+        vm.startPrank(investor2);
+        (bytes32 agreementId2, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager), registry, roundId2, 2, 5_000 * 10 ** 6, 7_500 * 10 ** 6, corpOwner, investor2PrivKey
+        );
+        vm.stopPrank();
+        vm.prank(corpOwner);
+        RoundManager(roundManager).allocate(agreementId2, 7_500 * 10 ** 6);
+
+        Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId2);
+        assertEq(esc.corpAssets[0].tokenAddress, address(printer));
+        assertEq(esc.corpAssets[0].tokenId, 1);
+        assertEq(printer.totalSupply(), 2);
+        assertEq(printer.ownerOf(0), investor);
+        assertEq(printer.ownerOf(1), investor2);
+        assertEq(printer.getCertificateDetails(1).unitsRepresented, (7_500 * 10 ** 18 * 1e18) / (2 * PRICE_PER_UNIT));
+    }
+
+    function test_RevertIf_CreateRoundWithPrinters_PrinterNotOfIssuanceManager() public {
+        address[] memory certPrinters = new address[](1);
+        certPrinters[0] = address(new LedgerEntryToken());
+
+        Round memory draft = draftRoundWithPrinters(certPrinters.length, 2 * PRICE_PER_UNIT);
+
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManagerStorage.InvalidCertPrinter.selector);
+        RoundManager(roundManager).createRoundWithPrinters(draft, certPrinters);
+    }
+
 }
 
 // Separate FCFS tests in their own contract to avoid the original setUp()

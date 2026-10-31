@@ -283,6 +283,8 @@ interface ILedgerEntryToken is IERC721Metadata, IERC721Enumerable {
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (Endorsement memory);
     function certificateUri() external view returns (string memory);
     function issuanceManager() external view returns (address);
+    function securityType() external view returns (SecurityClass);
+    function securitySeries() external view returns (SecuritySeries);
     function holderCount() external view returns (uint256);
 
     // ERC721-like APIs for legal owner
