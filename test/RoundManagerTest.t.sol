@@ -78,6 +78,15 @@ contract MockLDPaymentToken is ERC20 {
     }
 }
 
+/// @dev Not registered with any issuance manager, but reports one
+contract UnregisteredPrinterMock {
+    address public issuanceManager;
+
+    constructor(address _issuanceManager) {
+        issuanceManager = _issuanceManager;
+    }
+}
+
 contract MockRoundManagerVTest is UUPSUpgradeable {
     string public constant DEPLOY_VERSION = "test";
 
@@ -2774,14 +2783,25 @@ contract RoundManagerTest is Test {
         assertEq(printer.getCertificateDetails(1).unitsRepresented, (7_500 * 10 ** 18 * 1e18) / (2 * PRICE_PER_UNIT));
     }
 
-    function test_RevertIf_CreateRoundWithPrinters_PrinterNotOfIssuanceManager() public {
+    function test_RevertIf_CreateRoundWithPrinters_UnregisteredPrinterReportsIssuanceManager() public {
         address[] memory certPrinters = new address[](1);
-        certPrinters[0] = address(new LedgerEntryToken());
-
+        certPrinters[0] = address(new UnregisteredPrinterMock(issuance));
         Round memory draft = draftRoundWithPrinters(certPrinters.length, 2 * PRICE_PER_UNIT);
 
         vm.prank(corpOwner);
         vm.expectRevert(RoundManagerStorage.InvalidCertPrinter.selector);
+        RoundManager(roundManager).createRoundWithPrinters(draft, certPrinters);
+    }
+
+    function test_RevertIf_CreateRoundWithPrinters_DuplicatePrinter() public {
+        address printer = RoundManager(roundManager).getRound(roundId).certPrinter[0];
+        address[] memory certPrinters = new address[](2);
+        certPrinters[0] = printer;
+        certPrinters[1] = printer;
+        Round memory draft = draftRoundWithPrinters(certPrinters.length, 2 * PRICE_PER_UNIT);
+
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManagerStorage.DuplicateCertPrinter.selector);
         RoundManager(roundManager).createRoundWithPrinters(draft, certPrinters);
     }
 

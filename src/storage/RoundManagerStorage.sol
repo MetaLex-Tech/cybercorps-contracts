@@ -110,6 +110,7 @@ library RoundManagerStorage {
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.round.manager.storage.v1");
 
     error InvalidCertPrinter();
+    error DuplicateCertPrinter();
 
     // EIP-712 escrowed-signature domain (authority officer authorizes round parameters off-chain).
     string constant EIP712_NAME = "RoundManager";
@@ -211,16 +212,24 @@ library RoundManagerStorage {
     }
 
     /// @notice Creates a round that issues from existing certificate printers
-    /// @dev Each printer must belong to this issuance manager, or allocation cannot mint
+    /// @dev Each printer must be a registered printer of this issuance manager, or allocation cannot mint.
+    /// Each printer must occur one time only, because allocation mints the full units on each printer.
     function createRoundWithPrinters(
         Round memory roundDraft,
         address[] memory certPrinters
     )
     external // Use external library to save space
     returns (Round memory) {
-        address issuanceManager = address(getIssuanceManager());
+        IIssuanceManager issuanceManager = getIssuanceManager();
         for (uint256 i = 0; i < certPrinters.length; i++) {
-            if (ILedgerEntryToken(certPrinters[i]).issuanceManager() != issuanceManager) revert InvalidCertPrinter();
+            address printer = certPrinters[i];
+            if (
+                !issuanceManager.isPrinter(printer) ||
+                ILedgerEntryToken(printer).issuanceManager() != address(issuanceManager)
+            ) revert InvalidCertPrinter();
+            for (uint256 j = 0; j < i; j++) {
+                if (certPrinters[j] == printer) revert DuplicateCertPrinter();
+            }
         }
 
         roundDraft.certPrinter = certPrinters;
