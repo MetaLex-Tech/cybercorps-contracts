@@ -1,0 +1,43 @@
+{
+  "chainId": 4663,
+  "observedAtUtc": "2026-10-31T02:22:03.247461+00:00",
+  "block": 102211208,
+  "blockHash": "0x84b18484fee22a2e09bf6b0fd0ed0a1df670be91b862932522ff2f6012139482",
+  "deploymentFeed": "https://developers.uniswap.org/deployments.json",
+  "deploymentFeedSource": {
+    "repo": "https://github.com/Uniswap/contracts",
+    "commit": "cd2e8a869498e9cd6e821ad518d91f6c7a3d8d72"
+  },
+  "routerRevision": "802fe4c",
+  "v4PeripheryRevision": "545a5d2a87228167edde48f3b9eda122d1e3c4d6",
+  "pool": {
+    "currency0": "0x0000000000000000000000000000000000000000",
+    "currency1": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "fee": 500,
+    "tickSpacing": 10,
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "poolId": "0x387bf619da4d3fb62bb276482693dba1b9b3520f573cabdfe033384a24125982"
+  },
+  "contracts": {
+    "router": {
+      "address": "0x204FAca1764B154221e35c0d20aBb3c525710498",
+      "codeBytes": 24380,
+      "codeHash": "0x76b92a5bba2dd32019a64eb421f1750e78c6ba044dbfa6840b722eb5ac63d296"
+    },
+    "poolManager": {
+      "address": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "codeBytes": 24009,
+      "codeHash": "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626"
+    },
+    "quoter": {
+      "address": "0x8Dc178eFB8111BB0973Dd9d722ebeFF267c98F94",
+      "codeBytes": 6118,
+      "codeHash": "0xd707b1da8cb165e5ea35a3b4450d971eb562ec171e23492aa117036b78a868f6"
+    },
+    "stateView": {
+      "address": "0xF3334192D15450CdD385c8B70e03f9A6bD9E673b",
+      "codeBytes": 3531,
+      "codeHash": "0x7d9c591e0956fd89d98feb4ffcfe8bf1f7a62bd485edd979fa21d104b49878a6"
+    }
+  }
+}

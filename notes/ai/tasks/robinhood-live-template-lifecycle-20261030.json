@@ -1,0 +1,59 @@
+{
+  "observedAtUtc": "2026-10-31T02:06:39.615272+00:00",
+  "chainId": 4663,
+  "blockNumber": 102202000,
+  "blockHash": "0x63b16eac4c8f0840393409ea9b1b2fd6bfa9709add81b0e043206c0fdd4467b2",
+  "sourceBlockStillCanonical": true,
+  "sourceRevision": "b59269beea86f7ccb14c516361140519c8da8f2c",
+  "testedTree": "local lifecycle test/runner additions; production src unchanged",
+  "passed": [
+    "test_ForkTemplateFixture_FullSafeIssuance()",
+    "test_ForkTemplateFixture_RefusalsHaveNoEffects()",
+    "test_LiveSafeTemplateIsConfigured()"
+  ],
+  "failed": [],
+  "skipped": [],
+  "exitCode": 0,
+  "metadataJsonAndSvgValidated": true,
+  "liveTemplateCountMatched": 86,
+  "localTemplateRegistration": false,
+  "productionContractUpgrades": false,
+  "deploymentScriptInvoked": false,
+  "liveTransactionsSubmitted": false,
+  "forkCompany": [
+    "0x3F74c0afAf210D31f38f8B7B4c6C6948451CA949"
+  ],
+  "forkSafeLet": [
+    "0x0044331a23963bF976fE39fDBe6684a48A51aE77"
+  ],
+  "command": [
+    "forge",
+    "test",
+    "--match-path",
+    "test/RobinhoodLiveTemplateLifecycleTest.t.sol",
+    "--no-match-test",
+    "test_LiveFormationAndMissingTemplateRefusal",
+    "--offline",
+    "--use",
+    "0.8.28",
+    "--evm-version",
+    "cancun",
+    "--threads",
+    "1",
+    "-R",
+    "@openzeppelin/contracts/=dependencies/openzeppelin-contracts/contracts/",
+    "-R",
+    "@openzeppelin/contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/",
+    "-vvv"
+  ],
+  "sha256": {
+    "script/test-robinhood-live-templates.py": "c502729bcfa73054aa7266776e369fcce04435f458c5f2369d3282b6928c486d",
+    "test/RobinhoodLiveTemplateLifecycleTest.t.sol": "f063c12b0410a00e3bfc54e147bd75639e4b4e1863a2ccd888e6ac1b687341e5",
+    "test/RobinhoodPostUpgradeLifecycleTest.t.sol": "ff1b4af6ffaf87857706d11a1af34ac02c5ae4975a68bf6e9b0da1493c777de2",
+    "script/res/robinhood-base-templates.json": "c463a163df85afcf2671733182fcd1020e130b5fdedbbaa3beb3571871dba403",
+    "notes/ai/tasks/robinhood-live-template-readback-20261030.json": "eafda058a0e960862608ac3d49f95fe3ed53d88b78faa955b28eb7389f224c8a",
+    "out/robinhood-live-templates/lifecycle.log": "8cadcfb7ee6208603efe45b69e0695909c71e1e727a0fd931f814a5a276d0e92",
+    "out/robinhood-live-templates/safe-metadata.json": "dcb51f9a404b55e1a06b7b34d6933e8afaa4e67d2229ce40330ee883fb40ceb9",
+    "out/robinhood-live-templates/safe-image.svg": "7e69ee87f75b387eb2aa8b29d4f8747e33a67fce06c8cfddc2871a9f47662901"
+  }
+}

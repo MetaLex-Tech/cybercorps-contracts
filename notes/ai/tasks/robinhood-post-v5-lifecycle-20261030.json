@@ -1,0 +1,97 @@
+{
+  "chains": {
+    "robinhood": {
+      "observedAtUtc": "2026-10-30T14:00:39.145308+00:00",
+      "sourceRevision": "b59269beea86f7ccb14c516361140519c8da8f2c",
+      "testSources": "new local working-tree additions; production src unchanged",
+      "blockNumber": 101773759,
+      "blockHash": "0xc5422339fbe16ec951e16026d3e4e634fa2d1cf1330cb1904ca8c93ada6ba125",
+      "chainId": 4663,
+      "exitCode": 0,
+      "passed": [
+        "test_ForkTemplateFixture_FullSafeIssuance()",
+        "test_ForkTemplateFixture_RefusalsHaveNoEffects()",
+        "test_LiveFormationAndMissingTemplateRefusal()"
+      ],
+      "failed": [],
+      "skipped": [],
+      "productionContractUpgrades": false,
+      "submittedLiveTransactions": false,
+      "localTemplateFixture": true,
+      "metadataJsonAndSvgValidated": true,
+      "sha256": {
+        "test/RobinhoodPostUpgradeLifecycleTest.t.sol": "218c128ada6d70d30a962f45c7ff05ae353e677c8b2a6240715af5662dce9b8b",
+        "script/test-robinhood-post-upgrade.py": "7823aabfccf41d502a191b818350ea6ce284faa28982c57dfb43ba42123dd0b5",
+        "script/check-robinhood-post-upgrade.py": "11ecde24aff427d624379b9dc628e73fe52bd0b533dcb668a47f2c592c7b3a66",
+        "out/robinhood-post-v5/robinhood-lifecycle.log": "98dd2df9275ecc031d3a0fa1bdaf7e88b1b5576124f45d312f3a6424d746ef19",
+        "out/robinhood-post-v5/robinhood-safe-metadata.json": "8c0fff2d49f38204a5aef8cd51433eceef41619751d92f224c209dd3ec3f2bfc",
+        "out/robinhood-post-v5/robinhood-safe-image.svg": "e2126068c6b5824490b2ae0a6895ef2c331ddf319f1ffea31d2cf4b7adffee30"
+      },
+      "command": [
+        "forge",
+        "test",
+        "--match-path",
+        "test/RobinhoodPostUpgradeLifecycleTest.t.sol",
+        "--offline",
+        "--use",
+        "0.8.28",
+        "--evm-version",
+        "cancun",
+        "--threads",
+        "1",
+        "-R",
+        "@openzeppelin/contracts/=dependencies/openzeppelin-contracts/contracts/",
+        "-R",
+        "@openzeppelin/contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/",
+        "-vvv"
+      ]
+    },
+    "base": {
+      "observedAtUtc": "2026-10-30T14:00:55.271608+00:00",
+      "sourceRevision": "b59269beea86f7ccb14c516361140519c8da8f2c",
+      "testSources": "new local working-tree additions; production src unchanged",
+      "blockNumber": 53289424,
+      "blockHash": "0xfda612a520756ef6687c97cba417d6df7640fd11019cc70b0cdf16a41c53dc74",
+      "chainId": 8453,
+      "exitCode": 0,
+      "passed": [
+        "test_ForkTemplateFixture_FullSafeIssuance()",
+        "test_ForkTemplateFixture_RefusalsHaveNoEffects()"
+      ],
+      "failed": [],
+      "skipped": [
+        "test_LiveFormationAndMissingTemplateRefusal()"
+      ],
+      "productionContractUpgrades": false,
+      "submittedLiveTransactions": false,
+      "localTemplateFixture": false,
+      "metadataJsonAndSvgValidated": true,
+      "sha256": {
+        "test/RobinhoodPostUpgradeLifecycleTest.t.sol": "218c128ada6d70d30a962f45c7ff05ae353e677c8b2a6240715af5662dce9b8b",
+        "script/test-robinhood-post-upgrade.py": "7823aabfccf41d502a191b818350ea6ce284faa28982c57dfb43ba42123dd0b5",
+        "script/check-robinhood-post-upgrade.py": "11ecde24aff427d624379b9dc628e73fe52bd0b533dcb668a47f2c592c7b3a66",
+        "out/robinhood-post-v5/base-lifecycle.log": "f6fef0b21412b4ab0dacd757e714035d1e6f082f52be28498b7a58b5d1b53201",
+        "out/robinhood-post-v5/base-safe-metadata.json": "e69e26ffbdea99e613ce5138d01aaaa4647d2c09dc9b4e64ad71c1a3b3edec75",
+        "out/robinhood-post-v5/base-safe-image.svg": "839ef5ecb7e0240ab976080437567fd50cbaf8ae99a7666ace81c8be1dda041e"
+      },
+      "command": [
+        "forge",
+        "test",
+        "--match-path",
+        "test/RobinhoodPostUpgradeLifecycleTest.t.sol",
+        "--offline",
+        "--use",
+        "0.8.28",
+        "--evm-version",
+        "cancun",
+        "--threads",
+        "1",
+        "-R",
+        "@openzeppelin/contracts/=dependencies/openzeppelin-contracts/contracts/",
+        "-R",
+        "@openzeppelin/contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/",
+        "-vvv"
+      ]
+    }
+  }
+}

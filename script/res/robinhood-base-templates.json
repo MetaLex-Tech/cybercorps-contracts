@@ -1,0 +1,1979 @@
+{
+  "schemaVersion": 1,
+  "sourceChainId": 8453,
+  "sourceRegistry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+  "sourceBlock": 53290002,
+  "sourceBlockHash": "0x7a72032036f4b0f098ea91b49ec04baedd1447325b3d22f814cb839b259ed54b",
+  "targetChainId": 4663,
+  "targetRegistry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+  "templateCount": 86,
+  "templates": [
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000002",
+      "title": "SAFE+T",
+      "legalContractUri": "https://ipfs.io/ipfs/bafybeig6hszt562xsvcyumiph4kz5u5stgecpusbjw6hiycgxth42afezq",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000004",
+      "title": "\"SAFE\"",
+      "legalContractUri": "https://ipfs.io/ipfs/bafybeico7vlseh7qmp6pkzrhos4vmyebq32cesb226a5nbptlq2qgsarwy",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000014",
+      "title": "MetaLeX cyberSAFE US style Reg D v 1.0",
+      "legalContractUri": "ipfs://bafybeic242ypthamyr3kxnwk4x7sxj7s6svck4xfu3dzgttvic73lihy6m",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000015",
+      "title": "MetaLeX cyberSAFE + cyberTokenWarrant a16z US style reg D v 1.0",
+      "legalContractUri": "ipfs://bafybeieozn5ur3gocmmleoph57oznz6acgzrclwkibyijjxv7nobt5tbxa",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000016",
+      "title": "MetaLeX cyberSAFE UK Cayman style Reg S v 1.0",
+      "legalContractUri": "ipfs://bafybeigm77lgbd5wptji7hoeeqxedippdlvj4eaykgz5eb2bsw2ncboxcu",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000017",
+      "title": "MetaLeX cyberSAFE + cyberTokenWarrant a16z non-US Reg S v 1.0",
+      "legalContractUri": "ipfs://bafybeieoahzrvqk3vggrv6zyljlgkrqn2ls5wgpbgp4w4ylenr2r2ftugm",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000018",
+      "title": "MetaLeX cyberSAFT reg D v.1.0",
+      "legalContractUri": "ipfs://bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "agreementExecutionTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000019",
+      "title": "MetaLeX cyberSAFT reg D v.1.0",
+      "legalContractUri": "ipfs://bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x000000000000000000000000000000000000000000000000000000000000001a",
+      "title": "MetaLeX cyberSAFTE reg D v.1.0",
+      "legalContractUri": "ipfs://bafybeidnjftuutxtrfovto533thugxbseezktmy3trj6kjh4fwedfm4l2y",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x000000000000000000000000000000000000000000000000000000000000001b",
+      "title": "MetaLeX cyberSAFTE reg D v.1.1",
+      "legalContractUri": "ipfs://bafybeidephecyo4ovg2xtik6kiuuhejri4owu5qi6s6qft5j2uj2sf2t3q",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x000000000000000000000000000000000000000000000000000000000000001e",
+      "title": "MetaLeX cyberSAFE jx-neutral-style Reg D raise",
+      "legalContractUri": "IPFS://bafybeiazn4jdtlu4yz7lqbfhzaxsfhsfuwaq55m4x5mhjdeddbwwrhfufe",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x000000000000000000000000000000000000000000000000000000000000001f",
+      "title": "MetaLeX cyberTokenWarrant a16z jx-neutral-style-issuer Reg D raise",
+      "legalContractUri": "IPFS://bafybeibojsh6f4wxj3gvwjbv7uvvurony7jumyqqi5i6rqsv7wcywdsi44",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000020",
+      "title": "MetaLeX cyberSAFE jx-neutral-style Reg S raise",
+      "legalContractUri": "IPFS://bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000021",
+      "title": "MetaLeX cyberTokenWarrant a16z-jx-neutral-style-issuer Reg S raise",
+      "legalContractUri": "IFPS://bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000022",
+      "title": "MetaLeX cyberTokenWarrant a16z-jx-neutral-style-issuer Reg S raise",
+      "legalContractUri": "IPFS://bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000023",
+      "title": "MetaLeX cyberSAFT Reg S raise",
+      "legalContractUri": "IPFS://bafybeidquzma24o53tiys7kvspvx5izc7iru5n5dfgfwmxefi3qd67ou2y",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "agreementExecutionTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000032",
+      "title": "cySPA + Reg D SAFE",
+      "legalContractUri": "IPFS://bafybeics3btqftkfnzchtisazgvlvtq3xok6rrdvhjyhdvr7lhoa6snjxe",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000033",
+      "title": "cySPA + REG S SAFE",
+      "legalContractUri": "IPFS://bafybeidwqou5x4amvsidepwbuqpwarowv3vce473jpqcgejvbf4g2xxdee",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000034",
+      "title": "cySPA + REG D SAFE + REG D TOKEN WARRANT",
+      "legalContractUri": "IPFS://bafybeiapw7thrkzymtnhilmr5sjl7sm55yc42d2zxl66u6tdutfvm55t2y",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000035",
+      "title": "cySPA + REG S SAFE + REG S TOKEN WARRANT",
+      "legalContractUri": "IPFS://bafybeianosjn74ldjexzmwcji6nl3l24ikwazd64uei625nszysqfwla2i",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000036",
+      "title": "cySPA + REG D SAFTE ",
+      "legalContractUri": "IPFS://bafybeidb2ebvu7uxt6m2ukrdnytzpwrb4ihcncbx2v4qohe5xao3xr3m7e",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000037",
+      "title": "cySPA + REG S SAFTE ",
+      "legalContractUri": "IPFS://bafybeideutuq3r3v66rdcvzar5heefyark24urc3ix44tvvjpo2ntvkc7i",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000038",
+      "title": "cySPA + REG D SAFT",
+      "legalContractUri": "IPFS://bafybeidfbgwv35cu22ouwdpmho35gicfnkno2em7ngjn4mbhbiogvvaf7i",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000039",
+      "title": "cySPA + REG S SAFT",
+      "legalContractUri": "IPFS://bafybeibjm2mss4ctfsyajehtwnmje3aa2agif5n47i575pxdejrk7dee5m",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000190",
+      "title": "MetaLeX LeXCheX agreement v.1.0",
+      "legalContractUri": "ipfs://bafkreifikp43eagam765uiapfakvk6bc4chv62e2pv5qytrv6wlsrt6qji",
+      "globalFields": [
+        "expiryDate"
+      ],
+      "partyFields": [
+        "investorName",
+        "investorType",
+        "investorJurisdiction",
+        "investorContact"
+      ]
+    },
+    {
+      "id": "0x0fee8b55455433b318c2822dcf9dfe53fa2c35d0be977eb26bba334d99328908",
+      "title": "Test",
+      "legalContractUri": "ipfs://bafkreicvgqgf2z4cwmxgajntvsegrw6uwjiage3pdcgu4avc4rxuddo5i4",
+      "globalFields": [],
+      "partyFields": [
+        "Name"
+      ]
+    },
+    {
+      "id": "0x15e227f48109aa913c7e89b6eb8706c895df77b70689cf7cf60b7498813d4719",
+      "title": "Test",
+      "legalContractUri": "ipfs://bafkreiau2fxuuiozslotef7i7mryoogsriqasscdglvhs3353hrahvq5ra",
+      "globalFields": [],
+      "partyFields": [
+        "Name",
+        "Contract Role"
+      ]
+    },
+    {
+      "id": "0x192849aa2490d7e3df33ec373f87b74c92ce2899d0f74c322a687c9efed1a845",
+      "title": "cyberCORPs Stock Option Award Agreement",
+      "legalContractUri": "ipfs://bafybeigrqskj2upfb7ddnqhphy72rjy6tmlijugotimsoqshsqoavr4cnm",
+      "globalFields": [
+        "tokenStreamTotal",
+        "vestingCliffCredit",
+        "unlockingCliffCredit",
+        "vestingRate",
+        "vestingStartTime",
+        "unlockRate",
+        "unlockStartTime",
+        "exercisePrice",
+        "paymentToken",
+        "shortStopDuration",
+        "exerciseExpiration"
+      ],
+      "partyFields": [
+        "name",
+        "type"
+      ]
+    },
+    {
+      "id": "0x1a7cf1e15aa5d042d738f857871aa34149fa29cc7404e29b41116f237a4820da",
+      "title": "Test",
+      "legalContractUri": "ipfs://bafkreidq6tlyw4wlmlg6h43pazy2qrzcommphuv4ilxlrf2cydl2n5vmem",
+      "globalFields": [],
+      "partyFields": [
+        "name"
+      ]
+    },
+    {
+      "id": "0x29a84df4528409308723242993cf3347a285f8617cc1b4ce0f5ecc60c615242a",
+      "title": "cyberCORPs Stock Option Award Agreement (Bespoke)",
+      "legalContractUri": "ipfs://bafybeie7bevnvb47zzumk6cloloif4zkdof3776o7yutoznofxn5txizjm",
+      "globalFields": [
+        "tokenStreamTotal",
+        "vestingCliffCredit",
+        "unlockingCliffCredit",
+        "vestingRate",
+        "vestingStartTime",
+        "unlockRate",
+        "unlockStartTime",
+        "exercisePrice",
+        "paymentToken",
+        "shortStopDuration",
+        "exerciseExpiration"
+      ],
+      "partyFields": [
+        "name",
+        "type"
+      ]
+    },
+    {
+      "id": "0x2ea6c7f4dfc576e74f4e5d98ed75c5579224bc6b0fe4861f696bd4734e88c6a7",
+      "title": "Test",
+      "legalContractUri": "ipfs://bafkreidq6tlyw4wlmlg6h43pazy2qrzcommphuv4ilxlrf2cydl2n5vmem",
+      "globalFields": [
+        "Corp Name"
+      ],
+      "partyFields": [
+        "name"
+      ]
+    },
+    {
+      "id": "0x4142565f736166655f7400000000000000000000000000000000000000000000",
+      "title": "ABV_safe_t",
+      "legalContractUri": "IPFS://bafybeia6l2w5kwr52w6khvhqkgg4n6poua5yjlwjmeqgb77iffh4xxpvdu",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x419412d2908fe3853b7e75383a3ad8eab191f9ff2b5a626a7a476a3c52b9d337",
+      "title": "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0",
+      "legalContractUri": "ipfs://bafkreic7dscoigvwjc23vzvkmzophm34kpafu6nrctykq5bif63lqvpuoa",
+      "globalFields": [
+        "founderName",
+        "enterpriseName",
+        "companyName",
+        "companyType",
+        "companyJurisdiction",
+        "companyContactDetails",
+        "tokenSymbol",
+        "tokenName"
+      ],
+      "partyFields": [
+        "name",
+        "contactDetails"
+      ]
+    },
+    {
+      "id": "0x4dbb62e56a8a4ef98e1274329440fae54ebb8a9327469a7725ac53e43d574ca7",
+      "title": "Test",
+      "legalContractUri": "ipfs://bafkreidq6tlyw4wlmlg6h43pazy2qrzcommphuv4ilxlrf2cydl2n5vmem",
+      "globalFields": [],
+      "partyFields": [
+        "Name"
+      ]
+    },
+    {
+      "id": "0x562cb32ffa91cbce89b2b3016dbbdbf0b7f002b86243ad438e73a2ef7ce8828c",
+      "title": "Test",
+      "legalContractUri": "ipfs://bafkreidq6tlyw4wlmlg6h43pazy2qrzcommphuv4ilxlrf2cydl2n5vmem",
+      "globalFields": [],
+      "partyFields": []
+    },
+    {
+      "id": "0x5b68f12cdf593412d3a76d1c088ebd96b55d475e839e7c072ee694d2343eefc5",
+      "title": "cyberCORPs Stock Option Award Agreement",
+      "legalContractUri": "https://ipfs.io/ipfs/bafybeig6luysoemea2t7rpb5jczd7ojmt26w3ubtplyw577wp3b7ui72we",
+      "globalFields": [
+        "tokenStreamTotal",
+        "vestingCliffCredit",
+        "unlockingCliffCredit",
+        "vestingRate",
+        "vestingStartTime",
+        "unlockRate",
+        "unlockStartTime",
+        "exercisePrice",
+        "paymentToken",
+        "shortStopDuration",
+        "exerciseExpiration"
+      ],
+      "partyFields": [
+        "name",
+        "type"
+      ]
+    },
+    {
+      "id": "0x6163655f736166655f726567645f763100000000000000000000000000000000",
+      "title": "MetaLeX cyberSAFE jx-neutral-style / Reg D ACE raise v 1",
+      "legalContractUri": "IPFS://bafybeifca22x3r2vkcanj446pe2bcn465rseff6ff3h7lwuaeaw54mjugi",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6163655f73616665763100000000000000000000000000000000000000000000",
+      "title": "MetaLeX cyberSAFE jx-neutral-style / Reg S ACE raise v 1",
+      "legalContractUri": "IPFS://bafybeibwtm7irbxar76nmmg37uxw6oi5mts7flar4wzndsgfhy4tyq36hq",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6574686f735f7361667465000000000000000000000000000000000000000000",
+      "title": "SAFTE",
+      "legalContractUri": "ipfs://bafybeiby3ikipxaxafsqyow4jfchofw4wb2jr2x4nfximmwc6cnszca7ge",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x67ef1fc0ca03d9da0681a07f6c22e92f9c1e8d71af19a37f841e9709b83e7fd7",
+      "title": "Test",
+      "legalContractUri": "ipfs://bafkreighh6g7eshaawvzzgl7r7knvoq6phhfv3z77wkjoysu6miyjwir4a",
+      "globalFields": [],
+      "partyFields": [
+        "name"
+      ]
+    },
+    {
+      "id": "0x68af56e9933629fd8d8bb9048787a54e549e6ad14447dc1712d097e97eb42e12",
+      "title": "test contract",
+      "legalContractUri": "ipfs://bafkreiehq5p3hxc3t4uicalmfnemkxamczitw5pvyvtczfdndi6cxjroaa",
+      "globalFields": [],
+      "partyFields": [
+        "cybersign:v1:party:0:field:0:Name",
+        "cybersign:v1:party:0:field:1:Contract Role",
+        "cybersign:v1:party:0:field:2:custom field"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f7265675f645f76315f3300000000000000000000000000",
+      "title": "mlx_safe_reg_d_v1_3",
+      "legalContractUri": "IPFS://bafybeih7l2kxncjuwrfgv5gnmpcik43dnn4pxpe4it4u7ti2hgfgrlot2a",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f7265675f645f76315f3400000000000000000000000000",
+      "title": "mlx_safe_reg_d_v1_4",
+      "legalContractUri": "ipfs://bafybeibemqrqlcorwqyt5z5sfxuw3mnmptchuudjbetddwqsl4vwuc52ba",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f7265675f645f76315f3500000000000000000000000000",
+      "title": "mlx_safe_reg_d_v1_5",
+      "legalContractUri": "ipfs://bafybeihj25qoysfhnmmw72jecneseg7vi7tqqqgnat3rmx3yq45dlb3aeq",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f7265675f735f76315f3300000000000000000000000000",
+      "title": "mlx_safe_reg_s_v1_3",
+      "legalContractUri": "IPFS://bafybeieh7jn553jmrjmwee3dsvwf5hkedomey2vhubc3mumlewfpumvlae",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f7265675f735f76315f3400000000000000000000000000",
+      "title": "mlx_safe_reg_s_v1_4",
+      "legalContractUri": "ipfs://bafybeiduhbvdq7hsy542zzpu2hf5bvcavoj6fwn6lswqcc2h456fwvc6yi",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f7265675f735f76315f3500000000000000000000000000",
+      "title": "mlx_safe_reg_s_v1_5",
+      "legalContractUri": "ipfs://bafybeigkmgjl46tfstvvjoh3ei7dvrhk27ly2p3g4py5wylvqvj3ppdybq",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f74775f7265675f645f76315f3300000000000000000000",
+      "title": "mlx_safe_tw_reg_d_v1_3",
+      "legalContractUri": "IPFS://bafybeiaw3pwov3ahg4bk2hte2hu4pwv34nndoguxyk3umq6f5su3kod6ay",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f74775f7265675f645f76315f3400000000000000000000",
+      "title": "mlx_safe_tw_reg_d_v1_4",
+      "legalContractUri": "ipfs://bafybeiex744l7xm337shu7w3t2rgmr2nkkvhwi2jvqlbsbp45zwllwxyku",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f74775f7265675f645f76315f3500000000000000000000",
+      "title": "mlx_safe_tw_reg_d_v1_5",
+      "legalContractUri": "ipfs://bafybeiflv6kiiqbqvdql6hett3yfy5u42pshyuzj7spiziqvfbexnkf2pi",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f74775f7265675f735f76315f3300000000000000000000",
+      "title": "mlx_safe_tw_reg_s_v1_3",
+      "legalContractUri": "IPFS://bafybeicto2raupsj5ad7snxvhmmll2plwyploqho4fg2cibnn2fuhlm2d4",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f74775f7265675f735f76315f3400000000000000000000",
+      "title": "mlx_safe_tw_reg_s_v1_4",
+      "legalContractUri": "ipfs://bafybeibq73gmxouxjdoqzvuk5nuu5d4i4gmdyuncps3o736v6ehjjzymsu",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166655f74775f7265675f735f76315f3500000000000000000000",
+      "title": "mlx_safe_tw_reg_s_v1_5",
+      "legalContractUri": "ipfs://bafybeiefrg3mdwoa2vp4ugzs2agbzhfftv3h4zthvsjqrg3eu6j2jsiq4e",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "exercisePriceMethod",
+        "exercisePrice",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "latestExpirationTime",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166745f7265675f645f76315f3300000000000000000000000000",
+      "title": "mlx_saft_reg_d_v1_3",
+      "legalContractUri": "IPFS://bafybeieoljri2rwuv35rymjd654sr3u46kbcao7mymseqobfo7x6lxgdcy",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166745f7265675f645f76315f3400000000000000000000000000",
+      "title": "mlx_saft_reg_d_v1_4",
+      "legalContractUri": "ipfs://bafybeihtu4tsfei7hm54gfscfcjqy4hf47l3nlplaza2tt4xgzituxxs5i",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166745f7265675f645f76315f3500000000000000000000000000",
+      "title": "mlx_saft_reg_d_v1_5",
+      "legalContractUri": "ipfs://bafybeibnwbcxyvny7uyjuyddhxttqa7kflvx2zjnpmoqc2wwgsjgtmaiua",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166745f7265675f735f76315f3300000000000000000000000000",
+      "title": "mlx_saft_reg_s_v1_3",
+      "legalContractUri": "IPFS://bafybeibwrz3rttteguo5ccoh5x7ndwdu6hyhy7i3iraii5c5ml4pfv73t4",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166745f7265675f735f76315f3400000000000000000000000000",
+      "title": "mlx_saft_reg_s_v1_4",
+      "legalContractUri": "ipfs://bafybeiecsg2k26yfzajbirs4mqveyk5se3elv3tqft3mo3br4nl4xt7hcm",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f736166745f7265675f735f76315f3500000000000000000000000000",
+      "title": "mlx_saft_reg_s_v1_5",
+      "legalContractUri": "ipfs://bafybeifwrsxqzs2xrkkkh4coetg5y6qtiy3kkmuonxoyny2k4pf4uezbhm",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f73616674655f7265675f645f76315f33000000000000000000000000",
+      "title": "mlx_safte_reg_d_v1_3",
+      "legalContractUri": "IPFS://bafybeiag7xatsusb24evnpyj6ztf62kix36dgbsp3kbazfyvr273ph56ay",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f73616674655f7265675f645f76315f34000000000000000000000000",
+      "title": "mlx_safte_reg_d_v1_4",
+      "legalContractUri": "ipfs://bafybeid7pq7j3t24kw5cd5cyjr76nlsa3syenoemah3hm64umc34zhwwa4",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f73616674655f7265675f645f76315f35000000000000000000000000",
+      "title": "mlx_safte_reg_d_v1_5",
+      "legalContractUri": "ipfs://bafybeihxkjefb7oe2tp7k5q2moiare7j62hgiu6xke2elfmzigxcww45uy",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f73616674655f7265675f735f76315f33000000000000000000000000",
+      "title": "mlx_safte_reg_s_v1_3",
+      "legalContractUri": "IPFS://bafybeia43r7e566s2jlq4gtaasmtybutujy7fuizhw3fycxtwnstfbkeia",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f73616674655f7265675f735f76315f34000000000000000000000000",
+      "title": "mlx_safte_reg_s_v1_4",
+      "legalContractUri": "ipfs://bafybeih2kkairhmeud33qu4ks3e47kzwgn3eqgpqzwluxumnwcs2q6k7qy",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x6d6c785f73616674655f7265675f735f76315f35000000000000000000000000",
+      "title": "mlx_safte_reg_s_v1_5",
+      "legalContractUri": "ipfs://bafybeid3migqua643fzcdnxzmji3nhbkv3zfxkgefzyo43mv5znz3lroli",
+      "globalFields": [
+        "purchaseAmount",
+        "postMoneyValuationCap",
+        "protocolUSDValuationAtTimeofInvestment",
+        "expirationTime",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType",
+        "tokenCalculationMethod",
+        "minCompanyReserve",
+        "tokenPremiumMultiplier"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x702be0007e89fd55edef9e8d2b3ad1519a3b10afa67bf37348f470abe371c042",
+      "title": "LeXcheX Questionnaire & ToS v 1.2",
+      "legalContractUri": "ipfs://bafybeigbfthhgrnylctihlutogds35ggx64lz5rl6z6htuetym53n4qzgi",
+      "globalFields": [],
+      "partyFields": [
+        "Name",
+        "Contract Role"
+      ]
+    },
+    {
+      "id": "0x706f6c617269735f736166740000000000000000000000000000000000000000",
+      "title": "polaris_saft",
+      "legalContractUri": "IPFS://bafybeibxqu4vwmlx725i26uio7khdci6qw6v6cvcmn2j5k4rqknr5hfcnu",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x74656d706c2e66756e5f73616674000000000000000000000000000000000000",
+      "title": "templ fun SAFT",
+      "legalContractUri": "IPFS://bafybeigupbtjytii3jag3ld4qj2r5pdxvg7dspor4spwvjlmbsxqfegtye",
+      "globalFields": [
+        "purchaseAmount",
+        "protocolValuationCap",
+        "governingJurisdiction",
+        "disputeResolution",
+        "unlockStartTimeType",
+        "unlockStartTime",
+        "unlockingPeriod",
+        "unlockingCliffPeriod",
+        "unlockingCliffPercentage",
+        "unlockingIntervalType"
+      ],
+      "partyFields": [
+        "name",
+        "evmAddress",
+        "contactDetails",
+        "investorType",
+        "investorJurisdiction"
+      ]
+    },
+    {
+      "id": "0x7cbc9ad4b274ba3cdc2c43a6b6fec427c4df0b3b6a8e868bcddf9302edcf7ae3",
+      "title": "Harmony Governor and Delegator Agreement",
+      "legalContractUri": "ipfs://bafkreihh7pyokxxe7bmplxumhkzfq3ut4lqniiddprldja7sxgcym5ctne",
+      "globalFields": [],
+      "partyFields": []
+    },
+    {
+      "id": "0x7cc9c8dd9af596efe429f9302c8fb295a7e868db595f28ef164a87447137d978",
+      "title": "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo - Credit Facility Operator v 1.0",
+      "legalContractUri": "ipfs://bafkreihiy7xvbhloloyl2pfthreq7wyar22ss5isxxckla6zhltbnexmqm",
+      "globalFields": [
+        "founderName",
+        "enterpriseName",
+        "companyName",
+        "companyType",
+        "companyJurisdiction",
+        "companyContactDetails",
+        "tokenSymbol",
+        "tokenName",
+        "opcoName",
+        "opcoJurisdiction"
+      ],
+      "partyFields": [
+        "name",
+        "contactDetails"
+      ]
+    },
+    {
+      "id": "0x7fe58d4732321b37136993f9af46bc081c198e4bc5034003ada386b8f469e096",
+      "title": "test contract 2",
+      "legalContractUri": "ipfs://bafkreiehq5p3hxc3t4uicalmfnemkxamczitw5pvyvtczfdndi6cxjroaa",
+      "globalFields": [],
+      "partyFields": [
+        "cybersign:v1:party:0:field:0:Name",
+        "cybersign:v1:party:0:field:1:Contract Role",
+        "cybersign:v1:party:0:field:2:validator website",
+        "cybersign:v1:party:1:field:0:Name",
+        "cybersign:v1:party:1:field:1:Contract Role",
+        "cybersign:v1:party:1:field:2:cat"
+      ]
+    },
+    {
+      "id": "0x83b91cbf4e697e777b9f53b8f73dc7192abba118f10b3d94e99c501f78ed71ae",
+      "title": "Harmony Governor Agreement",
+      "legalContractUri": "ipfs://bafkreid3t6wuvcvpa4frfigditwbdq6temisbvd74xpowo6zin2aa5j34a",
+      "globalFields": [],
+      "partyFields": []
+    },
+    {
+      "id": "0x8abfb04f4f2f932f7042d9ba274fa5c24462985f02463bad1c0ca90056187c44",
+      "title": "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0",
+      "legalContractUri": "ipfs://bafybeifpvfwxfmobk7nhflsczqiynp3ca5urvyk3duh7s3rwptcnfzhuje",
+      "globalFields": [
+        "founderName",
+        "enterpriseName",
+        "companyName",
+        "companyType",
+        "companyJurisdiction",
+        "companyContactDetails",
+        "tokenSymbol",
+        "tokenName"
+      ],
+      "partyFields": [
+        "name",
+        "contactDetails"
+      ]
+    },
+    {
+      "id": "0x8e6ac00678801739feae79339198de6f24641049e6ea29b199aa29198eb5bbc5",
+      "title": "test contract 2",
+      "legalContractUri": "ipfs://bafkreiehq5p3hxc3t4uicalmfnemkxamczitw5pvyvtczfdndi6cxjroaa",
+      "globalFields": [],
+      "partyFields": [
+        "cybersign:v1:party:0:field:0:Name",
+        "cybersign:v1:party:0:field:1:Contract Role",
+        "cybersign:v1:party:0:field:2:validator website"
+      ]
+    },
+    {
+      "id": "0x954ea69b9d5eefda0bc5bbdf8654d9546488596527e983b276f111ae4d24dc5c",
+      "title": "Harmony Governor and Delegator Agreement",
+      "legalContractUri": "ipfs://bafkreihl2tvhdat63luw3abrlfxyxvnnms27kyk4ogvqfolicrxybhtdqm",
+      "globalFields": [],
+      "partyFields": []
+    },
+    {
+      "id": "0xa21d1a9713c935b95b9e301aafe0bc8f25c3b9652270208f4a838cb8864ca326",
+      "title": "LeXcheX Questionnaire + ToS v 1.2",
+      "legalContractUri": "ipfs://bafybeifiwg6gh5kogckgh35tvhpvfbszz4mbyn4ccktq5cqivp7zwjt5bi",
+      "globalFields": [],
+      "partyFields": [
+        "Name",
+        "Contract Role"
+      ]
+    },
+    {
+      "id": "0xa24a22626135085c706e567d935fd8ac8618632cc4f5ba0fec1f23bc87c5a9cf",
+      "title": "Accredited Investor Representations",
+      "legalContractUri": "ipfs://bafybeidolq2bbk2yq4hagakyvccxa7vua6koikui753kzylbspheylviny",
+      "globalFields": [],
+      "partyFields": [
+        "Name",
+        "Contract Role"
+      ]
+    },
+    {
+      "id": "0xa3e7f2c6a7464d9b2cd678bf6a0945a113c7abd0257632fcd14515480f4ae0a8",
+      "title": "cyberCORPs Restricted Stock Award Agreement",
+      "legalContractUri": "ipfs://bafybeigrqskj2upfb7ddnqhphy72rjy6tmlijugotimsoqshsqoavr4cnm",
+      "globalFields": [
+        "tokenStreamTotal",
+        "vestingCliffCredit",
+        "unlockingCliffCredit",
+        "vestingRate",
+        "vestingStartTime",
+        "unlockRate",
+        "unlockStartTime",
+        "repurchasePrice",
+        "paymentToken",
+        "shortStopDuration"
+      ],
+      "partyFields": [
+        "name",
+        "type"
+      ]
+    },
+    {
+      "id": "0xa69d4670c37d85984ddc75e8d32bf4ea4ac1b3875f5530ca3ee60fb3810159ba",
+      "title": "cyberCORPs Stock Option Award Agreement (Bespoke)",
+      "legalContractUri": "ipfs://bafybeiah6veghzxhphwds5miolqvnmtfd7t5nvtnyqh65rhv3kja6zxg3e",
+      "globalFields": [
+        "tokenStreamTotal",
+        "vestingCliffCredit",
+        "unlockingCliffCredit",
+        "vestingRate",
+        "vestingStartTime",
+        "unlockRate",
+        "unlockStartTime",
+        "exercisePrice",
+        "paymentToken",
+        "shortStopDuration",
+        "exerciseExpiration"
+      ],
+      "partyFields": [
+        "name",
+        "type"
+      ]
+    },
+    {
+      "id": "0xae5fe4de8c211db72bec36b59364608ad6712435b58725bbf9a3bf460c118e73",
+      "title": "cyberCORPs Equity Award Agreement",
+      "legalContractUri": "https://ipfs.io/ipfs/bafybeig6luysoemea2t7rpb5jczd7ojmt26w3ubtplyw577wp3b7ui72we",
+      "globalFields": [
+        "tokenStreamTotal",
+        "vestingCliffCredit",
+        "unlockingCliffCredit",
+        "vestingRate",
+        "vestingStartTime",
+        "unlockRate",
+        "unlockStartTime"
+      ],
+      "partyFields": [
+        "name",
+        "type"
+      ]
+    },
+    {
+      "id": "0xaf3867c3bb163cb6ed6e79c7941ec6b5cd5cda9c865fc8a313d7ec955b712326",
+      "title": "Test",
+      "legalContractUri": "ipfs://bafkreidq6tlyw4wlmlg6h43pazy2qrzcommphuv4ilxlrf2cydl2n5vmem",
+      "globalFields": [
+        "Corp Name"
+      ],
+      "partyFields": [
+        "Name"
+      ]
+    },
+    {
+      "id": "0xb2e2174bf095a9b72d4353526c140cd57597314802688b76c5bed244e2b0ad9e",
+      "title": "cyberCORPs Stock Option Award Agreement",
+      "legalContractUri": "ipfs://bafybeiah6veghzxhphwds5miolqvnmtfd7t5nvtnyqh65rhv3kja6zxg3e",
+      "globalFields": [
+        "tokenStreamTotal",
+        "vestingCliffCredit",
+        "unlockingCliffCredit",
+        "vestingRate",
+        "vestingStartTime",
+        "unlockRate",
+        "unlockStartTime",
+        "exercisePrice",
+        "paymentToken",
+        "shortStopDuration"
+      ],
+      "partyFields": [
+        "name",
+        "type"
+      ]
+    },
+    {
+      "id": "0xd716d270a26cc4d20d8af70fcf38c78c3911fc5668b7b6814fcd11742dc1b766",
+      "title": "test",
+      "legalContractUri": "ipfs://bafybeicqjfzf64hrhax7tbuimwlsnkca4ejzgv75kfy43xtua3iomex6ce",
+      "globalFields": [],
+      "partyFields": [
+        "Name"
+      ]
+    },
+    {
+      "id": "0xdbf48271facb27974d9c35874969cb930df7c085d5aff78a1da5df3f45e81f0d",
+      "title": "MetaDAO Futarchy Governance SPC - SegCo combined - Credit Facility Operator v 1.0",
+      "legalContractUri": "ipfs://bafybeigtgeoj5skx5vienw3hfegxfavwn6sn3omw4gx6gdsdoo3ioexqye",
+      "globalFields": [
+        "founderName",
+        "enterpriseName",
+        "companyName",
+        "companyType",
+        "companyJurisdiction",
+        "companyContactDetails",
+        "tokenSymbol",
+        "tokenName",
+        "opcoName",
+        "opcoJurisdiction"
+      ],
+      "partyFields": [
+        "name",
+        "contactDetails"
+      ]
+    },
+    {
+      "id": "0xe0b055536bfa245612f99568c3d8591d4a8b7db0415e49e4b0f31bee6b771c01",
+      "title": "Harmony Governor and Delegator Agreement",
+      "legalContractUri": "ipfs://bafkreig335oxj37i5giq76vberxevnchkbctzhisyxfxttqxaynq5cih3q",
+      "globalFields": [],
+      "partyFields": []
+    },
+    {
+      "id": "0xf6abc7e8e8c31378e0766d7b6d9276be66239be0db3182e135f13db64b85bb78",
+      "title": "Harmony Governor and Delegator Agreement",
+      "legalContractUri": "ipfs://bafkreihh7pyokxxe7bmplxumhkzfq3ut4lqniiddprldja7sxgcym5ctne",
+      "globalFields": [
+        "Compensation Pool",
+        "Compensation Period",
+        "Node Sunset Start"
+      ],
+      "partyFields": [
+        "cybersign:v1:party:0:field:0:Name",
+        "cybersign:v1:party:0:field:1:Contract Role"
+      ]
+    }
+  ],
+  "discovery": {
+    "event": "TemplateCreated(bytes32,string,string,string[],string[])",
+    "fromBlock": 0,
+    "toBlock": 53290002,
+    "eventCount": 87,
+    "eventSource": "Base Blockscout logs API (browser read)",
+    "exportedAtUtc": "2026-10-30T14:24:17.694966+00:00",
+    "lastCreation": {},
+    "inventoryFile": "script/res/base-template-events.json",
+    "inventorySha256": "febe24c614e4b133af5fe6d634efc1ccb562d2f28cefc224c184cf2e27530531",
+    "sourceUrl": "https://base.blockscout.com/api?module=logs&action=getLogs&fromBlock=0&toBlock=53290002&address=0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134&topic0=0x6f64e70baf61c385f10ebfcb33580d352fa6b8112dbcfdf50d0ce8f004a74416"
+  },
+  "sourceTemplateCount": 87,
+  "sourceManifest": "script/res/base-templates.json",
+  "sourceManifestSha256": "bf3d3f20d0a45661977fb085920b6d5e143e3c466b87e0da53eb801a32917832",
+  "destinationAudit": {
+    "targetChainId": 4663,
+    "targetRegistry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+    "targetBlock": 101773759,
+    "targetBlockHash": "0xc5422339fbe16ec951e16026d3e4e634fa2d1cf1330cb1904ca8c93ada6ba125",
+    "matching": [],
+    "missing": [
+      "0x0000000000000000000000000000000000000000000000000000000000000002",
+      "0x0000000000000000000000000000000000000000000000000000000000000004",
+      "0x0000000000000000000000000000000000000000000000000000000000000014",
+      "0x0000000000000000000000000000000000000000000000000000000000000015",
+      "0x0000000000000000000000000000000000000000000000000000000000000016",
+      "0x0000000000000000000000000000000000000000000000000000000000000017",
+      "0x0000000000000000000000000000000000000000000000000000000000000018",
+      "0x0000000000000000000000000000000000000000000000000000000000000019",
+      "0x000000000000000000000000000000000000000000000000000000000000001a",
+      "0x000000000000000000000000000000000000000000000000000000000000001b",
+      "0x000000000000000000000000000000000000000000000000000000000000001e",
+      "0x000000000000000000000000000000000000000000000000000000000000001f",
+      "0x0000000000000000000000000000000000000000000000000000000000000020",
+      "0x0000000000000000000000000000000000000000000000000000000000000021",
+      "0x0000000000000000000000000000000000000000000000000000000000000022",
+      "0x0000000000000000000000000000000000000000000000000000000000000023",
+      "0x0000000000000000000000000000000000000000000000000000000000000032",
+      "0x0000000000000000000000000000000000000000000000000000000000000033",
+      "0x0000000000000000000000000000000000000000000000000000000000000034",
+      "0x0000000000000000000000000000000000000000000000000000000000000035",
+      "0x0000000000000000000000000000000000000000000000000000000000000036",
+      "0x0000000000000000000000000000000000000000000000000000000000000037",
+      "0x0000000000000000000000000000000000000000000000000000000000000038",
+      "0x0000000000000000000000000000000000000000000000000000000000000039",
+      "0x0000000000000000000000000000000000000000000000000000000000000190",
+      "0x0fee8b55455433b318c2822dcf9dfe53fa2c35d0be977eb26bba334d99328908",
+      "0x15e227f48109aa913c7e89b6eb8706c895df77b70689cf7cf60b7498813d4719",
+      "0x192849aa2490d7e3df33ec373f87b74c92ce2899d0f74c322a687c9efed1a845",
+      "0x1a7cf1e15aa5d042d738f857871aa34149fa29cc7404e29b41116f237a4820da",
+      "0x29a84df4528409308723242993cf3347a285f8617cc1b4ce0f5ecc60c615242a",
+      "0x2ea6c7f4dfc576e74f4e5d98ed75c5579224bc6b0fe4861f696bd4734e88c6a7",
+      "0x4142565f736166655f7400000000000000000000000000000000000000000000",
+      "0x419412d2908fe3853b7e75383a3ad8eab191f9ff2b5a626a7a476a3c52b9d337",
+      "0x4dbb62e56a8a4ef98e1274329440fae54ebb8a9327469a7725ac53e43d574ca7",
+      "0x562cb32ffa91cbce89b2b3016dbbdbf0b7f002b86243ad438e73a2ef7ce8828c",
+      "0x5b68f12cdf593412d3a76d1c088ebd96b55d475e839e7c072ee694d2343eefc5",
+      "0x6163655f736166655f726567645f763100000000000000000000000000000000",
+      "0x6163655f73616665763100000000000000000000000000000000000000000000",
+      "0x6574686f735f7361667465000000000000000000000000000000000000000000",
+      "0x67ef1fc0ca03d9da0681a07f6c22e92f9c1e8d71af19a37f841e9709b83e7fd7",
+      "0x68af56e9933629fd8d8bb9048787a54e549e6ad14447dc1712d097e97eb42e12",
+      "0x6d6c785f736166655f7265675f645f76315f3300000000000000000000000000",
+      "0x6d6c785f736166655f7265675f645f76315f3400000000000000000000000000",
+      "0x6d6c785f736166655f7265675f645f76315f3500000000000000000000000000",
+      "0x6d6c785f736166655f7265675f735f76315f3300000000000000000000000000",
+      "0x6d6c785f736166655f7265675f735f76315f3400000000000000000000000000",
+      "0x6d6c785f736166655f7265675f735f76315f3500000000000000000000000000",
+      "0x6d6c785f736166655f74775f7265675f645f76315f3300000000000000000000",
+      "0x6d6c785f736166655f74775f7265675f645f76315f3400000000000000000000",
+      "0x6d6c785f736166655f74775f7265675f645f76315f3500000000000000000000",
+      "0x6d6c785f736166655f74775f7265675f735f76315f3300000000000000000000",
+      "0x6d6c785f736166655f74775f7265675f735f76315f3400000000000000000000",
+      "0x6d6c785f736166655f74775f7265675f735f76315f3500000000000000000000",
+      "0x6d6c785f736166745f7265675f645f76315f3300000000000000000000000000",
+      "0x6d6c785f736166745f7265675f645f76315f3400000000000000000000000000",
+      "0x6d6c785f736166745f7265675f645f76315f3500000000000000000000000000",
+      "0x6d6c785f736166745f7265675f735f76315f3300000000000000000000000000",
+      "0x6d6c785f736166745f7265675f735f76315f3400000000000000000000000000",
+      "0x6d6c785f736166745f7265675f735f76315f3500000000000000000000000000",
+      "0x6d6c785f73616674655f7265675f645f76315f33000000000000000000000000",
+      "0x6d6c785f73616674655f7265675f645f76315f34000000000000000000000000",
+      "0x6d6c785f73616674655f7265675f645f76315f35000000000000000000000000",
+      "0x6d6c785f73616674655f7265675f735f76315f33000000000000000000000000",
+      "0x6d6c785f73616674655f7265675f735f76315f34000000000000000000000000",
+      "0x6d6c785f73616674655f7265675f735f76315f35000000000000000000000000",
+      "0x702be0007e89fd55edef9e8d2b3ad1519a3b10afa67bf37348f470abe371c042",
+      "0x706f6c617269735f736166740000000000000000000000000000000000000000",
+      "0x74656d706c2e66756e5f73616674000000000000000000000000000000000000",
+      "0x7cbc9ad4b274ba3cdc2c43a6b6fec427c4df0b3b6a8e868bcddf9302edcf7ae3",
+      "0x7cc9c8dd9af596efe429f9302c8fb295a7e868db595f28ef164a87447137d978",
+      "0x7fe58d4732321b37136993f9af46bc081c198e4bc5034003ada386b8f469e096",
+      "0x83b91cbf4e697e777b9f53b8f73dc7192abba118f10b3d94e99c501f78ed71ae",
+      "0x8abfb04f4f2f932f7042d9ba274fa5c24462985f02463bad1c0ca90056187c44",
+      "0x8e6ac00678801739feae79339198de6f24641049e6ea29b199aa29198eb5bbc5",
+      "0x954ea69b9d5eefda0bc5bbdf8654d9546488596527e983b276f111ae4d24dc5c",
+      "0xa21d1a9713c935b95b9e301aafe0bc8f25c3b9652270208f4a838cb8864ca326",
+      "0xa24a22626135085c706e567d935fd8ac8618632cc4f5ba0fec1f23bc87c5a9cf",
+      "0xa3e7f2c6a7464d9b2cd678bf6a0945a113c7abd0257632fcd14515480f4ae0a8",
+      "0xa69d4670c37d85984ddc75e8d32bf4ea4ac1b3875f5530ca3ee60fb3810159ba",
+      "0xae5fe4de8c211db72bec36b59364608ad6712435b58725bbf9a3bf460c118e73",
+      "0xaf3867c3bb163cb6ed6e79c7941ec6b5cd5cda9c865fc8a313d7ec955b712326",
+      "0xb2e2174bf095a9b72d4353526c140cd57597314802688b76c5bed244e2b0ad9e",
+      "0xd716d270a26cc4d20d8af70fcf38c78c3911fc5668b7b6814fcd11742dc1b766",
+      "0xdbf48271facb27974d9c35874969cb930df7c085d5aff78a1da5df3f45e81f0d",
+      "0xe0b055536bfa245612f99568c3d8591d4a8b7db0415e49e4b0f31bee6b771c01",
+      "0xf6abc7e8e8c31378e0766d7b6d9276be66239be0db3182e135f13db64b85bb78"
+    ],
+    "conflicts": [
+      {
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "baseDefinition": {
+          "id": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "title": "SAFE",
+          "legalContractUri": "https://ipfs.io/ipfs/bafybeig6hszt562xsvcyumiph4kz5u5stgecpusbjw6hiycgxth42afezq",
+          "globalFields": [
+            "purchaseAmount",
+            "postMoneyValuationCap",
+            "expirationTime",
+            "governingJurisdiction",
+            "disputeResolution"
+          ],
+          "partyFields": [
+            "name",
+            "evmAddress",
+            "contactDetails",
+            "investorType",
+            "investorJurisdiction"
+          ]
+        },
+        "preservedRobinhoodDefinition": {
+          "title": "SAFE",
+          "legalContractUri": "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi",
+          "globalFields": [
+            "purchaseAmount",
+            "postMoneyValuationCap",
+            "expirationTime",
+            "governingJurisdiction",
+            "disputeResolution"
+          ],
+          "partyFields": [
+            "name",
+            "evmAddress",
+            "contactDetails",
+            "investorType",
+            "investorJurisdiction"
+          ]
+        },
+        "preservedDefinitionHash": "0xe20586f9eff6be632c856c53ce90c579e8af316ea18a7bdea35d3fc152f95867"
+      }
+    ]
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "observedAtUtc": "2026-10-31T02:24:40.957652+00:00",
+  "chainId": 4663,
+  "forkBlock": 102212288,
+  "forkBlockHash": "0x034dd487e4e8ab67270dbd2587f123fcbafa79c14eb2d61c1ef161e73d175b79",
+  "sourceRevision": "b59269beea86f7ccb14c516361140519c8da8f2c",
+  "testedTree": "local rehearsal script/test additions; src unchanged",
+  "exitCode": 0,
+  "passed": [
+    "test_ExpiredConfigRefuses()",
+    "test_InsufficientSwapBudgetRefusesBeforeSpending()",
+    "test_PlatformPayoutCollisionRefusesBeforeSwap()",
+    "test_RealSwapToOneCentSafeAndIdempotentRerun()",
+    "test_ResumeAfterSwapDoesNotSwapAgain()",
+    "test_SameSignerRefuses()",
+    "test_UnfundedInvestorRefuses()",
+    "test_UnsupportedTemplateRefusesBeforeSwap()",
+    "test_WrongChainRefuses()"
+  ],
+  "failed": [],
+  "skipped": [],
+  "liveTransactionsSubmitted": false,
+  "realKeysUsed": false,
+  "usdgMockFunding": false,
+  "metadataValidated": true,
+  "swapEthSpentWei": [
+    "4462287569119"
+  ],
+  "command": [
+    "forge",
+    "test",
+    "--match-path",
+    "test/RobinhoodCentSafeScriptTest.t.sol",
+    "--offline",
+    "--use",
+    "0.8.28",
+    "--evm-version",
+    "cancun",
+    "--threads",
+    "1",
+    "-R",
+    "@openzeppelin/contracts/=dependencies/openzeppelin-contracts/contracts/",
+    "-R",
+    "@openzeppelin/contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/",
+    "-vvv"
+  ],
+  "sha256": {
+    "script/robinhood-cent-safe.s.sol": "1048d27deaab71f5c7784878526bba95eac1abb618ad5aaa86a577893dc3642b",
+    "test/RobinhoodCentSafeScriptTest.t.sol": "41d8d85740e82c5e219fbbeaa1e847a04d8210278982ac8438bd4a36928e1c28",
+    "script/test-robinhood-cent-safe.py": "effad4693ffcc8b541f542e14f3bf8532ab9aefb42271d160eaf0826c36365c3",
+    "out/robinhood-cent-safe/fork.log": "6188262ad2310ea62e08f9df8647411220293fa49e98d783c5bc7d198969bee5"
+  }
+}

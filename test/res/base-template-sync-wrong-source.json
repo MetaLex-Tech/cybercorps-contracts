@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "sourceChainId": 1,
+  "sourceRegistry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+  "sourceBlock": 53290002,
+  "sourceBlockHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "targetChainId": 4663,
+  "targetRegistry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+  "templateCount": 0,
+  "templates": []
+}

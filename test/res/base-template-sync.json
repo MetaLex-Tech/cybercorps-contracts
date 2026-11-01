@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "sourceChainId": 8453,
+  "sourceRegistry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+  "sourceBlock": 53290002,
+  "sourceBlockHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "targetChainId": 4663,
+  "targetRegistry": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+  "templateCount": 2,
+  "templates": [
+    {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000020",
+      "title": "Fixture SAFE",
+      "legalContractUri": "IPFS://CaseSensitive-CID",
+      "globalFields": ["purchaseAmount", "valuationCap"],
+      "partyFields": ["name", "evmAddress"]
+    },
+    {
+      "id": "0x6163655f73616665763100000000000000000000000000000000000000000000",
+      "title": "Fixture ACE SAFE",
+      "legalContractUri": "ipfs://Different-CID",
+      "globalFields": [],
+      "partyFields": ["name"]
+    }
+  ]
+}

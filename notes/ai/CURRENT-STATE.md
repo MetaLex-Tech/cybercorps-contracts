@@ -19,6 +19,14 @@ have one. Do not assume another checkout's files are present here.
 
 ## Shared tasks
 
+- [One-cent on-chain SAFE rehearsal preparation](tasks/robinhood-onchain-safe-rehearsal-20261030.md): operator-run ETH→0.01 USDG→company/SAFE round→investor LET script and PowerShell wrapper ready. 9 real-route fork checks pass with generated signers and ETH funding only; distinct officer/investor environment keys required. No live transactions or operator-key use by this task.
+
+- [Robinhood live-template acceptance](tasks/robinhood-live-template-acceptance-20261030.md): fresh block 102202000 confirms 86/86 exact deployed templates and unchanged legacy ID 1. All 3 fixture-free lifecycle checks pass: company/SAFE round, signed USDG investment, allocation/finalized investor SAFE LET, rendering and refusal/refund paths. No live submissions or deployment-key use.
+
+- [Base-to-Robinhood template synchronization](tasks/robinhood-base-template-sync-20261030.md): October 30 complete Base snapshot contains 87 definitions; deployment plan selects 86 missing IDs and preserves Robinhood's conflicting immutable legacy SAFE ID 1. 17 checks pass, including full fork import, exact matching/rerun and signed USDG SAFE LET issuance. Script/runbook ready; no live registrations.
+
+- [Robinhood post-v5 acceptance](tasks/robinhood-post-v5-acceptance-20261030.md): October 30 user-reported final Safe execution; 23 resulting state checks pass against the 22-call operator batch. Critical addresses match Base. Deployed-code fork formation/SAFE issuance succeeds with a local copy of Base template 32, which is absent on Robinhood; production template registration remains. Robinhood 3 tests pass; Base control 2 pass, 1 expected skip. Local working-tree evidence; no live transactions.
+
 - [Robinhood final v5 synchronization/preparation](tasks/robinhood-final-v5-20261030.md): October 30 merge of develop `7ce4e1c` into the Robinhood branch; user chose existing shared kill switch. 98 selected checks passed, including full final-stage fork rehearsal; live release/review/signing gates remain separate.
 
 - [Robinhood intermediate deployment setup](tasks/robinhood-intermediate-20261028.md): October 28 operator deployment of 32 historical targets confirmed by RPC. Explorer source available: 22 Exact Match, 10 Similar Match. Separate 14-call Safe batch execution unconfirmed; colleague owns badge/secondary deployment on 4663; final-stage handoff/review/integration gates pending.

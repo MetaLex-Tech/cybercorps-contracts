@@ -1,0 +1,1331 @@
+{
+  "observedAtUtc": "2026-10-30T13:57:39.034517+00:00",
+  "sourceRevision": "b59269beea86f7ccb14c516361140519c8da8f2c",
+  "batchSha256": "fd682b68fd20367f4299f91ee2b075f95bc00994078fabbdf3b2eba5b934413e",
+  "submittedTransactions": false,
+  "chains": {
+    "robinhood": {
+      "chainId": 4663,
+      "blockNumber": 101773759,
+      "blockHash": "0xc5422339fbe16ec951e16026d3e4e634fa2d1cf1330cb1904ca8c93ada6ba125",
+      "blockTimestamp": 1793368189,
+      "contracts": {
+        "coreAuth": {
+          "address": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "codeBytes": 2188,
+          "codeHash": "0x3914db9567c13f35875b0f803634f8702915eba9b4dfaa225ce349d04896cc87",
+          "implementation": "0x0000000000000000000000000000000000000000"
+        },
+        "corporateFactory": {
+          "address": "0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0xe2868d47f70ae14689d903661e5729ca5e37a634"
+        },
+        "singleFactory": {
+          "address": "0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x839da23fbb14fea0ef89e0b524455421383b02ce"
+        },
+        "issuanceFactory": {
+          "address": "0xD353972D7955F421d94d0eA8c42c88c417F7155A",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x73f720866cb632023018524e5b738201adfcb01c"
+        },
+        "dealFactory": {
+          "address": "0x3982b078f2ac306219c9540Ebc908360a960C251",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0xa0714923988e5bdd0b72ecd7375471aa3045e689"
+        },
+        "roundFactory": {
+          "address": "0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x6af59f8d0656fb1da646fbdc1fa582165c143ef8"
+        },
+        "registry": {
+          "address": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0xeabeda8e939d570456ae2baf8bf2dd32c3810256"
+        },
+        "uriBuilder": {
+          "address": "0x5500c095ea7dE6F8a5E15949e24B80604cc670A3",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0x44f71d3a279fa89adfadcb9838e25ea34b8a519f"
+        },
+        "lexAuth": {
+          "address": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "codeBytes": 2188,
+          "codeHash": "0x3914db9567c13f35875b0f803634f8702915eba9b4dfaa225ce349d04896cc87",
+          "implementation": "0x0000000000000000000000000000000000000000"
+        },
+        "lex": {
+          "address": "0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0x25077c9c742b64ee5498bf3b6630761221bfdbb1"
+        },
+        "lexMinter": {
+          "address": "0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0xd6d889becbd19bfdfb43ac5df6d64b0028cb5247"
+        },
+        "badgeAuth": {
+          "address": "0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d",
+          "codeBytes": 2188,
+          "codeHash": "0x435f080683189a1856dabcb55f1a13488939783994e90d25c5fa9f81c4e4e59a",
+          "implementation": "0x0000000000000000000000000000000000000000"
+        },
+        "badge": {
+          "address": "0x114664773Ba721a6AA43890d5FDE7939aF37618F",
+          "codeBytes": 130,
+          "codeHash": "0x63c04ff22572238e25a05aa8a5bba88e97f1700e50ab822cf36b497325bc4edd",
+          "implementation": "0xc9ecfcad8792ff89c79dc1e3417abaf146778310"
+        },
+        "safeExtension": {
+          "address": "0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x1af1d74c53fee73f1ca29ba764b201ae0e1b4c27"
+        },
+        "safeExtensionV3": {
+          "address": "0x740003076c9F16c4a364AE07f3770FB77899299b",
+          "codeBytes": 130,
+          "codeHash": "0x63c04ff22572238e25a05aa8a5bba88e97f1700e50ab822cf36b497325bc4edd",
+          "implementation": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e"
+        },
+        "aceSafeExtensionV3": {
+          "address": "0x9a8ef946F18C4296e50f8DF0C97b5Cf5d1b5eCD2",
+          "codeBytes": 130,
+          "codeHash": "0x63c04ff22572238e25a05aa8a5bba88e97f1700e50ab822cf36b497325bc4edd",
+          "implementation": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e"
+        },
+        "killSwitch": {
+          "address": "0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435",
+          "codeBytes": 2067,
+          "codeHash": "0xfd685fedd1b29d2b3570ea379dc5c39b682154344b5181f5b27ff08063ee1e47",
+          "implementation": "0x0000000000000000000000000000000000000000"
+        },
+        "saftExtensionV2": {
+          "address": "0x37c2A0e801e569e01f0972186aF4DB01409e92c1",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x3157f1d053926bb0f2c10542f994f4102b359bce"
+        },
+        "safteExtensionV2": {
+          "address": "0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x911ef683c052f63fea9f0a3cd638262609c07e07"
+        },
+        "tokenWarrantExtensionV2": {
+          "address": "0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x9974c6f77c848f32a384df89c896bcdbe2519413"
+        },
+        "shareExtension": {
+          "address": "0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x0abd73115b541ba3c81e3134dd0ad7602b9429e8"
+        },
+        "shareExtensionV3": {
+          "address": "0xa21C434379CC44bfeD6e3c1342e49951804ec30f",
+          "codeBytes": 130,
+          "codeHash": "0x63c04ff22572238e25a05aa8a5bba88e97f1700e50ab822cf36b497325bc4edd",
+          "implementation": "0x3329182047d5e2c19a7d55b2c96d8379374c87aa"
+        }
+      },
+      "state": {
+        "corporateFactory.issuanceManagerFactory()": "0xd353972d7955f421d94d0ea8c42c88c417f7155a",
+        "corporateFactory.cyberCorpSingleFactory()": "0xbe0d3d13aa07501beac9b72de9e9292e66c7a5c4",
+        "corporateFactory.dealManagerFactory()": "0x3982b078f2ac306219c9540ebc908360a960c251",
+        "corporateFactory.roundManagerFactory()": "0xc9d5d0dedd124f9351e5880469f25ab41869aeb9",
+        "corporateFactory.stable()": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+        "corporateFactory.lexchexAuth()": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+        "corporateFactory.registryAddress()": "0xa9e808b8ecbb60bb19abf026b5b863215bc4c134",
+        "corporateFactory.uriBuilder()": "0x5500c095ea7de6f8a5e15949e24b80604cc670a3",
+        "singleFactory.ref": "0xf9c62753d4b849713f42cd7e735b33ec86b92258",
+        "issuanceFactory.ref": "0x1ad870eb28b15283c3a52db6d688526665990f38",
+        "dealFactory.ref": "0xe835b6030ffc5ba43219f7dd310dce1f4731c739",
+        "roundFactory.ref": "0xb7a923881b3c715993be8e1d7d243afd1967afd1",
+        "issuanceFactory.getCyberCertPrinterRefImplementation()": "0x487ed0d21e489d66e647fb4a55ce20daadaf7920",
+        "issuanceFactory.getCyberScripRefImplementation()": "0x7924dad9707df68ce41d44016950b6e9e6e82493",
+        "dealFactory.getDefaultFeeRatio()": 50,
+        "dealFactory.getSecondaryFeeRatio()": 500,
+        "roundFactory.getDefaultFeeRatio()": 50,
+        "roundFactory.getPlatformPayable()": "0x68ab3f79622cbe74c9683aa54d7e1bbdcae8003c",
+        "uriBuilder.imageBuilder()": "0x34a00d92735e8e02b3651bbae01a4297584e0b8d",
+        "killSwitch.metalexAdmin()": "0x68ab3f79622cbe74c9683aa54d7e1bbdcae8003c",
+        "killSwitch.legionAdmin()": "0x5ff4e90efa2b88cf3ca92d63d244a78a88219abf",
+        "killSwitch.killed()": 0,
+        "badge.AUTH()": "0x197333fc7a828e623fbfcf88ecdc976136f0cf1d",
+        "coreAuth.safeRole": 200,
+        "lexAuth.safeRole": 99,
+        "badgeAuth.safeRole": 99,
+        "badge.minterKeys": 65539,
+        "registry.zkpassportConfig": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000001d000001000efd9a6371f4d90bb8920d5431c0d8000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000106170702e6d6574616c65782e74656368000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000017637962657261677265656d656e742d70617373706f7274000000000000000000",
+        "paymentToken": {
+          "name": "Global Dollar",
+          "symbol": "USDG",
+          "decimals": 6
+        },
+        "roundFactory.paymentTokenWhitelistedForLexchexMint": 1
+      },
+      "implementations": {
+        "corporateFactory": {
+          "address": "0xe2868d47f70ae14689d903661e5729ca5e37a634",
+          "codeBytes": 20221,
+          "codeHash": "0x745afb5442c223c1405baca602fd248b7814ea4087ab4511dd77589ffae4f42a",
+          "normalizedCodeHash": "0xdd6fa2b816155e6d613f087acb92a1fe5ab3efb95b08f89f956f9b2a595245cb"
+        },
+        "singleFactory": {
+          "address": "0x839da23fbb14fea0ef89e0b524455421383b02ce",
+          "codeBytes": 4131,
+          "codeHash": "0xd726c131e52b016cc33f14e0777adebdf26dedafbb7938e61f058e62d7dac8f0",
+          "normalizedCodeHash": "0x422cf3d8e671ebc57653f00e0de5f3ef259c60249164b5c91b7fc3729e29dc34"
+        },
+        "issuanceFactory": {
+          "address": "0x73f720866cb632023018524e5b738201adfcb01c",
+          "codeBytes": 5400,
+          "codeHash": "0xc6c0d1ff7fa8fe6b21afc4bd99e741aae55191bae9bf2b000bc7e9ae4cca0af3",
+          "normalizedCodeHash": "0x8d4e05dfff234f1703220fd8f34b8cba8c63c78dc8ac3747f2ac25938ce12ec3"
+        },
+        "dealFactory": {
+          "address": "0xa0714923988e5bdd0b72ecd7375471aa3045e689",
+          "codeBytes": 7074,
+          "codeHash": "0x1ee83c46ec49a62274d5b266f5c392faa06503ed12bfcfb74c990d237f3a77f4",
+          "normalizedCodeHash": "0x38b2990b109a73567b69628102633df0fd2429228ab6196469f0fedf826b095d"
+        },
+        "roundFactory": {
+          "address": "0x6af59f8d0656fb1da646fbdc1fa582165c143ef8",
+          "codeBytes": 6097,
+          "codeHash": "0xb21e11ba36a112ef1856b73a00a04621560e6c95e6cf3ad2c444798036f98200",
+          "normalizedCodeHash": "0x2abc3d31ec6a036aad37461cbbd01f6c421cf110a56818b95465d99923b45551"
+        },
+        "registry": {
+          "address": "0xeabeda8e939d570456ae2baf8bf2dd32c3810256",
+          "codeBytes": 22942,
+          "codeHash": "0xd515d31e8345d79d897e86e61a7854a31d4cafff5b2ab31c2c1d696a830f3409",
+          "normalizedCodeHash": "0xed7340e62698f07d9e38197c5a92aef7b7b051f1df353b20f1c2420a9f2b2a75"
+        },
+        "uriBuilder": {
+          "address": "0x44f71d3a279fa89adfadcb9838e25ea34b8a519f",
+          "codeBytes": 21721,
+          "codeHash": "0xc6991aea21b4a801354c236faa97ebb052e0d1334e297fedac2bcaaeebf656ba",
+          "normalizedCodeHash": "0x40608975dae587d6017bd5f327759ae6198839769c547999c7380e8858663c0c"
+        },
+        "lex": {
+          "address": "0x25077c9c742b64ee5498bf3b6630761221bfdbb1",
+          "codeBytes": 18144,
+          "codeHash": "0x85568057450be194414c732c26a1d81e5eea4023d8f911a289e697bf4d5d51f6",
+          "normalizedCodeHash": "0x33d5c4db808a949a659f4dc036f4bd863c5c68f0f2a84db15a928246a5b50d50"
+        },
+        "lexMinter": {
+          "address": "0xd6d889becbd19bfdfb43ac5df6d64b0028cb5247",
+          "codeBytes": 11430,
+          "codeHash": "0x50097f5043aba4c8ae45c910875d2c35523a6748d39e90a6deb767420791244f",
+          "normalizedCodeHash": "0x707ac4325085f4729d68ba6e3df82d0c15ef21a84aca3b117ea911a4239432e8"
+        },
+        "badge": {
+          "address": "0xc9ecfcad8792ff89c79dc1e3417abaf146778310",
+          "codeBytes": 19885,
+          "codeHash": "0xbaf2a58f443b9326534c9d89d6356b386a0ce5ce49be8007f04b416036a9e62d",
+          "normalizedCodeHash": "0x9fdbf17c3359e5234bb2c6e303bfd7e0ef39262f25b3b27183d59d22506e19de"
+        },
+        "safeExtension": {
+          "address": "0x1af1d74c53fee73f1ca29ba764b201ae0e1b4c27",
+          "codeBytes": 4467,
+          "codeHash": "0xe695d240c4e56a70ed6fe2891868ac7c4ebbc4a4e4447a09eda53f296eef6e8e",
+          "normalizedCodeHash": "0x28e2e11e83c59790257c129fbe02d9f1475aa70474220290c16159b5203b2fb4"
+        },
+        "safeExtensionV3": {
+          "address": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+          "codeBytes": 6985,
+          "codeHash": "0xd727e2054491a1f4ad82af6ad82ba31068261e2f2dadba9c82b1ce9b2c21c858",
+          "normalizedCodeHash": "0xf7fe2c3444fbb40fa996a9afc067c321b0e9ec3024688dbad3246755bb7bf8e5"
+        },
+        "aceSafeExtensionV3": {
+          "address": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+          "codeBytes": 7300,
+          "codeHash": "0xad4c59469d4e2aa35e9a95270c44bc2fe374ac19c0057534a093fde515d586eb",
+          "normalizedCodeHash": "0xd7448e8795b3fb30eb24a50cdb09d16fbccfb7dad4c04eeef0a6271ebba3c559"
+        },
+        "saftExtensionV2": {
+          "address": "0x3157f1d053926bb0f2c10542f994f4102b359bce",
+          "codeBytes": 5897,
+          "codeHash": "0x2ffc83e6bfa1df11156b7bafe43f4f3d9ee304384f074e238496d28f7294a0db",
+          "normalizedCodeHash": "0x150cca3c5fb41a3ccdeb7e3a09d7fbc1a3b75b21d9034af9ee23ca39feecc820"
+        },
+        "safteExtensionV2": {
+          "address": "0x911ef683c052f63fea9f0a3cd638262609c07e07",
+          "codeBytes": 6637,
+          "codeHash": "0xa5480f6b55034334d7503f995bf8a796a4681e6310fe7e82da5768434ca1e5df",
+          "normalizedCodeHash": "0x0bfa8870f97b2504157ee01fec381a354c37e6314c7b6323f752aef9c1dfc984"
+        },
+        "tokenWarrantExtensionV2": {
+          "address": "0x9974c6f77c848f32a384df89c896bcdbe2519413",
+          "codeBytes": 6918,
+          "codeHash": "0x88c3ccc5053c9f4f60f3315b9b6c8b8add980a2c6d5f79bc622ac4a77f158c2a",
+          "normalizedCodeHash": "0x98f0c3ec2b4fd96aad34362a831d09b3195ad48f8a5baf67a2c63c290f96687a"
+        },
+        "shareExtension": {
+          "address": "0x0abd73115b541ba3c81e3134dd0ad7602b9429e8",
+          "codeBytes": 21736,
+          "codeHash": "0x9b3286ddcfe40c6a1866697a368c1ad16b24bee2a85a70296fcc73fbe011091b",
+          "normalizedCodeHash": "0xe79a18a17b1be2f9b83c6f8fbaf7c25bc9c52193b9bc1105b14642d925be6918"
+        },
+        "shareExtensionV3": {
+          "address": "0x3329182047d5e2c19a7d55b2c96d8379374c87aa",
+          "codeBytes": 23906,
+          "codeHash": "0xe3ac5f1f0e4fec0cfab60cfb454028912fb69fe8ef363ab5db0d6b045105d61b",
+          "normalizedCodeHash": "0x5a541aa3fb0581d920a05fb1f900a8f8c5b109ebdc7c07dc813a4e8ffbf4b181"
+        },
+        "singleFactory.ref": {
+          "address": "0xf9c62753d4b849713f42cd7e735b33ec86b92258",
+          "codeBytes": 16357,
+          "codeHash": "0x45814c31d687c3d5a0dae08145a9ea24cf2daead03d670565f7e8466449b8f79",
+          "normalizedCodeHash": "0xccbe5fdaaf5e439f8d565bd639162226908888beded7e54531348134450e2b28"
+        },
+        "issuanceFactory.ref": {
+          "address": "0x1ad870eb28b15283c3a52db6d688526665990f38",
+          "codeBytes": 17940,
+          "codeHash": "0xca0565e26282ea9ace1e43aad373bbc426b42c0358f45998f97ac1cbea9ae10c",
+          "normalizedCodeHash": "0xc25a32fbff521f2969d818da195051f4f06a53c1a57413aa6cf9f4b439c1a5a9"
+        },
+        "dealFactory.ref": {
+          "address": "0xe835b6030ffc5ba43219f7dd310dce1f4731c739",
+          "codeBytes": 22248,
+          "codeHash": "0x1094139b5d160110e1406b2221fc7657c1c69ce35c23233e0369e63ef103b96a",
+          "normalizedCodeHash": "0x7b1d8d43e01a1dc1446e0231e2094b0143f6fb2c505af6c27ad6c5c1bc0f5d9f"
+        },
+        "roundFactory.ref": {
+          "address": "0xb7a923881b3c715993be8e1d7d243afd1967afd1",
+          "codeBytes": 20727,
+          "codeHash": "0x0245e0ac38e2fc7d89c0c574e38e5c0ecf21ee234060abefbc58d0b47b173b39",
+          "normalizedCodeHash": "0x46c3702a6ac14897280c634b4096002ee5dd0c024fe2ca18ebe5ac3d0e4076c5"
+        },
+        "issuanceFactory.getCyberCertPrinterRefImplementation()": {
+          "address": "0x487ed0d21e489d66e647fb4a55ce20daadaf7920",
+          "codeBytes": 24288,
+          "codeHash": "0x6cb8f996906c07e0c34fc9a112daae0837ad7e4d76afcb1a937fbfabe2ea6d9f",
+          "normalizedCodeHash": "0xe8af33f17fed47274875e22745c1bb06848bf87d082c0b54edac9ade3c1c5761"
+        },
+        "issuanceFactory.getCyberScripRefImplementation()": {
+          "address": "0x7924dad9707df68ce41d44016950b6e9e6e82493",
+          "codeBytes": 11343,
+          "codeHash": "0xdbd04c75820db61bf0c85693dfef217840634234f8a7d69cbdbc61f3ed106809",
+          "normalizedCodeHash": "0x36109063d136f25ae9bbdea5eb518a52ed5ee29c43fa4380579e56aaff64842b"
+        },
+        "uriBuilder.imageBuilder()": {
+          "address": "0x34a00d92735e8e02b3651bbae01a4297584e0b8d",
+          "codeBytes": 14590,
+          "codeHash": "0x0a540046ebab91041c5576e0ef5122e44941127e8ba2a4c44b2d37373532d8d4",
+          "normalizedCodeHash": "0xbb397c1e6faef339dfef5220f2bd0b59c6a1868459d07e5cbd8880bea9b14cf2"
+        }
+      },
+      "templates": {
+        "safe_reg_s_32": {
+          "id": "0x0000000000000000000000000000000000000000000000000000000000000020",
+          "details": {
+            "rpcError": 3
+          }
+        },
+        "ace_safe_reg_d_v1": {
+          "id": "0x6163655f736166655f7265675f645f7631000000000000000000000000000000",
+          "details": {
+            "rpcError": 3
+          }
+        },
+        "ace_safev1": {
+          "id": "0x6163655f73616665763100000000000000000000000000000000000000000000",
+          "details": {
+            "rpcError": 3
+          }
+        }
+      }
+    },
+    "base": {
+      "chainId": 8453,
+      "blockNumber": 53289424,
+      "blockHash": "0xfda612a520756ef6687c97cba417d6df7640fd11019cc70b0cdf16a41c53dc74",
+      "blockTimestamp": 1793368195,
+      "contracts": {
+        "coreAuth": {
+          "address": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "codeBytes": 2188,
+          "codeHash": "0x3914db9567c13f35875b0f803634f8702915eba9b4dfaa225ce349d04896cc87",
+          "implementation": "0x0000000000000000000000000000000000000000"
+        },
+        "corporateFactory": {
+          "address": "0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0xfae7d5ee7539c7d1276810f4948373efb92a974c"
+        },
+        "singleFactory": {
+          "address": "0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x439c0e2fdf2db91759af9d14e5f0f93c813162d4"
+        },
+        "issuanceFactory": {
+          "address": "0xD353972D7955F421d94d0eA8c42c88c417F7155A",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0xda2ee152c2ccc1365cf76b94d800ee7d9c4d9425"
+        },
+        "dealFactory": {
+          "address": "0x3982b078f2ac306219c9540Ebc908360a960C251",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x73402033384f4c9a6158a68e5fd82acfe5cb7f8e"
+        },
+        "roundFactory": {
+          "address": "0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x92a74df75a4c02296af558b9e0dcd787bc35e973"
+        },
+        "registry": {
+          "address": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0x04295bc98728a972c9f3ddced5ccff5c78760f34"
+        },
+        "uriBuilder": {
+          "address": "0x5500c095ea7dE6F8a5E15949e24B80604cc670A3",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0x813470665b5ea24a0f1614c44ee33648c0b2f2c6"
+        },
+        "lexAuth": {
+          "address": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "codeBytes": 2188,
+          "codeHash": "0x3914db9567c13f35875b0f803634f8702915eba9b4dfaa225ce349d04896cc87",
+          "implementation": "0x0000000000000000000000000000000000000000"
+        },
+        "lex": {
+          "address": "0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3"
+        },
+        "lexMinter": {
+          "address": "0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960",
+          "codeBytes": 130,
+          "codeHash": "0x9fed5577f33d8256e2245117dc124ab271a5234972f6fe7c35252e9d109a79d9",
+          "implementation": "0x1bab1c9afbffd3f44a858b919b0843218f4cda6a"
+        },
+        "badgeAuth": {
+          "address": "0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d",
+          "codeBytes": 2188,
+          "codeHash": "0x435f080683189a1856dabcb55f1a13488939783994e90d25c5fa9f81c4e4e59a",
+          "implementation": "0x0000000000000000000000000000000000000000"
+        },
+        "badge": {
+          "address": "0x114664773Ba721a6AA43890d5FDE7939aF37618F",
+          "codeBytes": 130,
+          "codeHash": "0x63c04ff22572238e25a05aa8a5bba88e97f1700e50ab822cf36b497325bc4edd",
+          "implementation": "0xf2fed468afa26a9c11ba8ce5995543eb9e3b308b"
+        },
+        "safeExtension": {
+          "address": "0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0xb342b71d74327f546c428314b676ff85a0614385"
+        },
+        "safeExtensionV3": {
+          "address": "0x740003076c9F16c4a364AE07f3770FB77899299b",
+          "codeBytes": 130,
+          "codeHash": "0x63c04ff22572238e25a05aa8a5bba88e97f1700e50ab822cf36b497325bc4edd",
+          "implementation": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e"
+        },
+        "aceSafeExtensionV3": {
+          "address": "0x9a8ef946F18C4296e50f8DF0C97b5Cf5d1b5eCD2",
+          "codeBytes": 130,
+          "codeHash": "0x63c04ff22572238e25a05aa8a5bba88e97f1700e50ab822cf36b497325bc4edd",
+          "implementation": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e"
+        },
+        "killSwitch": {
+          "address": "0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435",
+          "codeBytes": 2067,
+          "codeHash": "0xb55c44ac853d7f1ca82d4d51f33cc915ed12e3dc2d97bd42065616f76c79baf2",
+          "implementation": "0x0000000000000000000000000000000000000000"
+        },
+        "saftExtensionV2": {
+          "address": "0x37c2A0e801e569e01f0972186aF4DB01409e92c1",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x6c104fe18241e6b1ab045b3ae0415d02605ce46c"
+        },
+        "safteExtensionV2": {
+          "address": "0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0xb7ea62196609fe01bfdd71bbd1722eaaf21fd84a"
+        },
+        "tokenWarrantExtensionV2": {
+          "address": "0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0x8af0ab45267195d78e3302faa05b1034607f22cc"
+        },
+        "shareExtension": {
+          "address": "0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81",
+          "codeBytes": 130,
+          "codeHash": "0x34b742de9f46169ea0668553c564f5d9b159937a1342246f58b53bd1428e69ac",
+          "implementation": "0xa9d33542c53d58875e53bb98d4c5d87027c377e6"
+        },
+        "shareExtensionV3": {
+          "address": "0xa21C434379CC44bfeD6e3c1342e49951804ec30f",
+          "codeBytes": 130,
+          "codeHash": "0x63c04ff22572238e25a05aa8a5bba88e97f1700e50ab822cf36b497325bc4edd",
+          "implementation": "0xa629ca644f0e1dfefb68f38f54f7f853bf0f238a"
+        }
+      },
+      "state": {
+        "corporateFactory.issuanceManagerFactory()": "0xd353972d7955f421d94d0ea8c42c88c417f7155a",
+        "corporateFactory.cyberCorpSingleFactory()": "0xbe0d3d13aa07501beac9b72de9e9292e66c7a5c4",
+        "corporateFactory.dealManagerFactory()": "0x3982b078f2ac306219c9540ebc908360a960c251",
+        "corporateFactory.roundManagerFactory()": "0xc9d5d0dedd124f9351e5880469f25ab41869aeb9",
+        "corporateFactory.stable()": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "corporateFactory.lexchexAuth()": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+        "corporateFactory.registryAddress()": "0xa9e808b8ecbb60bb19abf026b5b863215bc4c134",
+        "corporateFactory.uriBuilder()": "0x5500c095ea7de6f8a5e15949e24b80604cc670a3",
+        "singleFactory.ref": "0x1d85c3932ee70c74b331c80cc4a6a0fd5ffee4e2",
+        "issuanceFactory.ref": "0x2f59fc9685d4f4aa608da6a6eb73d139292c621f",
+        "dealFactory.ref": "0xc5d9bd9dc41e0da795f64b2fd003c421c476cbf7",
+        "roundFactory.ref": "0xccbbd8ebbe65bad66280462e06850c893e367fbc",
+        "issuanceFactory.getCyberCertPrinterRefImplementation()": "0xd8485c4d345cd4bc9536d071bc14a6632dba4c52",
+        "issuanceFactory.getCyberScripRefImplementation()": "0x3c0e4897a6abfa013f40e5e6d27f852a5cc60a80",
+        "dealFactory.getDefaultFeeRatio()": 30,
+        "dealFactory.getSecondaryFeeRatio()": 500,
+        "roundFactory.getDefaultFeeRatio()": 30,
+        "roundFactory.getPlatformPayable()": "0x68ab3f79622cbe74c9683aa54d7e1bbdcae8003c",
+        "uriBuilder.imageBuilder()": "0x23c8be24709c04e7eb45d858c4dd84e8ec494be0",
+        "killSwitch.metalexAdmin()": "0x68ab3f79622cbe74c9683aa54d7e1bbdcae8003c",
+        "killSwitch.legionAdmin()": "0x5ff4e90efa2b88cf3ca92d63d244a78a88219abf",
+        "killSwitch.killed()": 0,
+        "badge.AUTH()": "0x197333fc7a828e623fbfcf88ecdc976136f0cf1d",
+        "coreAuth.safeRole": 200,
+        "lexAuth.safeRole": 99,
+        "badgeAuth.safeRole": 99,
+        "badge.minterKeys": 65539,
+        "registry.zkpassportConfig": {
+          "rpcError": 3
+        },
+        "paymentToken": {
+          "name": "USD Coin",
+          "symbol": "USDC",
+          "decimals": 6
+        },
+        "roundFactory.paymentTokenWhitelistedForLexchexMint": 1
+      },
+      "implementations": {
+        "corporateFactory": {
+          "address": "0xfae7d5ee7539c7d1276810f4948373efb92a974c",
+          "codeBytes": 20221,
+          "codeHash": "0x05e5c1a1ebfaa41aba65959c911976be1fd54b7e26754ae6364dea9df4600be5",
+          "normalizedCodeHash": "0xf56cc4b9dd6377d86977b09a69f8441f2931c082450a43199e56113afb9a843f"
+        },
+        "singleFactory": {
+          "address": "0x439c0e2fdf2db91759af9d14e5f0f93c813162d4",
+          "codeBytes": 4131,
+          "codeHash": "0xe0127d352542807c7445f108e1de2878f63499af4d4013f57a83b4b1a361e082",
+          "normalizedCodeHash": "0x4e7ac1d0c1bc293fcdea169cbb81a32545b5ceea6dbb9f133cc24b7d99460cbd"
+        },
+        "issuanceFactory": {
+          "address": "0xda2ee152c2ccc1365cf76b94d800ee7d9c4d9425",
+          "codeBytes": 5400,
+          "codeHash": "0xf865d9317e7e91ab744361fb8d825029ea1109bc84572223c4d53f65cd1e7042",
+          "normalizedCodeHash": "0xd57f96980dbec31a42c30a2fc3d8f6478f90567acacddb8072389d3c9abc861b"
+        },
+        "dealFactory": {
+          "address": "0x73402033384f4c9a6158a68e5fd82acfe5cb7f8e",
+          "codeBytes": 7074,
+          "codeHash": "0x1d9c9804f0a41d48958d57f8df5d1b74bc2fac6d4e1d8c39d28defe14bde70eb",
+          "normalizedCodeHash": "0x0a118e0b09784753da98c535397492eb99d8b2073809b6766d502487343afb4d"
+        },
+        "roundFactory": {
+          "address": "0x92a74df75a4c02296af558b9e0dcd787bc35e973",
+          "codeBytes": 6097,
+          "codeHash": "0xf300bef55295e0070b2f4f762351ef5e8214196a8563e32c50be18627c86fa1b",
+          "normalizedCodeHash": "0xb1b042089dc3a57ac26cc72d6ee2835b562fe59a9971efd5771ff8f1cf087f44"
+        },
+        "registry": {
+          "address": "0x04295bc98728a972c9f3ddced5ccff5c78760f34",
+          "codeBytes": 24338,
+          "codeHash": "0xe0b97104613d8089c24e5fc62cd686b4316ade5c1b985323552f5107265e9e54",
+          "normalizedCodeHash": "0x372f541b12251c4bf268f8cdc3d896c7c1fea4797299c35fc267a71a24c54872"
+        },
+        "uriBuilder": {
+          "address": "0x813470665b5ea24a0f1614c44ee33648c0b2f2c6",
+          "codeBytes": 21670,
+          "codeHash": "0xb77e66673c4f0cb2b3145d33307f901acb6eb216571dd624baf9484746caeed2",
+          "normalizedCodeHash": "0x32e2092d3c0153e4cc52ee08a8505b29f675cda3d32a4f7d6c42a3591b0da394"
+        },
+        "lex": {
+          "address": "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3",
+          "codeBytes": 18144,
+          "codeHash": "0xb9e5dd829523b332e840a54d28a02b8f1596a3273c157501555e04e52bfeb736",
+          "normalizedCodeHash": "0x33d5c4db808a949a659f4dc036f4bd863c5c68f0f2a84db15a928246a5b50d50"
+        },
+        "lexMinter": {
+          "address": "0x1bab1c9afbffd3f44a858b919b0843218f4cda6a",
+          "codeBytes": 11430,
+          "codeHash": "0x3ea9e86a890402f559f2c7cf444a4eb975dbd43e3b9c8d5a5f2a029149fd262f",
+          "normalizedCodeHash": "0x707ac4325085f4729d68ba6e3df82d0c15ef21a84aca3b117ea911a4239432e8"
+        },
+        "badge": {
+          "address": "0xf2fed468afa26a9c11ba8ce5995543eb9e3b308b",
+          "codeBytes": 19885,
+          "codeHash": "0xebee344b7bb578f188b62a7c801775d58fe49c540d5de6322e3a41c9ba2d6462",
+          "normalizedCodeHash": "0x0156c02fe461ec44478cfe1e8ad8faf4b94743c96bcf47149ca03caf009e0ba2"
+        },
+        "safeExtension": {
+          "address": "0xb342b71d74327f546c428314b676ff85a0614385",
+          "codeBytes": 4467,
+          "codeHash": "0xd6e9988ded42b04632c7eae4598ceecf70d788e0ecce40166e93ac550bac3cbf",
+          "normalizedCodeHash": "0x28e2e11e83c59790257c129fbe02d9f1475aa70474220290c16159b5203b2fb4"
+        },
+        "safeExtensionV3": {
+          "address": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+          "codeBytes": 6985,
+          "codeHash": "0xd727e2054491a1f4ad82af6ad82ba31068261e2f2dadba9c82b1ce9b2c21c858",
+          "normalizedCodeHash": "0xf7fe2c3444fbb40fa996a9afc067c321b0e9ec3024688dbad3246755bb7bf8e5"
+        },
+        "aceSafeExtensionV3": {
+          "address": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+          "codeBytes": 7300,
+          "codeHash": "0xad4c59469d4e2aa35e9a95270c44bc2fe374ac19c0057534a093fde515d586eb",
+          "normalizedCodeHash": "0xd7448e8795b3fb30eb24a50cdb09d16fbccfb7dad4c04eeef0a6271ebba3c559"
+        },
+        "saftExtensionV2": {
+          "address": "0x6c104fe18241e6b1ab045b3ae0415d02605ce46c",
+          "codeBytes": 5897,
+          "codeHash": "0xbe31a65fe55ace9bee6ccaeb3cf17c692dae655e4f4b8a803ece18e69e300687",
+          "normalizedCodeHash": "0x150cca3c5fb41a3ccdeb7e3a09d7fbc1a3b75b21d9034af9ee23ca39feecc820"
+        },
+        "safteExtensionV2": {
+          "address": "0xb7ea62196609fe01bfdd71bbd1722eaaf21fd84a",
+          "codeBytes": 6637,
+          "codeHash": "0xf63158c7e58e3c49f07f0cec5ba5f757672f60b9621fecd72c153d09cb3eda78",
+          "normalizedCodeHash": "0x0bfa8870f97b2504157ee01fec381a354c37e6314c7b6323f752aef9c1dfc984"
+        },
+        "tokenWarrantExtensionV2": {
+          "address": "0x8af0ab45267195d78e3302faa05b1034607f22cc",
+          "codeBytes": 6918,
+          "codeHash": "0x98174c8561f953fa5c6886ddeaaf513d042e79e9c96e966ca11e3591476920e1",
+          "normalizedCodeHash": "0x98f0c3ec2b4fd96aad34362a831d09b3195ad48f8a5baf67a2c63c290f96687a"
+        },
+        "shareExtension": {
+          "address": "0xa9d33542c53d58875e53bb98d4c5d87027c377e6",
+          "codeBytes": 21736,
+          "codeHash": "0x106cb8e6d8724d2038cbd7ab18709606f9576ad5f1abe2326abf4405b543dc99",
+          "normalizedCodeHash": "0xe79a18a17b1be2f9b83c6f8fbaf7c25bc9c52193b9bc1105b14642d925be6918"
+        },
+        "shareExtensionV3": {
+          "address": "0xa629ca644f0e1dfefb68f38f54f7f853bf0f238a",
+          "codeBytes": 23906,
+          "codeHash": "0xcd9f2639ca21dd6008f4f335553a29617d302787dbff81b7dfe4efc4c1513bd6",
+          "normalizedCodeHash": "0xf224ccc0472b466fb724c495ee6b5ee8e5a3d4bdb7e7b30055b715033f13dabe"
+        },
+        "singleFactory.ref": {
+          "address": "0x1d85c3932ee70c74b331c80cc4a6a0fd5ffee4e2",
+          "codeBytes": 16357,
+          "codeHash": "0xfa17bcd35602423a35fec25bb80d077691a4b364b377463cb97a67236ab71866",
+          "normalizedCodeHash": "0xccbe5fdaaf5e439f8d565bd639162226908888beded7e54531348134450e2b28"
+        },
+        "issuanceFactory.ref": {
+          "address": "0x2f59fc9685d4f4aa608da6a6eb73d139292c621f",
+          "codeBytes": 17940,
+          "codeHash": "0x812d4699e9b7dcda49cdffec47efc3500e3219d8ac3deae25e09c259e5023a75",
+          "normalizedCodeHash": "0x663d22178e283a30d35d47a6d8e91a4d8832659eaa0f3c93d9a4675b688a074b"
+        },
+        "dealFactory.ref": {
+          "address": "0xc5d9bd9dc41e0da795f64b2fd003c421c476cbf7",
+          "codeBytes": 22248,
+          "codeHash": "0x36cdfe8d018ccca6aa44d939a37fb18557c3f32c214bd60fff66ce037a7861a6",
+          "normalizedCodeHash": "0x6ecd8b845b89419a7b7a8b70ed2f36f906e4da8481e503b81e97ce6738af5537"
+        },
+        "roundFactory.ref": {
+          "address": "0xccbbd8ebbe65bad66280462e06850c893e367fbc",
+          "codeBytes": 20727,
+          "codeHash": "0xb067095fdf7644d1479a091744edc1348d1ae1bf62c9bd9f33d2ae5374a9cde5",
+          "normalizedCodeHash": "0x58ba4ca7a87ba80619455dbb283c7cb4292b4a99d3569e056af0dbbbca4bad1b"
+        },
+        "issuanceFactory.getCyberCertPrinterRefImplementation()": {
+          "address": "0xd8485c4d345cd4bc9536d071bc14a6632dba4c52",
+          "codeBytes": 24288,
+          "codeHash": "0x54e5fd31e912487fe3c24e1ed4a14686236018f3c68faffb00680a986b68f752",
+          "normalizedCodeHash": "0x6974e0058c2682fbb84d03f430ac3af611752bfcfbafa9fe5790befed04cbd2e"
+        },
+        "issuanceFactory.getCyberScripRefImplementation()": {
+          "address": "0x3c0e4897a6abfa013f40e5e6d27f852a5cc60a80",
+          "codeBytes": 11343,
+          "codeHash": "0x042612dba372863d24a38ec801f47394ff4a1823d5206077f496cd31fc765b65",
+          "normalizedCodeHash": "0x36109063d136f25ae9bbdea5eb518a52ed5ee29c43fa4380579e56aaff64842b"
+        },
+        "uriBuilder.imageBuilder()": {
+          "address": "0x23c8be24709c04e7eb45d858c4dd84e8ec494be0",
+          "codeBytes": 14590,
+          "codeHash": "0x9c3d3114a9723f4960414110dd1e8a3960b3a10773840fc004ba5f7e402fd847",
+          "normalizedCodeHash": "0xd9f64f9d450d35fabc6e7f18aa644ca1ff592e6c66a58abe9b4a4c65280cbedb"
+        }
+      },
+      "templates": {
+        "safe_reg_s_32": {
+          "id": "0x0000000000000000000000000000000000000000000000000000000000000020",
+          "details": "\"IPFS://bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a\"\n\"MetaLeX cyberSAFE jx-neutral-style Reg S raise\"\n[\"purchaseAmount\", \"postMoneyValuationCap\", \"expirationTime\", \"governingJurisdiction\", \"disputeResolution\"]\n[\"name\", \"evmAddress\", \"contactDetails\", \"investorType\", \"investorJurisdiction\"]"
+        },
+        "ace_safe_reg_d_v1": {
+          "id": "0x6163655f736166655f7265675f645f7631000000000000000000000000000000",
+          "details": {
+            "rpcError": 3
+          }
+        },
+        "ace_safev1": {
+          "id": "0x6163655f73616665763100000000000000000000000000000000000000000000",
+          "details": "\"IPFS://bafybeibwtm7irbxar76nmmg37uxw6oi5mts7flar4wzndsgfhy4tyq36hq\"\n\"MetaLeX cyberSAFE jx-neutral-style / Reg S ACE raise v 1\"\n[\"purchaseAmount\", \"postMoneyValuationCap\", \"expirationTime\", \"governingJurisdiction\", \"disputeResolution\"]\n[\"name\", \"evmAddress\", \"contactDetails\", \"investorType\", \"investorJurisdiction\"]"
+        }
+      }
+    }
+  },
+  "comparison": [
+    {
+      "name": "coreAuth",
+      "address": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+      "bothHaveCode": true,
+      "runtimeMatches": true
+    },
+    {
+      "name": "corporateFactory",
+      "address": "0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": false
+    },
+    {
+      "name": "singleFactory",
+      "address": "0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": false
+    },
+    {
+      "name": "issuanceFactory",
+      "address": "0xD353972D7955F421d94d0eA8c42c88c417F7155A",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": false
+    },
+    {
+      "name": "dealFactory",
+      "address": "0x3982b078f2ac306219c9540Ebc908360a960C251",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": false
+    },
+    {
+      "name": "roundFactory",
+      "address": "0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": false
+    },
+    {
+      "name": "registry",
+      "address": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": false
+    },
+    {
+      "name": "uriBuilder",
+      "address": "0x5500c095ea7dE6F8a5E15949e24B80604cc670A3",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": false
+    },
+    {
+      "name": "lexAuth",
+      "address": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+      "bothHaveCode": true,
+      "runtimeMatches": true
+    },
+    {
+      "name": "lex",
+      "address": "0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": true
+    },
+    {
+      "name": "lexMinter",
+      "address": "0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": true
+    },
+    {
+      "name": "badgeAuth",
+      "address": "0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d",
+      "bothHaveCode": true,
+      "runtimeMatches": true
+    },
+    {
+      "name": "badge",
+      "address": "0x114664773Ba721a6AA43890d5FDE7939aF37618F",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": false
+    },
+    {
+      "name": "safeExtension",
+      "address": "0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": true
+    },
+    {
+      "name": "safeExtensionV3",
+      "address": "0x740003076c9F16c4a364AE07f3770FB77899299b",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": true,
+      "implementationRuntimeMatches": true,
+      "implementationNormalizedMatches": true
+    },
+    {
+      "name": "aceSafeExtensionV3",
+      "address": "0x9a8ef946F18C4296e50f8DF0C97b5Cf5d1b5eCD2",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": true,
+      "implementationRuntimeMatches": true,
+      "implementationNormalizedMatches": true
+    },
+    {
+      "name": "killSwitch",
+      "address": "0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435",
+      "bothHaveCode": true,
+      "runtimeMatches": false
+    },
+    {
+      "name": "saftExtensionV2",
+      "address": "0x37c2A0e801e569e01f0972186aF4DB01409e92c1",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": true
+    },
+    {
+      "name": "safteExtensionV2",
+      "address": "0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": true
+    },
+    {
+      "name": "tokenWarrantExtensionV2",
+      "address": "0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": true
+    },
+    {
+      "name": "shareExtension",
+      "address": "0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": true
+    },
+    {
+      "name": "shareExtensionV3",
+      "address": "0xa21C434379CC44bfeD6e3c1342e49951804ec30f",
+      "bothHaveCode": true,
+      "runtimeMatches": true,
+      "implementationAddressMatches": false,
+      "implementationRuntimeMatches": false,
+      "implementationNormalizedMatches": false
+    }
+  ],
+  "safeBatchChecks": [
+    {
+      "index": 0,
+      "target": "roundFactory",
+      "expected": "0x6af59f8d0656fb1da646fbdc1fa582165c143ef8",
+      "observed": "0x6af59f8d0656fb1da646fbdc1fa582165c143ef8",
+      "matches": true
+    },
+    {
+      "index": 1,
+      "target": "roundFactory",
+      "expected": "0xb7a923881b3c715993be8e1d7d243afd1967afd1",
+      "observed": "0xb7a923881b3c715993be8e1d7d243afd1967afd1",
+      "matches": true
+    },
+    {
+      "index": 2,
+      "target": "singleFactory",
+      "expected": "0x839da23fbb14fea0ef89e0b524455421383b02ce",
+      "observed": "0x839da23fbb14fea0ef89e0b524455421383b02ce",
+      "matches": true
+    },
+    {
+      "index": 3,
+      "target": "singleFactory",
+      "expected": "0xf9c62753d4b849713f42cd7e735b33ec86b92258",
+      "observed": "0xf9c62753d4b849713f42cd7e735b33ec86b92258",
+      "matches": true
+    },
+    {
+      "index": 4,
+      "target": "issuanceFactory",
+      "expected": "0x73f720866cb632023018524e5b738201adfcb01c",
+      "observed": "0x73f720866cb632023018524e5b738201adfcb01c",
+      "matches": true
+    },
+    {
+      "index": 5,
+      "target": "issuanceFactory",
+      "expected": "0x1ad870eb28b15283c3a52db6d688526665990f38",
+      "observed": "0x1ad870eb28b15283c3a52db6d688526665990f38",
+      "matches": true
+    },
+    {
+      "index": 6,
+      "target": "issuanceFactory",
+      "expected": "0x487ed0d21e489d66e647fb4a55ce20daadaf7920",
+      "observed": "0x487ed0d21e489d66e647fb4a55ce20daadaf7920",
+      "matches": true
+    },
+    {
+      "index": 7,
+      "target": "issuanceFactory",
+      "expected": "0x7924dad9707df68ce41d44016950b6e9e6e82493",
+      "observed": "0x7924dad9707df68ce41d44016950b6e9e6e82493",
+      "matches": true
+    },
+    {
+      "index": 8,
+      "target": "dealFactory",
+      "expected": "0xa0714923988e5bdd0b72ecd7375471aa3045e689",
+      "observed": "0xa0714923988e5bdd0b72ecd7375471aa3045e689",
+      "matches": true
+    },
+    {
+      "index": 9,
+      "target": "dealFactory",
+      "expected": "0xe835b6030ffc5ba43219f7dd310dce1f4731c739",
+      "observed": "0xe835b6030ffc5ba43219f7dd310dce1f4731c739",
+      "matches": true
+    },
+    {
+      "index": 10,
+      "target": "dealFactory",
+      "expected": 500,
+      "observed": 500,
+      "matches": true
+    },
+    {
+      "index": 11,
+      "target": "registry",
+      "expected": "0xeabeda8e939d570456ae2baf8bf2dd32c3810256",
+      "observed": "0xeabeda8e939d570456ae2baf8bf2dd32c3810256",
+      "matches": true
+    },
+    {
+      "index": 12,
+      "target": "registry",
+      "expected": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000001d000001000efd9a6371f4d90bb8920d5431c0d8000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000106170702e6d6574616c65782e74656368000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000017637962657261677265656d656e742d70617373706f7274000000000000000000",
+      "observed": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000001d000001000efd9a6371f4d90bb8920d5431c0d8000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000106170702e6d6574616c65782e74656368000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000017637962657261677265656d656e742d70617373706f7274000000000000000000",
+      "matches": true
+    },
+    {
+      "index": 13,
+      "target": "corporateFactory",
+      "expected": "0xe2868d47f70ae14689d903661e5729ca5e37a634",
+      "observed": "0xe2868d47f70ae14689d903661e5729ca5e37a634",
+      "matches": true
+    },
+    {
+      "index": 14,
+      "target": "uriBuilder.imageBuilder",
+      "expected": "0x34a00d92735e8e02b3651bbae01a4297584e0b8d",
+      "observed": "0x34a00d92735e8e02b3651bbae01a4297584e0b8d",
+      "matches": true
+    },
+    {
+      "index": 14,
+      "target": "uriBuilder",
+      "expected": "0x44f71d3a279fa89adfadcb9838e25ea34b8a519f",
+      "observed": "0x44f71d3a279fa89adfadcb9838e25ea34b8a519f",
+      "matches": true
+    },
+    {
+      "index": 15,
+      "target": "safeExtension",
+      "expected": "0x1af1d74c53fee73f1ca29ba764b201ae0e1b4c27",
+      "observed": "0x1af1d74c53fee73f1ca29ba764b201ae0e1b4c27",
+      "matches": true
+    },
+    {
+      "index": 16,
+      "target": "saftExtensionV2",
+      "expected": "0x3157f1d053926bb0f2c10542f994f4102b359bce",
+      "observed": "0x3157f1d053926bb0f2c10542f994f4102b359bce",
+      "matches": true
+    },
+    {
+      "index": 17,
+      "target": "safteExtensionV2",
+      "expected": "0x911ef683c052f63fea9f0a3cd638262609c07e07",
+      "observed": "0x911ef683c052f63fea9f0a3cd638262609c07e07",
+      "matches": true
+    },
+    {
+      "index": 18,
+      "target": "tokenWarrantExtensionV2",
+      "expected": "0x9974c6f77c848f32a384df89c896bcdbe2519413",
+      "observed": "0x9974c6f77c848f32a384df89c896bcdbe2519413",
+      "matches": true
+    },
+    {
+      "index": 19,
+      "target": "shareExtension",
+      "expected": "0x0abd73115b541ba3c81e3134dd0ad7602b9429e8",
+      "observed": "0x0abd73115b541ba3c81e3134dd0ad7602b9429e8",
+      "matches": true
+    },
+    {
+      "index": 20,
+      "target": "shareExtensionV3",
+      "expected": "0x3329182047d5e2c19a7d55b2c96d8379374c87aa",
+      "observed": "0x3329182047d5e2c19a7d55b2c96d8379374c87aa",
+      "matches": true
+    },
+    {
+      "index": 21,
+      "target": "badge",
+      "expected": "0xc9ecfcad8792ff89c79dc1e3417abaf146778310",
+      "observed": "0xc9ecfcad8792ff89c79dc1e3417abaf146778310",
+      "matches": true
+    }
+  ],
+  "implementationComparison": [
+    {
+      "name": "aceSafeExtensionV3",
+      "robinhoodAddress": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+      "baseAddress": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+      "robinhoodBytes": 7300,
+      "baseBytes": 7300,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "badge",
+      "robinhoodAddress": "0xc9ecfcad8792ff89c79dc1e3417abaf146778310",
+      "baseAddress": "0xf2fed468afa26a9c11ba8ce5995543eb9e3b308b",
+      "robinhoodBytes": 19885,
+      "baseBytes": 19885,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": [
+        {
+          "offset": 2203,
+          "robinhood": "0x177fb4ae7d0b180a1b6d5120c4fc4582e7f40ef4",
+          "base": "0xc238d64d9d9aa547a5a5d517f01699ffe9f09139"
+        }
+      ]
+    },
+    {
+      "name": "corporateFactory",
+      "robinhoodAddress": "0xe2868d47f70ae14689d903661e5729ca5e37a634",
+      "baseAddress": "0xfae7d5ee7539c7d1276810f4948373efb92a974c",
+      "robinhoodBytes": 20221,
+      "baseBytes": 20221,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "dealFactory",
+      "robinhoodAddress": "0xa0714923988e5bdd0b72ecd7375471aa3045e689",
+      "baseAddress": "0x73402033384f4c9a6158a68e5fd82acfe5cb7f8e",
+      "robinhoodBytes": 7074,
+      "baseBytes": 7074,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "dealFactory.ref",
+      "robinhoodAddress": "0xe835b6030ffc5ba43219f7dd310dce1f4731c739",
+      "baseAddress": "0xc5d9bd9dc41e0da795f64b2fd003c421c476cbf7",
+      "robinhoodBytes": 22248,
+      "baseBytes": 22248,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "issuanceFactory",
+      "robinhoodAddress": "0x73f720866cb632023018524e5b738201adfcb01c",
+      "baseAddress": "0xda2ee152c2ccc1365cf76b94d800ee7d9c4d9425",
+      "robinhoodBytes": 5400,
+      "baseBytes": 5400,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "issuanceFactory.getCyberCertPrinterRefImplementation()",
+      "robinhoodAddress": "0x487ed0d21e489d66e647fb4a55ce20daadaf7920",
+      "baseAddress": "0xd8485c4d345cd4bc9536d071bc14a6632dba4c52",
+      "robinhoodBytes": 24288,
+      "baseBytes": 24288,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "issuanceFactory.getCyberScripRefImplementation()",
+      "robinhoodAddress": "0x7924dad9707df68ce41d44016950b6e9e6e82493",
+      "baseAddress": "0x3c0e4897a6abfa013f40e5e6d27f852a5cc60a80",
+      "robinhoodBytes": 11343,
+      "baseBytes": 11343,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "issuanceFactory.ref",
+      "robinhoodAddress": "0x1ad870eb28b15283c3a52db6d688526665990f38",
+      "baseAddress": "0x2f59fc9685d4f4aa608da6a6eb73d139292c621f",
+      "robinhoodBytes": 17940,
+      "baseBytes": 17940,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "lex",
+      "robinhoodAddress": "0x25077c9c742b64ee5498bf3b6630761221bfdbb1",
+      "baseAddress": "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3",
+      "robinhoodBytes": 18144,
+      "baseBytes": 18144,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "lexMinter",
+      "robinhoodAddress": "0xd6d889becbd19bfdfb43ac5df6d64b0028cb5247",
+      "baseAddress": "0x1bab1c9afbffd3f44a858b919b0843218f4cda6a",
+      "robinhoodBytes": 11430,
+      "baseBytes": 11430,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "registry",
+      "robinhoodAddress": "0xeabeda8e939d570456ae2baf8bf2dd32c3810256",
+      "baseAddress": "0x04295bc98728a972c9f3ddced5ccff5c78760f34",
+      "robinhoodBytes": 22942,
+      "baseBytes": 24338,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "roundFactory",
+      "robinhoodAddress": "0x6af59f8d0656fb1da646fbdc1fa582165c143ef8",
+      "baseAddress": "0x92a74df75a4c02296af558b9e0dcd787bc35e973",
+      "robinhoodBytes": 6097,
+      "baseBytes": 6097,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "roundFactory.ref",
+      "robinhoodAddress": "0xb7a923881b3c715993be8e1d7d243afd1967afd1",
+      "baseAddress": "0xccbbd8ebbe65bad66280462e06850c893e367fbc",
+      "robinhoodBytes": 20727,
+      "baseBytes": 20727,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "safeExtension",
+      "robinhoodAddress": "0x1af1d74c53fee73f1ca29ba764b201ae0e1b4c27",
+      "baseAddress": "0xb342b71d74327f546c428314b676ff85a0614385",
+      "robinhoodBytes": 4467,
+      "baseBytes": 4467,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "safeExtensionV3",
+      "robinhoodAddress": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+      "baseAddress": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+      "robinhoodBytes": 6985,
+      "baseBytes": 6985,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "saftExtensionV2",
+      "robinhoodAddress": "0x3157f1d053926bb0f2c10542f994f4102b359bce",
+      "baseAddress": "0x6c104fe18241e6b1ab045b3ae0415d02605ce46c",
+      "robinhoodBytes": 5897,
+      "baseBytes": 5897,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "safteExtensionV2",
+      "robinhoodAddress": "0x911ef683c052f63fea9f0a3cd638262609c07e07",
+      "baseAddress": "0xb7ea62196609fe01bfdd71bbd1722eaaf21fd84a",
+      "robinhoodBytes": 6637,
+      "baseBytes": 6637,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "shareExtension",
+      "robinhoodAddress": "0x0abd73115b541ba3c81e3134dd0ad7602b9429e8",
+      "baseAddress": "0xa9d33542c53d58875e53bb98d4c5d87027c377e6",
+      "robinhoodBytes": 21736,
+      "baseBytes": 21736,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "shareExtensionV3",
+      "robinhoodAddress": "0x3329182047d5e2c19a7d55b2c96d8379374c87aa",
+      "baseAddress": "0xa629ca644f0e1dfefb68f38f54f7f853bf0f238a",
+      "robinhoodBytes": 23906,
+      "baseBytes": 23906,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": [
+        {
+          "offset": 345,
+          "robinhood": "0xe6c3e4eb75b4817a12c121c2924e2dca26481f58",
+          "base": "0xc284cac5ce91c6abc917b2d5821658f790667387"
+        },
+        {
+          "offset": 531,
+          "robinhood": "0xe6c3e4eb75b4817a12c121c2924e2dca26481f58",
+          "base": "0xc284cac5ce91c6abc917b2d5821658f790667387"
+        },
+        {
+          "offset": 3677,
+          "robinhood": "0xe6c3e4eb75b4817a12c121c2924e2dca26481f58",
+          "base": "0xc284cac5ce91c6abc917b2d5821658f790667387"
+        },
+        {
+          "offset": 5786,
+          "robinhood": "0xe6c3e4eb75b4817a12c121c2924e2dca26481f58",
+          "base": "0xc284cac5ce91c6abc917b2d5821658f790667387"
+        },
+        {
+          "offset": 6869,
+          "robinhood": "0xe6c3e4eb75b4817a12c121c2924e2dca26481f58",
+          "base": "0xc284cac5ce91c6abc917b2d5821658f790667387"
+        },
+        {
+          "offset": 7601,
+          "robinhood": "0xe6c3e4eb75b4817a12c121c2924e2dca26481f58",
+          "base": "0xc284cac5ce91c6abc917b2d5821658f790667387"
+        }
+      ]
+    },
+    {
+      "name": "singleFactory",
+      "robinhoodAddress": "0x839da23fbb14fea0ef89e0b524455421383b02ce",
+      "baseAddress": "0x439c0e2fdf2db91759af9d14e5f0f93c813162d4",
+      "robinhoodBytes": 4131,
+      "baseBytes": 4131,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "singleFactory.ref",
+      "robinhoodAddress": "0xf9c62753d4b849713f42cd7e735b33ec86b92258",
+      "baseAddress": "0x1d85c3932ee70c74b331c80cc4a6a0fd5ffee4e2",
+      "robinhoodBytes": 16357,
+      "baseBytes": 16357,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "tokenWarrantExtensionV2",
+      "robinhoodAddress": "0x9974c6f77c848f32a384df89c896bcdbe2519413",
+      "baseAddress": "0x8af0ab45267195d78e3302faa05b1034607f22cc",
+      "robinhoodBytes": 6918,
+      "baseBytes": 6918,
+      "normalizedCodeMatches": true,
+      "sameInstructionBodyExceptPush20": true,
+      "differingAddressOperands": []
+    },
+    {
+      "name": "uriBuilder",
+      "robinhoodAddress": "0x44f71d3a279fa89adfadcb9838e25ea34b8a519f",
+      "baseAddress": "0x813470665b5ea24a0f1614c44ee33648c0b2f2c6",
+      "robinhoodBytes": 21721,
+      "baseBytes": 21670,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    },
+    {
+      "name": "uriBuilder.imageBuilder()",
+      "robinhoodAddress": "0x34a00d92735e8e02b3651bbae01a4297584e0b8d",
+      "baseAddress": "0x23c8be24709c04e7eb45d858c4dd84e8ec494be0",
+      "robinhoodBytes": 14590,
+      "baseBytes": 14590,
+      "normalizedCodeMatches": false,
+      "sameInstructionBodyExceptPush20": false
+    }
+  ],
+  "normalization": "Strip trailing Solidity CBOR map and replace runtime own address bytes with zeros. Does not normalize linked libraries or prove behavioral equivalence."
+}

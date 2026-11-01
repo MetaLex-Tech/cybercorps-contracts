@@ -1,0 +1,177 @@
+== Logs ==
+  ==== UpgradeV5Script Configs ====
+  [config] chainId: 4663
+  [config] deployer: 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B
+  [config] Safe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C
+  [config] AUTH: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01
+  ⚫️ [deploy recorded] recorded CREATE2 contracts that already exist: 99 of 99
+  ==== UpgradeCoreScript Configs ====
+  [config] chainId: 4663
+  [config] deployer: 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B
+  [config] Safe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C
+  [config] AUTH: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01
+  [config] ZKPassport verifier: 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8
+  [config] ZKPassport domain: app.metalex.tech
+  [config] ZKPassport scope: cyberagreement-passport
+  [config] ZKPassport dev mode: false
+
+  🟢 [deploy implementation] deployed new RoundManagerFactory (CREATE): 0x6aF59f8d0656fB1Da646FbDC1fa582165c143eF8
+  🟢 [upgrade proxy] queued for the Safe: RoundManagerFactory 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9 to implementation 0x6aF59f8d0656fB1Da646FbDC1fa582165c143eF8
+  🟢 [deploy implementation] deployed new RoundManager (CREATE): 0xb7A923881B3C715993be8E1d7D243afD1967AFd1
+  🟢 [set ref implementation] queued for the Safe: RoundManager: 0xb7A923881B3C715993be8E1d7D243afD1967AFd1
+  🟢 [deploy implementation] deployed new CyberCorpSingleFactory (CREATE): 0x839DA23fbB14Fea0EF89e0B524455421383B02ce
+  🟢 [upgrade proxy] queued for the Safe: CyberCorpSingleFactory 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4 to implementation 0x839DA23fbB14Fea0EF89e0B524455421383B02ce
+  🟢 [deploy implementation] deployed new CyberCorp (CREATE): 0xf9c62753d4b849713f42cD7E735B33Ec86B92258
+  🟢 [set ref implementation] queued for the Safe: CyberCorp: 0xf9c62753d4b849713f42cD7E735B33Ec86B92258
+  🟢 [deploy implementation] deployed new IssuanceManagerFactory (CREATE): 0x73F720866cb632023018524E5b738201adFcb01C
+  🟢 [upgrade proxy] queued for the Safe: IssuanceManagerFactory 0xD353972D7955F421d94d0eA8c42c88c417F7155A to implementation 0x73F720866cb632023018524E5b738201adFcb01C
+  🟢 [deploy implementation] deployed new IssuanceManager (CREATE): 0x1aD870eb28B15283C3A52DB6D688526665990f38
+  🟢 [set ref implementation] queued for the Safe: IssuanceManager: 0x1aD870eb28B15283C3A52DB6D688526665990f38
+  🟢 [deploy implementation] deployed new LedgerEntryToken (CREATE): 0x487Ed0d21e489d66e647fB4A55cE20Daadaf7920
+  🟢 [set ref implementation] queued for the Safe: LedgerEntryToken: 0x487Ed0d21e489d66e647fB4A55cE20Daadaf7920
+  🟢 [deploy implementation] deployed new CyberScrip (CREATE): 0x7924daD9707df68cE41d44016950b6e9e6E82493
+  🟢 [set ref implementation] queued for the Safe: CyberScrip: 0x7924daD9707df68cE41d44016950b6e9e6E82493
+  🟢 [deploy implementation] deployed new DealManagerFactory (CREATE): 0xa0714923988e5bDd0b72ecd7375471aA3045e689
+  🟢 [upgrade proxy] queued for the Safe: DealManagerFactory 0x3982b078f2ac306219c9540Ebc908360a960C251 to implementation 0xa0714923988e5bDd0b72ecd7375471aA3045e689
+  🟢 [deploy implementation] deployed new DealManager (CREATE): 0xE835B6030fFc5BA43219f7dd310dCe1f4731c739
+  🟢 [set ref implementation] queued for the Safe: DealManager: 0xE835B6030fFc5BA43219f7dd310dCe1f4731c739
+  🟢 [set param] queued for the Safe: default secondary fee ratio (bps): 500
+  🟢 [deploy implementation] deployed new CyberAgreementRegistry (CREATE): 0xeAbeda8E939D570456Ae2BAF8Bf2dD32c3810256
+  🟢 [upgrade proxy] queued for the Safe: CyberAgreementRegistry 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134 to implementation 0xeAbeda8E939D570456Ae2BAF8Bf2dD32c3810256
+  🟢 [set param] queued for the Safe: CyberAgreementRegistry ZKPassport config
+  🟢 [deploy implementation] deployed new LeXcheXMinter (CREATE): 0xD6d889bECbD19bFdfb43AC5DF6d64b0028cb5247
+  🟢 [upgrade proxy] executed LeXcheXMinter 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960 to implementation 0xD6d889bECbD19bFdfb43AC5DF6d64b0028cb5247
+  🟢 [deploy implementation] deployed new CyberCorpFactory (CREATE): 0xe2868d47F70ae14689d903661e5729CA5e37A634
+  🟢 [upgrade proxy] queued for the Safe: CyberCorpFactory 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2 to implementation 0xe2868d47F70ae14689d903661e5729CA5e37A634
+
+  [sub-script] added Safe calls from core, count: 14
+  ==== DeployBuildersScript Configs ====
+  [config] chainId: 4663
+  [config] deployer: 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B
+  [config] Safe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C
+  [config] AUTH: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01
+  [config] URI builder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3
+
+  🟢 [deploy implementation] deployed new CertificateUriBuilder (CREATE): 0x44f71D3A279FA89adFAdCb9838E25ea34B8A519F
+  🟢 [deploy contract] deployed new CertificateImageBuilderContract (CREATE): 0x34A00D92735E8e02B3651BbAE01a4297584e0B8d
+  🟢 [upgrade proxy] queued for the Safe: CertificateUriBuilder 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3 to implementation 0x44f71D3A279FA89adFAdCb9838E25ea34B8A519F
+  [sub-script] added Safe calls from certificate builders, count: 1
+  ==== DeployExtensionsV2Script Configs ====
+  [config] chainId: 4663
+  [config] deployer: 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B
+  [config] Safe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C
+  [config] proxy salt string: CyberCorpV5-ExtensionsV2.0.1
+  [config] AUTH: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01
+
+  🟢 [deploy implementation] deployed new SAFEExtension (CREATE): 0x1Af1D74c53Fee73F1cA29ba764b201Ae0e1B4c27
+  ⚫️ [deploy proxy] SAFEExtension already exists, skipping: 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8
+  🟢 [upgrade proxy] queued for the Safe: SAFEExtension 0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8 to implementation 0x1Af1D74c53Fee73F1cA29ba764b201Ae0e1B4c27
+  🟢 [deploy implementation] deployed new SAFTExtensionV2 (CREATE): 0x3157f1d053926bB0f2C10542F994f4102B359bce
+  ⚫️ [deploy proxy] SAFTExtensionV2 already exists, skipping: 0x37c2A0e801e569e01f0972186aF4DB01409e92c1
+  🟢 [upgrade proxy] queued for the Safe: SAFTExtensionV2 0x37c2A0e801e569e01f0972186aF4DB01409e92c1 to implementation 0x3157f1d053926bB0f2C10542F994f4102B359bce
+  🟢 [deploy implementation] deployed new SAFTEExtensionV2 (CREATE): 0x911ef683c052F63fEa9F0A3CD638262609c07e07
+  ⚫️ [deploy proxy] SAFTEExtensionV2 already exists, skipping: 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A
+  🟢 [upgrade proxy] queued for the Safe: SAFTEExtensionV2 0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A to implementation 0x911ef683c052F63fEa9F0A3CD638262609c07e07
+  🟢 [deploy implementation] deployed new TokenWarrantExtensionV2 (CREATE): 0x9974C6F77c848F32a384dF89c896BcDbE2519413
+  ⚫️ [deploy proxy] TokenWarrantExtensionV2 already exists, skipping: 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F
+  🟢 [upgrade proxy] queued for the Safe: TokenWarrantExtensionV2 0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F to implementation 0x9974C6F77c848F32a384dF89c896BcDbE2519413
+  🟢 [deploy implementation] deployed new ShareExtension (CREATE): 0x0ABD73115B541BA3c81E3134Dd0Ad7602B9429E8
+  ⚫️ [deploy proxy] ShareExtension already exists, skipping: 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81
+  🟢 [upgrade proxy] queued for the Safe: ShareExtension 0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81 to implementation 0x0ABD73115B541BA3c81E3134Dd0Ad7602B9429E8
+
+  [sub-script] added Safe calls from extensions V2, count: 5
+  ==== DeployExtensionsV3Script Configs ====
+  [config] chainId: 4663
+  [config] deployer: 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B
+  [config] Safe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C
+  [config] proxy salt string: CyberCorpV5-ExtensionsV3
+  [config] AUTH: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01
+
+  ⚫️ [deploy implementation] ACESAFEExtensionV3 unchanged, keeping: 0x93EE4F2f833bEB5267401de03d680ba1E186EA4E
+  ⚫️ [deploy proxy] ACESAFEExtensionV3 already exists, skipping: 0x9a8ef946F18C4296e50f8DF0C97b5Cf5d1b5eCD2
+  ⚫️ [upgrade proxy] ACESAFEExtensionV3 already uses the implementation, skipping: 0x9a8ef946F18C4296e50f8DF0C97b5Cf5d1b5eCD2
+  ⚫️ [deploy implementation] SAFEExtensionV3 unchanged, keeping: 0xB4Cb111ac41E0c0f29C756eeAacD45dDD3bc168E
+  ⚫️ [deploy proxy] SAFEExtensionV3 already exists, skipping: 0x740003076c9F16c4a364AE07f3770FB77899299b
+  ⚫️ [upgrade proxy] SAFEExtensionV3 already uses the implementation, skipping: 0x740003076c9F16c4a364AE07f3770FB77899299b
+  ⚫️ [deploy implementation] SAFTExtensionV3 unchanged, keeping: 0x4b8551c1970A06bFF2Efcab8fdEbeb589638Bcd8
+  ⚫️ [deploy proxy] SAFTExtensionV3 already exists, skipping: 0x2Bf1b2f8f6009c5524886243CE4F2EF34e3d4957
+  ⚫️ [upgrade proxy] SAFTExtensionV3 already uses the implementation, skipping: 0x2Bf1b2f8f6009c5524886243CE4F2EF34e3d4957
+  ⚫️ [deploy implementation] SAFTEExtensionV3 unchanged, keeping: 0x5a58005EA5ECE5B87903dbA8D6cC3B4D96c7Df40
+  ⚫️ [deploy proxy] SAFTEExtensionV3 already exists, skipping: 0xE79C2b4a35b2509b27686D025FB8Fbab2Ca49406
+  ⚫️ [upgrade proxy] SAFTEExtensionV3 already uses the implementation, skipping: 0xE79C2b4a35b2509b27686D025FB8Fbab2Ca49406
+  ⚫️ [deploy implementation] TokenWarrantExtensionV3 unchanged, keeping: 0x5f6F6120e1A4Eb1e2Bd60F6Ae672780261D7003c
+  ⚫️ [deploy proxy] TokenWarrantExtensionV3 already exists, skipping: 0x3Bdb711517eEbd6A88D9Aa30B141adC43BAB033e
+  ⚫️ [upgrade proxy] TokenWarrantExtensionV3 already uses the implementation, skipping: 0x3Bdb711517eEbd6A88D9Aa30B141adC43BAB033e
+  🟢 [deploy implementation] deployed new ShareExtensionV3 (CREATE): 0x3329182047d5E2c19A7d55B2c96d8379374c87aA
+  ⚫️ [deploy proxy] ShareExtensionV3 already exists, skipping: 0xa21C434379CC44bfeD6e3c1342e49951804ec30f
+  🟢 [upgrade proxy] queued for the Safe: ShareExtensionV3 0xa21C434379CC44bfeD6e3c1342e49951804ec30f to implementation 0x3329182047d5E2c19A7d55B2c96d8379374c87aA
+  ⚫️ [deploy implementation] FundInterestExtensionV3 unchanged, keeping: 0x58c681a7Ed1d4C0DA39EE96F4109900fB8ee493C
+  ⚫️ [deploy proxy] FundInterestExtensionV3 already exists, skipping: 0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15
+  ⚫️ [upgrade proxy] FundInterestExtensionV3 already uses the implementation, skipping: 0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15
+
+  [sub-script] added Safe calls from extensions V3, count: 1
+  ==== DeploySecondaryConditionsScript Configs ====
+  [config] chainId: 4663
+  [config] deployer: 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B
+  [config] Safe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C
+  [config] proxy salt string: CyberCorpV5-SecondaryConditionsV1.0.0
+  [config] AUTH: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01
+  [config] CyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134
+
+  ⚫️ [deploy auth] LeXcheXBadge AUTH already exists, skipping: 0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d
+  🟢 [deploy implementation] deployed new LeXcheXBadge (CREATE): 0xc9EcfCaD8792Ff89C79Dc1e3417ABAf146778310
+  ⚫️ [deploy proxy] LeXcheXBadge already exists, skipping: 0x114664773Ba721a6AA43890d5FDE7939aF37618F
+  🟢 [upgrade proxy] queued for the Safe: LeXcheXBadge 0x114664773Ba721a6AA43890d5FDE7939aF37618F to implementation 0xc9EcfCaD8792Ff89C79Dc1e3417ABAf146778310
+  ⚫️ [set param] LeXcheX minter issuer keys on LeXcheXBadge unchanged, skipping
+  ⚫️ [deploy implementation] EligibilityCondition unchanged, keeping: 0xC94211fE38c5E6573713702F54B2b1b1Ca29D86E
+  ⚫️ [deploy proxy] EligibilityCondition already exists, skipping: 0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B
+  ⚫️ [upgrade proxy] EligibilityCondition already uses the implementation, skipping: 0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B
+  ⚫️ [deploy implementation] USStateOfResidenceCondition unchanged, keeping: 0x6B896856612B4f45c01DDDa4dB01DbcE681e06F2
+  ⚫️ [deploy proxy] USStateOfResidenceCondition already exists, skipping: 0x1d4918a83E1F971317f0DD529f088B208Ec24d8C
+  ⚫️ [upgrade proxy] USStateOfResidenceCondition already uses the implementation, skipping: 0x1d4918a83E1F971317f0DD529f088B208Ec24d8C
+  ⚫️ [deploy implementation] LegionSoulboundCondition unchanged, keeping: 0x2B301A98F7eE3776bFa22aE57497f359512871D8
+  ⚫️ [deploy proxy] LegionSoulboundCondition already exists, skipping: 0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04
+  ⚫️ [upgrade proxy] LegionSoulboundCondition already uses the implementation, skipping: 0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04
+  ⚫️ [deploy implementation] HolderCapCondition unchanged, keeping: 0xd6C4FF2Ec0FD80e7F3221787E7b714D9Fc13a6C0
+  ⚫️ [deploy proxy] HolderCapCondition already exists, skipping: 0xA8422D5fFE6b697152aEE19d13910302dE1E0576
+  ⚫️ [upgrade proxy] HolderCapCondition already uses the implementation, skipping: 0xA8422D5fFE6b697152aEE19d13910302dE1E0576
+  ⚫️ [deploy implementation] CFIUSCondition unchanged, keeping: 0x8961c3370B0021507af598AF633363a0E9c6Db2b
+  ⚫️ [deploy proxy] CFIUSCondition already exists, skipping: 0x89Fa72549b5Fadf209377d5348C30bca4c7e0462
+  ⚫️ [upgrade proxy] CFIUSCondition already uses the implementation, skipping: 0x89Fa72549b5Fadf209377d5348C30bca4c7e0462
+  ⚫️ [deploy implementation] Section4a7DisclosureCondition unchanged, keeping: 0xC492f904a81c8b0D64737171F2d5d4aCDA65a580
+  ⚫️ [deploy proxy] Section4a7DisclosureCondition already exists, skipping: 0x42c9e2dadE9669c725D88b78cD0e545FD9e7F723
+  ⚫️ [upgrade proxy] Section4a7DisclosureCondition already uses the implementation, skipping: 0x42c9e2dadE9669c725D88b78cD0e545FD9e7F723
+  ⚫️ [deploy implementation] Rule144DisclosureCondition unchanged, keeping: 0x76c85C9060f19BB5Dff58917e35657dA33C5c685
+  ⚫️ [deploy proxy] Rule144DisclosureCondition already exists, skipping: 0x7e30Ef03A0C4C7094D464b714E2480EF30088629
+  ⚫️ [upgrade proxy] Rule144DisclosureCondition already uses the implementation, skipping: 0x7e30Ef03A0C4C7094D464b714E2480EF30088629
+  ⚫️ [deploy implementation] HoldingPeriodCondition unchanged, keeping: 0x0f9397AEAaecbF28b1390b721caD93d1B4Fa529b
+  ⚫️ [deploy proxy] HoldingPeriodCondition already exists, skipping: 0xc5417d7DDE94310Ba334e31517deFED0aa0ED81F
+  ⚫️ [upgrade proxy] HoldingPeriodCondition already uses the implementation, skipping: 0xc5417d7DDE94310Ba334e31517deFED0aa0ED81F
+  ⚫️ [deploy implementation] LegalOpinionCondition unchanged, keeping: 0xe33F3eB6638C52ab3B87Aa3290d032aa678bD329
+  ⚫️ [deploy proxy] LegalOpinionCondition already exists, skipping: 0xD27317AED94BE6d310eA6B8c4e08360957ff24e3
+  ⚫️ [upgrade proxy] LegalOpinionCondition already uses the implementation, skipping: 0xD27317AED94BE6d310eA6B8c4e08360957ff24e3
+  ⚫️ [deploy implementation] RegSDistributionComplianceCondition unchanged, keeping: 0x7BaAaCf95F71B328d7249dfF40120f8EAcb74097
+  ⚫️ [deploy proxy] RegSDistributionComplianceCondition already exists, skipping: 0xe8A325Ba2dF0ba3E08A55B3E3F2bBBBc9354CebB
+  ⚫️ [upgrade proxy] RegSDistributionComplianceCondition already uses the implementation, skipping: 0xe8A325Ba2dF0ba3E08A55B3E3F2bBBBc9354CebB
+  ⚫️ [deploy implementation] GPLPApprovalCondition unchanged, keeping: 0x4d1cFa1Cf02994C94c1Bb525fd2e83fbAdA05658
+  ⚫️ [deploy proxy] GPLPApprovalCondition already exists, skipping: 0x4be9Eaff732F4BA3f1Fc6359a2F0858F70637c69
+  ⚫️ [upgrade proxy] GPLPApprovalCondition already uses the implementation, skipping: 0x4be9Eaff732F4BA3f1Fc6359a2F0858F70637c69
+  ⚫️ [deploy implementation] LexChexBadgeKindCondition unchanged, keeping: 0xCFBE52a7df301EDD3b26518Ffd53Da6cb44c8BFb
+  ⚫️ [deploy proxy] AccreditedInvestor (K_ACCREDITED) already exists, skipping: 0xedac303CAfdedd92aB6fbECFafFC0a648d9157a1
+  ⚫️ [upgrade proxy] AccreditedInvestor (K_ACCREDITED) already uses the implementation, skipping: 0xedac303CAfdedd92aB6fbECFafFC0a648d9157a1
+  ⚫️ [deploy proxy] QualifiedPurchaser (K_QP) already exists, skipping: 0xE4bcf1c4EA266bbD7F3c58A3aa02c43B5cdc9875
+  ⚫️ [upgrade proxy] QualifiedPurchaser (K_QP) already uses the implementation, skipping: 0xE4bcf1c4EA266bbD7F3c58A3aa02c43B5cdc9875
+  ⚫️ [deploy proxy] QualifiedInstitutionalBuyer (K_QIB) already exists, skipping: 0x8A617187aF27a98c89548dfFd886EEab0De0936F
+  ⚫️ [upgrade proxy] QualifiedInstitutionalBuyer (K_QIB) already uses the implementation, skipping: 0x8A617187aF27a98c89548dfFd886EEab0De0936F
+  ⚫️ [deploy proxy] NonUSPerson (K_NON_US) already exists, skipping: 0xe2AAc5187058a5c97Da7e6D3D6F9D5811124dcBb
+  ⚫️ [upgrade proxy] NonUSPerson (K_NON_US) already uses the implementation, skipping: 0xe2AAc5187058a5c97Da7e6D3D6F9D5811124dcBb
+  ⚫️ [deploy proxy] SpvWhitelist (K_SPV_WHITELIST) already exists, skipping: 0x0f2952dcf0279782e6048D2800ee3BeAd9f59f33
+  ⚫️ [upgrade proxy] SpvWhitelist (K_SPV_WHITELIST) already uses the implementation, skipping: 0x0f2952dcf0279782e6048D2800ee3BeAd9f59f33
+  ⚫️ [deploy proxy] Syndicate (K_SYNDICATE) already exists, skipping: 0x089b4Dba2E3EB49f875c0D7F92A06276B204870f
+  ⚫️ [upgrade proxy] Syndicate (K_SYNDICATE) already uses the implementation, skipping: 0x089b4Dba2E3EB49f875c0D7F92A06276B204870f
+  ⚫️ [deploy condition] KillSwitchCondition already exists, skipping: 0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435
+  ⚫️ [deploy condition] TimeSettlementPeriodCondition already exists, skipping: 0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd
+
+  [sub-script] added Safe calls from secondary conditions, count: 1
+  ⚫️ [hand off auth] deployer has no owner role on core AUTH: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01
+  🟢 [hand off auth] Safe holds the owner role. Deployer dropped its owner role on LeXcheX AUTH: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2
