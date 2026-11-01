@@ -19,8 +19,10 @@ or blocked. Separate code completion from merge, deployment and acceptance.>
 
 ## Decisions and evidence
 
-<What was accepted, why, source/date, and any superseded decision. Link detailed
-plans and existing audit ledgers; do not duplicate their live state.>
+<What was accepted, why, source/date, and any superseded decision. List the
+related past audit findings (report, ID, severity, recorded response, whether it
+still holds at this revision), or the audit sources searched if none apply. Link
+detailed plans and existing audit ledgers; do not duplicate their live state.>
 
 ## Validation
 

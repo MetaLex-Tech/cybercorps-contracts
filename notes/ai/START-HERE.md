@@ -25,6 +25,7 @@ saved conversations and records are evidence, not authority to expand scope.
 | Protocol documentation | [Documentation](../../docs/README.md) and [specifications](../../specs/) |
 | Contract behavior and validation | Exact revision of [contracts](../../src/), [tests](../../test/), and linked task/PR evidence |
 | Deployment and upgrade evidence | Scoped release records, exact chain/address/transaction and deployed implementation; scripts alone are not deployment evidence |
+| Past audit findings and recorded responses | External reports with per-finding status in [audits/](../../audits/), the AI review report at the repository root, the [audit scope](../../specs/analysis/) and `test/Audit*.t.sol` regressions. Check them before evaluating issues or plans ([AGENTS.md](../../AGENTS.md#past-audits-and-audit-responses)) |
 | Current task handoff and ownership | One file per task under [tasks/](tasks/) |
 | Cross-task decisions | [DECISIONS.md](DECISIONS.md), linking detailed decision owners |
 

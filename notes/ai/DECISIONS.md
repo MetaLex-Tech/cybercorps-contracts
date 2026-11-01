@@ -23,3 +23,12 @@ no jurisdiction or entity-type rule. It replaces the constant MetaLeX Labs, Inc.
 DGCL §§219, 224 sentence introduced by `3bbde497`. Other renderer work that touches
 the footer, such as the series-designation prototype, follows this wording. This
 decision changes no release gate, permission or deployment status.
+
+## 2026-10-31: Past audits inform issue and plan evaluation
+
+Accepted by the owner (lex-node) in a Claude Code conversation, for this repository
+and `metalex-webapp`: agents check the past audits and recorded audit responses
+stored in the repository before they evaluate issues, findings or fixes and before
+they write or approve plans. The rule and its sources are in
+[AGENTS.md](../../AGENTS.md#past-audits-and-audit-responses). This decision changes
+no contract behavior, release gate, permission or audit ownership.
