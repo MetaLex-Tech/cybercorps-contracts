@@ -42,6 +42,11 @@
         CyberCertData[] memory certData
     ) external returns (bytes32 roundId);
 
+    function createRoundWithPrinters(
+        Round memory roundDraft,
+        address[] memory certPrinters
+    ) external returns (bytes32 roundId);
+
     function submitEOI(
         bytes32 roundId,
         EOI memory eoi,

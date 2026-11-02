@@ -34,15 +34,9 @@ contract UpgradeCoreScript is DeploymentScript {
     ///      stored value through the upgrade; the secondary rate is new state and starts at zero.
     uint256 private constant SECONDARY_FEE_RATIO_BPS = 500; // 5% of the ticket
 
+    /// @dev The `--rpc-url` chain is the target chain.
     function run() public {
-        runAndExecute(
-//            // Production
-//            DeploymentConstants.BASE,
-//            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
-            // Staging
-            DeploymentConstants.BASE_SEPOLIA,
-            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
-        );
+        runAndExecute(block.chainid, vm.envUint("PRIVATE_KEY_MAIN"));
     }
 
     /// @notice Upgrades, then writes the Safe batch for the calls that the deployer cannot send.

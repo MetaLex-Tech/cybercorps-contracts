@@ -109,6 +109,9 @@ library RoundManagerStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.round.manager.storage.v1");
 
+    error InvalidCertPrinter();
+    error DuplicateCertPrinter();
+
     // EIP-712 escrowed-signature domain (authority officer authorizes round parameters off-chain).
     string constant EIP712_NAME = "RoundManager";
     string constant EIP712_VERSION = "1";
@@ -201,6 +204,41 @@ library RoundManagerStorage {
             : SecurityClass.SAFE;
         roundDraft.primarySecuritySeries = certData.length > 0
             ? certData[0].securitySeries
+            : SecuritySeries.NA;
+
+        setRound(roundDraft.id, roundDraft);
+
+        return roundDraft;
+    }
+
+    /// @notice Creates a round that issues from existing certificate printers
+    /// @dev Each printer must be a registered printer of this issuance manager, or allocation cannot mint.
+    /// Each printer must occur one time only, because allocation mints the full units on each printer.
+    function createRoundWithPrinters(
+        Round memory roundDraft,
+        address[] memory certPrinters
+    )
+    external // Use external library to save space
+    returns (Round memory) {
+        IIssuanceManager issuanceManager = getIssuanceManager();
+        for (uint256 i = 0; i < certPrinters.length; i++) {
+            address printer = certPrinters[i];
+            if (
+                !issuanceManager.isPrinter(printer) ||
+                ILedgerEntryToken(printer).issuanceManager() != address(issuanceManager)
+            ) revert InvalidCertPrinter();
+            for (uint256 j = 0; j < i; j++) {
+                if (certPrinters[j] == printer) revert DuplicateCertPrinter();
+            }
+        }
+
+        roundDraft.certPrinter = certPrinters;
+        roundDraft.raised = 0;
+        roundDraft.primarySecurityClass = certPrinters.length > 0
+            ? ILedgerEntryToken(certPrinters[0]).securityType()
+            : SecurityClass.SAFE;
+        roundDraft.primarySecuritySeries = certPrinters.length > 0
+            ? ILedgerEntryToken(certPrinters[0]).securitySeries()
             : SecuritySeries.NA;
 
         setRound(roundDraft.id, roundDraft);
