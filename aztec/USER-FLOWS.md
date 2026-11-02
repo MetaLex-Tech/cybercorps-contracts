@@ -24,6 +24,7 @@ sequenceDiagram
   participant PXE as Alice wallet + PXE
   participant Vault as MetaLeX vault
   participant Collector as MetaLeX collector
+  participant Cache as MetaLeX invite cache
 
   Alice->>App: Pick template, fill values, add Bob
   App->>App: salt = random, terms_hash = sha256(canonical JSON)
@@ -33,11 +34,16 @@ sequenceDiagram
   App->>PXE: consent_hash_of(agreement, alice)
   PXE->>PXE: createAuthWit(consumer = registry, consent hash)
   App->>Collector: agreement (no salt) + Alice authwit
+  App->>Cache: invite (kept for the retention period)
   App-->>Alice: Invite link for Bob
 ```
 
+PII in this flow: the document stays in Alice's browser as plaintext. The vault gets only ciphertext. The collector
+gets the party addresses, the expiry and the time that Alice signed. The invite cache gets the salt, so MetaLeX can
+read the agreement until the end of the retention period.
+
 Alice sends the invite link to Bob. The invite holds the salt, the expiry and the party addresses. The webapp puts
-it in the URL fragment, so the MetaLeX servers never receive it.
+it in the URL fragment, so the link does not send it to the MetaLeX servers.
 
 Nothing goes onchain in this flow. Alice sends no tx.
 
@@ -64,6 +70,9 @@ sequenceDiagram
   App->>Collector: Bob authwit
 ```
 
+PII in this flow: Bob's browser decrypts the document. The vault sees a fetch of a blob. The collector gets the
+time that Bob signed.
+
 Bob signs the agreement id that he computed himself from the document. If the vault blob or the invite is wrong,
 Bob gets a different agreement id. Then his authwit is for a different agreement, and `finalize` fails.
 
@@ -82,6 +91,9 @@ sequenceDiagram
   Net-->>Settler: Mined
 ```
 
+PII in this flow: the settler uses the party addresses and public keys that the collector already has. The tx holds
+no PII. The chain sees only 6 nullifiers and the FPC as fee payer.
+
 What the circuit checks:
 
 - The party list has one valid form: 1 to 4 parties, no zero address, no duplicate, unused slots are zero.
@@ -99,10 +111,13 @@ What the circuit checks:
 4. The webapp shows the document and the status "finalized". To show the time, the webapp finds the block of the
    finalized nullifier.
 
-The node sees the queried nullifier. It cannot link the nullifier to an agreement without the salt.
+PII in this flow: the auditor gets all PII of the agreement from the invite and the vault blob. The vault sees a fetch.
+The node sees the queried nullifier and the IP of the auditor. It cannot link the nullifier to an agreement without
+the salt.
 
 ## 6. Recovery
 
 - The account keys restore the wallet on a new device.
-- The webapp must keep the invite for each agreement of the user. With the invite, the user opens the document from
-  the vault and reads the status from the chain.
+- During the retention period, the webapp gets each invite of the user back from the MetaLeX invite cache. With the
+  invite, the user opens the document from the vault and reads the status from the chain.
+- After the retention period, the user needs its own copy of the invite.

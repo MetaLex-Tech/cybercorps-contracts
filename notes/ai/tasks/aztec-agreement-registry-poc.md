@@ -1,7 +1,7 @@
 # Task: Aztec private agreement registry PoC
 
 - **Status:** Ready for review (lifecycle redesign)
-- **Updated:** 2026-11-01 (local time)
+- **Updated:** 2026-11-02 (local time)
 - **Owner:** Claude Code session for the user (detoo)
 - **Collaborators / boundaries:** New files under `aztec/` only. No change to `src/`, `test/` or `script/`.
 - **Objective:** A minimal Aztec port of `CyberAgreementRegistry.createBoundContractAndSignFor`, privacy first,
@@ -58,6 +58,10 @@
 - Unused party slots get padding nullifiers: 6 nullifiers for one and for two parties (measured).
 - The invite (salt, expiry, parties) is shared out of band in the URL fragment. No events go to the parties.
 - The settler needs accounts whose authwit check reads no owner private state (initializerless Schnorr works).
+- 2026-11-02 (user): MetaLeX may cache each invite (salt) for a retention period to improve UX. MetaLeX can then
+  read the agreement during that period; users accept this trust. The collector and the settler still never get
+  the salt. Docs only; the cache is not in the PoC.
+- 2026-11-02: Added the PII matrix and the comparison with `metalex-webapp` `a5d47d9b4` to `ARCHITECTURE.md`.
 
 ## Validation
 
@@ -75,4 +79,4 @@ No independent review. Real-proof run and mainnet deploy need a funded deployer 
 ## Next action and handoff
 
 User reviews the lifecycle design and docs. Open items are listed in `aztec/ARCHITECTURE.md` (consent withdrawal
-before finalize, durable invite store, FPC use limits, value arrays).
+before finalize, invite cache and retention period, FPC use limits, value arrays).

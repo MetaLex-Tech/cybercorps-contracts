@@ -11,8 +11,9 @@ Toolchain: Aztec 6.0.0, aztec-nr v6.0.0, Noir 1.0.0-rc.3.
 1. The chain keeps only nullifiers. Agreement text, field values and party addresses stay offchain.
 2. Each party signs offchain with a private authwit. MetaLeX collects the authwits and sends one `finalize` tx
    when all parties signed. No party needs to send a tx or hold a fee token.
-3. Only the parties, and the people they share an invite with, know the salt. The MetaLeX services never get the
-   salt, the terms or the document text.
+3. The parties, and the people they share an invite with, know the salt. MetaLeX may cache the invite for a fixed
+   retention period to make the webapp easier to use. During that period, MetaLeX can read the agreement. Users
+   accept this trust. The collector and the settler never get the salt, the terms or the document text.
 4. The MetaLeX services hold no user keys.
 
 ## Components
@@ -20,17 +21,18 @@ Toolchain: Aztec 6.0.0, aztec-nr v6.0.0, Noir 1.0.0-rc.3.
 ```mermaid
 flowchart LR
     subgraph User device
-        App[MetaLeX webapp]
+        App[MetaLeX webapp<br/>PII: plaintext, in memory]
         PXE[Wallet + PXE<br/>keys]
     end
     subgraph MetaLeX services
         Catalog[Template catalog<br/>public]
-        Vault[Document vault<br/>encrypted blobs]
-        Collector[Signature collector<br/>authwits]
-        Settler[Settler<br/>MetaLeX wallet + PXE]
+        Vault[Document vault<br/>PII: ciphertext only]
+        Collector[Signature collector<br/>PII metadata: parties, signing times]
+        Settler[Settler<br/>MetaLeX wallet + PXE<br/>PII metadata: parties]
+        Cache[Invite cache<br/>PII access: salt, during retention]
     end
     subgraph Aztec network
-        Node[Aztec node RPC]
+        Node[Aztec node RPC<br/>network data: PXE IP, lookups]
         Registry[CyberAgreementRegistry<br/>private functions]
         Accounts[Party account contracts<br/>verify authwits]
         FPC[Fee payer contract<br/>MetaLeX deploys and funds it]
@@ -46,6 +48,7 @@ flowchart LR
     App --> Catalog
     App --> Vault
     App -->|authwit| Collector
+    App -->|invite| Cache
     Collector --> Settler
     PXE -. runs utilities locally .-> Registry
     PXE -->|read trees| Node
@@ -56,7 +59,24 @@ flowchart LR
     Node --> Sequencer
     Sequencer -->|insert nullifiers| Trees
     Sequencer -->|deduct fee| FeeJuice
+
+    subgraph Legend
+        direction TB
+        LPlain[Red: can read plaintext PII]
+        LCipher[Brown: holds encrypted PII only]
+        LMeta[Blue: holds metadata about people, no document content]
+        LNone[No color: holds no PII]
+    end
+
+    classDef piiPlain fill:#842029,stroke:#58151c,color:#fff
+    classDef piiCipher fill:#664d03,stroke:#332701,color:#fff
+    classDef piiMeta fill:#084298,stroke:#052c65,color:#fff
+    class App,Cache,LPlain piiPlain
+    class Vault,LCipher piiCipher
+    class Collector,Settler,Node,LMeta piiMeta
 ```
+
+The legend explains the colors. See [PII: who can see what](#pii-who-can-see-what) for the details.
 
 | Component                         | Who runs it                                       | What it stores                                                            | What it can read                                                  |
 |-----------------------------------|---------------------------------------------------|---------------------------------------------------------------------------|-------------------------------------------------------------------|
@@ -67,6 +87,7 @@ flowchart LR
 | Document vault                    | MetaLeX                                           | AES-256-GCM document blobs, keyed by a locator                            | Locator, blob size, upload and fetch times                        |
 | Signature collector               | MetaLeX                                           | Onboarded account data, `Agreement` structs without salt, authwits        | Parties, expiry, agreement id, who signed and when                |
 | Settler                           | MetaLeX                                           | Its own account keys, the public signing keys of the party accounts       | The same as the collector, and the finalize status                |
+| Invite cache                      | MetaLeX                                           | Invites, until the end of the retention period                            | With the vault: all data of each cached agreement                 |
 | Party account contracts           | Aztec network; each user owns one                 | The signing public key, in the contract instance (`immutables_hash`)      | Nothing after the tx                                              |
 | Fee payer contract (FPC)          | Aztec network; MetaLeX deploys and funds it       | Fee juice balance (public state)                                          | That a sponsored tx happened                                      |
 | Aztec node RPC                    | Aztec network                                     | Chain state                                                               | Queries from each PXE (nullifier lookups, tx hashes)              |
@@ -87,7 +108,7 @@ struct Agreement {
 
 `MAX_PARTIES` is 4. Each party adds one private call to its account contract in the finalize tx.
 
-The struct holds no salt and no `terms_hash`. So MetaLeX can run `finalize` and still cannot open the document.
+The struct holds no salt and no `terms_hash`. So the settler can run `finalize` and still cannot open the document.
 
 ### Derived values
 
@@ -120,7 +141,11 @@ The invite is what a party shares with a counterparty or an auditor. It holds th
 addresses. With the invite and the vault blob, the webapp can rebuild the `Agreement` struct and the agreement id.
 
 The webapp puts the invite in the URL fragment (after `#`). A browser does not send the fragment to the server, so
-the MetaLeX services never receive it. A holder of the invite can read the whole document. The webapp treats each
+a shared link does not give the invite to MetaLeX. A holder of the invite can read the whole document.
+
+The webapp also gives each invite to the MetaLeX invite cache. The cache gives it back to a signed-in party, so the
+party can open the agreement on any device without the link. The cache deletes the invite at the end of the
+retention period. After that, the party needs its own copy of the invite. The PoC does not include the cache. The webapp treats each
 party address in an invite as untrusted and checks that it is a valid address.
 
 ### Canonical JSON
@@ -172,8 +197,7 @@ Its canonical JSON, which the webapp hashes:
 
 ### Secrets, keys and hashes
 
-Each box is a place where a value lives. A dashed box is a value that the webapp computes when it needs it and does
-not store.
+Each box is a place where a value lives. The legend explains the colors and the dashed boxes.
 
 ```mermaid
 flowchart TB
@@ -193,6 +217,9 @@ flowchart TB
     subgraph Vault["MetaLeX vault"]
         BLOB["Encrypted document blob"]
     end
+    subgraph Cache["MetaLeX invite cache, during retention"]
+        CINV["Invite"]
+    end
     subgraph Collector["MetaLeX signature collector and settler"]
         AGR["Agreement<br/>terms_commitment, expiry, parties"]
         AW["Authwit<br/>one per party"]
@@ -206,6 +233,7 @@ flowchart TB
     DOC -->|SHA-256| TH
     TH -->|Poseidon2 with salt| TC
     INV -->|salt| TC
+    INV -->|cached copy| CINV
     INV -->|HKDF, locator label| LOC
     INV -->|HKDF, key label| KEY
     KEY -->|AES-256-GCM encrypts| BLOB
@@ -219,14 +247,29 @@ flowchart TB
     AGR -->|finalize| FIN
     AGR -->|finalize| PAD
 
+    subgraph Legend
+        direction TB
+        LPlain[Red: can read plaintext PII]
+        LCipher[Brown: holds encrypted PII only]
+        LMeta[Blue: holds metadata about people, no document content]
+        LNone[No color: holds no PII]
+        LDerived[Dashed: computed when needed, not stored]
+    end
+
     classDef derived stroke-dasharray: 5 5
-    class TH,TC,AID,CH,LOC,KEY derived
+    classDef piiPlain fill:#842029,stroke:#58151c,color:#fff
+    classDef piiCipher fill:#664d03,stroke:#332701,color:#fff
+    classDef piiMeta fill:#084298,stroke:#052c65,color:#fff
+    class TH,TC,AID,CH,LOC,KEY,LDerived derived
+    class DOC,INV,CINV,LPlain piiPlain
+    class BLOB,LCipher piiCipher
+    class AGR,LMeta piiMeta
 ```
 
 | Value                   | Kind           | Made by                               | Known to                                           | Stored at                                                     |
 |-------------------------|----------------|---------------------------------------|----------------------------------------------------|---------------------------------------------------------------|
 | Signing key             | Secret         | Party's wallet                        | That party                                         | Wallet                                                        |
-| Salt                    | Secret         | Creator's webapp, random              | All parties, and each holder of the invite         | Inside the invite; never onchain, never at MetaLeX            |
+| Salt                    | Secret         | Creator's webapp, random              | All parties, each holder of the invite, and MetaLeX during retention | Inside the invite; in the MetaLeX invite cache during retention; never onchain |
 | Document                | PII            | Creator's webapp                      | All parties, and each holder of the invite         | Plaintext only in webapp memory; ciphertext in the vault      |
 | `terms_hash`            | Hash           | Webapp, SHA-256 of the document       | Each holder of the invite                          | Not stored                                                    |
 | `terms_commitment`      | Hash           | Webapp, Poseidon2                     | Each holder of the invite, and MetaLeX             | In the collector                                              |
@@ -238,7 +281,7 @@ flowchart TB
 | Finalized nullifier     | Hash           | Circuit                               | Public                                             | Nullifier tree                                                |
 | Vault locator           | Derived id     | Webapp, HKDF of the salt              | Each holder of the invite, and the MetaLeX vault   | Vault index                                                   |
 | Document key            | Derived secret | Webapp, HKDF of the salt              | Each holder of the invite                          | Not stored                                                    |
-| Encrypted document blob | Ciphertext     | Creator's webapp, AES-256-GCM         | MetaLeX stores it; only salt holders decrypt it    | MetaLeX vault                                                 |
+| Encrypted document blob | Ciphertext     | Creator's webapp, AES-256-GCM         | MetaLeX stores it; only salt holders decrypt it, MetaLeX among them during retention | MetaLeX vault                    |
 
 The signing key of each party protects the account. The salt protects one agreement. Without the salt, a chain
 observer cannot link the three kinds of nullifiers to each other or to an agreement.
@@ -276,7 +319,7 @@ Each row compares one concept. "Today" is `src/CyberAgreementRegistry.sol`. "Pro
 | Finalize                | Today, the last signature sets `finalized`, or the finalizer calls `finalizeContract`.  | Proposed, one `finalize` tx after all parties signed. The finalized nullifier records it.                                        |
 | Signing time            | Today, `signedAt` stores the time of each signature.                                    | Proposed, the block of the finalize tx gives the time for all parties. Only the collector knows when each party signed.         |
 | Duplicate finalize      | Today, `ContractAlreadyFinalized` checks storage.                                       | Proposed, a second finalize gives the same finalized nullifier, so the network rejects the tx.                                   |
-| Expiry                  | Today, `block.timestamp` checks.                                                        | Proposed, `set_expiration_timestamp(expiry)`. The network drops the finalize tx after the expiry.                                |
+| Expiry                  | Today, `block.timestamp` checks.                                                        | Proposed, `set_expiration_timestamp(expiry)`. The network drops the finalize tx after the expiry.                                || Yes                                    
 | Status                  | Today, `isFinalized` and `hasSigned` read storage.                                      | Proposed, the `is_finalized` utility asks the node for the finalized nullifier.                                                  |
 | Events                  | Today, public `ContractCreated`, `AgreementSigned` and `ContractFinalized` logs.        | Proposed, no events. A holder of the invite reads the status from the chain.                                                     |
 | Gas                     | Today, the signer or a relayer pays ETH.                                                | Proposed, the MetaLeX FPC pays the fee of the finalize tx.                                                                       |
@@ -285,7 +328,8 @@ Not in this PoC: void, open party slots, secret hash, finalizer, signer conditio
 
 ## MetaLeX privacy data layer
 
-MetaLeX runs four services. None of them gets the salt, the terms or the document text.
+MetaLeX runs five services. Only the invite cache gets the salt, and only for the retention period. The others
+never get the salt, the terms or the document text.
 
 ### Signature collector
 
@@ -312,6 +356,14 @@ MetaLeX runs four services. None of them gets the salt, the terms or the documen
 - The vault cannot compute the agreement id, because it does not have the salt.
 - The vault is also the backup of the legal text. A party needs the text to know what it signed.
 
+### Invite cache
+
+- The webapp gives the cache each invite of the user. The cache gives an invite back only to a signed-in party of
+  that agreement.
+- With an invite and the vault blob, MetaLeX can read the whole agreement. Users accept this trust for the
+  retention period.
+- The cache deletes each invite at the end of the retention period. After that, MetaLeX cannot read the agreement.
+
 ### Fee payer contract
 
 - The FPC is an onchain contract on Aztec. MetaLeX deploys it and funds it with fee juice. Its balance is public
@@ -327,9 +379,60 @@ node for its users. A user who wants more privacy can use a separate node.
 
 ## Privacy analysis
 
+### PII: who can see what
+
+Each row is one kind of personal data. Each cell says what that viewer can see of it. "Party" means each party of
+the agreement, on its own device. The webapp runs in the browser of the user, so it counts as the user's device.
+
+| Personal data                                  | Stored at rest                                    | Party                                   | Auditor with invite | MetaLeX invite cache, during retention | MetaLeX collector and settler        | MetaLeX vault                     | Node operator                               | Chain observer, sequencer                        |
+|------------------------------------------------|---------------------------------------------------|-----------------------------------------|---------------------|----------------------------------------|--------------------------------------|-----------------------------------|---------------------------------------------|--------------------------------------------------|
+| Party values (names and other party fields)    | Vault, as ciphertext                              | Yes                                     | Yes                 | Yes, with the vault blob               | No                                   | Ciphertext and its size only      | No                                          | No                                               |
+| Global values (deal terms)                     | Vault, as ciphertext                              | Yes                                     | Yes                 | Yes, with the vault blob               | No                                   | Ciphertext and its size only      | No                                          | No                                               |
+| Party addresses (who contracts with whom)      | Collector; the invite; invite cache               | Yes, for its own agreements             | Yes                 | Yes                                    | Yes                                  | No                                | No                                          | No                                               |
+| Account instance and signing public key        | Collector; settler PXE                            | Its own only                            | No                  | No                                     | Yes, for each onboarded user         | No                                | No                                          | No                                               |
+| Expiry                                         | Collector; the invite; invite cache               | Yes                                     | Yes                 | Yes                                    | Yes                                  | No                                | No                                          | Only when it is less than one day after the anchor |
+| Time that each party signed                    | Collector, until finalize                         | Its own only                            | No                  | No                                     | Yes                                  | No                                | No                                          | No                                               |
+| Finalize status and time                       | Nullifier tree, not linkable without the salt     | Yes                                     | Yes                 | Yes                                    | Yes                                  | No                                | A lookup of a nullifier, not the agreement  | That a tx happened, not the agreement            |
+| IP address and request times                   | Logs of each service                              | Its own only                            | Its own only        | Of the webapps that put or get invites | Of the webapps that post to it       | Of the webapps that upload or fetch | Of each PXE that queries it, and of the settler | No                                               |
+
+Notes:
+
+- No PII goes onchain. The chain keeps only nullifiers. Without the salt, nobody can link them to an agreement or a
+  party.
+- The salt is the access key to the PII of one agreement. A holder of the invite sees the same data as a party.
+  A party controls who gets the invite. Nobody can take back an invite after a party shares it.
+- MetaLeX can decrypt a vault blob only while it caches the invite. After the retention period, the "invite cache"
+  column becomes "No" in each row. The collector, the settler and the vault never get the salt.
+- MetaLeX runs both the vault and the collector. It can link a blob to an agreement by the IP and the time of the
+  requests. This gives no plaintext.
+- The diagrams show no MetaLeX login. If a login links an email or a name to an Aztec address, MetaLeX can link
+  that person to each agreement, counterparty and signing time in the collector.
+- To erase the PII of an agreement, MetaLeX deletes the vault blob, the cached invite and the collector entry. The nullifiers stay
+  onchain, but they hold no PII. A party that keeps no copy of the document then loses access to it.
+
+### Compared with the current webapp
+
+"Today" is `metalex-webapp` at commit `a5d47d9b4` (2026-10-30), for agreements in `CyberAgreementRegistry`. Today
+has two paths. A deal (an offer, a round or a corp formation) stores its values onchain. A private document
+(cyberSign) stores the document in the MetaLeX database and puts only ids, hashes and party capacities onchain.
+"Proposed" is this design.
+
+| Personal data                    | Today                                                                                                                                                                                                                                                                                                  | Proposed                                                                                                       |
+|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
+| Party values (names, contacts)   | Today, a deal writes them onchain in `partyValues`. They are plaintext unless the user turns on encryption (`encryptionEnabledAtom` is `false` by default). Encrypted values use AES-256-CBC with a per-agreement key in the MetaLeX database. A private document keeps them in the encrypted document. | Proposed, only in the encrypted vault blob. Nothing onchain.                                                   |
+| Global values (deal terms)       | Today, a deal writes them onchain in `globalValues` as plaintext. A private document puts its company or owner address, document SHA-256, template id and request id onchain as plaintext.                                                                                                              | Proposed, only in the encrypted vault blob. Nothing onchain.                                                   |
+| Document file                    | Today, a private document is sealed with AES-256-GCM under a company key in the MetaLeX database.                                                                                                                                                                                                       | Proposed, sealed with AES-256-GCM under a key from the salt of the agreement, in the vault.                    |
+| Party addresses                  | Today, public onchain (`getParties`, events). A private document also puts each party wallet and capacity onchain as JSON.                                                                                                                                                                            | Proposed, the collector, the invite and the invite cache. Nothing onchain.                                     |
+| Signing times, finalize status   | Today, public onchain (`signedAt`, `AgreementSigned`, `ContractFinalized`).                                                                                                                                                                                                                             | Proposed, signing times only in the collector. Onchain, only a nullifier that nobody can link without the salt. |
+| Who at MetaLeX can decrypt       | Today, the MetaLeX server can decrypt every encrypted value and document. It unwraps each per-agreement key and each company key with one server secret, `ENCRYPTION_KEY`.                                                                                                                              | Proposed, MetaLeX can decrypt an agreement only while the invite cache keeps its invite. No MetaLeX secret opens all agreements. |
+| Who outside MetaLeX can decrypt  | Today, nobody without the MetaLeX server. A party cannot decrypt its own encrypted values without MetaLeX.                                                                                                                                                                                             | Proposed, each holder of the invite, without MetaLeX.                                                          |
+
+### What each viewer learns
+
 | Viewer                                | What it learns                                                                                                                  | What it does not learn                                     |
 |---------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
 | Chain observer                        | That some tx emitted 6 nullifiers, its fee payer, its time, and an expiry when the expiry is less than one day after the anchor | Contract called, parties, party count, terms, agreement id |
+| MetaLeX (invite cache)                | All data of each cached agreement, during the retention period                                                                  | Agreements after the retention period                      |
 | MetaLeX (collector and settler)       | Parties, expiry, agreement id, who signed and when, the finalize status                                                         | Salt, terms, document text                                 |
 | MetaLeX (vault)                       | Locator, blob size, upload and fetch times                                                                                      | Agreement id, parties, document text                       |
 | MetaLeX (FPC)                         | That a sponsored tx happened                                                                                                    | Which function or user, from the FPC alone                 |
@@ -348,8 +451,8 @@ Notes:
 - A party cannot withdraw an authwit before the finalize tx. Only the expiry limits it. A void flow needs a registry
   function that a party can call to block the finalize.
 - The settler works only with accounts whose authwit check reads no private state of the owner.
-- The webapp must keep the invite for the user. If the user loses the invite, the user cannot open the document.
-  A durable store for invites is a design item.
+- The invite cache keeps an invite only for the retention period. After that, a user who lost the invite cannot
+  open the document. The retention period and the cache are design items. The PoC does not include them.
 - The MetaLeX FPC with use limits is a design item. The PoC uses the test SponsoredFPC.
 - Counsel must confirm that an authwit is acceptable as an electronic signature. The PoC keeps no ECDSA signature
   artifact.
