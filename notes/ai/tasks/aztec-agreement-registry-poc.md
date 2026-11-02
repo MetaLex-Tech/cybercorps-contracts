@@ -62,6 +62,9 @@
   read the agreement during that period; users accept this trust. The collector and the settler still never get
   the salt. Docs only; the cache is not in the PoC.
 - 2026-11-02: Added the PII matrix and the comparison with `metalex-webapp` `a5d47d9b4` to `ARCHITECTURE.md`.
+- 2026-11-02: The invite cache encrypts each invite with AES-256-GCM under a KMS key (application-level
+  encryption; database storage encryption does not stop a credentialed copy). Added side-by-side Today/Proposed
+  component and secret diagrams with migration tags (keep, change, replace, new) and a migration table.
 
 ## Validation
 
