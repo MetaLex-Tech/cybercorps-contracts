@@ -71,6 +71,9 @@
   hashes. Onchain-logic readers assessed (CertificateUriBuilder, DealManagerStorage counterparty check,
   Section4a7DisclosureCondition, SecondaryTradeStorage, RoundManagerStorage, factories, LeXcheXMinter).
   Three-way diagrams (Today, EVM retrofit, Aztec) replace the two-way ones.
+- 2026-11-02 (user): "Invite cache" renamed to "data key store". The unit of access can later be a cyberCorp or a
+  group, under an ACL. Its KMS key is `ENCRYPTION_KEY` ("decrypts all data keys"), so it maps to today's
+  `ENCRYPTION_KEY` and `keys` table. Supersedes the "invite cache" wording above.
 
 ## Validation
 
@@ -88,4 +91,4 @@ No independent review. Real-proof run and mainnet deploy need a funded deployer 
 ## Next action and handoff
 
 User reviews the lifecycle design and docs. Open items are listed in `aztec/ARCHITECTURE.md` (consent withdrawal
-before finalize, invite cache and retention period, FPC use limits, value arrays).
+before finalize, data key store with ACL and retention periods, FPC use limits, value arrays).

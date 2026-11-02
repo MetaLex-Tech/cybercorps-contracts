@@ -24,7 +24,7 @@ sequenceDiagram
   participant PXE as Alice wallet + PXE
   participant Vault as MetaLeX vault
   participant Collector as MetaLeX collector
-  participant Cache as MetaLeX invite cache
+  participant Cache as MetaLeX data key store
 
   Alice->>App: Pick template, fill values, add Bob
   App->>App: salt = random, terms_hash = sha256(canonical JSON)
@@ -34,12 +34,12 @@ sequenceDiagram
   App->>PXE: consent_hash_of(agreement, alice)
   PXE->>PXE: createAuthWit(consumer = registry, consent hash)
   App->>Collector: agreement (no salt) + Alice authwit
-  App->>Cache: invite (kept for the retention period)
+  App->>Cache: salt (kept for the retention period)
   App-->>Alice: Invite link for Bob
 ```
 
 PII in this flow: the document stays in Alice's browser as plaintext. The vault gets only ciphertext. The collector
-gets the party addresses, the expiry and the time that Alice signed. The invite cache gets the salt, so MetaLeX can
+gets the party addresses, the expiry and the time that Alice signed. The data key store gets the salt, so MetaLeX can
 read the agreement until the end of the retention period.
 
 Alice sends the invite link to Bob. The invite holds the salt, the expiry and the party addresses. The webapp puts
@@ -118,6 +118,7 @@ the salt.
 ## 6. Recovery
 
 - The account keys restore the wallet on a new device.
-- During the retention period, the webapp gets each invite of the user back from the MetaLeX invite cache. With the
-  invite, the user opens the document from the vault and reads the status from the chain.
+- During the retention period, the webapp gets the salt of each agreement of the user from the MetaLeX data key
+  store, and the expiry and the parties from the collector. With these, the user opens the document from the vault
+  and reads the status from the chain.
 - After the retention period, the user needs its own copy of the invite.

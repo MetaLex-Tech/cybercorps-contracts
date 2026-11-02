@@ -12,8 +12,8 @@ Toolchain: Aztec 6.0.0, aztec-nr v6.0.0, Noir 1.0.0-rc.3.
 1. The chain keeps only nullifiers. Agreement text, field values and party addresses stay offchain.
 2. Each party signs offchain with a private authwit. MetaLeX collects the authwits and sends one `finalize` tx
    when all parties signed. No party needs to send a tx or hold a fee token.
-3. The parties, and the people they share an invite with, know the salt. MetaLeX may cache the invite for a fixed
-   retention period to make the webapp easier to use. During that period, MetaLeX can read the agreement. Users
+3. The parties, and the people they share an invite with, know the salt. MetaLeX may keep the salt in its data key
+   store for a fixed retention period to make the webapp easier to use. During that period, MetaLeX can read the agreement. Users
    accept this trust. The collector and the settler never get the salt, the terms or the document text.
 4. The MetaLeX services hold no user keys.
 
@@ -30,8 +30,8 @@ flowchart LR
         Vault[Document vault<br/>PII: ciphertext only]
         Collector[Signature collector<br/>PII metadata: parties, signing times]
         Settler[Settler<br/>MetaLeX wallet + PXE<br/>PII metadata: parties]
-        Cache[Invite cache<br/>PII access: salt, during retention<br/>encrypted with the KMS key]
-        KMS[Key management service<br/>invite cache key]
+        Cache[Data key store<br/>PII access: salt, during retention<br/>encrypted with ENCRYPTION_KEY]
+        KMS[Key management service<br/>ENCRYPTION_KEY, decrypts all data keys]
     end
     subgraph Aztec network
         Node[Aztec node RPC<br/>network data: PXE IP, lookups]
@@ -50,7 +50,7 @@ flowchart LR
     App --> Catalog
     App --> Vault
     App -->|authwit| Collector
-    App -->|invite| Cache
+    App -->|salt| Cache
     Cache -->|encrypt, decrypt| KMS
     Collector --> Settler
     PXE -. runs utilities locally .-> Registry
@@ -90,8 +90,8 @@ The legend explains the colors. See [PII: who can see what](#pii-who-can-see-wha
 | Document vault                    | MetaLeX                                           | AES-256-GCM document blobs, keyed by a locator                            | Locator, blob size, upload and fetch times                        |
 | Signature collector               | MetaLeX                                           | Onboarded account data, `Agreement` structs without salt, authwits        | Parties, expiry, agreement id, who signed and when                |
 | Settler                           | MetaLeX                                           | Its own account keys, the public signing keys of the party accounts       | The same as the collector, and the finalize status                |
-| Invite cache                      | MetaLeX                                           | Invites encrypted with the KMS key, until the end of the retention period | With the vault: all data of each cached agreement                 |
-| Key management service (KMS)      | MetaLeX account at a cloud KMS                    | The invite cache key; the key never leaves the KMS                        | Nothing; it logs each decrypt                                     |
+| Data key store                    | MetaLeX                                           | Data keys (salts) encrypted with `ENCRYPTION_KEY`, until the end of the retention period | With the vault and the collector: all data of each stored agreement |
+| Key management service (KMS)      | MetaLeX account at a cloud KMS                    | `ENCRYPTION_KEY`; the key never leaves the KMS                            | Nothing; it logs each decrypt                                     |
 | Party account contracts           | Aztec network; each user owns one                 | The signing public key, in the contract instance (`immutables_hash`)      | Nothing after the tx                                              |
 | Fee payer contract (FPC)          | Aztec network; MetaLeX deploys and funds it       | Fee juice balance (public state)                                          | That a sponsored tx happened                                      |
 | Aztec node RPC                    | Aztec network                                     | Chain state                                                               | Queries from each PXE (nullifier lookups, tx hashes)              |
@@ -147,9 +147,10 @@ addresses. With the invite and the vault blob, the webapp can rebuild the `Agree
 The webapp puts the invite in the URL fragment (after `#`). A browser does not send the fragment to the server, so
 a shared link does not give the invite to MetaLeX. A holder of the invite can read the whole document.
 
-The webapp also gives each invite to the MetaLeX invite cache. The cache gives it back to a signed-in party, so the
-party can open the agreement on any device without the link. The cache deletes the invite at the end of the
-retention period. After that, the party needs its own copy of the invite. The PoC does not include the cache. The webapp treats each
+The webapp also gives the salt to the MetaLeX data key store. The store gives it back to a signed-in party, so the
+party can open the agreement on any device without the link. The webapp gets the expiry and the parties from the
+collector. The store deletes the salt at the end of the retention period. After that, the party needs its own copy
+of the invite. The PoC does not include the data key store. The webapp treats each
 party address in an invite as untrusted and checks that it is a valid address.
 
 ### Canonical JSON
@@ -221,11 +222,11 @@ flowchart TB
     subgraph Vault["MetaLeX vault"]
         BLOB["Encrypted document blob"]
     end
-    subgraph Cache["MetaLeX invite cache, during retention"]
-        CINV["Invite, encrypted"]
+    subgraph Cache["MetaLeX data key store, during retention"]
+        CINV["Salt, encrypted"]
     end
     subgraph KMSBox["MetaLeX key management service"]
-        CKEY["Invite cache key"]
+        CKEY["ENCRYPTION_KEY<br/>decrypts all data keys"]
     end
     subgraph Collector["MetaLeX signature collector and settler"]
         AGR["Agreement<br/>terms_commitment, expiry, parties"]
@@ -240,7 +241,7 @@ flowchart TB
     DOC -->|SHA-256| TH
     TH -->|Poseidon2 with salt| TC
     INV -->|salt| TC
-    INV -->|cached copy| CINV
+    INV -->|stored copy of the salt| CINV
     CKEY -->|AES-256-GCM encrypts| CINV
     INV -->|HKDF, locator label| LOC
     INV -->|HKDF, key label| KEY
@@ -277,8 +278,8 @@ flowchart TB
 | Value                   | Kind           | Made by                               | Known to                                           | Stored at                                                     |
 |-------------------------|----------------|---------------------------------------|----------------------------------------------------|---------------------------------------------------------------|
 | Signing key             | Secret         | Party's wallet                        | That party                                         | Wallet                                                        |
-| Salt                    | Secret         | Creator's webapp, random              | All parties, each holder of the invite, and MetaLeX during retention | Inside the invite; encrypted in the MetaLeX invite cache during retention; never onchain |
-| Invite cache key        | Secret         | MetaLeX KMS                           | Nobody; only the KMS uses it                       | MetaLeX KMS                                                   |
+| Salt                    | Secret         | Creator's webapp, random              | All parties, each holder of the invite, and MetaLeX during retention | Inside the invite; encrypted in the MetaLeX data key store during retention; never onchain |
+| `ENCRYPTION_KEY`        | Secret         | MetaLeX KMS                           | Nobody; only the KMS uses it                       | MetaLeX KMS; it decrypts all data keys in the store           |
 | Document                | PII            | Creator's webapp                      | All parties, and each holder of the invite         | Plaintext only in webapp memory; ciphertext in the vault      |
 | `terms_hash`            | Hash           | Webapp, SHA-256 of the document       | Each holder of the invite                          | Not stored                                                    |
 | `terms_commitment`      | Hash           | Webapp, Poseidon2                     | Each holder of the invite, and MetaLeX             | In the collector                                              |
@@ -337,7 +338,7 @@ Not in this PoC: void, open party slots, secret hash, finalizer, signer conditio
 
 ## MetaLeX privacy data layer
 
-MetaLeX runs five services and one KMS key. Only the invite cache gets the salt, and only for the retention period. The others
+MetaLeX runs five services and one KMS key. Only the data key store gets the salt, and only for the retention period. The others
 never get the salt, the terms or the document text.
 
 ### Signature collector
@@ -365,20 +366,23 @@ never get the salt, the terms or the document text.
 - The vault cannot compute the agreement id, because it does not have the salt.
 - The vault is also the backup of the legal text. A party needs the text to know what it signed.
 
-### Invite cache
+### Data key store
 
-- The webapp gives the cache each invite of the user. The cache gives an invite back only to a signed-in party of
-  that agreement.
+- The store keeps data keys. A data key opens the data of one unit of access. Today the only unit is an agreement,
+  and its data key is the salt. Later units can be a cyberCorp or a group in a cyberCorp.
+- An access rule (ACL) controls each data key. For an agreement, the rule lets each signed-in party of that
+  agreement get the salt.
 - With an invite and the vault blob, MetaLeX can read the whole agreement. Users accept this trust for the
   retention period.
-- The cache deletes each invite at the end of the retention period. After that, MetaLeX cannot read the agreement.
-- The cache encrypts each invite with AES-256-GCM and a random IV before it writes the row. The key is in a key
-  management service (KMS), not in the database. Only the cache server role can ask the KMS to decrypt. The KMS
-  logs each decrypt.
+- Each kind of unit has a retention period. The store deletes an agreement salt at the end of its period. After
+  that, MetaLeX cannot read the agreement.
+- The store encrypts each data key with `ENCRYPTION_KEY`, with AES-256-GCM and a random IV, before it writes the
+  row. `ENCRYPTION_KEY` decrypts all data keys. It is in a key management service (KMS), not in the database or the
+  server environment. Only the store server role can ask the KMS to decrypt. The KMS logs each decrypt.
 - The database also encrypts its storage, but that protects only against a stolen disk or backup. The database
-  gives plaintext rows to each connection with valid credentials. The cache encryption makes a database copy give
+  gives plaintext rows to each connection with valid credentials. The store encryption makes a database copy give
   only ciphertext.
-- The cache encryption does not stop MetaLeX. The cache server can decrypt, because it must give the invite back to
+- The store encryption does not stop MetaLeX. The store server can decrypt, because it must give the salt back to
   the user.
 
 ### Fee payer contract
@@ -403,7 +407,7 @@ No code exists for it.
 ### Design
 
 1. The webapp makes the document and a random salt, as in the Aztec design. It encrypts the document into the
-   vault. It gives the invite to the parties and to the invite cache.
+   vault. It gives the invite to the parties and the salt to the data key store.
 2. The global values become one EIP-712 struct, `Terms { string[] values; bytes32 salt; }`. The values of each
    party become one `PartyTerms { address party; string[] values; bytes32 salt; }`.
 3. The registry stores `hashStruct(Terms)` and one `hashStruct(PartyTerms)` for each party. It does not store the
@@ -453,7 +457,7 @@ Effects on the other contracts:
 |----------------------------------------------------------|---------|----------------------------------------------------------------------------------------------|
 | Document format (canonical JSON), salt, invite           | Yes     | One document and one salt serve both chains.                                                 |
 | Document key (HKDF), vault, AES-256-GCM                  | Yes     | The same code and the same storage.                                                          |
-| Invite cache, KMS key, retention period                  | Yes     | The same service.                                                                            |
+| Data key store, `ENCRYPTION_KEY` in the KMS, retention periods | Yes | The same service.                                                                      |
 | Template catalog                                         | Yes     | The EVM registry keeps its templates onchain. The catalog can list the same templates.       |
 | Webapp crypto module, login                              | Yes     | One browser module encrypts, decrypts and hashes for both chains.                            |
 | Signature collector                                      | Yes     | It holds EIP-712 signatures for the EVM and authwits for Aztec.                              |
@@ -463,7 +467,7 @@ Effects on the other contracts:
 | Registry contract and status read                        | No      | EVM: storage and events. Aztec: nullifiers.                                                  |
 | Privacy of parties, signing times and status             | No      | EVM: public. Aztec: private. The EVM chain cannot hide them.                                 |
 
-So the offchain data layer is shared: the document, the keys, the vault, the cache and the collector. The chain
+So the offchain data layer is shared: the document, the keys, the vault, the data key store and the collector. The chain
 layer is not: the hash function, the signature, the tx sender and the registry differ.
 
 ## Privacy analysis
@@ -473,16 +477,16 @@ layer is not: the hash function, the signature, the tx sender and the registry d
 Each row is one kind of personal data. Each cell says what that viewer can see of it. "Party" means each party of
 the agreement, on its own device. The webapp runs in the browser of the user, so it counts as the user's device.
 
-| Personal data                                  | Stored at rest                                    | Party                                   | Auditor with invite | MetaLeX invite cache, during retention | MetaLeX collector and settler        | MetaLeX vault                     | Node operator                               | Chain observer, sequencer                        |
+| Personal data                                  | Stored at rest                                    | Party                                   | Auditor with invite | MetaLeX data key store, during retention | MetaLeX collector and settler        | MetaLeX vault                     | Node operator                               | Chain observer, sequencer                        |
 |------------------------------------------------|---------------------------------------------------|-----------------------------------------|---------------------|----------------------------------------|--------------------------------------|-----------------------------------|---------------------------------------------|--------------------------------------------------|
 | Party values (names and other party fields)    | Vault, as ciphertext                              | Yes                                     | Yes                 | Yes, with the vault blob               | No                                   | Ciphertext and its size only      | No                                          | No                                               |
 | Global values (deal terms)                     | Vault, as ciphertext                              | Yes                                     | Yes                 | Yes, with the vault blob               | No                                   | Ciphertext and its size only      | No                                          | No                                               |
-| Party addresses (who contracts with whom)      | Collector; the invite; invite cache, encrypted    | Yes, for its own agreements             | Yes                 | Yes                                    | Yes                                  | No                                | No                                          | No                                               |
+| Party addresses (who contracts with whom)      | Collector; the invite                             | Yes, for its own agreements             | Yes                 | Yes                                    | Yes                                  | No                                | No                                          | No                                               |
 | Account instance and signing public key        | Collector; settler PXE                            | Its own only                            | No                  | No                                     | Yes, for each onboarded user         | No                                | No                                          | No                                               |
-| Expiry                                         | Collector; the invite; invite cache, encrypted    | Yes                                     | Yes                 | Yes                                    | Yes                                  | No                                | No                                          | Only when it is less than one day after the anchor |
+| Expiry                                         | Collector; the invite                             | Yes                                     | Yes                 | Yes                                    | Yes                                  | No                                | No                                          | Only when it is less than one day after the anchor |
 | Time that each party signed                    | Collector, until finalize                         | Its own only                            | No                  | No                                     | Yes                                  | No                                | No                                          | No                                               |
 | Finalize status and time                       | Nullifier tree, not linkable without the salt     | Yes                                     | Yes                 | Yes                                    | Yes                                  | No                                | A lookup of a nullifier, not the agreement  | That a tx happened, not the agreement            |
-| IP address and request times                   | Logs of each service                              | Its own only                            | Its own only        | Of the webapps that put or get invites | Of the webapps that post to it       | Of the webapps that upload or fetch | Of each PXE that queries it, and of the settler | No                                               |
+| IP address and request times                   | Logs of each service                              | Its own only                            | Its own only        | Of the webapps that put or get salts   | Of the webapps that post to it       | Of the webapps that upload or fetch | Of each PXE that queries it, and of the settler | No                                               |
 
 Notes:
 
@@ -490,13 +494,13 @@ Notes:
   party.
 - The salt is the access key to the PII of one agreement. A holder of the invite sees the same data as a party.
   A party controls who gets the invite. Nobody can take back an invite after a party shares it.
-- MetaLeX can decrypt a vault blob only while it caches the invite. After the retention period, the "invite cache"
-  column becomes "No" in each row. The collector, the settler and the vault never get the salt.
+- MetaLeX can decrypt a vault blob only while the data key store keeps the salt. After the retention period, the
+  "data key store" column becomes "No" in each row. The collector, the settler and the vault never get the salt.
 - MetaLeX runs both the vault and the collector. It can link a blob to an agreement by the IP and the time of the
   requests. This gives no plaintext.
 - The diagrams show no MetaLeX login. If a login links an email or a name to an Aztec address, MetaLeX can link
   that person to each agreement, counterparty and signing time in the collector.
-- To erase the PII of an agreement, MetaLeX deletes the vault blob, the cached invite and the collector entry. The nullifiers stay
+- To erase the PII of an agreement, MetaLeX deletes the vault blob, the stored salt and the collector entry. The nullifiers stay
   onchain, but they hold no PII. A party that keeps no copy of the document then loses access to it.
 
 ### Compared with the EVM designs
@@ -531,15 +535,18 @@ flowchart LR
             TPrivy["Privy login<br/>links email to wallet"]
         end
         subgraph TChain["EVM chain, public"]
+            TNode["Node RPC<br/>caller IP, lookups"]
             TReg["CyberAgreementRegistry<br/>parties, signatures, times<br/>values: plaintext by default, or ciphertext"]
         end
         TApp -->|plaintext values to encrypt or decrypt| TServer
         TServer --> TDB
         TApp --> TPrivy
         TApp --> TWallet
-        TWallet -->|signature, tx| TReg
+        TWallet -->|signature, tx| TNode
+        TServer -->|read parties| TNode
         TServer --> TRelayer
-        TRelayer -->|sponsored tx| TReg
+        TRelayer -->|sponsored tx| TNode
+        TNode --> TReg
     end
     subgraph Proposed["Proposed: EVM retrofit and Aztec"]
         direction LR
@@ -553,8 +560,8 @@ flowchart LR
             direction TB
             SLogin["Privy login<br/>[keep]"]
             SVault["Document vault<br/>PII: ciphertext only<br/>[new]"]
-            SCache["Invite cache<br/>salt, during retention<br/>[new]"]
-            SKMS["KMS<br/>invite cache key<br/>[new]"]
+            SCache["Data key store<br/>salts, during retention<br/>[change: today's keys table]"]
+            SKMS["KMS<br/>ENCRYPTION_KEY, decrypts all data keys<br/>[change: moves into a KMS]"]
             SCollector["Signature collector<br/>parties, signing times<br/>[new]"]
             ERelayer["Signing relayer<br/>[keep]"]
             ASettler["Settler and FPC<br/>[new]"]
@@ -562,6 +569,7 @@ flowchart LR
         subgraph PChains["Chains"]
             direction TB
             subgraph EChain["EVM chain, public"]
+                ENode["Node RPC<br/>caller IP, lookups"]
                 EReg["CyberAgreementRegistry<br/>parties, signatures, times<br/>salted hashes of values<br/>[change]"]
             end
             subgraph AChain["Aztec network"]
@@ -571,16 +579,19 @@ flowchart LR
         end
         SApp --> SLogin
         SApp -->|ciphertext| SVault
-        SApp -->|invite| SCache
+        SApp -->|salt| SCache
         SCache --> SKMS
         SApp --> EWallet
         SApp --> AWallet
         EWallet -->|EIP-712 signature| SCollector
         AWallet -->|authwit| SCollector
         SCollector --> ERelayer
-        ERelayer -->|one tx with all signatures| EReg
+        ERelayer -->|one tx with all signatures| ENode
+        SApp -->|read hashes and status| ENode
+        ENode --> EReg
         SCollector --> ASettler
         ASettler -->|finalize tx| ANode
+        AWallet -->|read status| ANode
         ANode --> AReg
     end
     Today ~~~ Proposed
@@ -603,7 +614,7 @@ flowchart LR
     classDef piiMeta fill:#084298,stroke:#052c65,color:#fff
     class TApp,TServer,TReg,SApp,SCache,LPlain piiPlain
     class TDB,SVault,LCipher piiCipher
-    class TRelayer,TPrivy,SLogin,SCollector,ERelayer,EReg,ASettler,ANode,LMeta piiMeta
+    class TRelayer,TPrivy,TNode,SLogin,SCollector,ERelayer,ENode,EReg,ASettler,ANode,LMeta piiMeta
     style SApp stroke:#198754,stroke-width:4px
     style SLogin stroke:#198754,stroke-width:4px
     style SVault stroke:#198754,stroke-width:4px
@@ -613,6 +624,7 @@ flowchart LR
     style LShared stroke:#198754,stroke-width:4px
     style EWallet stroke:#6f42c1,stroke-width:4px
     style ERelayer stroke:#6f42c1,stroke-width:4px
+    style ENode stroke:#6f42c1,stroke-width:4px
     style EReg stroke:#6f42c1,stroke-width:4px
     style LEvm stroke:#6f42c1,stroke-width:4px
     style AWallet stroke:#fd7e14,stroke-width:4px
@@ -672,8 +684,8 @@ flowchart LR
         end
         subgraph PMeta["MetaLeX services"]
             direction TB
-            SCK["KMS: invite cache key<br/>[new]"]
-            SCINV["Invite cache: invite, encrypted<br/>[new]"]
+            SCK["KMS: ENCRYPTION_KEY<br/>decrypts all data keys<br/>[change: moves into a KMS]"]
+            SCINV["Data key store: salt, encrypted<br/>[change: today's keys table]"]
             SBLOB["Vault: encrypted document<br/>[new]"]
             AAW["Collector: authwits<br/>[new]"]
         end
@@ -690,7 +702,7 @@ flowchart LR
             end
         end
         SCK -->|AES-256-GCM encrypts| SCINV
-        SINV -->|cached copy| SCINV
+        SINV -->|stored copy of the salt| SCINV
         SINV -->|HKDF| SKEY
         SKEY -->|AES-256-GCM, random IV| SBLOB
         SDOC --> SBLOB
@@ -755,10 +767,10 @@ flowchart LR
 | Party values (names, contacts)   | Today, a deal writes them onchain in `partyValues`. They are plaintext unless the user turns on encryption (`encryptionEnabledAtom` is `false` by default). Encrypted values use AES-256-CBC with a per-agreement key in the MetaLeX database. A private document keeps them in the encrypted document. | Retrofit, only in the encrypted vault blob. Onchain, a salted hash for each party.                                              | Aztec, only in the encrypted vault blob. Nothing onchain.                                                      |
 | Global values (deal terms)       | Today, a deal writes them onchain in `globalValues` as plaintext. A private document puts its company or owner address, document SHA-256, template id and request id onchain as plaintext.                                                                                                              | Retrofit, only in the encrypted vault blob. Onchain, one salted hash, and the fields that contract logic needs (see below).     | Aztec, only in the encrypted vault blob. Nothing onchain.                                                      |
 | Document file                    | Today, a private document is sealed with AES-256-GCM under a company key in the MetaLeX database.                                                                                                                                                                                                       | Retrofit, sealed with AES-256-GCM under a key from the salt of the agreement, in the vault.                                     | Aztec, the same as the retrofit.                                                                               |
-| Party addresses                  | Today, public onchain (`getParties`, events). A private document also puts each party wallet and capacity onchain as JSON.                                                                                                                                                                            | Retrofit, public onchain, as today. Capacities go into the hashed values.                                                       | Aztec, the collector, the invite and the invite cache. Nothing onchain.                                        |
+| Party addresses                  | Today, public onchain (`getParties`, events). A private document also puts each party wallet and capacity onchain as JSON.                                                                                                                                                                            | Retrofit, public onchain, as today. Capacities go into the hashed values.                                                       | Aztec, the collector and the invite. Nothing onchain.                                        |
 | Signing times, finalize status   | Today, public onchain (`signedAt`, `AgreementSigned`, `ContractFinalized`).                                                                                                                                                                                                                             | Retrofit, public onchain, as today.                                                                                             | Aztec, signing times only in the collector. Onchain, only a nullifier that nobody can link without the salt.   |
-| Who at MetaLeX can decrypt       | Today, the MetaLeX server can decrypt every encrypted value and document. It unwraps each per-agreement key and each company key with one server secret, `ENCRYPTION_KEY`.                                                                                                                              | Retrofit, MetaLeX can decrypt an agreement only while the invite cache keeps its invite. No MetaLeX secret opens all agreements. | Aztec, the same as the retrofit.                                                                               |
-| Top MetaLeX key                  | Today, `ENCRYPTION_KEY`, an environment variable of the server. It opens every agreement for as long as the data exists. Nothing logs its use.                                                                                                                                                        | Retrofit, the invite cache key, in a KMS. It opens only the invites in the cache. The KMS logs each decrypt.                    | Aztec, the same as the retrofit.                                                                               |
+| Who at MetaLeX can decrypt       | Today, the MetaLeX server can decrypt every encrypted value and document. It unwraps each per-agreement key and each company key with one server secret, `ENCRYPTION_KEY`.                                                                                                                              | Retrofit, MetaLeX can decrypt an agreement only while the data key store keeps its salt. After the retention period, no MetaLeX key opens it. | Aztec, the same as the retrofit.                                                                               |
+| Top MetaLeX key                  | Today, `ENCRYPTION_KEY`, an environment variable of the server. It opens every agreement for as long as the data exists. Nothing logs its use.                                                                                                                                                        | Retrofit, `ENCRYPTION_KEY`, in a KMS. It decrypts all data keys in the store, but the store keeps each salt only for the retention period. The KMS logs each decrypt.                    | Aztec, the same as the retrofit.                                                                               |
 | Who outside MetaLeX can decrypt  | Today, nobody without the MetaLeX server. A party cannot decrypt its own encrypted values without MetaLeX.                                                                                                                                                                                             | Retrofit, each holder of the invite, without MetaLeX.                                                                           | Aztec, the same as the retrofit.                                                                               |
 
 What can be migrated:
@@ -766,11 +778,12 @@ What can be migrated:
 | Today                                             | EVM retrofit                                                    | Aztec                                                           | Migration                                                                                                   |
 |---------------------------------------------------|-----------------------------------------------------------------|-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
 | Webapp in browser                                 | Webapp in browser                                               | Webapp in browser                                               | Change. It encrypts, decrypts and hashes the document in the browser. One code path serves both designs.    |
-| Webapp server decrypts PII for parties            | Webapp server runs the vault, the collector and the invite cache | The same as the retrofit                                        | Change. The server stops decrypting PII, except the cached invites.                                         |
-| Postgres database                                 | Postgres database                                               | Postgres database                                               | Keep. The collector and the invite cache can use it. The vault can use it or a blob store.                  |
-| Privy login                                       | Privy login                                                     | Login for the invite cache                                      | Keep. The cache gives an invite only to a signed-in party.                                                  |
-| `ENCRYPTION_KEY` in the server environment        | Invite cache key in a KMS                                       | The same KMS key                                                | Replace for new agreements. Keep `ENCRYPTION_KEY` to read old agreements.                                   |
-| Per-agreement key in the database                 | Salt in the invite                                              | Salt in the invite                                              | Replace. The webapp makes a new salt for each agreement.                                                    |
+| Webapp server decrypts PII for parties            | Webapp server runs the vault, the collector and the data key store | The same as the retrofit                                      | Change. The server stops decrypting PII. It gives each data key only to a user that the ACL allows.        |
+| Postgres database                                 | Postgres database                                               | Postgres database                                               | Keep. The collector and the data key store can use it. The vault can use it or a blob store.                  |
+| Privy login                                       | Privy login                                                     | Login for the data key store                                    | Keep. The store gives a data key only to a signed-in user that the ACL allows.                              |
+| `ENCRYPTION_KEY` in the server environment        | `ENCRYPTION_KEY` in a KMS                                       | The same KMS key                                                | Change. Make the key in a KMS. Decrypt each old data key once with today's key and encrypt it again with the KMS key. Then remove today's key from the server environment. |
+| `keys` table: per-agreement and company keys      | Data key store: salts, later company and group keys            | The same store                                                  | Change. The table becomes the data key store, with an ACL and a retention period for each kind of unit.     |
+| Per-agreement key in the database                 | Salt in the invite and the data key store                       | The same                                                        | Replace. The webapp makes a new salt for each agreement.                                                    |
 | `sealArtifact` (AES-256-GCM, random IV)           | Document encryption in the browser                              | The same                                                        | Keep the pattern. Use the same cipher with the document key from the salt.                                  |
 | AES-256-CBC deal values, IV from the agreement id | Salted EIP-712 hashes onchain                                   | Nothing onchain                                                 | Replace. Deal values go into the encrypted document.                                                        |
 | EVM wallet and EIP-712 signature                  | EVM wallet and EIP-712 signature over readable terms            | Aztec account and authwit                                       | Retrofit: keep. Aztec: replace; each user needs an Aztec account, and counsel must confirm the authwit.     |
@@ -785,7 +798,7 @@ agreements to a new design.
 | Viewer                                | What it learns                                                                                                                  | What it does not learn                                     |
 |---------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
 | Chain observer                        | That some tx emitted 6 nullifiers, its fee payer, its time, and an expiry when the expiry is less than one day after the anchor | Contract called, parties, party count, terms, agreement id |
-| MetaLeX (invite cache)                | All data of each cached agreement, during the retention period                                                                  | Agreements after the retention period                      |
+| MetaLeX (data key store)              | All data of each stored agreement, during the retention period                                                                  | Agreements after the retention period                      |
 | MetaLeX (collector and settler)       | Parties, expiry, agreement id, who signed and when, the finalize status                                                         | Salt, terms, document text                                 |
 | MetaLeX (vault)                       | Locator, blob size, upload and fetch times                                                                                      | Agreement id, parties, document text                       |
 | MetaLeX (FPC)                         | That a sponsored tx happened                                                                                                    | Which function or user, from the FPC alone                 |
@@ -804,8 +817,9 @@ Notes:
 - A party cannot withdraw an authwit before the finalize tx. Only the expiry limits it. A void flow needs a registry
   function that a party can call to block the finalize.
 - The settler works only with accounts whose authwit check reads no private state of the owner.
-- The invite cache keeps an invite only for the retention period. After that, a user who lost the invite cannot
-  open the document. The retention period and the cache are design items. The PoC does not include them.
+- The data key store keeps a salt only for the retention period. After that, a user who lost the invite cannot
+  open the document. The retention periods, the ACL rules and the store are design items. The PoC does not include
+  them.
 - The MetaLeX FPC with use limits is a design item. The PoC uses the test SponsoredFPC.
 - Counsel must confirm that an authwit is acceptable as an electronic signature. The PoC keeps no ECDSA signature
   artifact.
