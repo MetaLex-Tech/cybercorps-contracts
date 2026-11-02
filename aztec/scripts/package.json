@@ -1,0 +1,15 @@
+{
+  "name": "agreement-registry-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "node e2e.ts",
+    "deploy": "node deploy.ts"
+  },
+  "dependencies": {
+    "@aztec-labs/accounts": "6.0.0",
+    "@aztec-labs/aztec.js": "6.0.0",
+    "@aztec-labs/noir-contracts.js": "6.0.0",
+    "@aztec-labs/wallets": "6.0.0"
+  }
+}

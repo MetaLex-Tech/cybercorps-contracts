@@ -1,0 +1,2 @@
+[workspace]
+members = ["agreement_registry_contract", "agreement_registry_test"]
