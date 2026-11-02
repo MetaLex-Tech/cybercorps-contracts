@@ -74,6 +74,14 @@
 - 2026-11-02 (user): "Invite cache" renamed to "data key store". The unit of access can later be a cyberCorp or a
   group, under an ACL. Its KMS key is `ENCRYPTION_KEY` ("decrypts all data keys"), so it maps to today's
   `ENCRYPTION_KEY` and `keys` table. Supersedes the "invite cache" wording above.
+- 2026-11-02 (user): Comparison diagrams show "MetaLeX smart contracts" (not only the registry), split into
+  rule inputs (credential facts, amounts, parties, statuses; stay readable on EVM, reduced to minimum facts) and
+  records (names, contacts, values; salted hashes on EVM). The indexer and credential issuers are part of
+  "MetaLeX services", not separate boxes (user, 2026-11-02).
+- 2026-11-02 (user): Aztec private notes use offchain delivery (`MessageDelivery::offchain`); the document vault
+  keeps the encrypted note messages per recipient (owner, and `deliver_to` recipients) with retention. Onchain
+  keeps note hashes and nullifiers only. Verified the API in aztec-nr v6.0.0 source (`note_message.nr`,
+  `offchain_messages.nr`).
 
 ## Validation
 

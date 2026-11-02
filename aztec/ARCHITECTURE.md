@@ -9,7 +9,9 @@ Toolchain: Aztec 6.0.0, aztec-nr v6.0.0, Noir 1.0.0-rc.3.
 
 ## Design rules
 
-1. The chain keeps only nullifiers. Agreement text, field values and party addresses stay offchain.
+1. The chain keeps only nullifiers. Agreement text, field values and party addresses stay offchain. When a later
+   contract keeps private notes, a note holds a reference (for example a salt), not PII. The PII stays in the
+   document vault. The note messages also go to the vault, not onchain.
 2. Each party signs offchain with a private authwit. MetaLeX collects the authwits and sends one `finalize` tx
    when all parties signed. No party needs to send a tx or hold a fee token.
 3. The parties, and the people they share an invite with, know the salt. MetaLeX may keep the salt in its data key
@@ -27,7 +29,7 @@ flowchart LR
     end
     subgraph MetaLeX services
         Catalog[Template catalog<br/>public]
-        Vault[Document vault<br/>PII: ciphertext only]
+        Vault[Document vault<br/>PII: ciphertext only<br/>documents, note messages]
         Collector[Signature collector<br/>PII metadata: parties, signing times]
         Settler[Settler<br/>MetaLeX wallet + PXE<br/>PII metadata: parties]
         Cache[Data key store<br/>PII access: salt, during retention<br/>encrypted with ENCRYPTION_KEY]
@@ -39,7 +41,7 @@ flowchart LR
         Accounts[Party account contracts<br/>verify authwits]
         FPC[Fee payer contract<br/>MetaLeX deploys and funds it]
         Sequencer[Sequencer<br/>builds blocks]
-        subgraph Private state
+        subgraph PrivateState["Private state, onchain form"]
             Trees[Nullifier tree<br/>agreement nullifiers]
         end
         subgraph Public state
@@ -87,7 +89,7 @@ The legend explains the colors. See [PII: who can see what](#pii-who-can-see-wha
 | User wallet and PXE               | User (browser embedded wallet or an Aztec wallet) | Account keys                                                              | What the user opens in it                                         |
 | MetaLeX webapp                    | MetaLeX (code), user (runtime)                    | The invites that the user keeps                                           | What the user opens in it                                         |
 | Template catalog                  | MetaLeX                                           | Public legal templates                                                    | Public data only                                                  |
-| Document vault                    | MetaLeX                                           | AES-256-GCM document blobs, keyed by a locator                            | Locator, blob size, upload and fetch times                        |
+| Document vault                    | MetaLeX                                           | AES-256-GCM document blobs, keyed by a locator; encrypted note messages for each recipient | Locator, blob size, upload and fetch times                        |
 | Signature collector               | MetaLeX                                           | Onboarded account data, `Agreement` structs without salt, authwits        | Parties, expiry, agreement id, who signed and when                |
 | Settler                           | MetaLeX                                           | Its own account keys, the public signing keys of the party accounts       | The same as the collector, and the finalize status                |
 | Data key store                    | MetaLeX                                           | Data keys (salts) encrypted with `ENCRYPTION_KEY`, until the end of the retention period | With the vault and the collector: all data of each stored agreement |
@@ -365,6 +367,14 @@ never get the salt, the terms or the document text.
 - The webapp encrypts the document with the document key and uploads it at the vault locator.
 - The vault cannot compute the agreement id, because it does not have the salt.
 - The vault is also the backup of the legal text. A party needs the text to know what it signed.
+- The vault also delivers private notes. A contract that makes a note sends its message offchain
+  (`MessageDelivery::offchain` in aztec-nr), not as an onchain log. The PXE that sends the tx gives each message to
+  the vault. The vault keeps it for its recipient: the note owner, and each other recipient that the contract names
+  with `NoteMessage::deliver_to`. A recipient can prove that the note exists, but only the owner can use it.
+- Each note message is encrypted to the public key of its recipient. The vault holds ciphertext only.
+- The vault must keep each note message available until the retention period ends. If the vault loses a message,
+  the recipient loses the content of that note. The onchain note hash stays, but nothing can open it.
+- Note messages do not go onchain, so deletion at the end of the retention period removes them.
 
 ### Data key store
 
@@ -437,6 +447,10 @@ it.
 | Id nonce, expiry, secret hash, finalizer, conditions | Registry logic                                                                                           | Stays public.                                                                                                                        |
 | Global values                            | Agreement id, `CertificateUriBuilder` (certificate metadata), `SecondaryTradeStorage` offer signatures, `RoundManagerStorage` | Replace with one salted hash. The id, the offer signatures and the round storage use the hash.                                |
 | Party values                             | `DealManagerStorage` counterparty check (equal or not), `CertificateUriBuilder`, `Section4a7DisclosureCondition`     | Replace with one salted hash for each party. The counterparty check compares hashes.                                                 |
+| Credential facts (LeXcheX badge: investor jurisdiction, look-through jurisdiction, investor type, US state) | Compliance conditions | Rule inputs. Must stay readable on the EVM. Reduce each one to the minimum fact that a rule reads, for example a US-person flag in place of a jurisdiction text. |
+| Amounts, units, prices, payment tokens, escrow | `DealManager`, `RoundManager`, `IssuanceManager`, escrow release | Rule inputs. Stay public on the EVM. |
+| Company signers (officers, Safe) | Access control (`BorgAuth`), company acts | Rule inputs. Stay public on the EVM. |
+| Other records: `OwnerDetails.name`, `endorseeName`, `signingOfficerName`, `investorName`, `investorContact`, `buyerName`, `cyberCORPContactDetails` | No rule reads them. Certificate metadata shows them. | Records. Replace each with a salted hash. The readable copy goes into the vault. |
 | The 4(a)(7) acknowledgment               | `Section4a7DisclosureCondition` finds the acknowledgment text in the buyer's party values                             | Change. The acknowledgment is fixed text, not PII. Keep it in a public field, or let the buyer give the value and the salt to prove it. |
 
 Effects on the other contracts:
@@ -448,8 +462,10 @@ Effects on the other contracts:
 - **Callers:** `DealManager`, `RoundManager`, `SecondaryTradeStorage`, the corp factories and `LeXcheXMinter` pass
   `string[]` values today. Each must pass hashes. The secondary-trade offer signatures also hold `buyerName`, which
   must move into the hashed party values.
-- **Not covered:** certificates hold other PII outside the registry, for example `signingOfficerName` in
-  `CertificateDetails`. The retrofit does not change them.
+- **MetaLeX copy of onchain data:** MetaLeX services copy contract events into the MetaLeX database. Today the
+  copy holds every public onchain record. In the retrofit it holds hashes, statuses and rule inputs only.
+- **Legible records:** counsel must confirm that hashes onchain plus a readable copy in the vault meet the record
+  rules for a stock ledger (DGCL §224).
 
 ### Shared with the Aztec design
 
@@ -500,21 +516,23 @@ Notes:
   requests. This gives no plaintext.
 - The diagrams show no MetaLeX login. If a login links an email or a name to an Aztec address, MetaLeX can link
   that person to each agreement, counterparty and signing time in the collector.
-- To erase the PII of an agreement, MetaLeX deletes the vault blob, the stored salt and the collector entry. The nullifiers stay
+- To erase the PII of an agreement, MetaLeX deletes the vault blob, the note messages, the stored salt and the collector entry. The nullifiers stay
   onchain, but they hold no PII. A party that keeps no copy of the document then loses access to it.
 
 ### Compared with the EVM designs
 
 This section compares three systems:
 
-- **Today:** `metalex-webapp` at commit `a5d47d9b4` (2026-10-30), for agreements in the EVM
-  `CyberAgreementRegistry`. Today has two paths. A deal (an offer, a round or a corp formation) stores its values
+- **Today:** `metalex-webapp` at commit `a5d47d9b4` (2026-10-30), with the MetaLeX smart contracts on EVM
+  chains (`CyberAgreementRegistry`, `CyberCorp`, `RoundManager`, `DealManager`, `LedgerEntryToken` and others). Today has two paths. A deal (an offer, a round or a corp formation) stores its values
   onchain. A private document (cyberSign) stores the document in the MetaLeX database and puts only ids, hashes and
   party capacities onchain.
 - **EVM retrofit:** the proposed EVM design in [EVM retrofit: hashes onchain](#evm-retrofit-hashes-onchain).
 - **Aztec:** the proposed design of this PoC.
 
-The diagrams put today next to the two proposed designs. The two proposed designs are drawn as one, because they
+The diagrams show all MetaLeX smart contracts as one box with two parts. "Rule inputs" are data that the codified
+rules read. "Records" are data that the contracts only store or show. The diagrams put today next to the two
+proposed designs. The two proposed designs are drawn as one, because they
 share most parts. The areas show where each part runs: the user device, the MetaLeX services or a chain. The border
 color shows which design uses the part: green for both, purple for the EVM retrofit only, orange for Aztec only. Each box has a tag that compares it with today: keep, change or new.
 
@@ -530,15 +548,18 @@ flowchart LR
         end
         subgraph TMeta["MetaLeX services"]
             TServer["Webapp server<br/>holds ENCRYPTION_KEY, decrypts all PII"]
-            TDB[("Postgres database<br/>wrapped keys, encrypted documents")]
+            TDB[("Postgres database<br/>wrapped keys, encrypted documents,<br/>a copy of the onchain data")]
             TRelayer["Signing relayer"]
             TPrivy["Privy login<br/>links email to wallet"]
         end
         subgraph TChain["EVM chain, public"]
             TNode["Node RPC<br/>caller IP, lookups"]
-            TReg["CyberAgreementRegistry<br/>parties, signatures, times<br/>values: plaintext by default, or ciphertext"]
+            subgraph TReg["MetaLeX smart contracts"]
+                TRules["Rule inputs<br/>parties, amounts, statuses"]
+                TRecords["Records<br/>plaintext or ciphertext"]
+            end
         end
-        TApp -->|plaintext values to encrypt or decrypt| TServer
+        TApp -->|plaintext PII to encrypt or decrypt| TServer
         TServer --> TDB
         TApp --> TPrivy
         TApp --> TWallet
@@ -546,20 +567,22 @@ flowchart LR
         TServer -->|read parties| TNode
         TServer --> TRelayer
         TRelayer -->|sponsored tx| TNode
-        TNode --> TReg
+        TNode --> TRules
+        TNode --> TRecords
+        TNode -->|events| TServer
     end
     subgraph Proposed["Proposed: EVM retrofit and Aztec"]
         direction LR
         subgraph PUser["User device"]
             direction TB
             SApp["Webapp in browser<br/>PII: plaintext; hashes, encrypts, decrypts locally<br/>[change]"]
-            EWallet["EVM wallet<br/>signs readable EIP-712 terms<br/>[keep]"]
+            EWallet["EVM wallet<br/>signs readable terms<br/>[keep]"]
             AWallet["Aztec wallet + PXE<br/>[new]"]
         end
         subgraph PMeta["MetaLeX services"]
             direction TB
             SLogin["Privy login<br/>[keep]"]
-            SVault["Document vault<br/>PII: ciphertext only<br/>[new]"]
+            SVault["Document vault<br/>PII: ciphertext only<br/>documents; Aztec: note messages<br/>[new]"]
             SCache["Data key store<br/>salts, during retention<br/>[change: today's keys table]"]
             SKMS["KMS<br/>ENCRYPTION_KEY, decrypts all data keys<br/>[change: moves into a KMS]"]
             SCollector["Signature collector<br/>parties, signing times<br/>[new]"]
@@ -570,29 +593,37 @@ flowchart LR
             direction TB
             subgraph EChain["EVM chain, public"]
                 ENode["Node RPC<br/>caller IP, lookups"]
-                EReg["CyberAgreementRegistry<br/>parties, signatures, times<br/>salted hashes of values<br/>[change]"]
+                subgraph EReg["MetaLeX smart contracts"]
+                    ERules["Rule inputs<br/>parties, amounts, statuses<br/>[change: minimum facts]"]
+                    ERecords["Records<br/>salted hashes<br/>[change]"]
+                end
             end
             subgraph AChain["Aztec network"]
                 ANode["Node RPC<br/>PXE IP, lookups"]
-                AReg["CyberAgreementRegistry<br/>nullifiers only<br/>[new]"]
+                subgraph AReg["MetaLeX smart contracts"]
+                    AState["Note hashes, nullifiers<br/>[new]"]
+                end
             end
         end
         SApp --> SLogin
-        SApp -->|ciphertext| SVault
-        SApp -->|salt| SCache
+        SApp -->|encrypted data| SVault
+        SApp -->|data keys| SCache
         SCache --> SKMS
         SApp --> EWallet
         SApp --> AWallet
-        EWallet -->|EIP-712 signature| SCollector
-        AWallet -->|authwit| SCollector
+        EWallet -->|signatures| SCollector
+        AWallet -->|signatures| SCollector
         SCollector --> ERelayer
         ERelayer -->|one tx with all signatures| ENode
         SApp -->|read hashes and status| ENode
-        ENode --> EReg
+        ENode --> ERules
+        ENode --> ERecords
         SCollector --> ASettler
         ASettler -->|finalize tx| ANode
         AWallet -->|read status| ANode
-        ANode --> AReg
+        ANode --> AState
+        ASettler -->|encrypted notes| SVault
+        AWallet -->|fetch encrypted notes| SVault
     end
     Today ~~~ Proposed
 
@@ -612,9 +643,9 @@ flowchart LR
     classDef piiPlain fill:#842029,stroke:#58151c,color:#fff
     classDef piiCipher fill:#664d03,stroke:#332701,color:#fff
     classDef piiMeta fill:#084298,stroke:#052c65,color:#fff
-    class TApp,TServer,TReg,SApp,SCache,LPlain piiPlain
+    class TApp,TServer,TRecords,SApp,SCache,LPlain piiPlain
     class TDB,SVault,LCipher piiCipher
-    class TRelayer,TPrivy,TNode,SLogin,SCollector,ERelayer,ENode,EReg,ASettler,ANode,LMeta piiMeta
+    class TRelayer,TPrivy,TNode,TRules,SLogin,SCollector,ERelayer,ENode,ERules,ASettler,ANode,LMeta piiMeta
     style SApp stroke:#198754,stroke-width:4px
     style SLogin stroke:#198754,stroke-width:4px
     style SVault stroke:#198754,stroke-width:4px
@@ -625,12 +656,13 @@ flowchart LR
     style EWallet stroke:#6f42c1,stroke-width:4px
     style ERelayer stroke:#6f42c1,stroke-width:4px
     style ENode stroke:#6f42c1,stroke-width:4px
-    style EReg stroke:#6f42c1,stroke-width:4px
+    style ERules stroke:#6f42c1,stroke-width:4px
+    style ERecords stroke:#6f42c1,stroke-width:4px
+    style AState stroke:#fd7e14,stroke-width:4px
     style LEvm stroke:#6f42c1,stroke-width:4px
     style AWallet stroke:#fd7e14,stroke-width:4px
     style ASettler stroke:#fd7e14,stroke-width:4px
     style ANode stroke:#fd7e14,stroke-width:4px
-    style AReg stroke:#fd7e14,stroke-width:4px
     style LAztec stroke:#fd7e14,stroke-width:4px
 ```
 
@@ -647,6 +679,7 @@ flowchart LR
             TAK["Per-agreement key, wrapped"]
             TCK["Company key, wrapped"]
             TDOC["Private document, sealed"]
+            TIDX["Copy of the onchain data"]
         end
         subgraph TWal["User wallet"]
             TSIG["EVM signing key"]
@@ -657,6 +690,8 @@ flowchart LR
             TVAL["Deal party values<br/>plaintext by default,<br/>or AES-256-CBC ciphertext"]
             TGV["Deal global values, plaintext"]
             TSIGS["Parties, signatures, signing times"]
+            TFACTS["Credential facts<br/>investor jurisdiction, type, US state"]
+            TREC["Other records<br/>owner, endorsee, investor and buyer names,<br/>contacts, plaintext"]
         end
         TEK -->|AES-256-CBC wraps| TAK
         TEK -->|AES-256-CBC wraps| TCK
@@ -665,6 +700,7 @@ flowchart LR
         TSALT --> TAID
         TGV --> TAID
         TSIG -->|EIP-712 signs| TSIGS
+        TREC -->|events| TIDX
     end
     subgraph Proposed["Proposed: EVM retrofit and Aztec"]
         direction LR
@@ -686,8 +722,9 @@ flowchart LR
             direction TB
             SCK["KMS: ENCRYPTION_KEY<br/>decrypts all data keys<br/>[change: moves into a KMS]"]
             SCINV["Data key store: salt, encrypted<br/>[change: today's keys table]"]
-            SBLOB["Vault: encrypted document<br/>[new]"]
+            SBLOB["Vault: encrypted document,<br/>Aztec: encrypted note messages<br/>[new]"]
             AAW["Collector: authwits<br/>[new]"]
+            EIDX["Copy of the onchain data:<br/>hashes and statuses<br/>[change]"]
         end
         subgraph PChains["Chains"]
             direction TB
@@ -696,6 +733,8 @@ flowchart LR
                 ENONCE["Id nonce, public<br/>not the salt"]
                 EAID["Agreement id<br/>keccak256 of template, nonce,<br/>terms hash, parties"]
                 ESIGS["Parties, signatures,<br/>signing times"]
+                EFACTS["Minimum credential facts<br/>for example a US-person flag<br/>[change]"]
+                EREC["Other records: salted hashes<br/>[change]"]
             end
             subgraph AChain["Aztec chain"]
                 ANUL["Nullifiers only<br/>[new]"]
@@ -717,6 +756,8 @@ flowchart LR
         AAID --> AAW
         ASIG -->|signs| AAW
         AAW -->|finalize| ANUL
+        SDOC --> EREC
+        EREC -->|events| EIDX
     end
     Today ~~~ Proposed
 
@@ -738,9 +779,9 @@ flowchart LR
     classDef piiCipher fill:#664d03,stroke:#332701,color:#fff
     classDef piiMeta fill:#084298,stroke:#052c65,color:#fff
     class SKEY,ETH,AAID,LDerived derived
-    class TVAL,TGV,TAK,TCK,TEK,SINV,SDOC,SCINV,LPlain piiPlain
+    class TVAL,TGV,TAK,TCK,TEK,TIDX,TFACTS,TREC,SINV,SDOC,SCINV,LPlain piiPlain
     class TDOC,SBLOB,LCipher piiCipher
-    class TSIGS,TAID,ESIGS,EAID,AAW,LMeta piiMeta
+    class TSIGS,TAID,ESIGS,EAID,EFACTS,EIDX,AAW,LMeta piiMeta
     style SINV stroke:#198754,stroke-width:4px
     style SDOC stroke:#198754,stroke-width:4px
     style SKEY stroke:#198754,stroke-width:4px
@@ -754,6 +795,9 @@ flowchart LR
     style ENONCE stroke:#6f42c1,stroke-width:4px
     style EAID stroke:#6f42c1,stroke-width:4px
     style ESIGS stroke:#6f42c1,stroke-width:4px
+    style EFACTS stroke:#6f42c1,stroke-width:4px
+    style EREC stroke:#6f42c1,stroke-width:4px
+    style EIDX stroke:#6f42c1,stroke-width:4px
     style LEvm stroke:#6f42c1,stroke-width:4px
     style AAID stroke:#fd7e14,stroke-width:4px
     style ASIG stroke:#fd7e14,stroke-width:4px
@@ -817,6 +861,8 @@ Notes:
 - A party cannot withdraw an authwit before the finalize tx. Only the expiry limits it. A void flow needs a registry
   function that a party can call to block the finalize.
 - The settler works only with accounts whose authwit check reads no private state of the owner.
+- The vault must keep note messages available. A lost message makes its note unreadable. The storage durability
+  of the vault is a design item.
 - The data key store keeps a salt only for the retention period. After that, a user who lost the invite cannot
   open the document. The retention periods, the ACL rules and the store are design items. The PoC does not include
   them.
