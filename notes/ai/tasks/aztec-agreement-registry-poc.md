@@ -65,6 +65,12 @@
 - 2026-11-02: The invite cache encrypts each invite with AES-256-GCM under a KMS key (application-level
   encryption; database storage encryption does not stop a credentialed copy). Added side-by-side Today/Proposed
   component and secret diagrams with migration tags (keep, change, replace, new) and a migration table.
+- 2026-11-02 (user): The EVM system stays in use and gets a privacy retrofit: salted hashes onchain instead of
+  encrypted values. Design only, in `ARCHITECTURE.md` "EVM retrofit: hashes onchain": EIP-712 nested `Terms` /
+  `PartyTerms` structs with a salt, so wallets show readable terms and the registry checks signatures from stored
+  hashes. Onchain-logic readers assessed (CertificateUriBuilder, DealManagerStorage counterparty check,
+  Section4a7DisclosureCondition, SecondaryTradeStorage, RoundManagerStorage, factories, LeXcheXMinter).
+  Three-way diagrams (Today, EVM retrofit, Aztec) replace the two-way ones.
 
 ## Validation
 

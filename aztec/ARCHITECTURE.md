@@ -3,6 +3,7 @@
 This document describes the proof of concept (PoC) port of `src/CyberAgreementRegistry.sol` to Aztec.
 The PoC supports the happy path of one agreement: every party signs offchain, and MetaLeX settles all signatures
 in one private transaction (`finalize`). See [USER-FLOWS.md](USER-FLOWS.md) for the step-by-step flows.
+[EVM retrofit: hashes onchain](#evm-retrofit-hashes-onchain) applies the same offchain design to the EVM registry.
 
 Toolchain: Aztec 6.0.0, aztec-nr v6.0.0, Noir 1.0.0-rc.3.
 
@@ -393,6 +394,78 @@ never get the salt, the terms or the document text.
 Each PXE asks a node for nullifier status, tx effects and block data. The node sees these queries. MetaLeX can run a
 node for its users. A user who wants more privacy can use a separate node.
 
+## EVM retrofit: hashes onchain
+
+The EVM system stays in use. This section applies the privacy design of this PoC to the EVM
+`CyberAgreementRegistry`. The EVM chain keeps salted hashes of the values, not the values. This is a design only.
+No code exists for it.
+
+### Design
+
+1. The webapp makes the document and a random salt, as in the Aztec design. It encrypts the document into the
+   vault. It gives the invite to the parties and to the invite cache.
+2. The global values become one EIP-712 struct, `Terms { string[] values; bytes32 salt; }`. The values of each
+   party become one `PartyTerms { address party; string[] values; bytes32 salt; }`.
+3. The registry stores `hashStruct(Terms)` and one `hashStruct(PartyTerms)` for each party. It does not store the
+   values.
+4. Each signer signs an EIP-712 message that holds these structs. The wallet shows the readable values and the
+   salt. EIP-712 encodes a nested struct as its hash, so the registry checks the signature with the stored hashes
+   only.
+5. The salt makes the hashes safe. Without it, a reader can test guesses of a value with few possible answers (a
+   state, an investor type) against the hash.
+6. The agreement id uses a public nonce, as the `salt` argument does today. The nonce must not be the salt of the
+   hashes, because the nonce is public.
+7. The webapp collects the EIP-712 signatures offchain. The signing relayer sends them in one tx when all parties
+   signed, for example `createBoundContractAndSignFor` and `signContractFor` in one Multicall3 call.
+8. A holder of the invite opens the document, computes the hashes and compares them with the registry. This proves
+   that the parties signed this document.
+
+### What must stay onchain
+
+Each row is one item that the EVM system keeps onchain today. "Read onchain by" names the contract logic that needs
+it.
+
+| Item                                     | Read onchain by                                                                                                     | Retrofit                                                                                                                             |
+|------------------------------------------|---------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| Parties (addresses)                      | Signature recovery, signer conditions, `DealManager` escrow and delivery, the `getParties` check of the webapp       | Stays public. An EVM chain shows each signer of an ECDSA signature.                                                                  |
+| Signatures, signing times, finalize, void | Registry status checks, `DealManager` and `RoundManager` finalize, escrow release                                    | Stays public.                                                                                                                        |
+| Template (title, URI, field names)       | Registry field-count check, `CertificateUriBuilder`                                                                  | Stays public. It holds no PII.                                                                                                       |
+| Id nonce, expiry, secret hash, finalizer, conditions | Registry logic                                                                                           | Stays public.                                                                                                                        |
+| Global values                            | Agreement id, `CertificateUriBuilder` (certificate metadata), `SecondaryTradeStorage` offer signatures, `RoundManagerStorage` | Replace with one salted hash. The id, the offer signatures and the round storage use the hash.                                |
+| Party values                             | `DealManagerStorage` counterparty check (equal or not), `CertificateUriBuilder`, `Section4a7DisclosureCondition`     | Replace with one salted hash for each party. The counterparty check compares hashes.                                                 |
+| The 4(a)(7) acknowledgment               | `Section4a7DisclosureCondition` finds the acknowledgment text in the buyer's party values                             | Change. The acknowledgment is fixed text, not PII. Keep it in a public field, or let the buyer give the value and the salt to prove it. |
+
+Effects on the other contracts:
+
+- **Certificate metadata:** `CertificateUriBuilder` cannot show the company details and the investor details. The
+  metadata shows the template and the hashes. The webapp shows the details to holders of the invite.
+- **Field-count check:** the registry cannot count the values in a hash. The webapp checks the count, and the
+  signature covers the values.
+- **Callers:** `DealManager`, `RoundManager`, `SecondaryTradeStorage`, the corp factories and `LeXcheXMinter` pass
+  `string[]` values today. Each must pass hashes. The secondary-trade offer signatures also hold `buyerName`, which
+  must move into the hashed party values.
+- **Not covered:** certificates hold other PII outside the registry, for example `signingOfficerName` in
+  `CertificateDetails`. The retrofit does not change them.
+
+### Shared with the Aztec design
+
+| Part                                                     | Shared? | Note                                                                                         |
+|----------------------------------------------------------|---------|----------------------------------------------------------------------------------------------|
+| Document format (canonical JSON), salt, invite           | Yes     | One document and one salt serve both chains.                                                 |
+| Document key (HKDF), vault, AES-256-GCM                  | Yes     | The same code and the same storage.                                                          |
+| Invite cache, KMS key, retention period                  | Yes     | The same service.                                                                            |
+| Template catalog                                         | Yes     | The EVM registry keeps its templates onchain. The catalog can list the same templates.       |
+| Webapp crypto module, login                              | Yes     | One browser module encrypts, decrypts and hashes for both chains.                            |
+| Signature collector                                      | Yes     | It holds EIP-712 signatures for the EVM and authwits for Aztec.                              |
+| Terms hash                                               | No      | EVM: EIP-712 `hashStruct` with keccak256. Aztec: SHA-256 of the canonical JSON, then Poseidon2. Both come from the same document and salt. |
+| Signature                                                | No      | EVM: ECDSA over EIP-712 in an EVM wallet. Aztec: authwit in an Aztec account.               |
+| Tx sender and fees                                       | No      | EVM: the signing relayer pays ETH. Aztec: the settler, and the FPC pays fee juice.            |
+| Registry contract and status read                        | No      | EVM: storage and events. Aztec: nullifiers.                                                  |
+| Privacy of parties, signing times and status             | No      | EVM: public. Aztec: private. The EVM chain cannot hide them.                                 |
+
+So the offchain data layer is shared: the document, the keys, the vault, the cache and the collector. The chain
+layer is not: the hash function, the signature, the tx sender and the registry differ.
+
 ## Privacy analysis
 
 ### PII: who can see what
@@ -426,39 +499,39 @@ Notes:
 - To erase the PII of an agreement, MetaLeX deletes the vault blob, the cached invite and the collector entry. The nullifiers stay
   onchain, but they hold no PII. A party that keeps no copy of the document then loses access to it.
 
-### Compared with the current webapp
+### Compared with the EVM designs
 
-"Today" is `metalex-webapp` at commit `a5d47d9b4` (2026-10-30), for agreements in `CyberAgreementRegistry`. Today
-has two paths. A deal (an offer, a round or a corp formation) stores its values onchain. A private document
-(cyberSign) stores the document in the MetaLeX database and puts only ids, hashes and party capacities onchain.
-"Proposed" is this design.
+This section compares three systems:
 
-The diagrams below put the two designs side by side. Each box has a tag that says what happens to it in a
-migration:
+- **Today:** `metalex-webapp` at commit `a5d47d9b4` (2026-10-30), for agreements in the EVM
+  `CyberAgreementRegistry`. Today has two paths. A deal (an offer, a round or a corp formation) stores its values
+  onchain. A private document (cyberSign) stores the document in the MetaLeX database and puts only ids, hashes and
+  party capacities onchain.
+- **EVM retrofit:** the proposed EVM design in [EVM retrofit: hashes onchain](#evm-retrofit-hashes-onchain).
+- **Aztec:** the proposed design of this PoC.
 
-- **keep:** the proposed design uses it as it is.
-- **change:** the proposed design uses it, with a different job.
-- **replace:** the proposed design uses a different component for the same job. The tag names it.
-- **new:** the proposed design adds it.
+The diagrams put today next to the two proposed designs. The two proposed designs are drawn as one, because they
+share most parts. The areas show where each part runs: the user device, the MetaLeX services or a chain. The border
+color shows which design uses the part: green for both, purple for the EVM retrofit only, orange for Aztec only. Each box has a tag that compares it with today: keep, change or new.
 
 Components:
 
 ```mermaid
 flowchart LR
-    subgraph Today["Today: metalex-webapp on EVM"]
+    subgraph Today["Today: EVM, encrypted values onchain"]
         direction TB
         subgraph TUser["User device"]
-            TApp["Webapp in browser<br/>PII: plaintext<br/>[change]"]
-            TWallet["EVM wallet, Privy embedded or external<br/>[replace: Aztec account]"]
+            TApp["Webapp in browser<br/>PII: plaintext"]
+            TWallet["EVM wallet<br/>Privy embedded or external"]
         end
         subgraph TMeta["MetaLeX services"]
-            TServer["Webapp server<br/>holds ENCRYPTION_KEY, decrypts all PII<br/>[change: decrypts no PII]"]
-            TDB[("Postgres database<br/>wrapped keys, encrypted documents<br/>[keep]")]
-            TRelayer["Signing relayer<br/>EVM key in the server environment<br/>[replace: settler and FPC]"]
+            TServer["Webapp server<br/>holds ENCRYPTION_KEY, decrypts all PII"]
+            TDB[("Postgres database<br/>wrapped keys, encrypted documents")]
+            TRelayer["Signing relayer"]
+            TPrivy["Privy login<br/>links email to wallet"]
         end
-        TPrivy["Privy<br/>login, links email to wallet<br/>[keep]"]
         subgraph TChain["EVM chain, public"]
-            TReg["CyberAgreementRegistry<br/>parties, values, signatures, times<br/>values plaintext by default<br/>[keep for old agreements]"]
+            TReg["CyberAgreementRegistry<br/>parties, signatures, times<br/>values: plaintext by default, or ciphertext"]
         end
         TApp -->|plaintext values to encrypt or decrypt| TServer
         TServer --> TDB
@@ -468,68 +541,103 @@ flowchart LR
         TServer --> TRelayer
         TRelayer -->|sponsored tx| TReg
     end
-    subgraph Proposed["Proposed: Aztec"]
-        direction TB
+    subgraph Proposed["Proposed: EVM retrofit and Aztec"]
+        direction LR
         subgraph PUser["User device"]
-            PApp["Webapp in browser<br/>PII: plaintext, encrypts and decrypts locally<br/>[change]"]
-            PWallet["Aztec wallet + PXE<br/>[new]"]
+            direction TB
+            SApp["Webapp in browser<br/>PII: plaintext; hashes, encrypts, decrypts locally<br/>[change]"]
+            EWallet["EVM wallet<br/>signs readable EIP-712 terms<br/>[keep]"]
+            AWallet["Aztec wallet + PXE<br/>[new]"]
         end
         subgraph PMeta["MetaLeX services"]
-            PLogin["Login, for example Privy<br/>[keep]"]
-            PVault["Document vault<br/>PII: ciphertext only<br/>[new]"]
-            PCache["Invite cache<br/>salt, during retention<br/>[new]"]
-            PKMS["KMS<br/>invite cache key<br/>[new]"]
-            PCollector["Collector and settler<br/>parties, signing times<br/>[new]"]
+            direction TB
+            SLogin["Privy login<br/>[keep]"]
+            SVault["Document vault<br/>PII: ciphertext only<br/>[new]"]
+            SCache["Invite cache<br/>salt, during retention<br/>[new]"]
+            SKMS["KMS<br/>invite cache key<br/>[new]"]
+            SCollector["Signature collector<br/>parties, signing times<br/>[new]"]
+            ERelayer["Signing relayer<br/>[keep]"]
+            ASettler["Settler and FPC<br/>[new]"]
         end
-        subgraph PChain["Aztec network"]
-            PNode["Node RPC<br/>PXE IP, lookups"]
-            PReg["CyberAgreementRegistry<br/>nullifiers only<br/>[new]"]
+        subgraph PChains["Chains"]
+            direction TB
+            subgraph EChain["EVM chain, public"]
+                EReg["CyberAgreementRegistry<br/>parties, signatures, times<br/>salted hashes of values<br/>[change]"]
+            end
+            subgraph AChain["Aztec network"]
+                ANode["Node RPC<br/>PXE IP, lookups"]
+                AReg["CyberAgreementRegistry<br/>nullifiers only<br/>[new]"]
+            end
         end
-        PApp --> PLogin
-        PApp -->|ciphertext| PVault
-        PApp -->|invite| PCache
-        PCache --> PKMS
-        PApp -->|authwit| PCollector
-        PApp --> PWallet
-        PWallet -->|read| PNode
-        PCollector -->|finalize tx, FPC pays| PNode
-        PNode --> PReg
+        SApp --> SLogin
+        SApp -->|ciphertext| SVault
+        SApp -->|invite| SCache
+        SCache --> SKMS
+        SApp --> EWallet
+        SApp --> AWallet
+        EWallet -->|EIP-712 signature| SCollector
+        AWallet -->|authwit| SCollector
+        SCollector --> ERelayer
+        ERelayer -->|one tx with all signatures| EReg
+        SCollector --> ASettler
+        ASettler -->|finalize tx| ANode
+        ANode --> AReg
     end
     Today ~~~ Proposed
 
     subgraph Legend
         direction TB
-        LPlain[Red: can read plaintext PII]
-        LCipher[Brown: holds encrypted PII only]
-        LMeta[Blue: holds metadata about people, no document content]
-        LNone[No color: holds no PII]
-        LTag["Tag: what happens in a migration<br/>keep, change, replace, new"]
+        LPlain[Red fill: can read plaintext PII]
+        LCipher[Brown fill: holds encrypted PII only]
+        LMeta[Blue fill: holds metadata about people, no document content]
+        LNone[No fill: holds no PII]
+        LShared[Green border: used by the EVM retrofit and Aztec]
+        LEvm[Purple border: used by the EVM retrofit only]
+        LAztec[Orange border: used by Aztec only]
+        LTag["Tag: compared with today<br/>keep, change or new"]
     end
 
+    classDef derived stroke-dasharray: 5 5
     classDef piiPlain fill:#842029,stroke:#58151c,color:#fff
     classDef piiCipher fill:#664d03,stroke:#332701,color:#fff
     classDef piiMeta fill:#084298,stroke:#052c65,color:#fff
-    class TApp,TServer,TReg,PApp,PCache,LPlain piiPlain
-    class TDB,PVault,LCipher piiCipher
-    class TRelayer,TPrivy,PLogin,PCollector,PNode,LMeta piiMeta
+    class TApp,TServer,TReg,SApp,SCache,LPlain piiPlain
+    class TDB,SVault,LCipher piiCipher
+    class TRelayer,TPrivy,SLogin,SCollector,ERelayer,EReg,ASettler,ANode,LMeta piiMeta
+    style SApp stroke:#198754,stroke-width:4px
+    style SLogin stroke:#198754,stroke-width:4px
+    style SVault stroke:#198754,stroke-width:4px
+    style SCache stroke:#198754,stroke-width:4px
+    style SKMS stroke:#198754,stroke-width:4px
+    style SCollector stroke:#198754,stroke-width:4px
+    style LShared stroke:#198754,stroke-width:4px
+    style EWallet stroke:#6f42c1,stroke-width:4px
+    style ERelayer stroke:#6f42c1,stroke-width:4px
+    style EReg stroke:#6f42c1,stroke-width:4px
+    style LEvm stroke:#6f42c1,stroke-width:4px
+    style AWallet stroke:#fd7e14,stroke-width:4px
+    style ASettler stroke:#fd7e14,stroke-width:4px
+    style ANode stroke:#fd7e14,stroke-width:4px
+    style AReg stroke:#fd7e14,stroke-width:4px
+    style LAztec stroke:#fd7e14,stroke-width:4px
 ```
 
 Secrets, keys and hashes:
 
 ```mermaid
 flowchart LR
-    subgraph Today["Today: metalex-webapp on EVM"]
+    subgraph Today["Today: EVM, encrypted values onchain"]
         direction TB
         subgraph TEnv["Server environment"]
-            TEK["ENCRYPTION_KEY<br/>[keep for old data]"]
+            TEK["ENCRYPTION_KEY"]
         end
         subgraph TKeys["MetaLeX database"]
-            TAK["Per-agreement key, wrapped<br/>[replace: salt]"]
-            TCK["Company key, wrapped<br/>[keep for old documents]"]
-            TDOC["Private document, sealed<br/>[change: moves to the vault]"]
+            TAK["Per-agreement key, wrapped"]
+            TCK["Company key, wrapped"]
+            TDOC["Private document, sealed"]
         end
         subgraph TWal["User wallet"]
-            TSIG["EVM signing key<br/>[replace: Aztec signing key]"]
+            TSIG["EVM signing key"]
         end
         subgraph TChain["EVM chain, public"]
             TSALT["Salt, public"]
@@ -546,91 +654,131 @@ flowchart LR
         TGV --> TAID
         TSIG -->|EIP-712 signs| TSIGS
     end
-    subgraph Proposed["Proposed: Aztec"]
-        direction TB
-        subgraph PKMSBox["MetaLeX KMS"]
-            PCK["Invite cache key<br/>[new]"]
+    subgraph Proposed["Proposed: EVM retrofit and Aztec"]
+        direction LR
+        subgraph PUser["User device"]
+            direction TB
+            subgraph PWeb["Webapp, in browser memory"]
+                SINV["Invite<br/>salt, expiry, parties<br/>[new]"]
+                SDOC["Document<br/>[new]"]
+                SKEY["Document key<br/>HKDF of the salt"]
+                ETH["EVM terms hashes<br/>EIP-712 hashStruct of values and salt"]
+                AAID["terms_commitment, agreement_id<br/>Poseidon2"]
+            end
+            subgraph PWal["Wallets"]
+                ESIG["EVM signing key<br/>[keep]"]
+                ASIG["Aztec signing key<br/>[new]"]
+            end
         end
-        subgraph PCacheBox["MetaLeX invite cache"]
-            PCINV["Invite, encrypted<br/>during retention<br/>[new]"]
+        subgraph PMeta["MetaLeX services"]
+            direction TB
+            SCK["KMS: invite cache key<br/>[new]"]
+            SCINV["Invite cache: invite, encrypted<br/>[new]"]
+            SBLOB["Vault: encrypted document<br/>[new]"]
+            AAW["Collector: authwits<br/>[new]"]
         end
-        subgraph PWeb["Webapp, in browser memory"]
-            PINV["Invite: salt, expiry, parties<br/>[new]"]
-            PKEY["Document key<br/>HKDF of the salt"]
-            PAID["agreement_id<br/>Poseidon2"]
+        subgraph PChains["Chains"]
+            direction TB
+            subgraph EChain["EVM chain, public"]
+                EHASH["Salted terms hashes<br/>[change]"]
+                ENONCE["Id nonce, public<br/>not the salt"]
+                EAID["Agreement id<br/>keccak256 of template, nonce,<br/>terms hash, parties"]
+                ESIGS["Parties, signatures,<br/>signing times"]
+            end
+            subgraph AChain["Aztec chain"]
+                ANUL["Nullifiers only<br/>[new]"]
+            end
         end
-        subgraph PVaultBox["MetaLeX vault"]
-            PBLOB["Encrypted document<br/>[new]"]
-        end
-        subgraph PWal["User wallet"]
-            PSIG["Aztec signing key<br/>[new]"]
-        end
-        subgraph PCol["MetaLeX collector"]
-            PAW["Authwits<br/>[new]"]
-        end
-        subgraph PChain["Aztec chain"]
-            PNUL["Nullifiers only"]
-        end
-        PCK -->|AES-256-GCM encrypts| PCINV
-        PINV -->|cached copy| PCINV
-        PINV -->|HKDF| PKEY
-        PKEY -->|AES-256-GCM, random IV| PBLOB
-        PINV --> PAID
-        PSIG -->|signs| PAW
-        PAID --> PAW
-        PAW -->|finalize| PNUL
+        SCK -->|AES-256-GCM encrypts| SCINV
+        SINV -->|cached copy| SCINV
+        SINV -->|HKDF| SKEY
+        SKEY -->|AES-256-GCM, random IV| SBLOB
+        SDOC --> SBLOB
+        SDOC --> ETH
+        SINV -->|salt| ETH
+        ETH --> EHASH
+        EHASH --> EAID
+        ENONCE --> EAID
+        ESIG -->|EIP-712 signs readable terms| ESIGS
+        SDOC --> AAID
+        SINV -->|salt| AAID
+        AAID --> AAW
+        ASIG -->|signs| AAW
+        AAW -->|finalize| ANUL
     end
     Today ~~~ Proposed
 
     subgraph Legend
         direction TB
-        LPlain[Red: can read plaintext PII]
-        LCipher[Brown: holds encrypted PII only]
-        LMeta[Blue: holds metadata about people, no document content]
-        LNone[No color: holds no PII]
+        LPlain[Red fill: can read plaintext PII]
+        LCipher[Brown fill: holds encrypted PII only]
+        LMeta[Blue fill: holds metadata about people, no document content]
+        LNone[No fill: holds no PII]
         LDerived[Dashed: computed when needed, not stored]
-        LTag["Tag: what happens in a migration<br/>keep, change, replace, new"]
+        LShared[Green border: used by the EVM retrofit and Aztec]
+        LEvm[Purple border: used by the EVM retrofit only]
+        LAztec[Orange border: used by Aztec only]
+        LTag["Tag: compared with today<br/>keep, change or new"]
     end
 
     classDef derived stroke-dasharray: 5 5
     classDef piiPlain fill:#842029,stroke:#58151c,color:#fff
     classDef piiCipher fill:#664d03,stroke:#332701,color:#fff
     classDef piiMeta fill:#084298,stroke:#052c65,color:#fff
-    class PKEY,PAID,LDerived derived
-    class TVAL,TGV,TAK,TCK,TEK,PINV,PCINV,LPlain piiPlain
-    class TDOC,PBLOB,LCipher piiCipher
-    class TSIGS,TAID,PAW,LMeta piiMeta
+    class SKEY,ETH,AAID,LDerived derived
+    class TVAL,TGV,TAK,TCK,TEK,SINV,SDOC,SCINV,LPlain piiPlain
+    class TDOC,SBLOB,LCipher piiCipher
+    class TSIGS,TAID,ESIGS,EAID,AAW,LMeta piiMeta
+    style SINV stroke:#198754,stroke-width:4px
+    style SDOC stroke:#198754,stroke-width:4px
+    style SKEY stroke:#198754,stroke-width:4px
+    style SCK stroke:#198754,stroke-width:4px
+    style SCINV stroke:#198754,stroke-width:4px
+    style SBLOB stroke:#198754,stroke-width:4px
+    style LShared stroke:#198754,stroke-width:4px
+    style ETH stroke:#6f42c1,stroke-width:4px
+    style ESIG stroke:#6f42c1,stroke-width:4px
+    style EHASH stroke:#6f42c1,stroke-width:4px
+    style ENONCE stroke:#6f42c1,stroke-width:4px
+    style EAID stroke:#6f42c1,stroke-width:4px
+    style ESIGS stroke:#6f42c1,stroke-width:4px
+    style LEvm stroke:#6f42c1,stroke-width:4px
+    style AAID stroke:#fd7e14,stroke-width:4px
+    style ASIG stroke:#fd7e14,stroke-width:4px
+    style AAW stroke:#fd7e14,stroke-width:4px
+    style ANUL stroke:#fd7e14,stroke-width:4px
+    style LAztec stroke:#fd7e14,stroke-width:4px
 ```
 
-| Personal data                    | Today                                                                                                                                                                                                                                                                                                  | Proposed                                                                                                       |
-|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
-| Party values (names, contacts)   | Today, a deal writes them onchain in `partyValues`. They are plaintext unless the user turns on encryption (`encryptionEnabledAtom` is `false` by default). Encrypted values use AES-256-CBC with a per-agreement key in the MetaLeX database. A private document keeps them in the encrypted document. | Proposed, only in the encrypted vault blob. Nothing onchain.                                                   |
-| Global values (deal terms)       | Today, a deal writes them onchain in `globalValues` as plaintext. A private document puts its company or owner address, document SHA-256, template id and request id onchain as plaintext.                                                                                                              | Proposed, only in the encrypted vault blob. Nothing onchain.                                                   |
-| Document file                    | Today, a private document is sealed with AES-256-GCM under a company key in the MetaLeX database.                                                                                                                                                                                                       | Proposed, sealed with AES-256-GCM under a key from the salt of the agreement, in the vault.                    |
-| Party addresses                  | Today, public onchain (`getParties`, events). A private document also puts each party wallet and capacity onchain as JSON.                                                                                                                                                                            | Proposed, the collector, the invite and the invite cache. Nothing onchain.                                     |
-| Signing times, finalize status   | Today, public onchain (`signedAt`, `AgreementSigned`, `ContractFinalized`).                                                                                                                                                                                                                             | Proposed, signing times only in the collector. Onchain, only a nullifier that nobody can link without the salt. |
-| Who at MetaLeX can decrypt       | Today, the MetaLeX server can decrypt every encrypted value and document. It unwraps each per-agreement key and each company key with one server secret, `ENCRYPTION_KEY`.                                                                                                                              | Proposed, MetaLeX can decrypt an agreement only while the invite cache keeps its invite. No MetaLeX secret opens all agreements. |
-| Top MetaLeX key                  | Today, `ENCRYPTION_KEY`, an environment variable of the server. It opens every agreement for as long as the data exists. Nothing logs its use.                                                                                                                                                        | Proposed, the invite cache key, in a KMS. It opens only the invites in the cache. The KMS logs each decrypt.   |
-| Who outside MetaLeX can decrypt  | Today, nobody without the MetaLeX server. A party cannot decrypt its own encrypted values without MetaLeX.                                                                                                                                                                                             | Proposed, each holder of the invite, without MetaLeX.                                                          |
+| Personal data                    | Today                                                                                                                                                                                                                                                                                                  | EVM retrofit                                                                                                                    | Aztec                                                                                                          |
+|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
+| Party values (names, contacts)   | Today, a deal writes them onchain in `partyValues`. They are plaintext unless the user turns on encryption (`encryptionEnabledAtom` is `false` by default). Encrypted values use AES-256-CBC with a per-agreement key in the MetaLeX database. A private document keeps them in the encrypted document. | Retrofit, only in the encrypted vault blob. Onchain, a salted hash for each party.                                              | Aztec, only in the encrypted vault blob. Nothing onchain.                                                      |
+| Global values (deal terms)       | Today, a deal writes them onchain in `globalValues` as plaintext. A private document puts its company or owner address, document SHA-256, template id and request id onchain as plaintext.                                                                                                              | Retrofit, only in the encrypted vault blob. Onchain, one salted hash, and the fields that contract logic needs (see below).     | Aztec, only in the encrypted vault blob. Nothing onchain.                                                      |
+| Document file                    | Today, a private document is sealed with AES-256-GCM under a company key in the MetaLeX database.                                                                                                                                                                                                       | Retrofit, sealed with AES-256-GCM under a key from the salt of the agreement, in the vault.                                     | Aztec, the same as the retrofit.                                                                               |
+| Party addresses                  | Today, public onchain (`getParties`, events). A private document also puts each party wallet and capacity onchain as JSON.                                                                                                                                                                            | Retrofit, public onchain, as today. Capacities go into the hashed values.                                                       | Aztec, the collector, the invite and the invite cache. Nothing onchain.                                        |
+| Signing times, finalize status   | Today, public onchain (`signedAt`, `AgreementSigned`, `ContractFinalized`).                                                                                                                                                                                                                             | Retrofit, public onchain, as today.                                                                                             | Aztec, signing times only in the collector. Onchain, only a nullifier that nobody can link without the salt.   |
+| Who at MetaLeX can decrypt       | Today, the MetaLeX server can decrypt every encrypted value and document. It unwraps each per-agreement key and each company key with one server secret, `ENCRYPTION_KEY`.                                                                                                                              | Retrofit, MetaLeX can decrypt an agreement only while the invite cache keeps its invite. No MetaLeX secret opens all agreements. | Aztec, the same as the retrofit.                                                                               |
+| Top MetaLeX key                  | Today, `ENCRYPTION_KEY`, an environment variable of the server. It opens every agreement for as long as the data exists. Nothing logs its use.                                                                                                                                                        | Retrofit, the invite cache key, in a KMS. It opens only the invites in the cache. The KMS logs each decrypt.                    | Aztec, the same as the retrofit.                                                                               |
+| Who outside MetaLeX can decrypt  | Today, nobody without the MetaLeX server. A party cannot decrypt its own encrypted values without MetaLeX.                                                                                                                                                                                             | Retrofit, each holder of the invite, without MetaLeX.                                                                           | Aztec, the same as the retrofit.                                                                               |
 
 What can be migrated:
 
-| Today                                             | Proposed                                                        | Migration                                                                                                   |
-|---------------------------------------------------|-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| Webapp in browser                                 | Webapp in browser                                               | Change. It encrypts, decrypts and hashes the document in the browser.                                       |
-| Webapp server decrypts PII for parties            | Webapp server runs the vault, the collector and the invite cache | Change. The server stops decrypting PII, except the cached invites.                                         |
-| Postgres database                                 | Postgres database                                               | Keep. The collector and the invite cache can use it. The vault can use it or a blob store.                  |
-| Privy login                                       | Login for the invite cache                                      | Keep. The cache gives an invite only to a signed-in party.                                                  |
-| `ENCRYPTION_KEY` in the server environment        | Invite cache key in a KMS                                       | Replace for new agreements. Keep `ENCRYPTION_KEY` to read old agreements.                                   |
-| Per-agreement key in the database                 | Salt in the invite                                              | Replace. The webapp makes a new salt for each agreement.                                                    |
-| `sealArtifact` (AES-256-GCM, random IV)           | Document encryption in the browser                              | Keep the pattern. Use the same cipher with the document key from the salt.                                  |
-| AES-256-CBC deal values, IV from the agreement id | Nothing                                                         | Replace. Deal values go into the encrypted document.                                                        |
-| EVM wallet and EIP-712 signature                  | Aztec account and authwit                                       | Replace. Each user needs an Aztec account. Counsel must confirm the authwit as a signature.                 |
-| Signing relayer                                   | Settler and FPC                                                 | Replace. The settler sends one `finalize` tx for each agreement, and the FPC pays the fee.                  |
-| EVM `CyberAgreementRegistry`                      | Aztec `CyberAgreementRegistry`                                  | New registry for new agreements. Old agreements stay on the EVM chain.                                      |
+| Today                                             | EVM retrofit                                                    | Aztec                                                           | Migration                                                                                                   |
+|---------------------------------------------------|-----------------------------------------------------------------|-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
+| Webapp in browser                                 | Webapp in browser                                               | Webapp in browser                                               | Change. It encrypts, decrypts and hashes the document in the browser. One code path serves both designs.    |
+| Webapp server decrypts PII for parties            | Webapp server runs the vault, the collector and the invite cache | The same as the retrofit                                        | Change. The server stops decrypting PII, except the cached invites.                                         |
+| Postgres database                                 | Postgres database                                               | Postgres database                                               | Keep. The collector and the invite cache can use it. The vault can use it or a blob store.                  |
+| Privy login                                       | Privy login                                                     | Login for the invite cache                                      | Keep. The cache gives an invite only to a signed-in party.                                                  |
+| `ENCRYPTION_KEY` in the server environment        | Invite cache key in a KMS                                       | The same KMS key                                                | Replace for new agreements. Keep `ENCRYPTION_KEY` to read old agreements.                                   |
+| Per-agreement key in the database                 | Salt in the invite                                              | Salt in the invite                                              | Replace. The webapp makes a new salt for each agreement.                                                    |
+| `sealArtifact` (AES-256-GCM, random IV)           | Document encryption in the browser                              | The same                                                        | Keep the pattern. Use the same cipher with the document key from the salt.                                  |
+| AES-256-CBC deal values, IV from the agreement id | Salted EIP-712 hashes onchain                                   | Nothing onchain                                                 | Replace. Deal values go into the encrypted document.                                                        |
+| EVM wallet and EIP-712 signature                  | EVM wallet and EIP-712 signature over readable terms            | Aztec account and authwit                                       | Retrofit: keep. Aztec: replace; each user needs an Aztec account, and counsel must confirm the authwit.     |
+| Signing relayer                                   | Signing relayer                                                 | Settler and FPC                                                 | Retrofit: keep. Aztec: replace; the settler sends one `finalize` tx, and the FPC pays the fee.              |
+| EVM `CyberAgreementRegistry`                      | EVM registry that stores hashes                                 | Aztec `CyberAgreementRegistry`                                  | Retrofit: change the registry and its callers. Aztec: a new registry. Old agreements stay as they are.      |
 
 Old agreements stay public. A migration cannot remove data that is already on an EVM chain. It can only move new
-agreements to the proposed design.
+agreements to a new design.
 
 ### What each viewer learns
 
