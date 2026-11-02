@@ -1,196 +1,194 @@
 use agreement_registry_contract::CyberAgreementRegistry;
-use agreement_registry_contract::agreement::{Agreement, MAX_PARTIES};
+use agreement_registry_contract::agreement::{Agreement, consent_hash, MAX_PARTIES};
 use aztec::{
-    messages::processing::offchain::MAX_OFFCHAIN_MESSAGES_PER_RECEIVE_CALL,
+    authwit::auth::compute_authwit_message_hash,
     protocol::{address::AztecAddress, traits::FromField},
-    test::helpers::{
-        authwit::add_private_authwit_from_call,
-        test_environment::{CallPrivateOptions, TestEnvironment},
-    },
+    test::helpers::{test_environment::{CallPrivateOptions, TestEnvironment}, txe_oracles},
 };
 
-global TERMS_HASH: Field = 0x1234;
-global SALT: Field = 0x5678;
+global TERMS_COMMITMENT: Field = 0x1234;
 
-unconstrained fn setup() -> (TestEnvironment, AztecAddress, AztecAddress, AztecAddress) {
+// Private authwits need an account contract, so the parties are contract accounts. The settler is any account.
+// A TXE contract account keeps its signing key in a note. So the settler call gets the scopes of the parties. The
+// local network run uses initializerless accounts and a settler PXE without these scopes.
+unconstrained fn setup() -> (TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
     let mut env = TestEnvironment::new();
-    let creator = env.create_contract_account();
-    let counterparty = env.create_light_account();
+    let alice = env.create_contract_account();
+    let bob = env.create_contract_account();
+    let settler = env.create_light_account();
     let registry = env.deploy("@agreement_registry_contract/CyberAgreementRegistry").without_initializer();
-    (env, registry, creator, counterparty)
+    (env, registry, alice, bob, settler)
 }
 
-fn two_party(creator: AztecAddress, counterparty: AztecAddress) -> Agreement {
+fn two_party(alice: AztecAddress, bob: AztecAddress) -> Agreement {
     let mut parties = [AztecAddress::zero(); MAX_PARTIES];
-    parties[0] = creator;
-    parties[1] = counterparty;
-    Agreement { terms_hash: TERMS_HASH, salt: SALT, expiry: 0, party_count: 2, parties }
+    parties[0] = alice;
+    parties[1] = bob;
+    Agreement { terms_commitment: TERMS_COMMITMENT, expiry: 0, party_count: 2, parties }
 }
 
-unconstrained fn create(env: TestEnvironment, registry: AztecAddress, from: AztecAddress, agreement: Agreement) -> Field {
-    env.call_private(
+// The party signs the consent hash offchain. The registry is the consumer.
+unconstrained fn consent(env: TestEnvironment, registry: AztecAddress, party: AztecAddress, agreement: Agreement) {
+    let inner_hash = consent_hash(agreement.id(), party);
+    let (chain_id, version) = env.utility_context(|context| (context.chain_id(), context.version()));
+    txe_oracles::add_authwit(party, compute_authwit_message_hash(registry, chain_id, version, inner_hash));
+}
+
+unconstrained fn finalize<let N: u32>(
+    env: TestEnvironment,
+    registry: AztecAddress,
+    from: AztecAddress,
+    scopes: [AztecAddress; N],
+    agreement: Agreement,
+) -> Field {
+    env.call_private_opts(
         from,
-        CyberAgreementRegistry::at(registry).create_bound_contract_and_sign_for(agreement.parties[0], agreement, 0),
+        CallPrivateOptions::new().with_additional_scopes(scopes),
+        CyberAgreementRegistry::at(registry).finalize(agreement),
     )
 }
 
-#[test]
-unconstrained fn creator_signs_and_each_party_gets_a_message() {
-    let (env, registry, creator, counterparty) = setup();
-    let agreement = two_party(creator, counterparty);
+unconstrained fn is_finalized(env: TestEnvironment, registry: AztecAddress, agreement: Agreement) -> bool {
+    env.execute_utility(CyberAgreementRegistry::at(registry).is_finalized(agreement))
+}
 
-    let agreement_id = create(env, registry, creator, agreement);
-    let messages = env.offchain_messages();
+#[test]
+unconstrained fn settler_finalizes_after_all_parties_consent() {
+    let (env, registry, alice, bob, settler) = setup();
+    let agreement = two_party(alice, bob);
+    consent(env, registry, alice, agreement);
+    consent(env, registry, bob, agreement);
+    assert(!is_finalized(env, registry, agreement));
+
+    let agreement_id = finalize(env, registry, settler, [alice, bob], agreement);
 
     assert_eq(agreement_id, env.execute_utility(CyberAgreementRegistry::at(registry).agreement_id(agreement)));
-    assert(env.execute_utility(CyberAgreementRegistry::at(registry).is_signed(agreement, creator)));
-    assert(!env.execute_utility(CyberAgreementRegistry::at(registry).is_signed(agreement, counterparty)));
-
-    assert_eq(messages.len(), 2);
-    assert_eq(messages.get(0).recipient, creator);
-    assert_eq(messages.get(1).recipient, counterparty);
-
-    let mut batch: BoundedVec<_, MAX_OFFCHAIN_MESSAGES_PER_RECEIVE_CALL> = BoundedVec::new();
-    batch.push(messages.get(1));
-    env.execute_utility(CyberAgreementRegistry::at(registry).offchain_receive(batch));
+    assert_eq(
+        consent_hash(agreement_id, bob),
+        env.execute_utility(CyberAgreementRegistry::at(registry).consent_hash_of(agreement, bob)),
+    );
+    assert(is_finalized(env, registry, agreement));
 }
 
 #[test]
 unconstrained fn single_party_agreement() {
-    let (env, registry, creator, _) = setup();
+    let (env, registry, alice, _, settler) = setup();
     let mut parties = [AztecAddress::zero(); MAX_PARTIES];
-    parties[0] = creator;
-    let agreement = Agreement { terms_hash: TERMS_HASH, salt: SALT, expiry: 0, party_count: 1, parties };
+    parties[0] = alice;
+    let agreement = Agreement { terms_commitment: TERMS_COMMITMENT, expiry: 0, party_count: 1, parties };
+    consent(env, registry, alice, agreement);
 
-    let _ = create(env, registry, creator, agreement);
-    let messages = env.offchain_messages();
+    let _ = finalize(env, registry, settler, [alice], agreement);
 
-    assert(env.execute_utility(CyberAgreementRegistry::at(registry).is_signed(agreement, creator)));
-    assert_eq(messages.len(), 1);
-    assert_eq(messages.get(0).recipient, creator);
+    assert(is_finalized(env, registry, agreement));
 }
 
 #[test]
 unconstrained fn future_expiry_is_accepted() {
-    let (env, registry, creator, counterparty) = setup();
-    let mut agreement = two_party(creator, counterparty);
+    let (env, registry, alice, bob, settler) = setup();
+    let mut agreement = two_party(alice, bob);
     agreement.expiry = env.last_block_timestamp() + 3600;
+    consent(env, registry, alice, agreement);
+    consent(env, registry, bob, agreement);
 
-    let _ = create(env, registry, creator, agreement);
+    let _ = finalize(env, registry, settler, [alice, bob], agreement);
 
-    assert(env.execute_utility(CyberAgreementRegistry::at(registry).is_signed(agreement, creator)));
+    assert(is_finalized(env, registry, agreement));
 }
 
 #[test]
-unconstrained fn other_salt_gives_other_agreement() {
-    let (env, registry, creator, counterparty) = setup();
-    let agreement = two_party(creator, counterparty);
+unconstrained fn other_terms_give_other_agreement() {
+    let (env, registry, alice, bob, _) = setup();
+    let agreement = two_party(alice, bob);
     let mut other = agreement;
-    other.salt = SALT + 1;
+    other.terms_commitment = TERMS_COMMITMENT + 1;
 
-    let first_id = create(env, registry, creator, agreement);
-    let other_id = create(env, registry, creator, other);
+    let first_id = env.execute_utility(CyberAgreementRegistry::at(registry).agreement_id(agreement));
+    let other_id = env.execute_utility(CyberAgreementRegistry::at(registry).agreement_id(other));
 
     assert(first_id != other_id);
 }
 
-// The delegate runs in the PXE of `creator`, for example an app contract that composes this call. The authwit check
-// reads the account note of `creator`, so that scope must be available.
-#[test]
-unconstrained fn delegate_signs_with_authwit() {
-    let (mut env, registry, creator, _) = setup();
-    let delegate = env.create_light_account();
-    let counterparty = env.create_light_account();
-    let agreement = two_party(creator, counterparty);
-    let call = CyberAgreementRegistry::at(registry).create_bound_contract_and_sign_for(creator, agreement, 1);
-    add_private_authwit_from_call(env, creator, delegate, call);
+#[test(should_fail_with = "Unknown auth witness for message hash")]
+unconstrained fn revert_if_one_party_did_not_consent() {
+    let (env, registry, alice, bob, settler) = setup();
+    let agreement = two_party(alice, bob);
+    consent(env, registry, alice, agreement);
 
-    let _ = env.call_private_opts(delegate, CallPrivateOptions::new().with_additional_scopes([creator]), call);
-
-    assert(env.execute_utility(CyberAgreementRegistry::at(registry).is_signed(agreement, creator)));
+    let _ = finalize(env, registry, settler, [alice, bob], agreement);
 }
 
 #[test(should_fail_with = "Unknown auth witness for message hash")]
-unconstrained fn revert_if_delegate_has_no_authwit() {
-    let (mut env, registry, creator, counterparty) = setup();
-    let delegate = env.create_light_account();
-    let agreement = two_party(creator, counterparty);
+unconstrained fn revert_if_consent_is_for_other_agreement() {
+    let (env, registry, alice, bob, settler) = setup();
+    let agreement = two_party(alice, bob);
+    let mut other = agreement;
+    other.terms_commitment = TERMS_COMMITMENT + 1;
+    consent(env, registry, alice, agreement);
+    consent(env, registry, bob, other);
 
-    let _ = env.call_private_opts(
-        delegate,
-        CallPrivateOptions::new().with_additional_scopes([creator]),
-        CyberAgreementRegistry::at(registry).create_bound_contract_and_sign_for(creator, agreement, 1),
-    );
+    let _ = finalize(env, registry, settler, [alice, bob], agreement);
 }
 
 #[test(should_fail_with = "duplicate")]
-unconstrained fn revert_if_created_twice() {
-    let (env, registry, creator, counterparty) = setup();
-    let agreement = two_party(creator, counterparty);
+unconstrained fn revert_if_finalized_twice() {
+    let (env, registry, alice, bob, settler) = setup();
+    let agreement = two_party(alice, bob);
+    consent(env, registry, alice, agreement);
+    consent(env, registry, bob, agreement);
 
-    let _ = create(env, registry, creator, agreement);
-    let _ = create(env, registry, creator, agreement);
+    let _ = finalize(env, registry, settler, [alice, bob], agreement);
+    let _ = finalize(env, registry, settler, [alice, bob], agreement);
 }
 
-#[test(should_fail_with = "signer is not the creator")]
-unconstrained fn revert_if_signer_is_not_creator() {
-    let (env, registry, creator, counterparty) = setup();
-    let agreement = two_party(creator, counterparty);
+#[test(should_fail_with = "terms commitment is zero")]
+unconstrained fn revert_if_terms_commitment_is_zero() {
+    let (env, registry, alice, bob, settler) = setup();
+    let mut agreement = two_party(alice, bob);
+    agreement.terms_commitment = 0;
 
-    let _ = env.call_private(
-        counterparty,
-        CyberAgreementRegistry::at(registry).create_bound_contract_and_sign_for(counterparty, agreement, 0),
-    );
-}
-
-#[test(should_fail_with = "terms hash is zero")]
-unconstrained fn revert_if_terms_hash_is_zero() {
-    let (env, registry, creator, counterparty) = setup();
-    let mut agreement = two_party(creator, counterparty);
-    agreement.terms_hash = 0;
-
-    let _ = create(env, registry, creator, agreement);
+    let _ = finalize(env, registry, settler, [alice, bob], agreement);
 }
 
 #[test(should_fail_with = "invalid party count")]
 unconstrained fn revert_if_party_count_is_zero() {
-    let (env, registry, creator, counterparty) = setup();
-    let mut agreement = two_party(creator, counterparty);
+    let (env, registry, alice, bob, settler) = setup();
+    let mut agreement = two_party(alice, bob);
     agreement.party_count = 0;
 
-    let _ = create(env, registry, creator, agreement);
+    let _ = finalize(env, registry, settler, [alice, bob], agreement);
 }
 
 #[test(should_fail_with = "invalid party count")]
 unconstrained fn revert_if_party_count_is_above_max() {
-    let (env, registry, creator, counterparty) = setup();
-    let mut agreement = two_party(creator, counterparty);
+    let (env, registry, alice, bob, settler) = setup();
+    let mut agreement = two_party(alice, bob);
     agreement.party_count = MAX_PARTIES + 1;
 
-    let _ = create(env, registry, creator, agreement);
+    let _ = finalize(env, registry, settler, [alice, bob], agreement);
 }
 
 #[test(should_fail_with = "party is zero address")]
 unconstrained fn revert_if_party_is_zero() {
-    let (env, registry, creator, _) = setup();
-    let agreement = two_party(creator, AztecAddress::zero());
+    let (env, registry, alice, _, settler) = setup();
+    let agreement = two_party(alice, AztecAddress::zero());
 
-    let _ = create(env, registry, creator, agreement);
+    let _ = finalize(env, registry, settler, [alice], agreement);
 }
 
 #[test(should_fail_with = "duplicate party")]
 unconstrained fn revert_if_party_is_duplicate() {
-    let (env, registry, creator, _) = setup();
-    let agreement = two_party(creator, creator);
+    let (env, registry, alice, _, settler) = setup();
+    let agreement = two_party(alice, alice);
 
-    let _ = create(env, registry, creator, agreement);
+    let _ = finalize(env, registry, settler, [alice], agreement);
 }
 
 #[test(should_fail_with = "unused party slot is not zero")]
 unconstrained fn revert_if_unused_slot_is_set() {
-    let (env, registry, creator, counterparty) = setup();
-    let mut agreement = two_party(creator, counterparty);
+    let (env, registry, alice, bob, settler) = setup();
+    let mut agreement = two_party(alice, bob);
     agreement.parties[2] = AztecAddress::from_field(0x99);
 
-    let _ = create(env, registry, creator, agreement);
+    let _ = finalize(env, registry, settler, [alice, bob], agreement);
 }

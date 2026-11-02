@@ -1,21 +1,21 @@
 # Private Agreement Registry on Aztec (PoC)
 
-A minimal port of `src/CyberAgreementRegistry.sol` to Aztec. It supports one flow:
-`create_bound_contract_and_sign_for`. The creator makes an agreement and signs it in one private tx. The chain
-keeps only nullifiers. The agreement data goes to each party as an encrypted private event, delivered offchain
-through a MetaLeX mailbox.
+A minimal port of `src/CyberAgreementRegistry.sol` to Aztec. It supports the happy path of one agreement. Each party
+signs offchain with a private authwit. MetaLeX collects the authwits and sends one private `finalize` tx when all
+parties signed. The chain keeps only nullifiers. The parties, and an auditor that a party shares the invite with,
+see the document and the status "finalized".
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): components, data model, the MetaLeX data layer, privacy analysis.
-- [USER-FLOWS.md](USER-FLOWS.md): onboarding, create and sign, receive, check, recovery.
+- [USER-FLOWS.md](USER-FLOWS.md): onboarding, draft and sign, review and sign, settle, view, recovery.
 
 ## Layout
 
 | Path | Content |
 | --- | --- |
 | `agreement_registry_contract/src/main.nr` | The `CyberAgreementRegistry` contract |
-| `agreement_registry_contract/src/agreement.nr` | `Agreement` struct, id, validation, signature nullifier |
+| `agreement_registry_contract/src/agreement.nr` | `Agreement` struct, id, validation, consent hash, nullifiers |
 | `agreement_registry_test/src/lib.nr` | TXE tests |
-| `scripts/e2e.ts` | Two-wallet flow on a local network, with an in-memory MetaLeX vault and mailbox |
+| `scripts/e2e.ts` | Lifecycle on a local network with four wallets, an in-memory MetaLeX vault and collector |
 | `scripts/deploy.ts` | Deploy script with a fixed salt (same address on every network) |
 
 ## Commands
@@ -49,9 +49,9 @@ Status on 2026-11-01, uncommitted, branch `feat/aztec`:
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Compile | `aztec compile` | Pass. `create_bound_contract_and_sign_for` has 5,972 gates (`aztec profile gates target`). |
-| Unit tests (TXE simulator) | `aztec test` | 14 of 14 pass |
-| Local network flow | `node e2e.ts` on `aztec start --local-network` | 13 of 13 checks pass |
+| Compile | `aztec compile` | Pass. `finalize` has 6,617 gates (`aztec profile gates target`). |
+| Unit tests (TXE simulator) | `aztec test` | 13 of 13 pass |
+| Local network flow | `node e2e.ts` on `aztec start --local-network` | 15 of 15 checks pass |
 | Deploy script | `node deploy.ts` on the local network with test account 2 | Pass |
 | Aztec mainnet | Not run | Not deployed |
 | Independent review | Not run | None |
@@ -60,8 +60,8 @@ Notes on these results:
 
 - The local node runs with `realProofs` set to false and accepts fake proofs. The run does not show that a real
   client proof verifies.
+- A TXE contract account keeps its signing key in a private note. So the TXE tests give the settler the scopes of
+  the parties. The local network run uses initializerless accounts and a settler PXE that has no party keys.
 - TXE does not run the rollup check that drops an expired tx. The local network run shows that the PXE refuses an
   expiry at or before the anchor block. No test covers an expiry between the anchor and the inclusion block. The
   rollup circuit enforces that case (`private_tail_validator.nr`).
-- The authwit test gives the delegate the signer scope. This is the same as a contract that runs in the signer's
-  PXE.

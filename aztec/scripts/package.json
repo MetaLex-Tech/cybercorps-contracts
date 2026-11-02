@@ -9,6 +9,7 @@
   "dependencies": {
     "@aztec-labs/accounts": "6.0.0",
     "@aztec-labs/aztec.js": "6.0.0",
+    "@aztec-labs/foundation": "6.0.0",
     "@aztec-labs/noir-contracts.js": "6.0.0",
     "@aztec-labs/wallets": "6.0.0"
   }

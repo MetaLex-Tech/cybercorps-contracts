@@ -1,26 +1,49 @@
-// Runs the create-and-sign flow on a local Aztec network with two separate wallets (two PXEs).
-// `MetaLeXRelay` stands in for the MetaLeX document vault and mailbox. It only stores ciphertext.
+// Runs the agreement lifecycle on a local Aztec network with four separate wallets (four PXEs): Alice, Bob, the
+// MetaLeX settler and an auditor. `MetaLeXServices` stands in for the MetaLeX document vault and signature collector.
 //
 // Usage: AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
 
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto';
 import { getInitialTestAccountsData } from '@aztec-labs/accounts/testing';
+import { NO_FROM } from '@aztec-labs/aztec.js/account';
 import { AztecAddress } from '@aztec-labs/aztec.js/addresses';
-import type { OffchainMessage } from '@aztec-labs/aztec.js/contracts';
+import type { AuthWitness } from '@aztec-labs/aztec.js/authorization';
+import { getContractInstanceFromInstantiationParams, type ContractInstanceWithAddress } from '@aztec-labs/aztec.js/contracts';
 import { SponsoredFeePaymentMethod } from '@aztec-labs/aztec.js/fee';
 import { Fr } from '@aztec-labs/aztec.js/fields';
 import { createAztecNodeClient, waitForNode } from '@aztec-labs/aztec.js/node';
+import { Schnorr } from '@aztec-labs/foundation/crypto/schnorr';
+import { SchnorrInitializerlessAccountContract } from '@aztec-labs/noir-contracts.js/SchnorrInitializerlessAccount';
 import { SponsoredFPCContract } from '@aztec-labs/noir-contracts.js/SponsoredFPC';
 import { EmbeddedWallet } from '@aztec-labs/wallets/embedded';
 import { createFundedInitializerlessAccounts } from '@aztec-labs/wallets/testing';
-import { getContractInstanceFromInstantiationParams } from '@aztec-labs/aztec.js/contracts';
 import { CyberAgreementRegistryContract } from './artifacts/CyberAgreementRegistry.ts';
 
 const MAX_PARTIES = 4;
 
-class MetaLeXRelay {
+type Agreement = { terms_commitment: Fr; expiry: bigint; party_count: number; parties: AztecAddress[] };
+
+// The public account data that a user gives MetaLeX at onboarding. The settler PXE needs it to run the authwit
+// check of the user account.
+type PartyAccount = { address: AztecAddress; instance: ContractInstanceWithAddress; signingPublicKey: { x: Fr; y: Fr } };
+
+// What a party sends to the collector. It holds no salt and no terms.
+type Signature = { signer: AztecAddress; authWitness: AuthWitness };
+
+class MetaLeXServices {
   vault = new Map<string, Buffer>();
-  mailbox = new Map<string, OffchainMessage[]>();
+  accounts = new Map<string, PartyAccount>();
+  collector = new Map<string, { agreement: Agreement; signatures: Signature[] }>();
+
+  onboard(account: PartyAccount) {
+    this.accounts.set(account.address.toString(), account);
+  }
+
+  accountOf(address: AztecAddress): PartyAccount {
+    const account = this.accounts.get(address.toString());
+    if (!account) throw new Error(`no onboarded account ${address}`);
+    return account;
+  }
 
   putDocument(locator: string, ciphertext: Buffer) {
     this.vault.set(locator, ciphertext);
@@ -32,17 +55,18 @@ class MetaLeXRelay {
     return doc;
   }
 
-  post(messages: OffchainMessage[]) {
-    for (const m of messages) {
-      const key = m.recipient.toString();
-      this.mailbox.set(key, [...(this.mailbox.get(key) ?? []), m]);
-    }
+  submitSignature(agreementId: Fr, agreement: Agreement, signature: Signature) {
+    const entry = this.collector.get(agreementId.toString()) ?? { agreement, signatures: [] };
+    entry.signatures.push(signature);
+    this.collector.set(agreementId.toString(), entry);
   }
 
-  fetch(recipient: AztecAddress): OffchainMessage[] {
-    const messages = this.mailbox.get(recipient.toString()) ?? [];
-    this.mailbox.delete(recipient.toString());
-    return messages;
+  pendingSigners(agreementId: Fr): AztecAddress[] {
+    const entry = this.collector.get(agreementId.toString())!;
+    const signed = entry.signatures.map(s => s.signer.toString());
+    return entry.agreement.parties
+      .slice(0, entry.agreement.party_count)
+      .filter(p => !signed.includes(p.toString()));
   }
 }
 
@@ -92,9 +116,28 @@ function decrypt(key: Buffer, blob: Buffer): string {
   return Buffer.concat([decipher.update(blob.subarray(28)), decipher.final()]).toString('utf8');
 }
 
-function agreementOf(termsHash: Fr, salt: Fr, expiry: bigint, parties: AztecAddress[]) {
+// The invite is what a party shares with a counterparty or an auditor. The app puts it in the URL fragment, so the
+// MetaLeX servers never receive it.
+type Invite = { salt: string; expiry: string; parties: string[] };
+
+function inviteOf(salt: Fr, expiry: bigint, parties: AztecAddress[]): string {
+  const invite: Invite = { salt: salt.toString(), expiry: expiry.toString(), parties: parties.map(p => p.toString()) };
+  return Buffer.from(JSON.stringify(invite)).toString('base64url');
+}
+
+// An invite is untrusted input, so each party address must be a valid address.
+async function readInvite(encoded: string) {
+  const invite: Invite = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+  const parties = invite.parties.map(p => AztecAddress.fromStringUnsafe(p));
+  for (const p of parties) {
+    if (!(await p.isValid())) throw new Error(`invalid party address ${p}`);
+  }
+  return { salt: Fr.fromString(invite.salt), expiry: BigInt(invite.expiry), parties };
+}
+
+function agreementOf(termsCommitment: Fr, expiry: bigint, parties: AztecAddress[]): Agreement {
   const padded = [...parties, ...Array(MAX_PARTIES - parties.length).fill(AztecAddress.ZERO)];
-  return { terms_hash: termsHash, salt, expiry, party_count: parties.length, parties: padded };
+  return { terms_commitment: termsCommitment, expiry, party_count: parties.length, parties: padded };
 }
 
 function check(condition: boolean, label: string) {
@@ -107,29 +150,79 @@ async function main() {
   const node = createAztecNodeClient(nodeUrl);
   await waitForNode(node);
 
-  const [aliceData, bobData] = await getInitialTestAccountsData();
+  const [aliceData, bobData, settlerData] = await getInitialTestAccountsData();
   const aliceWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
   const bobWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
+  const settlerWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
+  const auditorWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
   const [aliceAccount] = await createFundedInitializerlessAccounts(aliceWallet, [aliceData]);
   const [bobAccount] = await createFundedInitializerlessAccounts(bobWallet, [bobData]);
+  const [settlerAccount] = await createFundedInitializerlessAccounts(settlerWallet, [settlerData]);
   const alice = aliceAccount.address;
   const bob = bobAccount.address;
-  const relay = new MetaLeXRelay();
+  const settler = settlerAccount.address;
+  const metalex = new MetaLeXServices();
+
+  // Onboarding: each user gives MetaLeX its address, account instance and signing public key.
+  for (const [account, data] of [
+    [aliceAccount, aliceData],
+    [bobAccount, bobData],
+  ] as const) {
+    const signingPublicKey = await new Schnorr().computePublicKey(data.signingKey);
+    metalex.onboard({ address: account.address, instance: account.getInstance(), signingPublicKey });
+  }
 
   // The local network has a sponsored FPC. On mainnet, MetaLeX runs its own fee payer.
   const fpc = await getContractInstanceFromInstantiationParams(SponsoredFPCContract.artifact, { salt: new Fr(0) });
-  await aliceWallet.registerContract(fpc, SponsoredFPCContract.artifact);
+  await settlerWallet.registerContract(fpc, SponsoredFPCContract.artifact);
   const sponsored = { fee: { paymentMethod: new SponsoredFeePaymentMethod(fpc.address) } };
 
-  // MetaLeX deploys the registry once. Any wallet can then register it from the node.
-  const { contract: registry, instance } = await CyberAgreementRegistryContract.deploy(aliceWallet).send({
-    from: alice,
+  // MetaLeX deploys the registry once. Any wallet can then register it.
+  const { contract: registry, instance } = await CyberAgreementRegistryContract.deploy(settlerWallet).send({
+    from: settler,
   });
   console.log(`registry deployed at ${registry.address}`);
-  await bobWallet.registerContract(instance, CyberAgreementRegistryContract.artifact);
-  const bobRegistry = CyberAgreementRegistryContract.at(registry.address, bobWallet);
+  const registryIn = async (wallet: EmbeddedWallet) => {
+    await wallet.registerContract(instance, CyberAgreementRegistryContract.artifact);
+    return CyberAgreementRegistryContract.at(registry.address, wallet);
+  };
+  const aliceRegistry = await registryIn(aliceWallet);
+  const bobRegistry = await registryIn(bobWallet);
+  const auditorRegistry = await registryIn(auditorWallet);
 
-  // 1. Alice drafts the document in the MetaLeX app. It never goes onchain.
+  // A party signs in its own wallet. It sends only the authwit.
+  const sign = async (
+    wallet: EmbeddedWallet,
+    reg: CyberAgreementRegistryContract,
+    signer: AztecAddress,
+    agreement: Agreement,
+  ): Promise<Signature> => {
+    const { result: innerHash } = await reg.methods.consent_hash_of(agreement, signer).simulate({ from: signer });
+    const authWitness = await wallet.createAuthWit(signer, { consumer: registry.address, innerHash: new Fr(innerHash) });
+    return { signer, authWitness };
+  };
+
+  // The settler registers each party account and stores its public key. The account checks the key against its
+  // immutables hash. No secret of the party is needed. The party addresses are scopes only so that the settler PXE
+  // can read the stored keys.
+  const registered = new Set<string>();
+  const settle = async (agreement: Agreement, signatures: Signature[]) => {
+    const parties = agreement.parties.slice(0, agreement.party_count);
+    for (const party of parties.filter(p => !registered.has(p.toString()))) {
+      const { instance: account, signingPublicKey } = metalex.accountOf(party);
+      await settlerWallet.registerContract(account, SchnorrInitializerlessAccountContract.artifact);
+      await SchnorrInitializerlessAccountContract.at(party, settlerWallet)
+        .methods.constructor(signingPublicKey.x, signingPublicKey.y)
+        .simulate({ from: NO_FROM, additionalScopes: [party] });
+      registered.add(party.toString());
+    }
+    return registry.methods
+      .finalize(agreement)
+      .with({ authWitnesses: signatures.map(s => s.authWitness) })
+      .send({ from: settler, additionalScopes: parties, ...sponsored });
+  };
+
+  // 1. Alice drafts the document in the MetaLeX webapp. It never goes onchain.
   const document = {
     template: { title: 'Mutual NDA', uri: 'ipfs://example-template', globalFields: ['effectiveDate'], partyFields: ['name'] },
     globalValues: ['2026-11-01'],
@@ -139,92 +232,116 @@ async function main() {
     ],
   };
   const salt = Fr.random();
-  const agreement = agreementOf(termsHashOf(document), salt, 0n, [alice, bob]);
+  const { result: termsCommitment } = await aliceRegistry.methods
+    .terms_commitment_of(termsHashOf(document), salt)
+    .simulate({ from: alice });
+  const agreement = agreementOf(new Fr(termsCommitment), 0n, [alice, bob]);
+  const { result: agreementIdRaw } = await aliceRegistry.methods.agreement_id(agreement).simulate({ from: alice });
+  const agreementId = new Fr(agreementIdRaw);
   const { locator, key } = docKeysOf(salt);
-  relay.putDocument(locator, encrypt(key, canonicalJson(document)));
+  metalex.putDocument(locator, encrypt(key, canonicalJson(document)));
+  const invite = inviteOf(salt, agreement.expiry, [alice, bob]);
 
-  // 2. Alice creates and signs in one private tx. MetaLeX pays the fee.
-  const { result: expectedId } = await registry.methods.agreement_id(agreement).simulate({ from: alice });
-  const { receipt, offchainMessages } = await registry.methods
-    .create_bound_contract_and_sign_for(alice, agreement, 0)
-    .send({ from: alice, ...sponsored });
-  console.log(`create_bound_contract_and_sign_for mined in block ${receipt.blockNumber}, tx ${receipt.txHash}`);
-  check(offchainMessages.length === 2, 'one offchain message for each party');
+  // 2. Alice signs offchain. The collector waits for Bob.
+  metalex.submitSignature(agreementId, agreement, await sign(aliceWallet, aliceRegistry, alice, agreement));
+  const pending = metalex.pendingSigners(agreementId);
+  check(pending.length === 1 && pending[0].equals(bob), 'collector waits for Bob');
+  await expectFailure(
+    () => settle(agreement, metalex.collector.get(agreementId.toString())!.signatures),
+    'finalize without the consent of Bob is rejected',
+    'Unknown auth witness',
+  );
+
+  // 3. Bob opens the invite, reviews the document and signs.
+  const bobView = await openInvite(bobRegistry, bob, invite, metalex);
+  check(bobView.agreementId.equals(agreementId), 'Bob derives the same agreement id from the invite');
+  check(canonicalJson(bobView.document) === canonicalJson(document), 'Bob decrypts the same document');
+  check(bobView.finalized === false, 'Bob sees the status "pending"');
+  metalex.submitSignature(agreementId, bobView.agreement, await sign(bobWallet, bobRegistry, bob, bobView.agreement));
+  check(metalex.pendingSigners(agreementId).length === 0, 'collector has all signatures');
+
+  // 4. The settler finalizes in one tx. Its input holds no salt and no terms hash.
+  const collected = metalex.collector.get(agreementId.toString())!;
+  const collectedJson = JSON.stringify(collected, (_, v) => (typeof v === 'bigint' ? v.toString() : v));
+  check(
+    !collectedJson.includes(salt.toString().slice(2)) && !collectedJson.includes(termsHashOf(document).toString().slice(2)),
+    'collector and settler have no salt and no terms hash',
+  );
+  const { receipt } = await settle(collected.agreement, collected.signatures);
+  console.log(`finalize mined in block ${receipt.blockNumber}, tx ${receipt.txHash}`);
 
   const tx = await node.getTxByHash(receipt.txHash);
-  check(tx !== undefined && tx.data.feePayer.equals(fpc.address), 'fee payer is the FPC, not Alice');
-
-  const txEffect = await node.getTxEffect(receipt.txHash);
-  const effect = txEffect!.data;
+  check(tx !== undefined && tx.data.feePayer.equals(fpc.address), 'fee payer is the FPC');
+  const effect = (await node.getTxEffect(receipt.txHash))!.data;
   console.log(
     `public tx effects: ${effect.nullifiers.length} nullifiers, ${effect.noteHashes.length} note hashes, ` +
       `${effect.privateLogs.length} private logs, ${effect.publicLogs.length} public logs`,
   );
-  check(effect.privateLogs.length === 0, 'no private logs onchain (messages go offchain)');
-  check(effect.noteHashes.length === 0, 'no note hashes onchain');
+  check(effect.noteHashes.length === 0 && effect.privateLogs.length === 0 && effect.publicLogs.length === 0, 'no note hashes and no logs onchain');
 
-  // 3. Alice uploads the encrypted messages to the MetaLeX mailbox.
-  relay.post(offchainMessages);
+  // 5. Alice, Bob and an auditor see the details and the status "finalized". Alice gives the invite to the auditor.
+  for (const [name, reg, from] of [
+    ['Alice', aliceRegistry, alice],
+    ['Bob', bobRegistry, bob],
+    ['Auditor', auditorRegistry, NO_FROM],
+  ] as const) {
+    const view = await openInvite(reg, from, invite, metalex);
+    check(view.finalized && canonicalJson(view.document) === canonicalJson(document), `${name} sees the document and the status "finalized"`);
+  }
 
-  // 4. Bob syncs his mailbox into his own PXE.
-  const toArg = (m: OffchainMessage) => ({
-    ciphertext: m.payload,
-    recipient: m.recipient,
-    tx_hash: { _is_some: true, _value: receipt.txHash.hash },
-    anchor_block_timestamp: m.anchorBlockTimestamp,
-  });
-  const bobMessages = relay.fetch(bob);
-  check(bobMessages.length === 1, 'mailbox has one message for Bob');
-  await bobRegistry.methods.offchain_receive(bobMessages.map(toArg)).simulate({ from: bob });
+  // 6. A second finalize of the same agreement fails.
+  await expectFailure(() => settle(collected.agreement, collected.signatures), 'second finalize is rejected', 'nullifier');
 
-  const events = await bobWallet.getPrivateEvents<any>(CyberAgreementRegistryContract.events.AgreementSigned, {
-    contractAddress: registry.address,
-    scopes: [bob],
-  });
-  check(events.length === 1, 'Bob PXE decrypted one AgreementSigned event');
-  const received = events[0].event;
-  check(received.signer.equals(alice), 'event names Alice as signer');
+  // 7. A one-party agreement gives the same nullifier count, so the chain does not show the party count.
+  const solo = agreementOf(Fr.random(), 0n, [alice]);
+  const { result: soloIdRaw } = await aliceRegistry.methods.agreement_id(solo).simulate({ from: alice });
+  metalex.submitSignature(new Fr(soloIdRaw), solo, await sign(aliceWallet, aliceRegistry, alice, solo));
+  const { receipt: soloReceipt } = await settle(solo, metalex.collector.get(new Fr(soloIdRaw).toString())!.signatures);
+  const soloEffect = (await node.getTxEffect(soloReceipt.txHash))!.data;
+  check(soloEffect.nullifiers.length === effect.nullifiers.length, `same nullifier count for one and two parties (${effect.nullifiers.length})`);
 
-  // 5. Bob opens the document from the vault and checks it against the terms hash.
-  const receivedSalt = new Fr(BigInt(received.agreement.salt));
-  const bobKeys = docKeysOf(receivedSalt);
-  const opened = JSON.parse(decrypt(bobKeys.key, relay.getDocument(bobKeys.locator)));
-  check(termsHashOf(opened).toBigInt() === BigInt(received.agreement.terms_hash), 'document matches terms hash');
-
-  // 6. Bob checks the signature onchain. Only holders of the agreement data can do this.
-  const { result: aliceSigned } = await bobRegistry.methods.is_signed(received.agreement, alice).simulate({ from: bob });
-  const { result: bobSigned } = await bobRegistry.methods.is_signed(received.agreement, bob).simulate({ from: bob });
-  check(aliceSigned === true, 'Alice signature exists');
-  check(bobSigned === false, 'Bob has not signed yet');
-  const { result: bobSideId } = await bobRegistry.methods.agreement_id(received.agreement).simulate({ from: bob });
-  check(BigInt(bobSideId) === BigInt(expectedId), 'Bob derives the same agreement id');
-
-  // 7. A second creation of the same agreement fails.
-  await expectFailure(
-    () => registry.methods.create_bound_contract_and_sign_for(alice, agreement, 0).send({ from: alice }),
-    'second creation of the same agreement is rejected',
-  );
-
-  // 8. The network drops a tx after the agreement expiry.
+  // 8. The network drops a finalize after the agreement expiry.
   const header = (await node.getBlockData('latest'))!.header;
-  const expired = agreementOf(termsHashOf(document), Fr.random(), header.globalVariables.timestamp, [alice, bob]);
+  const expired = agreementOf(Fr.random(), header.globalVariables.timestamp, [alice]);
   await expectFailure(
-    () => registry.methods.create_bound_contract_and_sign_for(alice, expired, 0).send({ from: alice }),
-    'expired agreement is rejected',
+    async () => settle(expired, [await sign(aliceWallet, aliceRegistry, alice, expired)]),
+    'finalize after the expiry is rejected',
+    'timestamp',
   );
 
   console.log('all checks passed');
   process.exit(0);
 }
 
-async function expectFailure(fn: () => Promise<unknown>, label: string) {
+// The webapp opens an invite: it fetches and checks the document, and reads the status from the chain.
+async function openInvite(
+  reg: CyberAgreementRegistryContract,
+  from: AztecAddress | typeof NO_FROM,
+  invite: string,
+  metalex: MetaLeXServices,
+) {
+  const { salt, expiry, parties } = await readInvite(invite);
+  const { locator, key } = docKeysOf(salt);
+  const document = JSON.parse(decrypt(key, metalex.getDocument(locator)));
+  const { result: termsCommitment } = await reg.methods.terms_commitment_of(termsHashOf(document), salt).simulate({ from });
+  const agreement = agreementOf(new Fr(termsCommitment), expiry, parties);
+  const { result: id } = await reg.methods.agreement_id(agreement).simulate({ from });
+  const { result: finalized } = await reg.methods.is_finalized(agreement).simulate({ from });
+  return { agreement, agreementId: new Fr(id), document, finalized: finalized as boolean };
+}
+
+// The call must fail with an error that contains `expected`.
+async function expectFailure(fn: () => Promise<unknown>, label: string, expected: string) {
+  let message: string;
   try {
     await fn();
   } catch (err) {
-    console.log(`ok - ${label}: ${(err as Error).message.split('\n')[0]}`);
+    message = (err as Error).message.split('\n')[0];
+    if (!message.includes(expected)) throw new Error(`FAIL: ${label}: unexpected error: ${message}`);
+    console.log(`ok - ${label}: ${message}`);
     return;
   }
-  throw new Error(`FAIL: ${label}`);
+  throw new Error(`FAIL: ${label}: no error`);
 }
 
 main().catch(err => {

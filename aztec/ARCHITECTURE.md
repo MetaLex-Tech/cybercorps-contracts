@@ -1,19 +1,19 @@
 # Private Agreement Registry on Aztec: Architecture
 
 This document describes the proof of concept (PoC) port of `src/CyberAgreementRegistry.sol` to Aztec.
-The PoC supports one flow: `create_bound_contract_and_sign_for`. The creator makes an agreement and signs it in
-one private transaction. See [USER-FLOWS.md](USER-FLOWS.md) for the step-by-step flows.
+The PoC supports the happy path of one agreement: every party signs offchain, and MetaLeX settles all signatures
+in one private transaction (`finalize`). See [USER-FLOWS.md](USER-FLOWS.md) for the step-by-step flows.
 
 Toolchain: Aztec 6.0.0, aztec-nr v6.0.0, Noir 1.0.0-rc.3.
 
 ## Design rules
 
-1. The chain keeps only what the protocol needs to prevent a double signature and to prove a signature later.
-   Agreement text, field values and party addresses stay offchain.
-2. Each party keeps its own copy of the agreement data in its own PXE (the private execution environment in the
-   wallet). The registry sends that copy as an encrypted private event, with offchain delivery.
-3. MetaLeX runs the offchain services that make this easy to use. These services store and forward ciphertext
-   only. They do not hold user keys.
+1. The chain keeps only nullifiers. Agreement text, field values and party addresses stay offchain.
+2. Each party signs offchain with a private authwit. MetaLeX collects the authwits and sends one `finalize` tx
+   when all parties signed. No party needs to send a tx or hold a fee token.
+3. Only the parties, and the people they share an invite with, know the salt. The MetaLeX services never get the
+   salt, the terms or the document text.
+4. The MetaLeX services hold no user keys.
 
 ## Components
 
@@ -21,16 +21,18 @@ Toolchain: Aztec 6.0.0, aztec-nr v6.0.0, Noir 1.0.0-rc.3.
 flowchart LR
     subgraph User device
         App[MetaLeX webapp]
-        PXE[Wallet + PXE<br/>keys, notes, events]
+        PXE[Wallet + PXE<br/>keys]
     end
     subgraph MetaLeX services
         Catalog[Template catalog<br/>public]
         Vault[Document vault<br/>encrypted blobs]
-        Mailbox[Mailbox relay<br/>encrypted messages]
+        Collector[Signature collector<br/>authwits]
+        Settler[Settler<br/>MetaLeX wallet + PXE]
     end
     subgraph Aztec network
         Node[Aztec node RPC]
         Registry[CyberAgreementRegistry<br/>private functions]
+        Accounts[Party account contracts<br/>verify authwits]
         FPC[Fee payer contract<br/>MetaLeX deploys and funds it]
         Sequencer[Sequencer<br/>builds blocks]
         subgraph Private state
@@ -43,64 +45,87 @@ flowchart LR
     App --> PXE
     App --> Catalog
     App --> Vault
-    App --> Mailbox
-    PXE -. runs locally .-> Registry
-    PXE -. runs locally .-> FPC
-    PXE -->|send tx, read trees| Node
+    App -->|authwit| Collector
+    Collector --> Settler
+    PXE -. runs utilities locally .-> Registry
+    PXE -->|read trees| Node
+    Settler -. runs finalize locally .-> Registry
+    Registry -. static call .-> Accounts
+    Settler -. runs locally .-> FPC
+    Settler -->|send tx| Node
     Node --> Sequencer
     Sequencer -->|insert nullifiers| Trees
     Sequencer -->|deduct fee| FeeJuice
 ```
 
-| Component                         | Who runs it                                       | What it stores                                          | What it can read                                    |
-|-----------------------------------|---------------------------------------------------|---------------------------------------------------------|-----------------------------------------------------|
-| `CyberAgreementRegistry` contract | Aztec network                                     | Nullifiers only (private state)                         | Nothing after the tx                                |
-| User wallet and PXE               | User (browser embedded wallet or an Aztec wallet) | Keys, decrypted `AgreementSigned` events                | All agreements of that user                         |
-| MetaLeX app                       | MetaLeX (code), user (runtime)                    | Nothing that the user does not keep                     | What the user opens in it                           |
-| Template catalog                  | MetaLeX                                           | Public legal templates                                  | Public data only                                    |
-| Document vault                    | MetaLeX                                           | AES-256-GCM document blobs, keyed by a locator          | Locator, blob size, upload and fetch times          |
-| Mailbox relay                     | MetaLeX                                           | Encrypted offchain messages, keyed by recipient address | Recipient address, sender session, timing           |
-| Fee payer contract (FPC)          | Aztec network; MetaLeX deploys and funds it       | Fee juice balance (public state)                        | That a sponsored tx happened                        |
-| Aztec node RPC                    | Aztec network                                     | Chain state                                             | Queries from the PXE (nullifier lookups, tx hashes) |
-| Sequencer                         | Aztec network                                     | Nothing; it writes tx effects into the trees            | Tx effects: nullifiers, fee payer, fee              |
+| Component                         | Who runs it                                       | What it stores                                                            | What it can read                                                  |
+|-----------------------------------|---------------------------------------------------|---------------------------------------------------------------------------|-------------------------------------------------------------------|
+| `CyberAgreementRegistry` contract | Aztec network                                     | Nullifiers only (private state)                                           | Nothing after the tx                                              |
+| User wallet and PXE               | User (browser embedded wallet or an Aztec wallet) | Account keys                                                              | What the user opens in it                                         |
+| MetaLeX webapp                    | MetaLeX (code), user (runtime)                    | The invites that the user keeps                                           | What the user opens in it                                         |
+| Template catalog                  | MetaLeX                                           | Public legal templates                                                    | Public data only                                                  |
+| Document vault                    | MetaLeX                                           | AES-256-GCM document blobs, keyed by a locator                            | Locator, blob size, upload and fetch times                        |
+| Signature collector               | MetaLeX                                           | Onboarded account data, `Agreement` structs without salt, authwits        | Parties, expiry, agreement id, who signed and when                |
+| Settler                           | MetaLeX                                           | Its own account keys, the public signing keys of the party accounts       | The same as the collector, and the finalize status                |
+| Party account contracts           | Aztec network; each user owns one                 | The signing public key, in the contract instance (`immutables_hash`)      | Nothing after the tx                                              |
+| Fee payer contract (FPC)          | Aztec network; MetaLeX deploys and funds it       | Fee juice balance (public state)                                          | That a sponsored tx happened                                      |
+| Aztec node RPC                    | Aztec network                                     | Chain state                                                               | Queries from each PXE (nullifier lookups, tx hashes)              |
+| Sequencer                         | Aztec network                                     | Nothing; it writes tx effects into the trees                              | Tx effects: nullifiers, fee payer, fee                            |
 
 ## Data model
 
-### Agreement (circuit input and event payload)
+### Agreement (circuit input)
 
 ```noir
 struct Agreement {
-    terms_hash: Field,                    // commits to the offchain document
-    salt: Field,                          // random secret that the parties share
+    terms_commitment: Field,              // hides the terms; only salt holders can open it
     expiry: u64,                          // 0 means no expiry
     party_count: u32,
-    parties: [AztecAddress; MAX_PARTIES], // parties[0] is the creator; unused slots are zero
+    parties: [AztecAddress; MAX_PARTIES], // unused slots are zero
 }
 ```
 
-`MAX_PARTIES` is 4. One private event message holds at most 11 fields (`MAX_EVENT_SERIALIZED_LEN` in aztec-nr).
-`AgreementSigned { agreement, signer }` uses 9 of them.
+`MAX_PARTIES` is 4. Each party adds one private call to its account contract in the finalize tx.
+
+The struct holds no salt and no `terms_hash`. So MetaLeX can run `finalize` and still cannot open the document.
 
 ### Derived values
 
-| Value               | Formula                                                                                     | Where it is computed                    |
-|---------------------|---------------------------------------------------------------------------------------------|-----------------------------------------|
-| `terms_hash`        | `sha256(canonical JSON of the document)` reduced into the field                             | App                                     |
-| `agreement_id`      | `poseidon2([terms_hash, salt, expiry, party_count, parties...], "metalex.agreement.id.v1")` | Circuit, and the `agreement_id` utility |
-| Signature nullifier | `poseidon2([agreement_id, signer], "metalex.agreement.signature.v1")`                       | Circuit                                 |
-| Vault locator       | `HKDF-SHA256(ikm = salt, salt = empty, info = "metalex.doc.locator.v1", 32 bytes)`          | App                                     |
-| Document key        | `HKDF-SHA256(ikm = salt, salt = empty, info = "metalex.doc.key.v1", 32 bytes)`              | App                                     |
+| Value               | Formula                                                                                   | Where it is computed                       |
+|---------------------|-------------------------------------------------------------------------------------------|--------------------------------------------|
+| `terms_hash`        | `sha256(canonical JSON of the document)` reduced into the field                           | Webapp                                     |
+| `terms_commitment`  | `poseidon2([terms_hash, salt], "metalex.agreement.terms.v1")`                             | Webapp, with the `terms_commitment_of` utility |
+| `agreement_id`      | `poseidon2([terms_commitment, expiry, party_count, parties...], "metalex.agreement.id.v1")` | Circuit, and the `agreement_id` utility    |
+| Consent hash        | `compute_inner_authwit_hash(["metalex.agreement.consent.v1", agreement_id, signer])`      | Circuit, and the `consent_hash_of` utility |
+| Authwit             | The signature of the party over `poseidon2([registry, chain_id, version, consent hash])`  | Party wallet                               |
+| Authwit nullifier   | `compute_authwit_nullifier(signer, consent hash)`, one per party                          | Circuit                                    |
+| Padding nullifier   | `poseidon2([agreement_id, slot], "metalex.agreement.padding.v1")`, one per unused slot     | Circuit                                    |
+| Finalized nullifier | `poseidon2([agreement_id], "metalex.agreement.finalized.v1")`                             | Circuit, and the `is_finalized` utility    |
+| Vault locator       | `HKDF-SHA256(ikm = salt, salt = empty, info = "metalex.doc.locator.v1", 32 bytes)`        | Webapp                                     |
+| Document key        | `HKDF-SHA256(ikm = salt, salt = empty, info = "metalex.doc.key.v1", 32 bytes)`            | Webapp                                     |
+
+The consent hash holds the signer. Two parties that sign the same agreement must sign different messages. The PXE
+finds an authwit by its message hash, and that hash does not hold the signer.
 
 The PoC uses one hash for the whole document. A Poseidon Merkle root over the fields would let a party later prove
 one field in a circuit without the others.
 
-The salt is the root secret of an agreement. A holder of the salt and the other inputs can find the vault blob,
-decrypt it and compute the signature nullifiers. Without the salt, nobody can link a nullifier to an agreement.
-The app must make the salt with a secure random source.
+The salt is the root secret of an agreement. A holder of the salt can open the terms commitment, find the vault
+blob and decrypt it. Without the salt, nobody can link the agreement id to a document. The webapp must make the
+salt with a secure random source.
+
+### Invite
+
+The invite is what a party shares with a counterparty or an auditor. It holds the salt, the expiry and the party
+addresses. With the invite and the vault blob, the webapp can rebuild the `Agreement` struct and the agreement id.
+
+The webapp puts the invite in the URL fragment (after `#`). A browser does not send the fragment to the server, so
+the MetaLeX services never receive it. A holder of the invite can read the whole document. The webapp treats each
+party address in an invite as untrusted and checks that it is a valid address.
 
 ### Canonical JSON
 
-All parties must get the same `terms_hash` from the same document. So the app writes the document as one fixed
+All parties must get the same `terms_hash` from the same document. So the webapp writes the document as one fixed
 JSON string before it hashes it:
 
 - It sorts the keys of each object.
@@ -109,7 +134,7 @@ JSON string before it hashes it:
 - It writes strings and numbers as `JSON.stringify` does.
 
 The standard for this is RFC 8785, the JSON Canonicalization Scheme (JCS). The PoC function `canonicalJson` in
-`scripts/e2e.ts` gives the JCS output for strings, numbers, arrays and objects. An app in another language must use
+`scripts/e2e.ts` gives the JCS output for strings, numbers, arrays and objects. A webapp in another language must use
 JCS. The same string is the plaintext of the vault blob, so a party decrypts the exact bytes that were hashed.
 
 The document holds:
@@ -118,8 +143,8 @@ The document holds:
 - `globalValues`: the values of the fields that apply to the whole agreement.
 - `partyValues`: for each party address, the values of that party. These hold the PII.
 
-The salt and the expiry are not in the document. They are fields of `Agreement`. The value arrays are an open item
-(see [Limits and open items](#limits-and-open-items)).
+The salt is not in the document. It is in the invite. The expiry is a field of `Agreement`. The value arrays are an
+open item (see [Limits and open items](#limits-and-open-items)).
 
 Example document:
 
@@ -139,7 +164,7 @@ Example document:
 }
 ```
 
-Its canonical JSON, which the app hashes:
+Its canonical JSON, which the webapp hashes:
 
 ```text
 {"globalValues":["2026-11-01"],"partyValues":[["<Alice address>",["Alice Corp"]],["<Bob address>",["Bob LLC"]]],"template":{"globalFields":["effectiveDate"],"partyFields":["name"],"title":"Mutual NDA","uri":"ipfs://example-template"}}
@@ -147,130 +172,143 @@ Its canonical JSON, which the app hashes:
 
 ### Secrets, keys and hashes
 
-Each box is a place where a value lives. A dashed box is a value that the app computes when it needs it and does
+Each box is a place where a value lives. A dashed box is a value that the webapp computes when it needs it and does
 not store.
 
 ```mermaid
 flowchart TB
     subgraph Wallet["Each party: wallet and PXE"]
-        SK["Account secret key"]
-        IVSK["Incoming viewing key"]
         SIG["Signing key"]
-        EVT["Decrypted AgreementSigned event<br/>Agreement: terms_hash, salt, expiry, parties"]
-        AID["agreement_id"]
     end
     subgraph Webapp["MetaLeX webapp, in browser memory"]
-        SALT["salt<br/>random, one per agreement"]
+        INV["Invite<br/>salt, expiry, parties"]
         DOC["Document, PII<br/>template and values"]
         TH["terms_hash"]
+        TC["terms_commitment"]
+        AID["agreement_id"]
+        CH["Consent hash<br/>one per party"]
         LOC["Vault locator"]
         KEY["Document key"]
-    end
-    subgraph Mailbox["MetaLeX mailbox"]
-        CT["Event ciphertext<br/>one per party"]
     end
     subgraph Vault["MetaLeX vault"]
         BLOB["Encrypted document blob"]
     end
+    subgraph Collector["MetaLeX signature collector and settler"]
+        AGR["Agreement<br/>terms_commitment, expiry, parties"]
+        AW["Authwit<br/>one per party"]
+    end
     subgraph Chain["Aztec chain: nullifier tree"]
-        NUL["Signature nullifier"]
-        EC["Event commitment"]
+        AWN["Authwit nullifier<br/>one per party"]
+        PAD["Padding nullifier<br/>one per unused slot"]
+        FIN["Finalized nullifier"]
     end
 
-    SK -->|derives| IVSK
-    CT -->|decrypt with incoming viewing key| EVT
-    IVSK -.->|the address encrypts to its public key| CT
-    EVT -->|holds| SALT
     DOC -->|SHA-256| TH
-    SALT -->|HKDF, locator label| LOC
-    SALT -->|HKDF, key label| KEY
+    TH -->|Poseidon2 with salt| TC
+    INV -->|salt| TC
+    INV -->|HKDF, locator label| LOC
+    INV -->|HKDF, key label| KEY
     KEY -->|AES-256-GCM encrypts| BLOB
     LOC -->|indexes| BLOB
-    TH -->|Poseidon2 with salt, expiry, parties| AID
-    SALT --> AID
-    AID -->|Poseidon2 with signer| NUL
-    SIG -->|authorizes the tx that inserts| NUL
-    CT -->|PXE checks against| EC
+    TC -->|Poseidon2 with expiry, parties| AID
+    TC --> AGR
+    AID -->|with signer| CH
+    SIG -->|signs| AW
+    CH --> AW
+    AW -->|finalize checks| AWN
+    AGR -->|finalize| FIN
+    AGR -->|finalize| PAD
 
     classDef derived stroke-dasharray: 5 5
-    class AID,LOC,KEY derived
+    class TH,TC,AID,CH,LOC,KEY derived
 ```
 
-| Value                   | Kind                    | Made by                              | Known to                                        | Stored at                                                        |
-|-------------------------|-------------------------|--------------------------------------|-------------------------------------------------|------------------------------------------------------------------|
-| Account secret key      | Secret                  | Party's wallet                       | That party                                      | Wallet                                                           |
-| Incoming viewing key    | Secret                  | Derived from the account secret key  | That party, and anyone the party gives it to    | Wallet and PXE                                                   |
-| Signing key             | Secret                  | Party's wallet                       | That party                                      | Wallet                                                           |
-| Salt                    | Secret                  | Creator's webapp, random             | All parties                                     | Inside each event ciphertext and each party's PXE; never onchain |
-| Document                | PII                     | Creator's webapp                     | All parties                                     | Plaintext only in webapp memory; ciphertext in the vault         |
-| `terms_hash`            | Hash                    | Webapp, SHA-256 of the document      | All parties                                     | Inside the event                                                 |
-| `agreement_id`          | Hash                    | Circuit and utility, Poseidon2       | Each holder of the `Agreement` struct           | Not stored                                                       |
-| Signature nullifier     | Hash                    | Circuit, Poseidon2                   | Public                                          | Nullifier tree                                                   |
-| Event ciphertext        | Ciphertext              | Sender's PXE, one per party          | Each party can decrypt its own copy             | MetaLeX mailbox, for a set time                                  |
-| Event commitment        | Hash                    | Protocol, one per tx                 | Public                                          | Nullifier tree                                                   |
-| Vault locator           | Derived id              | Webapp, HKDF of the salt             | All parties and the MetaLeX vault               | Vault index                                                      |
-| Document key            | Derived secret          | Webapp, HKDF of the salt             | All parties                                     | Not stored                                                       |
-| Encrypted document blob | Ciphertext              | Creator's webapp, AES-256-GCM        | MetaLeX stores it; only salt holders decrypt it | MetaLeX vault                                                    |
+| Value                   | Kind           | Made by                               | Known to                                           | Stored at                                                     |
+|-------------------------|----------------|---------------------------------------|----------------------------------------------------|---------------------------------------------------------------|
+| Signing key             | Secret         | Party's wallet                        | That party                                         | Wallet                                                        |
+| Salt                    | Secret         | Creator's webapp, random              | All parties, and each holder of the invite         | Inside the invite; never onchain, never at MetaLeX            |
+| Document                | PII            | Creator's webapp                      | All parties, and each holder of the invite         | Plaintext only in webapp memory; ciphertext in the vault      |
+| `terms_hash`            | Hash           | Webapp, SHA-256 of the document       | Each holder of the invite                          | Not stored                                                    |
+| `terms_commitment`      | Hash           | Webapp, Poseidon2                     | Each holder of the invite, and MetaLeX             | In the collector                                              |
+| `agreement_id`          | Hash           | Webapp and circuit, Poseidon2         | Each holder of the invite, and MetaLeX             | Collector index                                               |
+| Consent hash            | Hash           | Webapp and circuit                    | The same as `agreement_id`                         | Not stored                                                    |
+| Authwit                 | Signature      | Party's wallet                        | That party and MetaLeX                             | Collector, until the finalize tx                              |
+| Authwit nullifier       | Hash           | Circuit                               | Public                                             | Nullifier tree                                                |
+| Padding nullifier       | Hash           | Circuit                               | Public                                             | Nullifier tree                                                |
+| Finalized nullifier     | Hash           | Circuit                               | Public                                             | Nullifier tree                                                |
+| Vault locator           | Derived id     | Webapp, HKDF of the salt              | Each holder of the invite, and the MetaLeX vault   | Vault index                                                   |
+| Document key            | Derived secret | Webapp, HKDF of the salt              | Each holder of the invite                          | Not stored                                                    |
+| Encrypted document blob | Ciphertext     | Creator's webapp, AES-256-GCM         | MetaLeX stores it; only salt holders decrypt it    | MetaLeX vault                                                 |
 
-The three keys of each party protect the account. The salt protects one agreement. The PXE also keeps the decrypted
-event, so a party can open the document again without the mailbox.
+The signing key of each party protects the account. The salt protects one agreement. Without the salt, a chain
+observer cannot link the three kinds of nullifiers to each other or to an agreement.
 
 ### What goes onchain
 
-The PoC tx was measured on a local network (see [README.md](README.md#verification)):
+The finalize tx was measured on a local network (see [README.md](README.md#verification)):
 
-| Tx field                                    | Value for `create_bound_contract_and_sign_for`                       |
-|---------------------------------------------|----------------------------------------------------------------------|
-| Nullifiers                                  | 3: the tx nullifier, the signature nullifier, the event commitment   |
-| Note hashes                                 | 0                                                                    |
-| Private logs                                | 0                                                                    |
-| Public logs                                 | 0                                                                    |
-| Fee payer                                   | The FPC address when sponsored. The user address when the user pays. |
-| Expiration timestamp                        | `min(expiry, anchor + 1 day)`                                        |
-| Anchor block header, gas settings, gas used | Same for all calls to this function                                  |
+| Tx field                                    | Value for `finalize`                                                                   |
+|---------------------------------------------|----------------------------------------------------------------------------------------|
+| Nullifiers                                  | 6: the tx nullifier, one per party slot (authwit or padding), the finalized nullifier |
+| Note hashes                                 | 0                                                                                      |
+| Private logs                                | 0                                                                                      |
+| Public logs                                 | 0                                                                                      |
+| Fee payer                                   | The FPC address                                                                        |
+| Expiration timestamp                        | `min(expiry, anchor + 1 day)`                                                          |
+| Anchor block header, gas settings, gas used | Same for all calls to this function                                                    |
 
-The number of nullifiers does not change with the number of parties. One event commitment covers all recipients.
-A per-party note would add one note hash for each party and show the party count.
+The number of nullifiers does not change with the number of parties. Each unused slot adds a padding nullifier. The
+local network run measured 6 nullifiers for one party and for two parties.
 
 ## Mapping from the Solidity registry
 
 Each row compares one concept. "Today" is `src/CyberAgreementRegistry.sol`. "Proposed" is this PoC.
 
-| Concept                 | Today                                                                               | Proposed                                                                                                                       |
-|-------------------------|-------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| Template                | Today, stored onchain in `templates` (title, URI, field name arrays).               | Proposed, an entry in the public MetaLeX catalog. The document includes it, and `terms_hash` commits to it.                    |
-| Global and party values | Today, `string[]` arrays stored onchain.                                            | Proposed, fields in the encrypted document in the vault.                                                                       |
-| Parties                 | Today, `address[]` stored onchain, plus `agreementsForParty`.                       | Proposed, a fixed array in the circuit input and in each party's event. Nothing onchain.                                       |
-| Agreement id            | Today, `keccak256` over creator, template, values, parties, expiry.                 | Proposed, Poseidon2 over `terms_hash`, salt, expiry and parties. The creator is `parties[0]`.                                  |
-| Signature               | Today, an EIP-712 ECDSA signature, checked onchain. `signedAt` stores the time.     | Proposed, the account contract authorizes the tx. A nullifier records the consent. The block of that nullifier gives the time. |
-| `...For` and delegation | Today, any relayer submits a signature. The `delegations` map lets a delegate sign. | Proposed, `#[authorize_once]`: the signer calls with nonce 0, or a contract in the signer's tx uses a one-time authwit.        |
-| Duplicate creation      | Today, `ContractAlreadyExists` checks storage.                                      | Proposed, the second signature nullifier is a duplicate, so the network rejects the tx.                                        |
-| Expiry                  | Today, `block.timestamp` checks.                                                    | Proposed, `set_expiration_timestamp(expiry)`. The network drops the tx after the expiry.                                       |
-| Events                  | Today, public `ContractCreated` and `AgreementSigned` logs.                         | Proposed, one private `AgreementSigned` event, encrypted to each party, delivered offchain.                                    |
-| Gas                     | Today, the signer or a relayer pays ETH.                                            | Proposed, the MetaLeX FPC pays the fee.                                                                                        |
+| Concept                 | Today                                                                                   | Proposed                                                                                                                         |
+|-------------------------|-----------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| Template                | Today, stored onchain in `templates` (title, URI, field name arrays).                   | Proposed, an entry in the public MetaLeX catalog. The document includes it, and `terms_hash` commits to it.                      |
+| Global and party values | Today, `string[]` arrays stored onchain.                                                | Proposed, fields in the encrypted document in the vault.                                                                         |
+| Parties                 | Today, `address[]` stored onchain, plus `agreementsForParty`.                           | Proposed, a fixed array in the circuit input, the invite and the collector. Nothing onchain.                                     |
+| Agreement id            | Today, `keccak256` over creator, template, values, parties, expiry.                     | Proposed, Poseidon2 over `terms_commitment`, expiry and parties. No creator role.                                                |
+| Create                  | Today, `createBoundContract` or `createBoundContractAndSignFor` stores the agreement.   | Proposed, nothing onchain. The creator puts the document in the vault and shares the invite.                                     |
+| Signature               | Today, an EIP-712 ECDSA signature for each party, checked onchain by `signContract`.    | Proposed, a private authwit for each party, made offchain. `finalize` checks each authwit, and an authwit nullifier records it.  |
+| Relayer                 | Today, any relayer submits a signature with `...For`. `delegations` lets a delegate sign. | Proposed, any account can send `finalize` with the authwits. The MetaLeX settler does this.                                     |
+| Finalize                | Today, the last signature sets `finalized`, or the finalizer calls `finalizeContract`.  | Proposed, one `finalize` tx after all parties signed. The finalized nullifier records it.                                        |
+| Signing time            | Today, `signedAt` stores the time of each signature.                                    | Proposed, the block of the finalize tx gives the time for all parties. Only the collector knows when each party signed.         |
+| Duplicate finalize      | Today, `ContractAlreadyFinalized` checks storage.                                       | Proposed, a second finalize gives the same finalized nullifier, so the network rejects the tx.                                   |
+| Expiry                  | Today, `block.timestamp` checks.                                                        | Proposed, `set_expiration_timestamp(expiry)`. The network drops the finalize tx after the expiry.                                |
+| Status                  | Today, `isFinalized` and `hasSigned` read storage.                                      | Proposed, the `is_finalized` utility asks the node for the finalized nullifier.                                                  |
+| Events                  | Today, public `ContractCreated`, `AgreementSigned` and `ContractFinalized` logs.        | Proposed, no events. A holder of the invite reads the status from the chain.                                                     |
+| Gas                     | Today, the signer or a relayer pays ETH.                                                | Proposed, the MetaLeX FPC pays the fee of the finalize tx.                                                                       |
 
-Not in this PoC: counterparty signature, void, finalize, open party slots, secret hash, finalizer, signer
-conditions, escrow signatures.
+Not in this PoC: void, open party slots, secret hash, finalizer, signer conditions, escrow signatures.
 
 ## MetaLeX privacy data layer
 
-Aztec offchain delivery gives no delivery guarantee. The sender can skip it, and nobody stores the message. MetaLeX
-closes this gap with two stores and one sponsor. Each of them sees only ciphertext.
+MetaLeX runs four services. None of them gets the salt, the terms or the document text.
 
-### Mailbox relay
+### Signature collector
 
-- The sender wallet gets `offchainMessages` from the send result. Each message holds the recipient address, the
-  ciphertext, the contract address and the anchor block timestamp.
-- The app uploads the messages with the tx hash. The mailbox keeps them by recipient.
-- The recipient app downloads its messages and calls `offchain_receive` on the registry in its own PXE. The PXE
-  finds the tx onchain, checks the event commitment and stores the event.
-- Late delivery works. The PXE processes a message whenever its tx is onchain. The inbox drops a message only if
-  its tx is not found within `MAX_TX_LIFETIME + 2h` of the anchor.
-- The mailbox keeps messages after delivery for a set time. A user who loses a device can sync again.
+- At onboarding, the webapp gives the collector the address, the account instance and the signing public key of
+  the user. These are public data. The settler needs them to run the authwit check of the account.
+- The creator's webapp gives the collector the `Agreement` struct. The struct holds no salt.
+- Each party's webapp gives the collector one authwit. The collector shows which parties signed.
+- When all parties signed, the collector gives the struct and the authwits to the settler.
+
+### Settler
+
+- The settler is a MetaLeX account in its own wallet and PXE.
+- For each party, the settler registers the account instance and stores the signing public key. The account
+  contract checks that key against its `immutables_hash`. No secret of the party is needed.
+- The settler sends `finalize` with the authwits, and adds the party addresses as PXE scopes. A scope lets the PXE
+  read the key that it stored for that address. It gives no access to party keys.
+- The authwit check of the account must read no private state of the owner. The initializerless Schnorr account
+  meets this. An account that keeps its signing key in a private note does not, because only the owner can read
+  that note.
 
 ### Document vault
 
-- The app encrypts the document with the document key and uploads it at the vault locator.
+- The webapp encrypts the document with the document key and uploads it at the vault locator.
 - The vault cannot compute the agreement id, because it does not have the salt.
 - The vault is also the backup of the legal text. A party needs the text to know what it signed.
 
@@ -278,39 +316,42 @@ closes this gap with two stores and one sponsor. Each of them sees only cipherte
 
 - The FPC is an onchain contract on Aztec. MetaLeX deploys it and funds it with fee juice. Its balance is public
   state.
-- The MetaLeX FPC pays the fee, so users need no fee token. The tx shows the FPC as fee payer, not the user.
-- The local network test uses the canonical SponsoredFPC. A mainnet FPC must limit its use, for example by a
-  quota per account or by a check of the target function. This PoC does not include that FPC.
+- The FPC pays the fee of the finalize tx, so no user needs a fee token. The tx shows the FPC as fee payer.
+- The local network test uses the canonical SponsoredFPC. A mainnet FPC must limit its use, for example to the
+  settler account. This PoC does not include that FPC.
 
 ### Node RPC
 
-The PXE asks a node for nullifier status, tx effects and block data. The node sees these queries. MetaLeX can run a
+Each PXE asks a node for nullifier status, tx effects and block data. The node sees these queries. MetaLeX can run a
 node for its users. A user who wants more privacy can use a separate node.
 
 ## Privacy analysis
 
-| Viewer                      | What it learns                                                                                                                  | What it does not learn                                     |
-|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
-| Chain observer              | That some tx emitted 3 nullifiers, its fee payer, its time, and an expiry when the expiry is less than one day after the anchor | Contract called, parties, party count, terms, agreement id |
-| MetaLeX (mailbox and vault) | Which addresses got messages from one upload, so who deals with whom, and when. Blob sizes.                                     | Terms, salt, agreement id, signature status                |
-| MetaLeX (FPC)               | That a sponsored tx happened                                                                                                    | Which function or user, from the FPC alone                 |
-| Node operator               | Nullifier lookups and tx hash lookups from a PXE, and the IP of the PXE                                                         | Terms or parties, unless it can link the lookups           |
-| Counterparty                | All agreement data and the signature status of each party                                                                       | Other agreements of the creator                            |
+| Viewer                                | What it learns                                                                                                                  | What it does not learn                                     |
+|---------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
+| Chain observer                        | That some tx emitted 6 nullifiers, its fee payer, its time, and an expiry when the expiry is less than one day after the anchor | Contract called, parties, party count, terms, agreement id |
+| MetaLeX (collector and settler)       | Parties, expiry, agreement id, who signed and when, the finalize status                                                         | Salt, terms, document text                                 |
+| MetaLeX (vault)                       | Locator, blob size, upload and fetch times                                                                                      | Agreement id, parties, document text                       |
+| MetaLeX (FPC)                         | That a sponsored tx happened                                                                                                    | Which function or user, from the FPC alone                 |
+| Node operator                         | Nullifier lookups and tx hash lookups from a PXE, and the IP of the PXE                                                         | Terms or parties, unless it can link the lookups           |
+| Counterparty, or auditor with invite  | All data of that agreement and its finalize status                                                                              | Other agreements of the parties                            |
 
 Notes:
 
-- The mailbox can link parties because one upload has all recipients and the tx hash. An app can upload each
-  message in a separate session with a delay, and put the tx hash inside an envelope encrypted to the recipient.
-- A delegated call adds one authwit nullifier. That tx shape differs from a direct call.
-- A party can prove a signature to a third party by disclosure of the agreement data. The verifier recomputes the
-  nullifier and checks it onchain. This also discloses the salt.
+- A party can prove the agreement to a third party with the invite. The verifier opens the document, rebuilds the
+  agreement id and checks the finalized nullifier onchain.
+- The collector can link parties, because one agreement lists all of them.
 
 ## Limits and open items
 
-- `MAX_PARTIES` is 4 because of the event size. More parties need a commitment to the party list and a membership
-  proof in the circuit.
+- `MAX_PARTIES` is 4. More parties need more private calls in the finalize tx, or a commitment to the party list.
+- A party cannot withdraw an authwit before the finalize tx. Only the expiry limits it. A void flow needs a registry
+  function that a party can call to block the finalize.
+- The settler works only with accounts whose authwit check reads no private state of the owner.
+- The webapp must keep the invite for the user. If the user loses the invite, the user cannot open the document.
+  A durable store for invites is a design item.
 - The MetaLeX FPC with use limits is a design item. The PoC uses the test SponsoredFPC.
-- Counsel must confirm that an account-authorized nullifier is acceptable as an electronic signature record.
-  The PoC keeps no ECDSA signature artifact.
+- Counsel must confirm that an authwit is acceptable as an electronic signature. The PoC keeps no ECDSA signature
+  artifact.
 - The PoC is not deployed on Aztec mainnet. It has no independent review.
 - No need to store "globalValues" and "partyValues" as string arrays in the canonical JSON. That was a legacy structure to fit EVM; we no longer subject to such limitation and a JSON can have dynamic structures. Find a more native way of storing the info

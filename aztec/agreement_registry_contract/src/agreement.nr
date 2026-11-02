@@ -1,46 +1,50 @@
-use aztec::protocol::{
-    address::AztecAddress,
-    hash::{poseidon2_hash_bytes, poseidon2_hash_with_separator},
-    traits::{Deserialize, Serialize, ToField},
+use aztec::{
+    authwit::auth::compute_inner_authwit_hash,
+    protocol::{
+        address::AztecAddress,
+        hash::{poseidon2_hash_bytes, poseidon2_hash_with_separator},
+        traits::{Deserialize, Serialize, ToField},
+    },
 };
 
-// One private event message holds at most 11 fields. An agreement uses 4 + MAX_PARTIES of them.
+// Each party adds one authwit check to the finalize tx.
 pub global MAX_PARTIES: u32 = 4;
 
+global TERMS_COMMITMENT_DOMAIN: Field = comptime { poseidon2_hash_bytes("metalex.agreement.terms.v1".as_bytes()) };
 global AGREEMENT_ID_DOMAIN: Field = comptime { poseidon2_hash_bytes("metalex.agreement.id.v1".as_bytes()) };
-global SIGNATURE_DOMAIN: Field = comptime { poseidon2_hash_bytes("metalex.agreement.signature.v1".as_bytes()) };
+global CONSENT_DOMAIN: Field = comptime { poseidon2_hash_bytes("metalex.agreement.consent.v1".as_bytes()) };
+global FINALIZED_DOMAIN: Field = comptime { poseidon2_hash_bytes("metalex.agreement.finalized.v1".as_bytes()) };
+global PADDING_DOMAIN: Field = comptime { poseidon2_hash_bytes("metalex.agreement.padding.v1".as_bytes()) };
 
-/// The onchain view of an agreement. The legal text and the field values stay offchain. `terms_hash` commits to
-/// them.
+/// The onchain view of an agreement. The legal text and the field values stay offchain.
 ///
-/// `salt` is a random secret that the parties share. It keeps the agreement id unknown to everyone else.
+/// `terms_commitment` hides the terms. Only holders of the salt can open it, so the settler can finalize without
+/// the terms.
 #[derive(Eq, Serialize, Deserialize)]
 pub struct Agreement {
-    pub terms_hash: Field,
-    pub salt: Field,
+    pub terms_commitment: Field,
     // Zero means no expiry.
     pub expiry: u64,
     pub party_count: u32,
-    // `parties[0]` is the creator. Slots at and after `party_count` must be zero.
+    // Slots at and after `party_count` must be zero.
     pub parties: [AztecAddress; MAX_PARTIES],
 }
 
 impl Agreement {
     pub fn id(self) -> Field {
-        let mut inputs = [0; 4 + MAX_PARTIES];
-        inputs[0] = self.terms_hash;
-        inputs[1] = self.salt;
-        inputs[2] = self.expiry as Field;
-        inputs[3] = self.party_count as Field;
+        let mut inputs = [0; 3 + MAX_PARTIES];
+        inputs[0] = self.terms_commitment;
+        inputs[1] = self.expiry as Field;
+        inputs[2] = self.party_count as Field;
         for i in 0..MAX_PARTIES {
-            inputs[4 + i] = self.parties[i].to_field();
+            inputs[3 + i] = self.parties[i].to_field();
         }
         poseidon2_hash_with_separator(inputs, AGREEMENT_ID_DOMAIN)
     }
 
     /// One agreement has one valid encoding, so one set of terms gives one id.
     pub fn assert_valid(self) {
-        assert(self.terms_hash != 0, "terms hash is zero");
+        assert(self.terms_commitment != 0, "terms commitment is zero");
         assert((self.party_count >= 1) & (self.party_count <= MAX_PARTIES), "invalid party count");
         for i in 0..MAX_PARTIES {
             if i < self.party_count {
@@ -55,8 +59,23 @@ impl Agreement {
     }
 }
 
-/// The nullifier that records the consent of `signer` to `agreement_id`. Only a holder of the agreement id can
-/// compute it.
-pub fn signature_nullifier(agreement_id: Field, signer: AztecAddress) -> Field {
-    poseidon2_hash_with_separator([agreement_id, signer.to_field()], SIGNATURE_DOMAIN)
+/// Binds the terms to the salt. `terms_hash` is the hash of the canonical document.
+pub fn terms_commitment(terms_hash: Field, salt: Field) -> Field {
+    poseidon2_hash_with_separator([terms_hash, salt], TERMS_COMMITMENT_DOMAIN)
+}
+
+/// The message that `signer` authorizes to consent to `agreement_id`. It holds the signer, so each party signs a
+/// different message.
+pub fn consent_hash(agreement_id: Field, signer: AztecAddress) -> Field {
+    compute_inner_authwit_hash([CONSENT_DOMAIN, agreement_id, signer.to_field()])
+}
+
+/// The nullifier that records that all parties signed `agreement_id`.
+pub fn finalized_nullifier(agreement_id: Field) -> Field {
+    poseidon2_hash_with_separator([agreement_id], FINALIZED_DOMAIN)
+}
+
+/// Fills an unused party slot, so the tx has the same nullifier count for each party count.
+pub fn padding_nullifier(agreement_id: Field, slot: u32) -> Field {
+    poseidon2_hash_with_separator([agreement_id, slot as Field], PADDING_DOMAIN)
 }
