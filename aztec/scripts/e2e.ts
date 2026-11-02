@@ -1,5 +1,6 @@
 // Runs the agreement lifecycle on a local Aztec network with four separate wallets (four PXEs): Alice, Bob, the
-// MetaLeX settler and an auditor. `MetaLeXServices` stands in for the MetaLeX document vault and signature collector.
+// MetaLeX settler and an auditor. `MetaLeXServices` stands in for the MetaLeX document vault, signature collector and
+// data key store.
 //
 // Usage: AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
 
@@ -30,10 +31,38 @@ type PartyAccount = { address: AztecAddress; instance: ContractInstanceWithAddre
 // What a party sends to the collector. It holds no salt and no terms.
 type Signature = { signer: AztecAddress; authWitness: AuthWitness };
 
+// A data key store row. The access rule lets each party of the agreement get the salt until the retention ends.
+type DataKeyRow = { ciphertext: Buffer; parties: string[]; retainUntil: number };
+
 class MetaLeXServices {
   vault = new Map<string, Buffer>();
   accounts = new Map<string, PartyAccount>();
   collector = new Map<string, { agreement: Agreement; signatures: Signature[] }>();
+  dataKeys = new Map<string, DataKeyRow>();
+  // Stands in for ENCRYPTION_KEY in the KMS. The key never goes into a data key store row.
+  encryptionKey = randomBytes(32);
+
+  putDataKey(agreementId: Fr, salt: Fr, parties: AztecAddress[], retainUntil: number) {
+    this.dataKeys.set(agreementId.toString(), {
+      ciphertext: encrypt(this.encryptionKey, salt.toString()),
+      parties: parties.map(p => p.toString()),
+      retainUntil,
+    });
+  }
+
+  // `requester` stands in for the signed-in user.
+  getDataKey(agreementId: Fr, requester: AztecAddress): Fr {
+    const row = this.dataKeys.get(agreementId.toString());
+    if (!row) throw new Error(`no data key for ${agreementId}`);
+    if (!row.parties.includes(requester.toString())) throw new Error(`access denied for ${requester}`);
+    return Fr.fromString(decrypt(this.encryptionKey, row.ciphertext));
+  }
+
+  deleteExpiredDataKeys(now: number) {
+    for (const [id, row] of this.dataKeys) {
+      if (row.retainUntil <= now) this.dataKeys.delete(id);
+    }
+  }
 
   onboard(account: PartyAccount) {
     this.accounts.set(account.address.toString(), account);
@@ -116,8 +145,8 @@ function decrypt(key: Buffer, blob: Buffer): string {
   return Buffer.concat([decipher.update(blob.subarray(28)), decipher.final()]).toString('utf8');
 }
 
-// The invite is what a party shares with a counterparty or an auditor. The app puts it in the URL fragment, so the
-// MetaLeX servers never receive it.
+// The invite is what a party shares with a counterparty or an auditor. The app puts it in the URL fragment, so a
+// shared link does not send it to MetaLeX.
 type Invite = { salt: string; expiry: string; parties: string[] };
 
 function inviteOf(salt: Fr, expiry: bigint, parties: AztecAddress[]): string {
@@ -241,6 +270,8 @@ async function main() {
   const { locator, key } = docKeysOf(salt);
   metalex.putDocument(locator, encrypt(key, canonicalJson(document)));
   const invite = inviteOf(salt, agreement.expiry, [alice, bob]);
+  const retainUntil = Date.now() + 30 * 24 * 3600 * 1000;
+  metalex.putDataKey(agreementId, salt, [alice, bob], retainUntil);
 
   // 2. Alice signs offchain. The collector waits for Bob.
   metalex.submitSignature(agreementId, agreement, await sign(aliceWallet, aliceRegistry, alice, agreement));
@@ -289,10 +320,29 @@ async function main() {
     check(view.finalized && canonicalJson(view.document) === canonicalJson(document), `${name} sees the document and the status "finalized"`);
   }
 
-  // 6. A second finalize of the same agreement fails.
+  // 6. Bob opens the agreement on a new device without the invite. The data key store gives the salt to a party
+  // only, and only until the retention ends.
+  const row = metalex.dataKeys.get(agreementId.toString())!;
+  check(
+    !row.ciphertext.includes(Buffer.from(salt.toString())) && !row.ciphertext.includes(salt.toBuffer()),
+    'data key store keeps the salt encrypted',
+  );
+  const stored = collected.agreement;
+  const recovered = inviteOf(
+    metalex.getDataKey(agreementId, bob),
+    stored.expiry,
+    stored.parties.slice(0, stored.party_count),
+  );
+  const bobRecovered = await openInvite(bobRegistry, bob, recovered, metalex);
+  check(bobRecovered.finalized && canonicalJson(bobRecovered.document) === canonicalJson(document), 'Bob opens the agreement with the salt from the data key store');
+  await expectFailure(async () => metalex.getDataKey(agreementId, settler), 'data key store refuses a non-party', 'access denied');
+  metalex.deleteExpiredDataKeys(retainUntil);
+  await expectFailure(async () => metalex.getDataKey(agreementId, bob), 'data key store deletes the salt after the retention period', 'no data key');
+
+  // 7. A second finalize of the same agreement fails.
   await expectFailure(() => settle(collected.agreement, collected.signatures), 'second finalize is rejected', 'nullifier');
 
-  // 7. A one-party agreement gives the same nullifier count, so the chain does not show the party count.
+  // 8. A one-party agreement gives the same nullifier count, so the chain does not show the party count.
   const solo = agreementOf(Fr.random(), 0n, [alice]);
   const { result: soloIdRaw } = await aliceRegistry.methods.agreement_id(solo).simulate({ from: alice });
   metalex.submitSignature(new Fr(soloIdRaw), solo, await sign(aliceWallet, aliceRegistry, alice, solo));
@@ -300,7 +350,7 @@ async function main() {
   const soloEffect = (await node.getTxEffect(soloReceipt.txHash))!.data;
   check(soloEffect.nullifiers.length === effect.nullifiers.length, `same nullifier count for one and two parties (${effect.nullifiers.length})`);
 
-  // 8. The network drops a finalize after the agreement expiry.
+  // 9. The network drops a finalize after the agreement expiry.
   const header = (await node.getBlockData('latest'))!.header;
   const expired = agreementOf(Fr.random(), header.globalVariables.timestamp, [alice]);
   await expectFailure(

@@ -14,10 +14,11 @@ Toolchain: Aztec 6.0.0, aztec-nr v6.0.0, Noir 1.0.0-rc.3.
    document vault. The note messages also go to the vault, not onchain.
 2. Each party signs offchain with a private authwit. MetaLeX collects the authwits and sends one `finalize` tx
    when all parties signed. No party needs to send a tx or hold a fee token.
-3. The parties, and the people they share an invite with, know the salt. MetaLeX may keep the salt in its data key
-   store for a fixed retention period to make the webapp easier to use. During that period, MetaLeX can read the agreement. Users
-   accept this trust. The collector and the settler never get the salt, the terms or the document text.
-4. The MetaLeX services hold no user keys.
+3. The parties, and the people they share an invite with, know the salt. MetaLeX keeps the salt in its data key
+   store for a fixed retention period to make the webapp easier to use. During that period, MetaLeX can read the
+   agreement. Users accept this trust. The collector and the settler never get the salt, the terms or the document
+   text.
+4. The MetaLeX services hold no user account keys. The data key store holds data keys (salts) only.
 
 ## Components
 
@@ -152,8 +153,9 @@ a shared link does not give the invite to MetaLeX. A holder of the invite can re
 The webapp also gives the salt to the MetaLeX data key store. The store gives it back to a signed-in party, so the
 party can open the agreement on any device without the link. The webapp gets the expiry and the parties from the
 collector. The store deletes the salt at the end of the retention period. After that, the party needs its own copy
-of the invite. The PoC does not include the data key store. The webapp treats each
-party address in an invite as untrusted and checks that it is a valid address.
+of the invite. The PoC has an in-memory data key store in `scripts/e2e.ts`.
+
+The webapp treats each party address in an invite as untrusted and checks that it is a valid address.
 
 ### Canonical JSON
 
@@ -331,7 +333,7 @@ Each row compares one concept. "Today" is `src/CyberAgreementRegistry.sol`. "Pro
 | Finalize                | Today, the last signature sets `finalized`, or the finalizer calls `finalizeContract`.  | Proposed, one `finalize` tx after all parties signed. The finalized nullifier records it.                                        |
 | Signing time            | Today, `signedAt` stores the time of each signature.                                    | Proposed, the block of the finalize tx gives the time for all parties. Only the collector knows when each party signed.         |
 | Duplicate finalize      | Today, `ContractAlreadyFinalized` checks storage.                                       | Proposed, a second finalize gives the same finalized nullifier, so the network rejects the tx.                                   |
-| Expiry                  | Today, `block.timestamp` checks.                                                        | Proposed, `set_expiration_timestamp(expiry)`. The network drops the finalize tx after the expiry.                                || Yes                                    
+| Expiry                  | Today, `block.timestamp` checks.                                                        | Proposed, `set_expiration_timestamp(expiry)`. The network drops the finalize tx after the expiry.                                |
 | Status                  | Today, `isFinalized` and `hasSigned` read storage.                                      | Proposed, the `is_finalized` utility asks the node for the finalized nullifier.                                                  |
 | Events                  | Today, public `ContractCreated`, `AgreementSigned` and `ContractFinalized` logs.        | Proposed, no events. A holder of the invite reads the status from the chain.                                                     |
 | Gas                     | Today, the signer or a relayer pays ETH.                                                | Proposed, the MetaLeX FPC pays the fee of the finalize tx.                                                                       |
@@ -340,8 +342,8 @@ Not in this PoC: void, open party slots, secret hash, finalizer, signer conditio
 
 ## MetaLeX privacy data layer
 
-MetaLeX runs five services and one KMS key. Only the data key store gets the salt, and only for the retention period. The others
-never get the salt, the terms or the document text.
+Only the data key store gets the salt, and only for the retention period. The other MetaLeX services never get the
+salt, the terms or the document text.
 
 ### Signature collector
 
@@ -382,7 +384,7 @@ never get the salt, the terms or the document text.
   and its data key is the salt. Later units can be a cyberCorp or a group in a cyberCorp.
 - An access rule (ACL) controls each data key. For an agreement, the rule lets each signed-in party of that
   agreement get the salt.
-- With an invite and the vault blob, MetaLeX can read the whole agreement. Users accept this trust for the
+- With a stored salt and the vault blob, MetaLeX can read the whole agreement. Users accept this trust for the
   retention period.
 - Each kind of unit has a retention period. The store deletes an agreement salt at the end of its period. After
   that, MetaLeX cannot read the agreement.
@@ -472,8 +474,8 @@ Effects on the other contracts:
 | Part                                                     | Shared? | Note                                                                                         |
 |----------------------------------------------------------|---------|----------------------------------------------------------------------------------------------|
 | Document format (canonical JSON), salt, invite           | Yes     | One document and one salt serve both chains.                                                 |
-| Document key (HKDF), vault, AES-256-GCM                  | Yes     | The same code and the same storage.                                                          |
-| Data key store, `ENCRYPTION_KEY` in the KMS, retention periods | Yes | The same service.                                                                      |
+| Document key (HKDF), vault, AES-256-GCM                  | Yes     | The same code and the same storage. On Aztec the vault also keeps the note messages.         |
+| Data key store, `ENCRYPTION_KEY` in the KMS, retention periods | Yes     | The same service.                                                                      |
 | Template catalog                                         | Yes     | The EVM registry keeps its templates onchain. The catalog can list the same templates.       |
 | Webapp crypto module, login                              | Yes     | One browser module encrypts, decrypts and hashes for both chains.                            |
 | Signature collector                                      | Yes     | It holds EIP-712 signatures for the EVM and authwits for Aztec.                              |
@@ -514,27 +516,31 @@ Notes:
   "data key store" column becomes "No" in each row. The collector, the settler and the vault never get the salt.
 - MetaLeX runs both the vault and the collector. It can link a blob to an agreement by the IP and the time of the
   requests. This gives no plaintext.
-- The diagrams show no MetaLeX login. If a login links an email or a name to an Aztec address, MetaLeX can link
-  that person to each agreement, counterparty and signing time in the collector.
-- To erase the PII of an agreement, MetaLeX deletes the vault blob, the note messages, the stored salt and the collector entry. The nullifiers stay
-  onchain, but they hold no PII. A party that keeps no copy of the document then loses access to it.
+- The MetaLeX login (Privy) links an email to an address. So MetaLeX can link that person to each agreement,
+  counterparty and signing time in the collector.
+- To erase the PII of an agreement, MetaLeX deletes the vault blob, the note messages, the stored salt and the
+  collector entry. The nullifiers stay onchain, but they hold no PII. A party that keeps no copy of the document
+  then loses access to it.
 
 ### Compared with the EVM designs
 
 This section compares three systems:
 
-- **Today:** `metalex-webapp` at commit `a5d47d9b4` (2026-10-30), with the MetaLeX smart contracts on EVM
-  chains (`CyberAgreementRegistry`, `CyberCorp`, `RoundManager`, `DealManager`, `LedgerEntryToken` and others). Today has two paths. A deal (an offer, a round or a corp formation) stores its values
-  onchain. A private document (cyberSign) stores the document in the MetaLeX database and puts only ids, hashes and
-  party capacities onchain.
+- **Today:** `metalex-webapp` at commit `a5d47d9b4` (2026-10-30), with the MetaLeX smart contracts on EVM chains
+  (`CyberAgreementRegistry`, `CyberCorp`, `RoundManager`, `DealManager`, `LedgerEntryToken` and others). Today has
+  two paths. A deal (an offer, a round or a corp formation) stores its values onchain. A private document
+  (cyberSign) stores the document in the MetaLeX database and puts only ids, hashes and party capacities onchain.
 - **EVM retrofit:** the proposed EVM design in [EVM retrofit: hashes onchain](#evm-retrofit-hashes-onchain).
 - **Aztec:** the proposed design of this PoC.
 
-The diagrams show all MetaLeX smart contracts as one box with two parts. "Rule inputs" are data that the codified
-rules read. "Records" are data that the contracts only store or show. The diagrams put today next to the two
-proposed designs. The two proposed designs are drawn as one, because they
+The diagrams show all MetaLeX smart contracts on a chain as one area. On an EVM chain the area has two parts. "Rule
+inputs" are data that the contracts read in their rules. "Records" are data that the contracts only store or show.
+On Aztec the area holds only note hashes and nullifiers.
+
+The diagrams put today next to the two proposed designs. The two proposed designs are drawn as one, because they
 share most parts. The areas show where each part runs: the user device, the MetaLeX services or a chain. The border
-color shows which design uses the part: green for both, purple for the EVM retrofit only, orange for Aztec only. Each box has a tag that compares it with today: keep, change or new.
+color shows which design uses the part: green for both, purple for the EVM retrofit only, orange for Aztec only.
+Each box has a tag that compares it with today: keep, change or new.
 
 Components:
 
@@ -864,8 +870,9 @@ Notes:
 - The vault must keep note messages available. A lost message makes its note unreadable. The storage durability
   of the vault is a design item.
 - The data key store keeps a salt only for the retention period. After that, a user who lost the invite cannot
-  open the document. The retention periods, the ACL rules and the store are design items. The PoC does not include
-  them.
+  open the document. The PoC has an in-memory store with a party-only rule and one retention period. The KMS, the
+  login check, the retention periods for each kind of unit and the rules for a cyberCorp or a group are design
+  items.
 - The MetaLeX FPC with use limits is a design item. The PoC uses the test SponsoredFPC.
 - Counsel must confirm that an authwit is acceptable as an electronic signature. The PoC keeps no ECDSA signature
   artifact.

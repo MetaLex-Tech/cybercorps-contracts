@@ -1,13 +1,15 @@
 # Private Agreement Registry on Aztec: User Flows
 
 The flows below use two parties and one auditor. Alice drafts the agreement. Bob is the counterparty. Each party has
-its own wallet and PXE. MetaLeX runs the vault, the signature collector and the settler. Flows 2 to 5 run in
-`scripts/e2e.ts` on a local network. See [ARCHITECTURE.md](ARCHITECTURE.md) for the components.
+its own wallet and PXE. MetaLeX runs the document vault, the data key store, the signature collector and the
+settler. Flows 2 to 6 run in `scripts/e2e.ts` on a local network. The PoC has no login, so a request to the data
+key store names its user. See [ARCHITECTURE.md](ARCHITECTURE.md) for the components.
 
 ## 1. Onboarding
 
-1. The user opens the MetaLeX webapp. The webapp makes an Aztec account in an embedded wallet in the browser, or it
-   connects to an Aztec wallet that the user has.
+1. The user signs in to the MetaLeX webapp (Privy). The webapp makes an Aztec account in an embedded wallet in the
+   browser, or it connects to an Aztec wallet that the user has. The login links the email of the user to the
+   address.
 2. The keys stay on the user device. MetaLeX never gets them.
 3. The webapp gives the signature collector the address, the account instance and the signing public key of the
    user. These are public data.

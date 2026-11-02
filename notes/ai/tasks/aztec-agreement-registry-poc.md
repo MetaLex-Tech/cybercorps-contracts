@@ -27,6 +27,8 @@
    hashes.
 6. The MetaLeX settler never receives the salt or `terms_hash`.
 7. A holder of the invite (salt, expiry, parties) can open the document and read the finalized status.
+8. The data key store keeps each salt encrypted, gives it only to a party of that agreement, and deletes it at the
+   end of the retention period.
 
 ## Acceptance tests (lifecycle redesign)
 
@@ -35,6 +37,8 @@
   second finalize. Existing validation reverts.
 - Local network: three separate wallets (Alice, Bob, MetaLeX settler) and one auditor wallet. Same nullifier count
   for one and two parties. Settler input has no salt. Auditor opens the document and reads "finalized".
+- Local network: Bob opens the agreement without the invite, with the salt from the data key store. The store
+  refuses a non-party and has no salt after the retention period. Its row holds no plaintext salt.
 
 ## Acceptance and current state
 
@@ -42,7 +46,8 @@
 - Contract compiles with Aztec 6.0.0: verified. `finalize` has 6,617 gates.
 - TXE tests: verified (13 of 13). The settler call gets the party scopes, because TXE accounts keep the signing
   key in a note.
-- Local network run with four separate wallets: verified (15 of 15 checks, two runs), fake proofs only.
+- Local network run with four separate wallets: verified (19 of 19 checks, 2026-11-02, three runs), fake proofs
+  only. The data key store is in memory; its KMS key is a local random key and the login is the requester address.
 - Docs (`README.md`, `ARCHITECTURE.md`, `USER-FLOWS.md`): rewritten for the lifecycle. All five Mermaid diagrams
   render with mermaid-cli 12.1.0.
 - Mainnet deployment: not done, no authority.
@@ -89,7 +94,7 @@
 | --- | --- | --- |
 | Compile | `aztec compile` in `aztec/`, uncommitted on `fd9a1e65` | Passed |
 | TXE tests | `aztec test` | 13 passed; TXE cannot test rollup expiry rejection |
-| Local network | `aztec start --local-network --port 8090`, then `node e2e.ts` | 15 checks passed, two runs; `realProofs=false` |
+| Local network | `aztec start --local-network --port 8090`, then `node e2e.ts` | 19 checks passed, three runs on 2026-11-02; `realProofs=false` |
 | Deploy script | `node deploy.ts` on the local network, test account 2 | Passed |
 
 ## Review and blockers
