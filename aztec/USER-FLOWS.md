@@ -2,7 +2,7 @@
 
 The flows below use two parties and one auditor. Alice drafts the agreement. Bob is the counterparty. Each party has
 its own wallet and PXE. MetaLeX runs the document vault, the data key store, the signature collector and the
-settler. Flows 2 to 6 run in `scripts/e2e.ts` on a local network. The PoC has no login, so a request to the data
+settler. Flows 2 to 7 run in `scripts/e2e.ts` on a local network. The PoC has no login, so a request to the data
 key store names its user. See [ARCHITECTURE.md](ARCHITECTURE.md) for the components.
 
 ## 1. Onboarding
@@ -125,3 +125,14 @@ the salt.
   and reads the status from the chain.
 - After the retention period, the data key store has no salt. The vault still keeps the encrypted document. The
   user opens it with its own copy of the invite, or asks a counterparty to send the invite link again.
+
+## 7. Withdraw consent (party)
+
+1. Before the settler sends `finalize`, a party opens the agreement and withdraws its consent.
+2. The webapp calls `withdraw_consent(agreement)` from the party account. The party sends this tx. The FPC pays the
+   fee.
+3. The tx emits the authwit nullifier of that party for this agreement. A later `finalize` fails.
+4. To agree again, the parties make a new agreement with a new salt.
+
+PII in this flow: the tx shows 2 nullifiers and the fee payer. It does not show the agreement or the party. The
+withdraw tx must be mined before the finalize tx. The PoC script runs this flow; the web app has no button for it.

@@ -135,6 +135,12 @@ The struct holds no salt and no `terms_hash`. So the settler can run `finalize` 
 The consent hash holds the signer. Two parties that sign the same agreement must sign different messages. The PXE
 finds an authwit by its message hash, and that hash does not hold the signer.
 
+The Aztec docs build an inner hash from the caller, the function selector and the arguments hash. The consent hash
+leaves out the caller and the selector on purpose. Any account can send `finalize`, and `finalize` is the only
+function that consumes a consent hash. The outer hash holds the consumer (the registry), the chain id and the
+version, so the authwit cannot be used on another contract or chain. The authwit nullifier makes each authwit
+single-use, so the consent hash needs no nonce.
+
 The PoC uses one hash for the whole document. A Poseidon Merkle root over the fields would let a party later prove
 one field in a circuit without the others.
 
@@ -320,7 +326,15 @@ The finalize tx was measured on a local network (see [README.md](README.md#verif
 | Anchor block header, gas settings, gas used | Same for all calls to this function                                                    |
 
 The number of nullifiers does not change with the number of parties. Each unused slot adds a padding nullifier. The
-local network run measured 6 nullifiers for one party and for two parties.
+local network run measured 6 nullifiers for one party and for two parties. A copy of the contract without the
+padding gave 3 nullifiers for one party and 4 for two parties (local network, 2026-11-02). So the node shows the
+party count unless `finalize` pads it.
+
+A party can withdraw its consent with `withdraw_consent(agreement)` before the finalize tx. The party sends this tx
+from its own account. It emits the authwit nullifier of the caller for that agreement, so a later `finalize` of the
+agreement fails. The withdraw tx has 2 nullifiers (the tx nullifier and the authwit nullifier), no note hashes and no
+logs. It does not show the agreement or the parties. The fee payer is visible. A withdrawn consent cannot be given
+again for the same agreement id. The parties make a new agreement with a new salt.
 
 ## Mapping from the Solidity registry
 
@@ -382,6 +396,10 @@ salt, the terms or the document text.
 - The vault must keep each note message available until the retention period ends. If the vault loses a message,
   the recipient loses the content of that note. The onchain note hash stays, but nothing can open it.
 - Note messages do not go onchain, so deletion at the end of the retention period removes them.
+- For each note message, the vault keeps the four values that the recipient needs: the ciphertext, the recipient
+  address, the tx hash and the anchor block timestamp. The webapp of the recipient gives them to the
+  `offchain_receive` utility of the contract, at most 16 messages in each call. The PXE processes a message only
+  after it finds the tx onchain.
 
 ### Data key store
 
@@ -409,13 +427,15 @@ salt, the terms or the document text.
 - The FPC is an onchain contract on Aztec. MetaLeX deploys it and funds it with fee juice. Its balance is public
   state.
 - The FPC pays the fee of the finalize tx, so no user needs a fee token. The tx shows the FPC as fee payer.
-- The local network test uses the canonical SponsoredFPC. A mainnet FPC must limit its use, for example to the
-  settler account. This PoC does not include that FPC.
+- The local network test uses the canonical SponsoredFPC. The testnet has the same SponsoredFPC at the same
+  address. Mainnet has no SponsoredFPC, so mainnet needs the MetaLeX FPC. That FPC must limit its use, for example
+  to the settler account. This PoC does not include that FPC.
 
 ### Node RPC
 
 Each PXE asks a node for nullifier status, tx effects and block data. The node sees these queries. MetaLeX can run a
-node for its users. A user who wants more privacy can use a separate node.
+node for its users. A user who wants more privacy can use a separate node. The Aztec docs give the same advice:
+each query leaks data to the node operator, so run your own node when you can.
 
 ## EVM retrofit: hashes onchain
 
@@ -872,17 +892,27 @@ Notes:
 ## Limits and open items
 
 - `MAX_PARTIES` is 4. More parties need more private calls in the finalize tx, or a commitment to the party list.
-- A party cannot withdraw an authwit before the finalize tx. Only the expiry limits it. A void flow needs a registry
-  function that a party can call to block the finalize.
+- `withdraw_consent` follows the cancel pattern of the Aztec docs. The withdraw tx must be mined before the
+  finalize tx, because the sequencer decides the order of two pending txs. A party needs a fee payer to send it.
+  The webapp does not show a withdraw button yet.
 - The settler works only with accounts whose authwit check reads no private state of the owner.
 - The vault must keep note messages available. A lost message makes its note unreadable. The storage durability
   of the vault is a design item.
 - The data key store keeps a salt only for the retention period. After that, a user who lost the invite must get
-  it again from another party. The vault keeps the encrypted document. The PoC has an in-memory store with a party-only rule and one retention period. The KMS, the
-  login check, the retention periods for each kind of unit and the rules for a cyberCorp or a group are design
-  items.
+  it again from another party. The vault keeps the encrypted document. The PoC has an in-memory store with a
+  party-only rule and one retention period. The KMS, the login check, the retention periods for each kind of unit
+  and the rules for a cyberCorp or a group are design items.
 - The MetaLeX FPC with use limits is a design item. The PoC uses the test SponsoredFPC.
 - Counsel must confirm that an authwit is acceptable as an electronic signature. The PoC keeps no ECDSA signature
   artifact.
 - The PoC is not deployed on Aztec mainnet. It has no independent review.
+- The Aztec docs say that the network is unaudited, that some circuits are under-constrained, and that the zk
+  property is not yet secure. They say not to put real secrets on an Aztec network. So the PoC must not use real
+  customer data on the testnet or on mainnet until Aztec removes this warning.
+- The Aztec docs say that the protocol pads the counts of note hashes, nullifiers and private logs. The tx effect
+  that the 6.0.0 local node gives does not show this: without our padding nullifiers, one party gave 3 nullifiers
+  and two parties gave 4. So `finalize` keeps its padding nullifiers.
+- The Aztec account docs do not describe a third party (the settler) that checks the authwit of another account.
+  The local network run shows that it works with the initializerless Schnorr account. Aztec Labs must confirm that
+  this is a supported pattern.
 - No need to store "globalValues" and "partyValues" as string arrays in the canonical JSON. That was a legacy structure to fit EVM; we no longer subject to such limitation and a JSON can have dynamic structures. Find a more native way of storing the info

@@ -3,6 +3,7 @@
 // data key store.
 //
 // Usage: AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
+//    or: node --env-file=.env.testnet e2e.ts (accounts and registry from the env, see `.env.example`)
 
 import { NO_FROM } from '@aztec-labs/aztec.js/account';
 import { Fr } from '@aztec-labs/aztec.js/fields';
@@ -30,7 +31,7 @@ async function main() {
   const { address: alice, wallet: aliceWallet, registry: aliceRegistry } = poc.alice;
   const { address: bob, wallet: bobWallet, registry: bobRegistry } = poc.bob;
   const auditorRegistry = poc.auditor.registry;
-  console.log(`registry deployed at ${poc.registry}`);
+  console.log(`registry at ${poc.registry}`);
 
   // 1. Alice drafts the document in the MetaLeX webapp. It never goes onchain.
   const document = documentOf('2026-11-01', [
@@ -140,6 +141,23 @@ async function main() {
     'finalize after the expiry is rejected',
     'timestamp',
   );
+
+  // 10. Bob withdraws his consent with his own tx before the settler sends finalize. The finalize is rejected.
+  const withdrawn = agreementOf(Fr.random(), 0n, [alice, bob]);
+  const consents = [
+    await sign(aliceWallet, aliceRegistry, alice, withdrawn),
+    await sign(bobWallet, bobRegistry, bob, withdrawn),
+  ];
+  const { receipt: withdrawReceipt } = await poc.withdraw(bobRegistry, bob, withdrawn);
+  const withdrawEffect = (await node.getTxEffect(withdrawReceipt.txHash))!.data;
+  check(
+    withdrawEffect.nullifiers.length === 2 &&
+      withdrawEffect.noteHashes.length === 0 &&
+      withdrawEffect.privateLogs.length === 0 &&
+      withdrawEffect.publicLogs.length === 0,
+    'withdraw tx has 2 nullifiers, no note hashes and no logs',
+  );
+  await expectFailure(() => settle(withdrawn, consents), 'finalize after a withdraw is rejected', 'nullifier');
 
   console.log('all checks passed');
   process.exit(0);

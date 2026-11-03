@@ -4,3 +4,5 @@ node_modules/
 scripts/artifacts/
 scripts/journey/test-results/
 scripts/journey/playwright-report/
+scripts/.env*
+!scripts/.env.example

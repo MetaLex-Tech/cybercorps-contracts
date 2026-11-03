@@ -29,6 +29,13 @@
 7. A holder of the invite (salt, expiry, parties) can open the document and read the finalized status.
 8. The data key store keeps each salt encrypted, gives it only to a party of that agreement, and deletes it at the
    end of the retention period.
+9. After a party withdraws its consent, `finalize` of that agreement fails.
+10. A withdraw blocks only the consent of the caller to that one agreement id. A withdraw by a non-party does not
+    block `finalize`.
+11. A withdraw after `finalize` fails. A second withdraw of the same consent fails. A withdrawn consent cannot be
+    given again for the same agreement id; the parties make a new agreement (new salt).
+12. The withdraw tx holds no agreement data: one authwit nullifier besides the tx nullifier, no logs, no note
+    hashes.
 
 ## Acceptance tests (lifecycle redesign)
 
@@ -39,6 +46,10 @@
   for one and two parties. Settler input has no salt. Auditor opens the document and reads "finalized".
 - Local network: Bob opens the agreement without the invite, with the salt from the data key store. The store
   refuses a non-party and has no salt after the retention period. Its row holds no plaintext salt.
+- TXE (withdraw): withdraw then finalize fails; withdraw after finalize fails; second withdraw fails; a withdraw
+  for another agreement does not block finalize; a non-party withdraw does not block finalize.
+- Local network (withdraw): Bob withdraws with his own tx (fee by the SponsoredFPC) before the settler sends
+  finalize; the finalize is rejected; the withdraw tx has 2 nullifiers, no note hashes and no logs.
 - Web app journey (Playwright): Alice drafts and signs; MetaLeX page shows no names and no salt; Bob opens the
   invite and signs; MetaLeX finalizes (node: 6 nullifiers, no note hashes, no logs, FPC pays); the auditor sees
   "finalized"; Bob on a new device opens it from the data key store; after the retention ends, his list is empty,
@@ -49,9 +60,9 @@
 
 - Lifecycle redesign implemented: offchain authwit per party, one `finalize` tx by the MetaLeX settler.
 - Contract compiles with Aztec 6.0.0: verified. `finalize` has 6,617 gates.
-- TXE tests: verified (13 of 13). The settler call gets the party scopes, because TXE accounts keep the signing
+- TXE tests: verified (18 of 18). The settler call gets the party scopes, because TXE accounts keep the signing
   key in a note.
-- Local network run with four separate wallets: verified (20 of 20 checks, 2026-11-02, three runs), fake proofs
+- Local network run with four separate wallets: verified (22 of 22 checks, 2026-11-02, three runs; also 22 of 22 with env accounts), fake proofs
   only. The data key store is in memory; its KMS key is a local random key and the login is the requester address.
 - Docs (`README.md`, `ARCHITECTURE.md`, `USER-FLOWS.md`): rewritten for the lifecycle. All five Mermaid diagrams
   render with mermaid-cli 12.1.0.
@@ -102,14 +113,32 @@
   the whole agreement. The end of the retention period deletes only the data key; the vault keeps the encrypted
   document for the parties. Invite links stay in the browser of each party (`localStorage`); an agreement opened
   with a stored salt does not save a link on the device.
+- 2026-11-02: Cross-checked the PoC with the Aztec developer docs (networks, testnet guide, privacy
+  considerations, limitations, authwits, testing, readiness states, deployment, fees, offchain messages). The PoC
+  follows them: separate test crate on the same v6.0.0 tag, `aztec test`, `should_fail_with`, universal deploy with
+  a fixed salt, the testnet SponsoredFPC address equals the computed one (`0x2d8f…69d3`), no public calls, domain
+  separated hashes. Documented deviations and gaps in `aztec/ARCHITECTURE.md`: consent hash without caller and
+  selector (by design), withdraw pattern from the docs not built, "no real secrets" warning, protocol padding vs.
+  our padding nullifiers (untested), settler checks authwits of other accounts (not in the docs). Testnet endpoint
+  from the docs: `https://aztec-testnet.drpc.org` (6.0.0); not called by the agent.
+- 2026-11-02 (user): Padding test: a no-padding copy of `finalize` gave 3 nullifiers for one party and 4 for two
+  on the 6.0.0 local node. The padding nullifiers stay.
+- 2026-11-02 (user): Added `withdraw_consent(agreement)` (docs cancel pattern: the authwit nullifier of the caller).
+  Invariants 9 to 12 and the acceptance tests were written first. TXE 18 of 18; e2e step 10 shows the withdraw tx
+  (2 nullifiers, no notes, no logs) and a rejected finalize. No independent review.
+- 2026-11-02 (user): Scripts load the settler, Alice and Bob from an untracked env file (`scripts/.env.testnet`,
+  template `.env.example`), with the keys from `aztec-wallet create-account`; the registry comes from
+  `REGISTRY_ADDRESS`. Parties must be `schnorr_initializerless`. All fees use the SponsoredFPC (same address on the
+  local network and the testnet). `deploy.ts` uses the settler and the FPC. Verified on the local network only;
+  derived addresses equal the `aztec-wallet` addresses.
 
 ## Validation
 
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
 | Compile | `aztec compile` in `aztec/`, uncommitted on `fd9a1e65` | Passed |
-| TXE tests | `aztec test` | 13 passed; TXE cannot test rollup expiry rejection |
-| Local network | `aztec start --local-network --port 8090`, then `node e2e.ts` | 20 checks passed, three runs on 2026-11-02; `realProofs=false` |
+| TXE tests | `aztec test` | 18 passed (5 for withdraw); TXE cannot test rollup expiry rejection |
+| Local network | `aztec start --local-network --port 8090`, then `node e2e.ts` | 22 checks passed, three runs on 2026-11-02, with test accounts and with env accounts; `realProofs=false` |
 | Web app journey | `npm run journey` in `aztec/scripts` (Playwright 1.61.0, Chromium) on the same local network | 1 passed, three runs on 2026-11-02; wallets run in the app server, not the browser |
 | Deploy script | `node deploy.ts` on the local network, test account 2 | Passed |
 

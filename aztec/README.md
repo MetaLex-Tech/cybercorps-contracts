@@ -22,6 +22,7 @@ a party can open the agreement again without the invite.
 | `scripts/app/` | A local web app with one page for each role: Alice, Bob, auditor and MetaLeX |
 | `scripts/journey/` | Playwright journey that drives the web app and saves a screenshot for each step |
 | `scripts/deploy.ts` | Deploy script with a fixed salt (same address on every network) |
+| `scripts/.env.example` | The env for a shared network: settler, Alice and Bob keys, registry address |
 
 ## Commands
 
@@ -57,13 +58,26 @@ cd scripts && npx playwright install chromium && npm run journey
 
 The screenshots go to `scripts/journey/test-results/`.
 
-Deploy:
+Testnet, or any shared network. Copy `scripts/.env.example` to `scripts/.env.testnet` (git ignores it) and fill
+in the keys that `aztec-wallet create-account` prints. The settler can be any account type. Alice and Bob must be
+`schnorr_initializerless`, so that the settler can check their authwits. The SponsoredFPC pays each fee. Then run:
 
 ```shell
-cd scripts && AZTEC_NODE_URL=<node> DEPLOYER_SECRET_KEY=<fr> DEPLOYER_SIGNING_KEY=<fq> DEPLOYER_SALT=<fr> node deploy.ts
+cd scripts && node --env-file=.env.testnet deploy.ts
 ```
 
-The deployer is an initializerless Schnorr account. It must hold fee juice at its address.
+Put the printed `REGISTRY_ADDRESS` into `.env.testnet`, then:
+
+```shell
+cd scripts && node --env-file=.env.testnet e2e.ts
+```
+
+Without `SETTLER_SIGNING_KEY`, the scripts use the local network test accounts and deploy a new registry.
+
+Networks for this PoC (Aztec docs, networks page): the testnet runs 6.0.0 at `https://aztec-testnet.drpc.org`, with
+the SponsoredFPC at `0x2d8fff82a3b0c15d0a89169e7d8d043e079ab94d52031f1de1e4972ebad169d3`. The testnet needs real
+proofs, so each tx takes longer than on the local network. Mainnet has no SponsoredFPC. The Aztec docs say not to put
+real secrets on an Aztec network yet, so the PoC uses test data only.
 
 ## Verification
 
@@ -71,11 +85,13 @@ Status on 2026-11-02, uncommitted, branch `feat/aztec`:
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Compile | `aztec compile` | Pass. `finalize` has 6,617 gates (`aztec profile gates target`). |
-| Unit tests (TXE simulator) | `aztec test` | 13 of 13 pass |
-| Local network flow | `node e2e.ts` on `aztec start --local-network` | 20 of 20 checks pass |
+| Compile | `aztec compile` | Pass. `finalize` has 6,617 gates, `withdraw_consent` 5,245 (`aztec profile gates target`). |
+| Unit tests (TXE simulator) | `aztec test` | 18 of 18 pass |
+| Local network flow, test accounts | `node e2e.ts` on `aztec start --local-network` | 22 of 22 checks pass, three runs |
+| Local network flow, env accounts | `node --env-file=<env> e2e.ts`, keys from `aztec-wallet create-account`, registry from `deploy.ts` | 22 of 22 checks pass, three runs |
 | Web app journey | `npm run journey` (Playwright, Chromium) on `aztec start --local-network` | 1 of 1 passes, three runs |
-| Deploy script | `node deploy.ts` on the local network with test account 2 | Pass |
+| Deploy script | `node --env-file=<env> deploy.ts` on the local network, settler from `aztec-wallet` | Pass; the deployer address equals the `aztec-wallet` address |
+| Aztec testnet | Not run | Waits for the user's keys and go-ahead |
 | Aztec mainnet | Not run | Not deployed |
 | Independent review | Not run | None |
 

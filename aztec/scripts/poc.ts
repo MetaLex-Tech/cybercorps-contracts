@@ -4,12 +4,13 @@
 
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto';
 import { getInitialTestAccountsData } from '@aztec-labs/accounts/testing';
+import { deriveSecretKeyFromSigningKey } from '@aztec-labs/accounts/utils';
 import { NO_FROM } from '@aztec-labs/aztec.js/account';
 import { AztecAddress } from '@aztec-labs/aztec.js/addresses';
 import type { AuthWitness } from '@aztec-labs/aztec.js/authorization';
 import { getContractInstanceFromInstantiationParams, type ContractInstanceWithAddress } from '@aztec-labs/aztec.js/contracts';
 import { SponsoredFeePaymentMethod } from '@aztec-labs/aztec.js/fee';
-import { Fr } from '@aztec-labs/aztec.js/fields';
+import { Fq, Fr } from '@aztec-labs/aztec.js/fields';
 import { createAztecNodeClient, waitForNode } from '@aztec-labs/aztec.js/node';
 import { Schnorr } from '@aztec-labs/foundation/crypto/schnorr';
 import { SchnorrInitializerlessAccountContract } from '@aztec-labs/noir-contracts.js/SchnorrInitializerlessAccount';
@@ -217,42 +218,107 @@ export async function openInvite(
   return { agreement, agreementId: new Fr(id), document, locator, finalized: finalized as boolean };
 }
 
-// Starts the four wallets, onboards Alice and Bob, and deploys the registry with the settler.
+type AccountType = 'schnorr' | 'schnorr_initializerless';
+
+// The keys that `aztec-wallet create-account` printed for an account.
+export type AccountKeys = { type: AccountType; signingKey: Fq; salt: Fr };
+
+function envOf(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is not set`);
+  return value;
+}
+
+// The settler can be any account type. A party must be initializerless, so that the settler PXE can run its
+// authwit check.
+export function keysFromEnv(prefix: string, type?: AccountType): AccountKeys {
+  const accountType = type ?? (process.env[`${prefix}_ACCOUNT_TYPE`] ?? 'schnorr');
+  if (accountType !== 'schnorr' && accountType !== 'schnorr_initializerless') {
+    throw new Error(`unsupported ${prefix}_ACCOUNT_TYPE ${accountType}`);
+  }
+  return {
+    type: accountType,
+    signingKey: Fq.fromHexString(envOf(`${prefix}_SIGNING_KEY`)),
+    salt: Fr.fromHexString(process.env[`${prefix}_SALT`] ?? '0x0'),
+  };
+}
+
+// Gives the same address as `aztec-wallet create-account` with the same keys: the CLI derives the secret key from
+// the signing key.
+export async function accountOf(wallet: EmbeddedWallet, keys: AccountKeys) {
+  const secret = await deriveSecretKeyFromSigningKey(keys.signingKey);
+  return keys.type === 'schnorr'
+    ? wallet.createSchnorrAccount(secret, keys.salt, keys.signingKey)
+    : wallet.createSchnorrInitializerlessAccount(secret, keys.salt, keys.signingKey);
+}
+
+// The SponsoredFPC has the same address on the local network and on the testnet:
+// 0x2d8fff82a3b0c15d0a89169e7d8d043e079ab94d52031f1de1e4972ebad169d3 for Aztec 6.0.0.
+export async function sponsoredFpcIn(...wallets: EmbeddedWallet[]) {
+  const fpc = await getContractInstanceFromInstantiationParams(SponsoredFPCContract.artifact, { salt: new Fr(0) });
+  for (const wallet of wallets) await wallet.registerContract(fpc, SponsoredFPCContract.artifact);
+  return { address: fpc.address, fee: { paymentMethod: new SponsoredFeePaymentMethod(fpc.address) } };
+}
+
+async function registryInstanceAt(node: ReturnType<typeof createAztecNodeClient>, address: AztecAddress) {
+  const instance = await node.getContract(address);
+  if (!instance) throw new Error(`no contract instance at ${address}`);
+  return instance;
+}
+
+// Starts the four wallets and onboards Alice and Bob.
+//
+// With `SETTLER_SIGNING_KEY` set, for example on the testnet, the accounts come from the env (`SETTLER_*`,
+// `ALICE_*`, `BOB_*`) and the registry is at `REGISTRY_ADDRESS`. Without it, the local network test accounts are
+// used and the settler deploys a new registry.
 export async function startPoc(nodeUrl: string) {
   const node = createAztecNodeClient(nodeUrl);
   await waitForNode(node);
+  const fromEnv = process.env.SETTLER_SIGNING_KEY !== undefined;
 
-  const [aliceData, bobData, settlerData] = await getInitialTestAccountsData();
   const aliceWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
   const bobWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
   const settlerWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
   const auditorWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
-  const [aliceAccount] = await createFundedInitializerlessAccounts(aliceWallet, [aliceData]);
-  const [bobAccount] = await createFundedInitializerlessAccounts(bobWallet, [bobData]);
-  const [settlerAccount] = await createFundedInitializerlessAccounts(settlerWallet, [settlerData]);
+
+  const [aliceKeys, bobKeys] = fromEnv
+    ? [keysFromEnv('ALICE', 'schnorr_initializerless'), keysFromEnv('BOB', 'schnorr_initializerless')]
+    : [];
+  const [aliceData, bobData, settlerData] = fromEnv ? [] : await getInitialTestAccountsData();
+  const [aliceAccount, bobAccount, settlerAccount] = fromEnv
+    ? [
+        await accountOf(aliceWallet, aliceKeys!),
+        await accountOf(bobWallet, bobKeys!),
+        await accountOf(settlerWallet, keysFromEnv('SETTLER')),
+      ]
+    : [
+        (await createFundedInitializerlessAccounts(aliceWallet, [aliceData]))[0],
+        (await createFundedInitializerlessAccounts(bobWallet, [bobData]))[0],
+        (await createFundedInitializerlessAccounts(settlerWallet, [settlerData]))[0],
+      ];
   const alice = aliceAccount.address;
   const bob = bobAccount.address;
   const settler = settlerAccount.address;
   const metalex = new MetaLeXServices();
 
   // Onboarding: each user gives MetaLeX its address, account instance and signing public key.
-  for (const [account, data] of [
-    [aliceAccount, aliceData],
-    [bobAccount, bobData],
+  for (const [account, signingKey] of [
+    [aliceAccount, aliceKeys?.signingKey ?? aliceData.signingKey],
+    [bobAccount, bobKeys?.signingKey ?? bobData.signingKey],
   ] as const) {
-    const signingPublicKey = await new Schnorr().computePublicKey(data.signingKey);
+    const signingPublicKey = await new Schnorr().computePublicKey(signingKey);
     metalex.onboard({ address: account.address, instance: account.getInstance(), signingPublicKey });
   }
 
-  // The local network has a sponsored FPC. On mainnet, MetaLeX runs its own fee payer.
-  const fpc = await getContractInstanceFromInstantiationParams(SponsoredFPCContract.artifact, { salt: new Fr(0) });
-  await settlerWallet.registerContract(fpc, SponsoredFPCContract.artifact);
-  const sponsored = { fee: { paymentMethod: new SponsoredFeePaymentMethod(fpc.address) } };
+  // On mainnet, MetaLeX runs its own fee payer. The parties need the FPC only to withdraw a consent.
+  const sponsored = await sponsoredFpcIn(settlerWallet, aliceWallet, bobWallet);
 
-  // MetaLeX deploys the registry once. Any wallet can then register it.
-  const { contract: registry, instance } = await CyberAgreementRegistryContract.deploy(settlerWallet).send({
-    from: settler,
-  });
+  // MetaLeX deploys the registry once (`deploy.ts` on a shared network). Any wallet can then register it.
+  const instance = fromEnv
+    ? await registryInstanceAt(node, AztecAddress.fromStringUnsafe(envOf('REGISTRY_ADDRESS')))
+    : (await CyberAgreementRegistryContract.deploy(settlerWallet).send({ from: settler })).instance;
+  await settlerWallet.registerContract(instance, CyberAgreementRegistryContract.artifact);
+  const registry = await CyberAgreementRegistryContract.at(instance.address, settlerWallet);
   const registryIn = async (wallet: EmbeddedWallet) => {
     await wallet.registerContract(instance, CyberAgreementRegistryContract.artifact);
     return CyberAgreementRegistryContract.at(registry.address, wallet);
@@ -290,12 +356,16 @@ export async function startPoc(nodeUrl: string) {
     return registry.methods
       .finalize(agreement)
       .with({ authWitnesses: signatures.map(s => s.authWitness) })
-      .send({ from: settler, additionalScopes: parties, ...sponsored });
+      .send({ from: settler, additionalScopes: parties, fee: sponsored.fee });
   };
+
+  // A party withdraws its consent with its own tx. The FPC pays the fee.
+  const withdraw = (reg: CyberAgreementRegistryContract, party: AztecAddress, agreement: Agreement) =>
+    reg.methods.withdraw_consent(agreement).send({ from: party, fee: sponsored.fee });
 
   return {
     node,
-    fpc: fpc.address,
+    fpc: sponsored.address,
     registry: registry.address,
     metalex,
     alice: { address: alice, wallet: aliceWallet, registry: aliceRegistry },
@@ -304,5 +374,6 @@ export async function startPoc(nodeUrl: string) {
     settler,
     sign,
     settle,
+    withdraw,
   };
 }

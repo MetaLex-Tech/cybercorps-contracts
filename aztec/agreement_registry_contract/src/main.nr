@@ -7,7 +7,7 @@ use aztec::macros::aztec;
 #[aztec]
 pub contract CyberAgreementRegistry {
     use aztec::{
-        authwit::auth::assert_inner_hash_valid_authwit,
+        authwit::auth::{assert_inner_hash_valid_authwit, compute_authwit_nullifier},
         macros::functions::external,
         oracle::nullifiers::check_nullifier_exists,
         protocol::address::AztecAddress,
@@ -43,6 +43,16 @@ pub contract CyberAgreementRegistry {
         self.context.push_nullifier_unsafe(finalized_nullifier(agreement_id));
 
         agreement_id
+    }
+
+    /// Withdraws the consent of the caller to `agreement`. After this, `finalize` of `agreement` fails, because it
+    /// emits the same authwit nullifier.
+    ///
+    /// The withdraw tx must be mined before the finalize tx. If both are pending, the sequencer decides the order.
+    #[external("private")]
+    fn withdraw_consent(agreement: Agreement) {
+        let signer = self.msg_sender();
+        self.context.push_nullifier_unsafe(compute_authwit_nullifier(signer, consent_hash(agreement.id(), signer)));
     }
 
     #[external("utility")]
