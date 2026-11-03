@@ -36,6 +36,10 @@
     given again for the same agreement id; the parties make a new agreement (new salt).
 12. The withdraw tx holds no agreement data: one authwit nullifier besides the tx nullifier, no logs, no note
     hashes.
+13. A holder of the invite can verify two proofs without MetaLeX: (path 1) the finalized nullifier of the recomputed
+    agreement id exists; (path 2) each party's stored authwit is a valid Schnorr signature, by a key that the party
+    address commits to, over the authwit message hash of the recomputed agreement. Any change to a party address,
+    the expiry or one byte of the document makes both proofs fail.
 
 ## Acceptance tests (lifecycle redesign)
 
@@ -50,6 +54,8 @@
   for another agreement does not block finalize; a non-party withdraw does not block finalize.
 - Local network (withdraw): Bob withdraws with his own tx (fee by the SponsoredFPC) before the settler sends
   finalize; the finalize is rejected; the withdraw tx has 2 nullifiers, no note hashes and no logs.
+- Local network (auditor proofs): both paths pass for the original agreement; both fail for a changed clause.
+- Web app journey (auditor): both paths pass; a changed clause, expiry or party address fails both; reset passes.
 - Web app journey (Playwright): Alice drafts and signs; MetaLeX page shows no names and no salt; Bob opens the
   invite and signs; MetaLeX finalizes (node: 6 nullifiers, no note hashes, no logs, FPC pays); the auditor sees
   "finalized"; Bob on a new device opens it from the data key store; after the retention ends, his list is empty,
@@ -142,6 +148,13 @@
   `0x240dd2db03e8521b18ef00d527564c3aa80590e733f7e68ad1146479ae18f17f` in block 16488 (6 nullifiers, no note
   hashes, no logs, FPC fee payer). Second finalize and finalize after withdraw rejected by the node ("Existing
   nullifier"). No independent review.
+- 2026-11-02 (user): Auditor proofs, both paths (invariant 13). Each party's device stores its evidence (authwit,
+  signing public key, account preimage) in the vault, encrypted with the document key. `verifyAgreement` checks the
+  finalized nullifier (path 1) and each Schnorr signature over the recomputed authwit message hash, with the key bound
+  to the address through the account preimage and `immutablesHash` (path 2). The auditor page lets the user change
+  parties, expiry and document and shows both results live. Local e2e 24 of 24 (test and env accounts, two runs
+  each); journey 3 of 3 with change/reset checks; TXE 18 of 18. Not run on the testnet yet. Per-deal accounts added
+  as an open item.
 
 ## Validation
 

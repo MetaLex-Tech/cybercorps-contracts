@@ -15,8 +15,10 @@ import {
   encrypt,
   inviteOf,
   openInvite,
+  putEvidence,
   startPoc,
   termsHashOf,
+  verifyAgreement,
 } from './poc.ts';
 
 function check(condition: boolean, label: string) {
@@ -52,7 +54,10 @@ async function main() {
   metalex.putDataKey(agreementId, salt, [alice, bob], retainUntil);
 
   // 2. Alice signs offchain. The collector waits for Bob.
-  metalex.submitSignature(agreementId, agreement, await sign(aliceWallet, aliceRegistry, alice, agreement));
+  // Each party also stores the proof of its signature in the vault, encrypted with the document key.
+  const aliceSignature = await sign(aliceWallet, aliceRegistry, alice, agreement);
+  putEvidence(metalex, salt, aliceSignature, poc.alice);
+  metalex.submitSignature(agreementId, agreement, aliceSignature);
   const pending = metalex.pendingSigners(agreementId);
   check(pending.length === 1 && pending[0].equals(bob), 'collector waits for Bob');
   await expectFailure(
@@ -66,7 +71,9 @@ async function main() {
   check(bobView.agreementId.equals(agreementId), 'Bob derives the same agreement id from the invite');
   check(canonicalJson(bobView.document) === canonicalJson(document), 'Bob decrypts the same document');
   check(bobView.finalized === false, 'Bob sees the status "pending"');
-  metalex.submitSignature(agreementId, bobView.agreement, await sign(bobWallet, bobRegistry, bob, bobView.agreement));
+  const bobSignature = await sign(bobWallet, bobRegistry, bob, bobView.agreement);
+  putEvidence(metalex, salt, bobSignature, poc.bob);
+  metalex.submitSignature(agreementId, bobView.agreement, bobSignature);
   check(metalex.pendingSigners(agreementId).length === 0, 'collector has all signatures');
 
   // 4. The settler finalizes in one tx. Its input holds no salt and no terms hash.
@@ -97,6 +104,15 @@ async function main() {
     const view = await openInvite(reg, from, invite, metalex);
     check(view.finalized && canonicalJson(view.document) === canonicalJson(document), `${name} sees the document and the status "finalized"`);
   }
+
+  // The auditor checks both proofs: path 1 on the chain, path 2 with the stored signatures. A changed clause fails
+  // both.
+  const proofs = await verifyAgreement(auditorRegistry, NO_FROM, metalex, salt, 0n, [alice, bob], document);
+  check(proofs.finalized && proofs.signed && proofs.agreementId === agreementId.toString(), 'auditor verifies both proofs');
+  const changed = { ...document, template: { ...document.template, text: [...document.template.text] } };
+  changed.template.text[7] = changed.template.text[7].replace('2 years', '1 year');
+  const changedProofs = await verifyAgreement(auditorRegistry, NO_FROM, metalex, salt, 0n, [alice, bob], changed);
+  check(!changedProofs.finalized && !changedProofs.signed, 'auditor rejects a changed clause on both proofs');
 
   // 6. Bob opens the agreement on a new device without the invite. The data key store gives the salt to a party
   // only, and only until the retention ends.

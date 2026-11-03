@@ -67,3 +67,11 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: upp
 .doc ol { padding-left: 20px; margin: 12px 0; }
 .doc li { margin-bottom: 8px; }
 #saved input { width: 100%; }
+.clauses { display: grid; gap: 10px; margin-top: 14px; }
+textarea { font: inherit; font-weight: 400; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+.verdict { font-weight: 650; padding: 12px 14px; border-radius: 8px; margin: 16px 0 0; }
+.ok-bg { background: var(--ok-bg); color: var(--ok); }
+.bad-bg { background: #f8dcd9; color: var(--bad); }
+.ok { color: var(--ok); font-weight: 700; }
+.bad { color: var(--bad); font-weight: 700; }
+ul.checks { margin: 0; padding-left: 18px; }

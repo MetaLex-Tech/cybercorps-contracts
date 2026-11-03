@@ -7,14 +7,21 @@ import { getInitialTestAccountsData } from '@aztec-labs/accounts/testing';
 import { deriveSecretKeyFromSigningKey } from '@aztec-labs/accounts/utils';
 import { NO_FROM } from '@aztec-labs/aztec.js/account';
 import { AztecAddress } from '@aztec-labs/aztec.js/addresses';
-import type { AuthWitness } from '@aztec-labs/aztec.js/authorization';
-import { getContractInstanceFromInstantiationParams, type ContractInstanceWithAddress } from '@aztec-labs/aztec.js/contracts';
+import { type AuthWitness, computeAuthWitMessageHash } from '@aztec-labs/aztec.js/authorization';
+import {
+  getContractClassFromArtifact,
+  getContractInstanceFromInstantiationParams,
+  type ContractInstanceWithAddress,
+} from '@aztec-labs/aztec.js/contracts';
 import { SponsoredFeePaymentMethod } from '@aztec-labs/aztec.js/fee';
-import { Fq, Fr } from '@aztec-labs/aztec.js/fields';
+import { Fq, Fr, Point } from '@aztec-labs/aztec.js/fields';
 import { createAztecNodeClient, waitForNode } from '@aztec-labs/aztec.js/node';
-import { Schnorr } from '@aztec-labs/foundation/crypto/schnorr';
+import { poseidon2Hash } from '@aztec-labs/foundation/crypto/poseidon';
+import { Schnorr, SchnorrSignature } from '@aztec-labs/foundation/crypto/schnorr';
 import { SchnorrInitializerlessAccountContract } from '@aztec-labs/noir-contracts.js/SchnorrInitializerlessAccount';
 import { SponsoredFPCContract } from '@aztec-labs/noir-contracts.js/SponsoredFPC';
+import { computeContractAddressFromInstance } from '@aztec-labs/stdlib/contract';
+import { PublicKeys } from '@aztec-labs/stdlib/keys';
 import { EmbeddedWallet } from '@aztec-labs/wallets/embedded';
 import { createFundedInitializerlessAccounts } from '@aztec-labs/wallets/testing';
 import { CyberAgreementRegistryContract } from './artifacts/CyberAgreementRegistry.ts';
@@ -201,6 +208,128 @@ export function agreementOf(termsCommitment: Fr, expiry: bigint, parties: AztecA
   return { terms_commitment: termsCommitment, expiry, party_count: parties.length, parties: padded };
 }
 
+// The proof of one party's signature. It holds the authwit and public account data only. The party's device stores
+// it in the vault, encrypted with the document key, so each holder of the invite can check it without MetaLeX.
+export type Evidence = {
+  signer: string;
+  signingPublicKey: { x: string; y: string };
+  instance: {
+    salt: string;
+    deployer: string;
+    originalContractClassId: string;
+    initializationHash: string;
+    immutablesHash: string;
+    publicKeys: string;
+  };
+  witness: string[];
+};
+
+function evidenceLocatorOf(salt: Fr, signer: AztecAddress) {
+  return hkdf(salt, `metalex.evidence.locator.v1:${signer}`).toString('hex');
+}
+
+export function putEvidence(
+  metalex: MetaLeXServices,
+  salt: Fr,
+  signature: Signature,
+  account: { instance: ContractInstanceWithAddress; signingPublicKey: { x: Fr; y: Fr } },
+) {
+  const { instance, signingPublicKey } = account;
+  const evidence: Evidence = {
+    signer: signature.signer.toString(),
+    signingPublicKey: { x: signingPublicKey.x.toString(), y: signingPublicKey.y.toString() },
+    instance: {
+      salt: instance.salt.toString(),
+      deployer: instance.deployer.toString(),
+      originalContractClassId: instance.originalContractClassId.toString(),
+      initializationHash: instance.initializationHash.toString(),
+      immutablesHash: instance.immutablesHash.toString(),
+      publicKeys: instance.publicKeys.toString(),
+    },
+    witness: signature.authWitness.witness.map(f => f.toString()),
+  };
+  metalex.putDocument(evidenceLocatorOf(salt, signature.signer), encrypt(docKeysOf(salt).key, JSON.stringify(evidence)));
+}
+
+function findEvidence(metalex: MetaLeXServices, salt: Fr, signer: AztecAddress): Evidence | undefined {
+  const blob = metalex.vault.get(evidenceLocatorOf(salt, signer));
+  return blob && JSON.parse(decrypt(docKeysOf(salt).key, blob));
+}
+
+// The authwit witness holds the 64-byte signature as four 16-byte limbs, in the order of `toLimbFields`.
+function signatureOf(witness: string[]) {
+  const [b, a, d, c] = witness.map(w => Fr.fromString(w).toBuffer().subarray(16));
+  return new SchnorrSignature(Buffer.concat([a, b, c, d]));
+}
+
+let schnorrAccountClassId: Fr | undefined;
+
+// Checks one party's evidence against `messageHash`, the authwit message hash of the agreement being checked.
+async function checkSignature(evidence: Evidence, party: AztecAddress, messageHash: Fr) {
+  schnorrAccountClassId ??= (await getContractClassFromArtifact(SchnorrInitializerlessAccountContract.artifact)).id;
+  const key = new Point(Fr.fromString(evidence.signingPublicKey.x), Fr.fromString(evidence.signingPublicKey.y));
+  const preimage = {
+    version: 2 as const,
+    salt: Fr.fromString(evidence.instance.salt),
+    deployer: AztecAddress.fromStringUnsafe(evidence.instance.deployer),
+    originalContractClassId: Fr.fromString(evidence.instance.originalContractClassId),
+    initializationHash: Fr.fromString(evidence.instance.initializationHash),
+    immutablesHash: Fr.fromString(evidence.instance.immutablesHash),
+    publicKeys: PublicKeys.fromString(evidence.instance.publicKeys),
+  };
+  return {
+    // The party address commits to the account preimage.
+    addressMatches: (await computeContractAddressFromInstance(preimage)).equals(party),
+    // The initializerless Schnorr account checks signatures with the key in its immutables.
+    schnorrAccount: preimage.originalContractClassId.equals(schnorrAccountClassId),
+    keyMatches: preimage.immutablesHash.equals(await poseidon2Hash([key.x, key.y])),
+    signatureValid: await new Schnorr().verifySignature(messageHash, key, signatureOf(evidence.witness)),
+  };
+}
+
+// Checks the two proofs that the parties signed exactly `document`, `expiry` and `parties`:
+// path 1, the registry recorded the agreement as finalized; path 2, each party's stored signature is valid for it.
+export async function verifyAgreement(
+  reg: CyberAgreementRegistryContract,
+  from: AztecAddress | typeof NO_FROM,
+  metalex: MetaLeXServices,
+  salt: Fr,
+  expiry: bigint,
+  parties: AztecAddress[],
+  document: object,
+) {
+  const termsHash = termsHashOf(document);
+  const { result: commitment } = await reg.methods.terms_commitment_of(termsHash, salt).simulate({ from });
+  const agreement = agreementOf(new Fr(commitment), expiry, parties);
+  const { result: id } = await reg.methods.agreement_id(agreement).simulate({ from });
+  const { result: finalized } = await reg.methods.is_finalized(agreement).simulate({ from });
+  const chainInfo = await reg.wallet.getChainInfo();
+  const signatures = [];
+  for (const party of parties) {
+    const evidence = findEvidence(metalex, salt, party);
+    if (!evidence) {
+      signatures.push({ party: party.toString(), evidenceFound: false });
+      continue;
+    }
+    const { result: consent } = await reg.methods.consent_hash_of(agreement, party).simulate({ from });
+    const messageHash = await computeAuthWitMessageHash(
+      { consumer: reg.address, innerHash: new Fr(consent) },
+      chainInfo,
+    );
+    signatures.push({ party: party.toString(), evidenceFound: true, ...(await checkSignature(evidence, party, messageHash)) });
+  }
+  const signed = signatures.every(
+    s => s.evidenceFound && s.addressMatches && s.schnorrAccount && s.keyMatches && s.signatureValid,
+  );
+  return {
+    termsHash: termsHash.toString(),
+    agreementId: new Fr(id).toString(),
+    finalized: finalized as boolean,
+    signed,
+    signatures,
+  };
+}
+
 // The webapp opens an invite: it fetches and checks the document, and reads the status from the chain.
 export async function openInvite(
   reg: CyberAgreementRegistryContract,
@@ -312,14 +441,16 @@ export async function startPoc(nodeUrl: string) {
   const settler = settlerAccount.address;
   const metalex = new MetaLeXServices();
 
-  // Onboarding: each user gives MetaLeX its address, account instance and signing public key.
-  for (const [account, signingKey] of [
-    [aliceAccount, aliceKeys?.signingKey ?? aliceData.signingKey],
-    [bobAccount, bobKeys?.signingKey ?? bobData.signingKey],
-  ] as const) {
-    const signingPublicKey = await new Schnorr().computePublicKey(signingKey);
-    metalex.onboard({ address: account.address, instance: account.getInstance(), signingPublicKey });
-  }
+  // The public account data of each party. Onboarding gives it to MetaLeX. The party also puts it in its evidence.
+  const publicAccountOf = async (account: typeof aliceAccount, signingKey: Fq) => ({
+    address: account.address,
+    instance: account.getInstance(),
+    signingPublicKey: await new Schnorr().computePublicKey(signingKey),
+  });
+  const aliceAccountData = await publicAccountOf(aliceAccount, aliceKeys?.signingKey ?? aliceData.signingKey);
+  const bobAccountData = await publicAccountOf(bobAccount, bobKeys?.signingKey ?? bobData.signingKey);
+  metalex.onboard(aliceAccountData);
+  metalex.onboard(bobAccountData);
 
   // On mainnet, MetaLeX runs its own fee payer. The parties need the FPC only to withdraw a consent.
   const sponsored = await sponsoredFpcIn(settlerWallet, aliceWallet, bobWallet);
@@ -379,8 +510,8 @@ export async function startPoc(nodeUrl: string) {
     fpc: sponsored.address,
     registry: registry.address,
     metalex,
-    alice: { address: alice, wallet: aliceWallet, registry: aliceRegistry },
-    bob: { address: bob, wallet: bobWallet, registry: bobRegistry },
+    alice: { ...aliceAccountData, wallet: aliceWallet, registry: aliceRegistry },
+    bob: { ...bobAccountData, wallet: bobWallet, registry: bobRegistry },
     auditor: { wallet: auditorWallet, registry: auditorRegistry },
     settler,
     sign,

@@ -112,6 +112,9 @@ What the circuit checks:
    auditor needs no Aztec account.
 4. The webapp shows the document and the status "finalized". To show the time, the webapp finds the block of the
    finalized nullifier.
+5. The auditor can change a party address, the expiry or the document in the webapp. The webapp checks both proofs
+   again (see [ARCHITECTURE.md](ARCHITECTURE.md#proof-for-an-auditor)) and says whether these are the finalized
+   terms.
 
 PII in this flow: the auditor gets all PII of the agreement from the invite and the vault blob. The vault sees a fetch.
 The node sees the queried nullifier and the IP of the auditor. It cannot link the nullifier to an agreement without

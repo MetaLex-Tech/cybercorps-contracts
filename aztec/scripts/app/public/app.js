@@ -8,6 +8,11 @@ const esc = s =>
 const short = hex => (hex ? `${hex.slice(0, 10)}…${hex.slice(-6)}` : '');
 // `#invite=` is a link that the user got. `#stored=` opens an agreement with the salt from the data key store.
 const hashParams = () => new URLSearchParams(location.hash.slice(1));
+// A link to the tx in the block explorer, or the short hash when the network has no explorer.
+const txLink = hash =>
+  state.explorerUrl
+    ? `<a class="mono" href="${esc(`${state.explorerUrl}/tx-effects/${hash}`)}" target="_blank" rel="noopener">${esc(short(hash))}</a>`
+    : `<span class="mono">${esc(short(hash))}</span>`;
 const inviteFromHash = () => hashParams().get('invite') ?? hashParams().get('stored');
 const userOf = key => state.users.find(u => u.key === key);
 
@@ -95,7 +100,8 @@ function agreementHtml(view, me) {
   const iSigned = view.signers?.signed.includes(me);
   let progress = '';
   if (view.finalized) {
-    progress = '<p class="callout">All parties signed. MetaLeX finalized the agreement on Aztec.</p>';
+    const tx = view.settlement?.txHash ? ` in one transaction: ${txLink(view.settlement.txHash)}` : '';
+    progress = `<p class="callout" id="finalized">All parties signed. MetaLeX finalized the agreement on Aztec${tx}.</p>`;
   } else if (view.settlement?.status === 'failed') {
     progress = `<p class="error">Settlement failed: ${esc(view.settlement.error)}</p>`;
   } else if (view.signers && view.signers.pending.length === 0) {
@@ -140,6 +146,7 @@ async function renderAgreement(device, invite, view) {
     }),
   );
   if (view.isParty && !view.finalized && view.settlement?.status !== 'failed') poll(() => renderAgreement(device, invite));
+  return view;
 }
 
 async function renderMyAgreements(device) {
@@ -258,12 +265,93 @@ async function renderAuditor() {
       <form id="open-form"><label>Invite link<input name="link" placeholder="http://…#invite=…" required></label></form>
       <div class="actions"><button form="open-form">Open</button></div>
     </section>
-    <div id="agreement-slot"></div>`;
+    <div id="agreement-slot"></div><div id="verify-slot"></div>`;
   document.getElementById('open-form').addEventListener('submit', e => {
     e.preventDefault();
     location.hash = new URL(new FormData(e.target).get('link')).hash;
   });
-  if (invite) await renderAgreement('auditor', invite);
+  if (invite) renderVerify(invite, await renderAgreement('auditor', invite));
+}
+
+function verifyFormHtml(view) {
+  const doc = view.document;
+  const field = (label, name, value, attrs = '') =>
+    `<label>${esc(label)}<input data-field="${name}" value="${esc(value)}" ${attrs}></label>`;
+  return `<section id="verify">
+    <h2>Verify the signatures</h2>
+    <p class="muted">Change a party address, the expiry or any part of the document. This device checks two proofs
+      at once. Path 1: the registry recorded this exact agreement as finalized. Path 2: each party's stored signature
+      is valid for these exact terms, by a key that the party address commits to.</p>
+    <form id="verify-form" class="grid">
+      ${view.parties.map((p, i) => field(`Party ${i + 1} address (${p.name})`, `party:${i}`, p.address, 'class="mono"')).join('')}
+      ${field('Expiry (Unix seconds, 0 = none)', 'expiry', view.expiry)}
+      ${field('Effective date', 'date', doc.globalValues[0])}
+      ${doc.partyValues.map(([, [name]], i) => field(`Party ${i + 1} legal name`, `name:${i}`, name)).join('')}
+    </form>
+    <div class="clauses">${doc.template.text
+      .map((c, i) => `<label>Clause ${i + 1}<textarea data-field="clause:${i}" rows="2">${esc(c)}</textarea></label>`)
+      .join('')}</div>
+    <div class="actions"><button class="secondary" id="verify-reset">Reset to the invite</button></div>
+    <div id="verify-result" aria-live="polite"><p class="muted">Checking…</p></div>
+  </section>`;
+}
+
+// The terms in the form: the invite's terms with the user's changes.
+function editedTerms(view) {
+  const value = name => document.querySelector(`[data-field="${name}"]`).value;
+  const doc = structuredClone(view.document);
+  doc.globalValues[0] = value('date');
+  doc.partyValues.forEach((entry, i) => (entry[1][0] = value(`name:${i}`)));
+  doc.template.text = doc.template.text.map((_, i) => value(`clause:${i}`));
+  return { expiry: value('expiry'), parties: view.parties.map((_, i) => value(`party:${i}`)), document: doc };
+}
+
+function verifyResultHtml(view, r) {
+  const mark = ok => (ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>');
+  const nameOf = address => view.parties.find(p => p.address === address)?.name ?? short(address);
+  const verdict =
+    r.finalized && r.signed
+      ? '<p class="verdict ok-bg">✓ These are the exact terms that the parties signed and that MetaLeX finalized.</p>'
+      : '<p class="verdict bad-bg">✗ These terms were not signed and finalized.</p>';
+  const signatures = r.signatures
+    .map(s =>
+      s.evidenceFound
+        ? `<li>${esc(nameOf(s.party))}: ${mark(s.addressMatches)} address commits to the key
+            ${mark(s.schnorrAccount)} Schnorr account ${mark(s.keyMatches)} key in the account
+            ${mark(s.signatureValid)} signature over these terms</li>`
+        : `<li>${esc(nameOf(s.party))}: ${mark(false)} no stored signature for this address</li>`,
+    )
+    .join('');
+  return `${verdict}
+    <dl class="facts">
+      <dt>Agreement id</dt><dd class="mono">${esc(r.agreementId)} ${r.agreementId === view.agreementId ? '(same as the invite)' : '(different from the invite)'}</dd>
+      <dt>Path 1 · chain</dt><dd>${mark(r.finalized)} finalized nullifier of this agreement id onchain</dd>
+      <dt>Path 2 · signatures</dt><dd><ul class="checks">${signatures}</ul></dd>
+    </dl>`;
+}
+
+// Checks the terms again after each change. Only the answer to the newest request is shown.
+function renderVerify(invite, view) {
+  document.getElementById('verify-slot').innerHTML = verifyFormHtml(view);
+  const result = document.getElementById('verify-result');
+  let request = 0;
+  let timer;
+  const check = async () => {
+    const mine = ++request;
+    result.innerHTML = '<p class="muted">Checking…</p>';
+    try {
+      const r = await api('/api/device/auditor/verify', { invite, ...editedTerms(view) });
+      if (mine === request) result.innerHTML = verifyResultHtml(view, r);
+    } catch (err) {
+      if (mine === request) result.innerHTML = `<p class="verdict bad-bg">✗ ${esc(err.message)}</p>`;
+    }
+  };
+  document.getElementById('verify').addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(check, 400);
+  });
+  document.getElementById('verify-reset').addEventListener('click', () => renderVerify(invite, view));
+  check();
 }
 
 async function renderMetalex() {
@@ -273,7 +361,7 @@ async function renderMetalex() {
     if (s.status === 'settling') return '<span class="status pending">Sending finalize</span>';
     if (s.status === 'failed') return `<span class="error">${esc(s.error)}</span>`;
     return `<span class="status finalized">Finalized</span><br>Block ${s.block}<br>
-      <span class="mono">tx ${esc(short(s.txHash))}</span><br>${s.nullifiers} nullifiers, ${s.noteHashes} note hashes, ${s.logs} logs<br>
+      tx ${txLink(s.txHash)}<br>${s.nullifiers} nullifiers, ${s.noteHashes} note hashes, ${s.logs} logs<br>
       Fee payer: ${s.feePayer === v.fpc ? 'MetaLeX FPC' : esc(short(s.feePayer))}`;
   };
   app.innerHTML = `${roleHeader('MetaLeX services', 'What MetaLeX sees', 'metalex', `registry ${short(v.registry)}`)}

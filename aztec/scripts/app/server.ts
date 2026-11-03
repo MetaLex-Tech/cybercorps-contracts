@@ -20,8 +20,11 @@ import {
   inviteOf,
   NDA_TEMPLATE,
   openInvite,
+  putEvidence,
+  readInvite,
   startPoc,
   termsHashOf,
+  verifyAgreement,
 } from '../poc.ts';
 
 const RETENTION_MS = 30 * 24 * 3600 * 1000;
@@ -48,7 +51,7 @@ type Settlement = {
 };
 const settlements = new Map<string, Settlement>();
 
-type Device = { name: string; address?: AztecAddress; registry: CyberAgreementRegistryContract; wallet?: typeof poc.alice.wallet };
+type Device = Partial<typeof poc.alice> & { name: string; registry: CyberAgreementRegistryContract };
 const devices: Record<string, Device> = {
   alice: { name: 'Alice', ...poc.alice },
   bob: { name: 'Bob', ...poc.bob },
@@ -180,7 +183,9 @@ async function create(device: Device, draft: Draft) {
   const { locator, key } = docKeysOf(salt);
   metalex.putDocument(locator, encrypt(key, canonicalJson(document)));
   metalex.putDataKey(agreementId, salt, parties, Date.now() + RETENTION_MS);
-  metalex.submitSignature(agreementId, agreement, await poc.sign(device.wallet!, device.registry, creator, agreement));
+  const signature = await poc.sign(device.wallet!, device.registry, creator, agreement);
+  putEvidence(metalex, salt, signature, device as typeof poc.alice);
+  metalex.submitSignature(agreementId, agreement, signature);
   settleWhenComplete(agreementId);
   return { invite: inviteOf(salt, expiry, parties), agreementId: agreementId.toString() };
 }
@@ -188,13 +193,31 @@ async function create(device: Device, draft: Draft) {
 // Device: the user signs the agreement in the invite.
 async function sign(device: Device, invite: string) {
   const view = await openInvite(device.registry, device.address!, invite, metalex);
-  metalex.submitSignature(
-    view.agreementId,
-    view.agreement,
-    await poc.sign(device.wallet!, device.registry, device.address!, view.agreement),
-  );
+  const signature = await poc.sign(device.wallet!, device.registry, device.address!, view.agreement);
+  putEvidence(metalex, (await readInvite(invite)).salt, signature, device as typeof poc.alice);
+  metalex.submitSignature(view.agreementId, view.agreement, signature);
   settleWhenComplete(view.agreementId);
   return open(device, invite);
+}
+
+type VerifyRequest = { invite: string; expiry: string; parties: string[]; document: object };
+
+// Device: checks both proofs for terms that the user may have changed. The salt comes from the invite.
+async function verify(device: Device, request: VerifyRequest) {
+  const { salt } = await readInvite(request.invite);
+  const parties = request.parties.map(p => AztecAddress.fromStringUnsafe(p));
+  for (const p of parties) {
+    if (!(await p.isValid())) throw new Error(`invalid party address ${p}`);
+  }
+  return verifyAgreement(
+    device.registry,
+    device.address ?? NO_FROM,
+    metalex,
+    salt,
+    BigInt(request.expiry),
+    parties,
+    request.document,
+  );
 }
 
 async function route(method: string, path: string, body: any): Promise<unknown> {
@@ -202,6 +225,8 @@ async function route(method: string, path: string, body: any): Promise<unknown> 
     return {
       nodeUrl,
       registry: poc.registry.toString(),
+      // The block explorer of the network, for tx links. The local network has none.
+      explorerUrl: process.env.EXPLORER_URL,
       template: NDA_TEMPLATE,
       users: Object.entries(devices).map(([key, d]) => ({ key, name: d.name, address: d.address?.toString() })),
     };
@@ -214,11 +239,12 @@ async function route(method: string, path: string, body: any): Promise<unknown> 
     metalex.deleteExpiredDataKeys(Date.now());
     return {};
   }
-  const match = path.match(/^\/api\/device\/(alice|bob|auditor)\/(open|create|sign|agreements)$/);
+  const match = path.match(/^\/api\/device\/(alice|bob|auditor)\/(open|create|sign|agreements|verify)$/);
   if (!match) throw new Error(`no route ${method} ${path}`);
   const device = devices[match[1]];
   const action = match[2];
   if (action === 'open') return serial(() => open(device, body.invite));
+  if (action === 'verify') return serial(() => verify(device, body));
   if (!device.address) throw new Error(`${device.name} has no account`);
   if (action === 'create') return serial(() => create(device, body));
   if (action === 'sign') return serial(() => sign(device, body.invite));

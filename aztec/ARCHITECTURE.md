@@ -336,6 +336,21 @@ agreement fails. The withdraw tx has 2 nullifiers (the tx nullifier and the auth
 logs. It does not show the agreement or the parties. The fee payer is visible. A withdrawn consent cannot be given
 again for the same agreement id. The parties make a new agreement with a new salt.
 
+### Proof for an auditor
+
+A holder of the invite can check two proofs that the parties signed the exact terms. Any change to a party address,
+the expiry or one byte of the document gives another agreement id, and both proofs fail.
+
+| Path | What it shows | Data the auditor needs | Trust that remains |
+|---|---|---|---|
+| 1, chain | The registry recorded the agreement id as finalized. Only `finalize` creates that nullifier, after it checks each authwit. | Invite (salt, expiry, parties), document, registry address, a node | The registry code, the Aztec proof system, the node's answer |
+| 2, signatures | Each party's authwit is a valid Schnorr signature over the authwit message hash `H(registry, chain id, version, consent hash)`, by a key that the party address commits to. | Path 1 data without the node, plus each party's evidence: the authwit, the signing public key and the account preimage | None of the above. Under the rule "an address signs, so its owner signs", this is a portable signature. |
+
+Each party's device stores its evidence in the vault when it signs, encrypted with the document key at
+`HKDF(salt, "metalex.evidence.locator.v1:" + address)`. The evidence holds only the authwit and public account data.
+With it, a holder can show the signature to a third party, and can link the address to its signing key. So each
+account must have its own signing key.
+
 ## Mapping from the Solidity registry
 
 Each row compares one concept. "Today" is `src/CyberAgreementRegistry.sol`. "Proposed" is this PoC.
@@ -388,6 +403,7 @@ salt, the terms or the document text.
 - The webapp encrypts the document with the document key and uploads it at the vault locator.
 - The vault cannot compute the agreement id, because it does not have the salt.
 - The vault is also the backup of the legal text. A party needs the text to know what it signed.
+- The vault keeps each party's signature evidence (see [Proof for an auditor](#proof-for-an-auditor)).
 - The vault also delivers private notes. A contract that makes a note sends its message offchain
   (`MessageDelivery::offchain` in aztec-nr), not as an onchain log. The PXE that sends the tx gives each message to
   the vault. The vault keeps it for its recipient: the note owner, and each other recipient that the contract names
@@ -915,4 +931,8 @@ Notes:
 - The Aztec account docs do not describe a third party (the settler) that checks the authwit of another account.
   The local network run shows that it works with the initializerless Schnorr account. Aztec Labs must confirm that
   this is a supported pattern.
+- Per-deal accounts: a new account and signing key for each agreement stop chain observers and evidence holders
+  from linking a party's deals. Repeated names in the documents, MetaLeX (login, collector, access list) and identity
+  attestations still link them. Each party then holds one key per deal (derive them from one master secret) and must
+  send a fresh address before each draft. Design item.
 - No need to store "globalValues" and "partyValues" as string arrays in the canonical JSON. That was a legacy structure to fit EVM; we no longer subject to such limitation and a JSON can have dynamic structures. Find a more native way of storing the info

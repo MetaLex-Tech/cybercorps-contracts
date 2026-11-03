@@ -32,7 +32,12 @@ export default defineConfig({
     command: 'node app/server.ts',
     cwd: '..',
     url: `${appUrl}/api/state`,
-    env: { AZTEC_NODE_URL: process.env.AZTEC_NODE_URL ?? 'http://localhost:8090', PORT: port },
+    // The local network has no explorer. A fixed base URL lets the journey check the tx link format.
+    env: {
+      AZTEC_NODE_URL: process.env.AZTEC_NODE_URL ?? 'http://localhost:8090',
+      PORT: port,
+      EXPLORER_URL: 'https://explorer.invalid',
+    },
     reuseExistingServer: true,
     timeout: 5 * 60_000,
   },

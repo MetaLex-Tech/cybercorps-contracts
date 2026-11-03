@@ -121,6 +121,12 @@ test('two parties sign, MetaLeX finalizes, an auditor and a new device open the 
     expect(effect.privateLogs.length + effect.publicLogs.length).toBe(0);
     const tx = (await node.getTxByHash(TxHash.fromString(txHash)))!;
     expect(tx.data.feePayer.toString()).toBe(view.fpc);
+
+    // The parties and MetaLeX get a link to the one finalize tx.
+    const href = `https://explorer.invalid/tx-effects/${txHash}`;
+    await expect(rowOf(metalex, 'collector', agreementId).locator(`a[href="${href}"]`)).toBeVisible();
+    await bob.reload();
+    await expect(bob.locator(`#finalized a[href="${href}"]`)).toBeVisible();
   });
 
   await test.step('the auditor opens the invite link and sees "finalized"', async () => {
@@ -132,6 +138,33 @@ test('two parties sign, MetaLeX finalizes, an auditor and a new device open the 
     await expect(agreement.locator('.doc')).toContainText('Bob LLC');
     await expect(agreement.getByRole('button', { name: 'Sign' })).toHaveCount(0);
     await shot(auditor, 'auditor-sees-finalized');
+
+    const verdict = auditor.locator('#verify-result .verdict');
+    const signed = 'These are the exact terms that the parties signed';
+    const notSigned = 'These terms were not signed and finalized';
+    await expect(verdict).toContainText(signed, long);
+    await expect(auditor.locator('#verify-result')).not.toContainText('✗');
+    await shot(auditor, 'auditor-verifies-both-proofs');
+
+    const clause = auditor.getByLabel('Clause 8');
+    await clause.fill((await clause.inputValue()).replace('2 years', '1 year'));
+    await expect(verdict).toContainText(notSigned, long);
+    await expect(auditor.locator('#verify-result')).toContainText('✗ finalized nullifier');
+    await expect(auditor.locator('#verify-result')).toContainText('✗ signature over these terms');
+    await shot(auditor, 'auditor-changes-a-clause');
+
+    const reset = auditor.getByRole('button', { name: 'Reset to the invite' });
+    await reset.click();
+    await expect(verdict).toContainText(signed, long);
+
+    await auditor.getByLabel('Expiry (Unix seconds, 0 = none)').fill('1');
+    await expect(verdict).toContainText(notSigned, long);
+    await reset.click();
+    await expect(verdict).toContainText(signed, long);
+
+    await auditor.getByLabel(/^Party 2 address/).fill(await auditor.getByLabel(/^Party 1 address/).inputValue());
+    await expect(verdict).toContainText(notSigned, long);
+    await shot(auditor, 'auditor-changes-a-party');
   });
 
   const bobNewDevice = await device(browser);
