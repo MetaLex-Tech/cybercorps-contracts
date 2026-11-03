@@ -85,3 +85,6 @@ section h2 { font-weight: 650; }
 .role h1 { font-weight: 700; }
 nav a.active { background: var(--ink); color: #fff; }
 details summary { cursor: pointer; font-weight: 600; }
+.spinner { display: inline-block; width: 12px; height: 12px; margin-left: 6px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }

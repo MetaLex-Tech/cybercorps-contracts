@@ -60,6 +60,11 @@ function TxLink({ hash, explorerUrl }: { hash: string; explorerUrl?: string }) {
   );
 }
 
+// Shows that work is still running.
+function Spinner() {
+  return <span className="spinner" role="status" aria-label="In progress" />;
+}
+
 function Status({ view }: { view: Pick<AgreementView, 'finalized' | 'signers'> }) {
   if (view.finalized) return <span className="status finalized">Finalized</span>;
   if (view.signers?.settlement?.status === 'failed') return <span className="status failed">Settlement failed</span>;
@@ -199,11 +204,15 @@ function AgreementSection({ device, invite, onChange }: { device: Device; invite
     progress = (
       <p className="callout" id="sent">
         MetaLeX sent the finalize transaction: <TxLink hash={settlement.txHash} explorerUrl={explorerUrl} />. Status:{' '}
-        {tx?.status ?? 'pending'}. Waiting for a block.
+        {tx?.status ?? 'pending'}. Waiting for a block. <Spinner />
       </p>
     );
   } else if (signers && signers.pending.length === 0) {
-    progress = <p className="callout">All parties signed. MetaLeX is sending the finalize transaction.</p>;
+    progress = (
+      <p className="callout">
+        All parties signed. MetaLeX is sending the finalize transaction. <Spinner />
+      </p>
+    );
   } else if (signers) {
     progress = <p className="callout">Waiting for: {signers.pending.map(nameOf).join(', ')}</p>;
   }

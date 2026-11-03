@@ -14,6 +14,7 @@ import { poseidon2Hash } from '@aztec-labs/foundation/crypto/poseidon';
 import { Schnorr, SchnorrSignature } from '@aztec-labs/foundation/crypto/schnorr';
 import { SchnorrInitializerlessAccountContract } from '@aztec-labs/noir-contracts.js/SchnorrInitializerlessAccount';
 import { computeContractAddressFromInstance } from '@aztec-labs/stdlib/contract';
+import { openTmpStore } from '@aztec-labs/kv-store/sqlite-opfs';
 import { EmbeddedWallet } from '@aztec-labs/wallets/embedded';
 import { CyberAgreementRegistryContract } from '../artifacts/CyberAgreementRegistry';
 import {
@@ -95,7 +96,13 @@ async function startDevice(role: Role) {
   const config = await getConfig();
   const nodeClientOptions = config.maxBatchSize ? { maxBatchSize: config.maxBatchSize } : {};
   const node = createAztecNodeClient(config.nodeUrl, nodeClientOptions);
-  const wallet = await EmbeddedWallet.create(config.nodeUrl, { ephemeral: true, nodeClientOptions });
+  // Each tab gets its own in-memory PXE store. The default store is named after the chain only, so a second tab of
+  // this origin (Alice and Bob) could not open it. The keys stay in localStorage, so nothing is lost on reload.
+  const wallet = await EmbeddedWallet.create(config.nodeUrl, {
+    ephemeral: true,
+    nodeClientOptions,
+    pxe: { store: await openTmpStore(true) },
+  });
   const registryAddress = AztecAddress.fromStringUnsafe(config.registry);
   const instance = await node.getContract(registryAddress);
   if (!instance) throw new Error(`no registry at ${registryAddress}`);
