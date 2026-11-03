@@ -167,7 +167,15 @@ async function signAgreement(device: Device, salt: Fr, agreementId: Fr, agreemen
   });
 }
 
-export type Draft = { effectiveDate: string; myName: string; counterparty: string; theirName: string; expiry: string };
+export type Draft = {
+  title: string;
+  clauses: string[];
+  effectiveDate: string;
+  myName: string;
+  counterparty: string;
+  theirName: string;
+  expiry: string;
+};
 
 // Draft, encrypt, upload and sign a new agreement. Only this device sees the salt and the document in plaintext.
 export function createAgreement(device: Device, draft: Draft) {
@@ -176,10 +184,14 @@ export function createAgreement(device: Device, draft: Draft) {
     const counterparty = AztecAddress.fromStringUnsafe(draft.counterparty);
     if (!(await counterparty.isValid())) throw new Error(`invalid party address ${counterparty}`);
     const parties = [me, counterparty];
-    const document = documentOf(draft.effectiveDate, [
-      [me.toString(), draft.myName],
-      [counterparty.toString(), draft.theirName],
-    ]);
+    const document = documentOf(
+      draft.effectiveDate,
+      [
+        [me.toString(), draft.myName],
+        [counterparty.toString(), draft.theirName],
+      ],
+      { title: draft.title, text: draft.clauses },
+    );
     const expiry = draft.expiry ? BigInt(Math.floor(new Date(draft.expiry).getTime() / 1000)) : 0n;
     const salt = Fr.random();
     const { agreement, agreementId } = await agreementIdOf(device, document, salt, expiry, parties);

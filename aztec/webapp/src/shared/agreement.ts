@@ -16,9 +16,14 @@ export type AgreementDocument = {
   partyValues: [string, string[]][];
 };
 
-export function documentOf(effectiveDate: string, parties: [string, string][]): AgreementDocument {
+// The user can change the template's title and clauses. The document holds the text as signed.
+export function documentOf(
+  effectiveDate: string,
+  parties: [string, string][],
+  terms: { title: string; text: string[] } = NDA_TEMPLATE,
+): AgreementDocument {
   return {
-    template: NDA_TEMPLATE,
+    template: { ...NDA_TEMPLATE, title: terms.title, text: terms.text },
     globalValues: [effectiveDate],
     partyValues: parties.map(([address, name]) => [address, [name]]),
   };

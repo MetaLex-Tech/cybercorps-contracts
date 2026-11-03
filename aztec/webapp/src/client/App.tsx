@@ -114,8 +114,8 @@ function DocumentText({ doc }: { doc: AgreementDocument }) {
         .
       </p>
       <ol>
-        {doc.template.text.map(clause => (
-          <li key={clause}>{clause}</li>
+        {doc.template.text.map((clause, i) => (
+          <li key={i}>{clause}</li>
         ))}
       </ol>
     </div>
@@ -372,6 +372,12 @@ function SavedInvites({ role, version }: { role: Role; version: number }) {
 function DraftSection({ device, onCreated }: { device: Device; onCreated: () => void }) {
   const [draft, setDraft] = useState<Draft>();
   const [result, setResult] = useState<{ invite: string; agreementId: string }>();
+  // The last draft, so that "Edit" returns to the values that the user typed.
+  const [last, setLast] = useState<Draft>();
+  const [title, setTitle] = useState(device.config.template.title);
+  const nextId = useRef(0);
+  const clauseOf = (text: string) => ({ id: nextId.current++, text });
+  const [clauses, setClauses] = useState(() => device.config.template.text.map(clauseOf));
   // The counterparty is the Bob of this browser: the account that the Bob tab uses.
   const [bob, setBob] = useState<string>();
   const me = device.address!.toString();
@@ -412,7 +418,7 @@ function DraftSection({ device, onCreated }: { device: Device; onCreated: () => 
 
   if (draft) {
     const doc = {
-      template: device.config.template,
+      template: { ...device.config.template, title: draft.title, text: draft.clauses },
       globalValues: [draft.effectiveDate],
       partyValues: [
         [me, [draft.myName]],
@@ -438,7 +444,14 @@ function DraftSection({ device, onCreated }: { device: Device; onCreated: () => 
               onCreated();
             }}
           />
-          <button type="button" className="secondary" onClick={() => setDraft(undefined)}>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              setLast(draft);
+              setDraft(undefined);
+            }}
+          >
             Edit
           </button>
         </div>
@@ -450,6 +463,8 @@ function DraftSection({ device, onCreated }: { device: Device; onCreated: () => 
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     setDraft({
+      title: title.trim(),
+      clauses: clauses.map(c => c.text.trim()).filter(c => c.length > 0),
       effectiveDate: String(form.get('effectiveDate')),
       myName: String(form.get('myName')),
       counterparty: bob!,
@@ -459,19 +474,28 @@ function DraftSection({ device, onCreated }: { device: Device; onCreated: () => 
   };
   return (
     <section id="draft">
-      <h2>New {device.config.template.title}</h2>
+      <h2>New agreement</h2>
       <p className="muted">
-        The document, with the full legal text, stays on your device. MetaLeX gets it only as ciphertext in its document
-        vault.
+        Write any terms: the title and every clause. The document, with its full text, stays on your device. MetaLeX
+        gets it only as ciphertext in its document vault.
       </p>
       <form id="draft-form" onSubmit={submit}>
+        <label className="wide">
+          Title
+          <input name="title" value={title} onChange={e => setTitle(e.target.value)} required />
+        </label>
         <label>
           Effective date
-          <input name="effectiveDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
+          <input
+            name="effectiveDate"
+            type="date"
+            defaultValue={last?.effectiveDate ?? new Date().toISOString().slice(0, 10)}
+            required
+          />
         </label>
         <label>
           Your legal name
-          <input name="myName" defaultValue="Alice Corp" required />
+          <input name="myName" defaultValue={last?.myName ?? 'Alice Corp'} required />
         </label>
         <label>
           Counterparty
@@ -479,13 +503,42 @@ function DraftSection({ device, onCreated }: { device: Device; onCreated: () => 
         </label>
         <label>
           Counterparty legal name
-          <input name="theirName" defaultValue="Bob LLC" required />
+          <input name="theirName" defaultValue={last?.theirName ?? 'Bob LLC'} required />
         </label>
         <label>
           Expiry (optional)
-          <input name="expiry" type="datetime-local" />
+          <input name="expiry" type="datetime-local" defaultValue={last?.expiry} />
         </label>
       </form>
+      <div className="clauses" id="draft-clauses">
+        {clauses.map((clause, i) => (
+          <div className="clause" key={clause.id}>
+            <label>
+              Clause {i + 1}
+              <textarea
+                rows={2}
+                value={clause.text}
+                onChange={e =>
+                  setClauses(list => list.map(c => (c.id === clause.id ? { ...c, text: e.target.value } : c)))
+                }
+              />
+            </label>
+            <button
+              type="button"
+              className="secondary"
+              aria-label={`Remove clause ${i + 1}`}
+              onClick={() => setClauses(list => list.filter(c => c.id !== clause.id))}
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        <div>
+          <button type="button" className="secondary" onClick={() => setClauses(list => [...list, clauseOf('')])}>
+            Add clause
+          </button>
+        </div>
+      </div>
       <div className="actions">
         <button form="draft-form" disabled={!bob}>
           Review
