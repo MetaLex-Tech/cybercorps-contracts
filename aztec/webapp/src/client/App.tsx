@@ -780,7 +780,13 @@ function MetalexPage({ explorerUrl }: { explorerUrl?: string }) {
                   <td>
                     {!c.settlement && <span className="muted">Waiting for signatures</span>}
                     {c.settlement?.status === 'settling' && <span className="status pending">Sending finalize</span>}
-                    {c.settlement?.status === 'failed' && <span className="error">{c.settlement.error}</span>}
+                    {c.settlement?.status === 'failed' && (
+                      <>
+                        <span className="status failed">Settlement failed</span>
+                        <br />
+                        <span className="muted">{c.settlement.error}</span>
+                      </>
+                    )}
                     {c.settlement?.status === 'sent' && c.settlement.txHash && (
                       <>
                         <span className={`status ${c.onchain?.block ? 'finalized' : 'pending'}`}>

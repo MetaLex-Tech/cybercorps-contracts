@@ -62,11 +62,11 @@ APP_URL=http://localhost:3003 bun run journey
 2. In this folder, link a new project: `vercel link`. Pick your personal scope and "create a new project".
 3. Add a Neon Postgres database: Vercel dashboard > the project > Storage > Create Database > Neon. Connect it to
    the project. It sets `DATABASE_URL`.
-4. Apply the migrations to it once, from this folder: `vercel env pull .env.vercel`, then
-   `bunx drizzle-kit migrate` with that `DATABASE_URL`.
-5. Add the other variables of `.env.example` (Production and Preview): `vercel env add <NAME>`. Mark
+4. Add the other variables of `.env.example` (Production and Preview): `vercel env add <NAME>`. Mark
    `SETTLER_SIGNING_KEY` and `ENCRYPTION_KEY` as sensitive.
-6. Deploy: `vercel deploy --prod`.
+5. Deploy: `vercel deploy --prod`. On Vercel, the build command in `vercel.json` applies the migrations to
+   `DATABASE_URL` before it builds. The CLI cannot pull the Neon connection string (it is sensitive), so the build
+   does it.
 
 The settler runs in the app's function: about 120 MB with the Linux prover, under Vercel's 250 MB limit. Each
 `finalize` runs for about 15 to 30 s in the background, under the 300 s limit of the Hobby plan.

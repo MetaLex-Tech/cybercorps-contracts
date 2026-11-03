@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import react from '@vitejs/plugin-react';
@@ -35,6 +35,19 @@ function browserPolyfills(): Plugin {
   };
 }
 
+// Nitro writes each header rule as a Vercel route that ends the matching. So `/assets/*`, which has its own cache
+// rule, would not get the isolation headers, and the browser would block the wallet's workers. With `continue`,
+// each request gets the headers of every rule that matches it.
+function continueHeaderRoutes(outputDir: string) {
+  const file = join(outputDir, 'config.json');
+  if (!existsSync(file)) return;
+  const config = JSON.parse(readFileSync(file, 'utf8'));
+  for (const route of config.routes ?? []) {
+    if (route.headers && !route.dest && !route.handle) route.continue = true;
+  }
+  writeFileSync(file, JSON.stringify(config, null, 2));
+}
+
 const isolation = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -60,7 +73,17 @@ export default defineConfig({
         'pino*',
         'thread-stream*',
       ],
-      hooks: { compiled: nitro => pruneBb(nitro.options.output.serverDir) },
+      // A module adds this hook next to the preset's own `compiled` hook, which writes the Vercel config.
+      modules: [
+        {
+          setup: nitro => {
+            nitro.hooks.hook('compiled', () => {
+              pruneBb(nitro.options.output.serverDir);
+              continueHeaderRoutes(nitro.options.output.dir);
+            });
+          },
+        },
+      ],
       vercel: { functions: { maxDuration: 300 } },
     }),
     react(),
