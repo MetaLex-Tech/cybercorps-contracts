@@ -1,0 +1,49 @@
+{
+  "name": "aztec-agreements-webapp",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "NODE_ENV=production vite build",
+    "start": "NODE_ENV=production node .output/server/index.mjs",
+    "artifacts": "mkdir -p src/artifacts/json && cp ../target/agreement_registry_contract-CyberAgreementRegistry.json src/artifacts/json/ && aztec codegen src/artifacts/json -o src/artifacts -f && sed -i '' \"s#from 'json/#from './json/#\" src/artifacts/CyberAgreementRegistry.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "typecheck": "tsc --noEmit",
+    "journey": "playwright test -c journey/playwright.config.ts"
+  },
+  "dependencies": {
+    "@aztec-labs/accounts": "6.0.0",
+    "@aztec-labs/aztec.js": "6.0.0",
+    "@aztec-labs/foundation": "6.0.0",
+    "@aztec-labs/noir-contracts.js": "6.0.0",
+    "@aztec-labs/stdlib": "6.0.0",
+    "@aztec-labs/wallets": "6.0.0",
+    "@tanstack/react-router": "1.170.41",
+    "@tanstack/react-start": "1.168.60",
+    "@vercel/functions": "^2.2.0",
+    "drizzle-orm": "^0.44.2",
+    "pg": "^8.12.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "autoprefixer": "^10.4.20",
+    "drizzle-kit": "^0.31.4",
+    "nitro": "3.0.260903-beta",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.9",
+    "typescript": "^5.9.0",
+    "vite": "8.3.0",
+    "vite-plugin-node-polyfills": "^0.26.0"
+  }
+}

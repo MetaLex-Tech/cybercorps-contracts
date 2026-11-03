@@ -155,6 +155,15 @@
   parties, expiry and document and shows both results live. Local e2e 24 of 24 (test and env accounts, two runs
   each); journey 3 of 3 with change/reset checks; TXE 18 of 18. Not run on the testnet yet. Per-deal accounts added
   as an open item.
+- 2026-11-03 (user): Rewrote the web app on the cyberSign stack in `aztec/webapp/` (TanStack Start, Vite 8, Nitro
+  Vercel preset, Tailwind, Drizzle on Postgres; `pg` driver so Neon and local Postgres both work). The wallets and
+  PXEs run in the browser (keys in `localStorage`, restore by signing key). MetaLeX services persist in Postgres.
+  The settler runs in the server function (option 1): `waitUntil` + `NO_WAIT`, the browser polls; claims are a
+  single insert/update so one request wins; a `settling` row older than 5 min retries. bb.js, noir wasm and pino stay
+  external (they read files next to their own code); bb.js keeps only the build platform's binary. Linux function
+  116 MB. Journey: local network 1 of 1; Aztec testnet 1 of 1, two runs (54 s), finalize txs `0x0786d013…e3e3`
+  (block 16576, 6 nullifiers) and `0x2a1cd3a7…cc3c`. Old `scripts/app` and `scripts/journey` removed. Not deployed
+  to Vercel (needs the user's account); `waitUntil` on Vercel not yet observed.
 
 ## Validation
 

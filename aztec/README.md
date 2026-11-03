@@ -19,8 +19,7 @@ a party can open the agreement again without the invite.
 | `agreement_registry_test/src/lib.nr`           | TXE tests                                                                                                                               |
 | `scripts/poc.ts`                               | The parts that `e2e.ts` and the web app share: four wallets, the registry, and an in-memory MetaLeX vault, collector and data key store |
 | `scripts/e2e.ts`                               | Lifecycle checks on a local network                                                                                                     |
-| `scripts/app/`                                 | A local web app with one page for each role: Alice, Bob, auditor and MetaLeX                                                            |
-| `scripts/journey/`                             | Playwright journey that drives the web app and saves a screenshot for each step                                                         |
+| `webapp/` | The web app (TanStack Start, Postgres, Vercel) and its Playwright journey |
 | `scripts/deploy.ts`                            | Deploy script with a fixed salt (same address on every network)                                                                         |
 | `scripts/.env.example`                         | The env for a shared network: settler, Alice and Bob keys, registry address                                                             |
 
@@ -41,23 +40,8 @@ aztec start --local-network --port 8090
 cd scripts && npm install && AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
 ```
 
-Web app, with the local network running:
-
-```shell
-cd scripts && AZTEC_NODE_URL=http://localhost:8090 npm run app
-```
-
-Open http://localhost:8091/alice. The server runs the wallet and PXE of each user in place of the user's browser.
-Each role page is one user, because the PoC has no login.
-
-Web app journey, with the local network running. It starts the app on port 8091, or uses one that runs:
-
-```shell
-cd scripts && npx playwright install chromium && npm run journey
-```
-
-The screenshots go to `scripts/journey/test-results/`. To keep the journey off an app that already runs on 8091, set
-`JOURNEY_PORT` (for example `JOURNEY_PORT=8093 npm run journey`).
+Web app: see [webapp/README.md](webapp/README.md). It runs the wallets in the browser and MetaLeX on the server
+with Postgres, and deploys to Vercel.
 
 Testnet, or any shared network. Copy `scripts/.env.example` to `scripts/.env.testnet` (git ignores it) and fill
 in the keys that `aztec-wallet create-account` prints. The settler can be any account type. Alice and Bob must be
@@ -90,7 +74,9 @@ Status on 2026-11-02, uncommitted, branch `feat/aztec`:
 | Unit tests (TXE simulator)        | `aztec test`                                                                                                         | 18 of 18 pass                                                                                                                                                                                                                                                  |
 | Local network flow, test accounts | `node e2e.ts` on `aztec start --local-network`                                                                       | 24 of 24 checks pass, two runs                                                                                                                                                                                                                               |
 | Local network flow, env accounts  | `node --env-file=<env> e2e.ts`, keys from `aztec-wallet create-account`, registry from `deploy.ts`                   | 24 of 24 checks pass, two runs                                                                                                                                                                                                                               |
-| Web app journey                   | `npm run journey` (Playwright, Chromium) on `aztec start --local-network`                                            | 1 of 1 passes, three runs, with the auditor verify steps                                                                                                                                                                                                  |
+| Web app journey, local network | `APP_URL=http://localhost:3001 bun run journey` in `webapp/`, app built with `bun run build` and run with `.env.local` | 1 of 1 passes on 2026-11-03 (33 s) |
+| Web app journey, Aztec testnet | `APP_URL=http://localhost:3002 bun run journey` in `webapp/`, app run with `.env.testnet` (local Postgres, testnet node, settler `detoo`) | 1 of 1 passes, two runs on 2026-11-03 (54 s each). Finalize txs `0x0786d013834dfd0815422b3858fe7b16c52ebc2c8095347f2346fa70ae04e3e3` (block 16576, 6 nullifiers, no note hashes) and `0x2a1cd3a7d6ad18fc1378f4f4edb90eab1051c46afcce25afccc61697ed0bcc3c` |
+| Vercel build | `VERCEL=1 bun run build` in a Linux x64 container (`node:24-bookworm`) | Server function 116 MB with the Linux prover (limit 250 MB). Not deployed. |
 | Deploy script                     | `node --env-file=<env> deploy.ts` on the local network, settler from `aztec-wallet`                                  | Pass; the deployer address equals the `aztec-wallet` address                                                                                                                                                                                                   |
 | Aztec testnet deploy              | `node --env-file=.env.testnet deploy.ts`, node `https://aztec-testnet.drpc.org` 6.0.0, `AZTEC_NODE_MAX_BATCH_SIZE=3` | Pass on 2026-11-02, real client proof. Registry `0x18b41975b6265c16f1debf308070c866fad699802392c4e14f4a4597cc05ba38`, tx `0x08d31f3b3608e54533746345030fe350d6ab638fb54dc478cfa1903068198d41`, block 16480, mined (`checkpointed` at the second check)         |
 | Aztec testnet e2e                 | `node --env-file=.env.testnet e2e.ts`                                                                                | 22 of 22 checks pass on 2026-11-02, one run, about 1.5 minutes, real client proofs (2.3 to 2.8 s each). Finalize tx `0x240dd2db03e8521b18ef00d527564c3aa80590e733f7e68ad1146479ae18f17f`, block 16488: 6 nullifiers, no note hashes, no logs, FPC as fee payer |

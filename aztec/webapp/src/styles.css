@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --bg: #f6f5f1;
   --panel: #ffffff;
@@ -75,3 +79,9 @@ textarea { font: inherit; font-weight: 400; padding: 9px 10px; border: 1px solid
 .ok { color: var(--ok); font-weight: 700; }
 .bad { color: var(--bad); font-weight: 700; }
 ul.checks { margin: 0; padding-left: 18px; }
+.doc ol { list-style: decimal; }
+ul.checks { list-style: disc; }
+section h2 { font-weight: 650; }
+.role h1 { font-weight: 700; }
+nav a.active { background: var(--ink); color: #fff; }
+details summary { cursor: pointer; font-weight: 600; }
