@@ -101,6 +101,7 @@ test('two parties sign, MetaLeX finalizes, an auditor and a new device open the 
     await shown(bob, bob.getByText('MetaLeX is sending the finalize transaction'));
     await shot(bob, 'bob-signs');
     await shown(bob, bob.locator('#agreement .status', { hasText: 'Finalized' }));
+    await expect(rowOf(bob, 'mine', agreementId).locator('.status')).toHaveText('Finalized');
     await shot(bob, 'bob-sees-finalized');
   });
 

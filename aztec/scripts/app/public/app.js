@@ -119,6 +119,9 @@ function agreementHtml(view, me) {
   </section>`;
 }
 
+// The status that the agreement section shows. A change also refreshes "Your agreements".
+let shownStatus;
+
 // `view` is the result of a sign call. Without it, the device opens the invite again.
 async function renderAgreement(device, invite, view) {
   view ??= await api(`/api/device/${device}/open`, { invite });
@@ -126,6 +129,11 @@ async function renderAgreement(device, invite, view) {
   const me = userOf(device)?.address;
   const holder = document.getElementById('agreement-slot');
   holder.innerHTML = agreementHtml(view, me);
+  const status = statusOf(view);
+  if (shownStatus !== undefined && status !== shownStatus && document.getElementById('mine')) {
+    await renderMyAgreements(device);
+  }
+  shownStatus = status;
   document.getElementById('sign')?.addEventListener('click', e =>
     busy(e.target, 'Signing…', async () => {
       await renderAgreement(device, invite, await api(`/api/device/${device}/sign`, { invite }));
@@ -304,6 +312,7 @@ async function renderMetalex() {
 
 async function render() {
   clearTimeout(pollTimer);
+  shownStatus = undefined;
   for (const a of document.querySelectorAll('nav a')) {
     if (a.dataset.role === role) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');

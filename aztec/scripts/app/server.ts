@@ -31,10 +31,10 @@ const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javas
 const nodeUrl = process.env.AZTEC_NODE_URL ?? 'http://localhost:8080';
 const port = Number(process.env.PORT ?? 8091);
 
-console.log(`starting wallets and deploying the registry on ${nodeUrl}`);
+console.log(`starting wallets on ${nodeUrl}`);
 const poc = await startPoc(nodeUrl);
 const { metalex } = poc;
-console.log(`registry deployed at ${poc.registry}`);
+console.log(`registry at ${poc.registry}`);
 
 type Settlement = {
   status: 'settling' | 'finalized' | 'failed';

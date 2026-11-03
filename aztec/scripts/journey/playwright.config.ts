@@ -6,7 +6,9 @@ import { defineConfig } from '@playwright/test';
  *     aztec start --local-network --port 8090
  *     npm run journey
  */
-const appUrl = 'http://localhost:8091';
+// `JOURNEY_PORT` keeps the journey off a port that another app uses.
+const port = process.env.JOURNEY_PORT ?? '8091';
+const appUrl = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: '.',
@@ -30,7 +32,7 @@ export default defineConfig({
     command: 'node app/server.ts',
     cwd: '..',
     url: `${appUrl}/api/state`,
-    env: { AZTEC_NODE_URL: process.env.AZTEC_NODE_URL ?? 'http://localhost:8090', PORT: '8091' },
+    env: { AZTEC_NODE_URL: process.env.AZTEC_NODE_URL ?? 'http://localhost:8090', PORT: port },
     reuseExistingServer: true,
     timeout: 5 * 60_000,
   },

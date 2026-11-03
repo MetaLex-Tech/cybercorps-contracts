@@ -56,7 +56,8 @@ Web app journey, with the local network running. It starts the app on port 8091,
 cd scripts && npx playwright install chromium && npm run journey
 ```
 
-The screenshots go to `scripts/journey/test-results/`.
+The screenshots go to `scripts/journey/test-results/`. To keep the journey off an app that already runs on 8091, set
+`JOURNEY_PORT` (for example `JOURNEY_PORT=8093 npm run journey`).
 
 Testnet, or any shared network. Copy `scripts/.env.example` to `scripts/.env.testnet` (git ignores it) and fill
 in the keys that `aztec-wallet create-account` prints. The settler can be any account type. Alice and Bob must be
