@@ -5,18 +5,17 @@
 
 import { Fr } from '@aztec-labs/aztec.js/fields';
 import { createAztecNodeClient, waitForNode } from '@aztec-labs/aztec.js/node';
-import { EmbeddedWallet } from '@aztec-labs/wallets/embedded';
 import { CyberAgreementRegistryContract } from './artifacts/CyberAgreementRegistry.ts';
-import { accountOf, keysFromEnv, sponsoredFpcIn } from './poc.ts';
+import { accountOf, keysFromEnv, nodeClientOptions, sponsoredFpcIn, walletAt } from './poc.ts';
 
 const REGISTRY_SALT = Fr.fromHexString('0x4d6574614c6558'); // "MetaLeX"
 
 async function main() {
   const nodeUrl = process.env.AZTEC_NODE_URL;
   if (!nodeUrl) throw new Error('AZTEC_NODE_URL is not set');
-  await waitForNode(createAztecNodeClient(nodeUrl));
+  await waitForNode(createAztecNodeClient(nodeUrl, nodeClientOptions()));
 
-  const wallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
+  const wallet = await walletAt(nodeUrl);
   const account = await accountOf(wallet, keysFromEnv('SETTLER'));
   const { address: fpc, fee } = await sponsoredFpcIn(wallet);
   console.log(`Configs: node=${nodeUrl} deployer=${account.address} fpc=${fpc} salt=${REGISTRY_SALT}`);

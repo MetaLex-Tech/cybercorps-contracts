@@ -218,6 +218,17 @@ export async function openInvite(
   return { agreement, agreementId: new Fr(id), document, locator, finalized: finalized as boolean };
 }
 
+// A node behind a free RPC plan can refuse large JSON-RPC batches. `AZTEC_NODE_MAX_BATCH_SIZE` caps each batch.
+export function nodeClientOptions() {
+  const maxBatchSize = process.env.AZTEC_NODE_MAX_BATCH_SIZE;
+  return maxBatchSize ? { maxBatchSize: Number(maxBatchSize) } : {};
+}
+
+// A wallet with its own PXE and in-memory stores.
+export function walletAt(nodeUrl: string) {
+  return EmbeddedWallet.create(nodeUrl, { ephemeral: true, nodeClientOptions: nodeClientOptions() });
+}
+
 type AccountType = 'schnorr' | 'schnorr_initializerless';
 
 // The keys that `aztec-wallet create-account` printed for an account.
@@ -272,14 +283,14 @@ async function registryInstanceAt(node: ReturnType<typeof createAztecNodeClient>
 // `ALICE_*`, `BOB_*`) and the registry is at `REGISTRY_ADDRESS`. Without it, the local network test accounts are
 // used and the settler deploys a new registry.
 export async function startPoc(nodeUrl: string) {
-  const node = createAztecNodeClient(nodeUrl);
+  const node = createAztecNodeClient(nodeUrl, nodeClientOptions());
   await waitForNode(node);
   const fromEnv = process.env.SETTLER_SIGNING_KEY !== undefined;
 
-  const aliceWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
-  const bobWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
-  const settlerWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
-  const auditorWallet = await EmbeddedWallet.create(nodeUrl, { ephemeral: true });
+  const aliceWallet = await walletAt(nodeUrl);
+  const bobWallet = await walletAt(nodeUrl);
+  const settlerWallet = await walletAt(nodeUrl);
+  const auditorWallet = await walletAt(nodeUrl);
 
   const [aliceKeys, bobKeys] = fromEnv
     ? [keysFromEnv('ALICE', 'schnorr_initializerless'), keysFromEnv('BOB', 'schnorr_initializerless')]

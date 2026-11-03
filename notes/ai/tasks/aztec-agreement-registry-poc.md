@@ -131,6 +131,17 @@
   `REGISTRY_ADDRESS`. Parties must be `schnorr_initializerless`. All fees use the SponsoredFPC (same address on the
   local network and the testnet). `deploy.ts` uses the settler and the FPC. Verified on the local network only;
   derived addresses equal the `aztec-wallet` addresses.
+- 2026-11-02 (user approved): Deployed the registry on the Aztec testnet (node `https://aztec-testnet.drpc.org`,
+  6.0.0, Sepolia L1) with the user's `detoo` schnorr account as settler and the SponsoredFPC as fee payer. Registry
+  `0x18b41975b6265c16f1debf308070c866fad699802392c4e14f4a4597cc05ba38` (same as the local universal deploy), tx
+  `0x08d31f3b3608e54533746345030fe350d6ab638fb54dc478cfa1903068198d41`, block 16480, status proposed, instance
+  published, real ClientIVC proof (4.7 s). The free dRPC plan refuses JSON-RPC batches above 3, so the scripts take
+  `AZTEC_NODE_MAX_BATCH_SIZE`. The deploy tx later showed `checkpointed`.
+- 2026-11-02 (user approved): Testnet e2e `node --env-file=.env.testnet e2e.ts`: 22 of 22 checks, one run, about
+  1.5 minutes, real ClientIVC proofs (2.3 to 2.8 s). Finalize tx
+  `0x240dd2db03e8521b18ef00d527564c3aa80590e733f7e68ad1146479ae18f17f` in block 16488 (6 nullifiers, no note
+  hashes, no logs, FPC fee payer). Second finalize and finalize after withdraw rejected by the node ("Existing
+  nullifier"). No independent review.
 
 ## Validation
 
