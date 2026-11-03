@@ -123,4 +123,5 @@ the salt.
 - During the retention period, the webapp gets the salt of each agreement of the user from the MetaLeX data key
   store, and the expiry and the parties from the collector. With these, the user opens the document from the vault
   and reads the status from the chain.
-- After the retention period, the user needs its own copy of the invite.
+- After the retention period, the data key store has no salt. The vault still keeps the encrypted document. The
+  user opens it with its own copy of the invite, or asks a counterparty to send the invite link again.

@@ -89,7 +89,7 @@ The legend explains the colors. See [PII: who can see what](#pii-who-can-see-wha
 | `CyberAgreementRegistry` contract | Aztec network                                     | Nullifiers only (private state)                                           | Nothing after the tx                                              |
 | User wallet and PXE               | User (browser embedded wallet or an Aztec wallet) | Account keys                                                              | What the user opens in it                                         |
 | MetaLeX webapp                    | MetaLeX (code), user (runtime)                    | The invites that the user keeps                                           | What the user opens in it                                         |
-| Template catalog                  | MetaLeX                                           | Public legal templates                                                    | Public data only                                                  |
+| Template catalog                  | MetaLeX                                           | Public legal templates. The webapp copies the full text into each document | Public data only                                                  |
 | Document vault                    | MetaLeX                                           | AES-256-GCM document blobs, keyed by a locator; encrypted note messages for each recipient | Locator, blob size, upload and fetch times                        |
 | Signature collector               | MetaLeX                                           | Onboarded account data, `Agreement` structs without salt, authwits        | Parties, expiry, agreement id, who signed and when                |
 | Settler                           | MetaLeX                                           | Its own account keys, the public signing keys of the party accounts       | The same as the collector, and the finalize status                |
@@ -152,8 +152,9 @@ a shared link does not give the invite to MetaLeX. A holder of the invite can re
 
 The webapp also gives the salt to the MetaLeX data key store. The store gives it back to a signed-in party, so the
 party can open the agreement on any device without the link. The webapp gets the expiry and the parties from the
-collector. The store deletes the salt at the end of the retention period. After that, the party needs its own copy
-of the invite. The PoC has an in-memory data key store in `scripts/e2e.ts`.
+collector. The store deletes the salt at the end of the retention period. The vault keeps the encrypted document.
+After that, a party opens the document with its own copy of the invite, or with a copy from another party. The PoC
+has an in-memory data key store in `scripts/poc.ts`.
 
 The webapp treats each party address in an invite as untrusted and checks that it is a valid address.
 
@@ -168,12 +169,13 @@ JSON string before it hashes it:
 - It writes strings and numbers as `JSON.stringify` does.
 
 The standard for this is RFC 8785, the JSON Canonicalization Scheme (JCS). The PoC function `canonicalJson` in
-`scripts/e2e.ts` gives the JCS output for strings, numbers, arrays and objects. A webapp in another language must use
+`scripts/poc.ts` gives the JCS output for strings, numbers, arrays and objects. A webapp in another language must use
 JCS. The same string is the plaintext of the vault blob, so a party decrypts the exact bytes that were hashed.
 
 The document holds:
 
-- `template`: the title, the URI and the field names, from the public catalog.
+- `template`: the title, the full legal text and the field names, copied from the public catalog. So the vault
+  blob is the whole agreement, and `terms_hash` commits to the exact text.
 - `globalValues`: the values of the fields that apply to the whole agreement.
 - `partyValues`: for each party address, the values of that party. These hold the PII.
 
@@ -185,10 +187,13 @@ Example document:
 ```json
 {
   "template": {
-    "title": "Mutual NDA",
-    "uri": "ipfs://example-template",
+    "title": "Mutual Non-Disclosure Agreement",
     "globalFields": ["effectiveDate"],
-    "partyFields": ["name"]
+    "partyFields": ["name"],
+    "text": [
+      "Purpose. The parties want to discuss a possible business relationship (the \"Purpose\"). ...",
+      "..."
+    ]
   },
   "globalValues": ["2026-11-01"],
   "partyValues": [
@@ -201,7 +206,7 @@ Example document:
 Its canonical JSON, which the webapp hashes:
 
 ```text
-{"globalValues":["2026-11-01"],"partyValues":[["<Alice address>",["Alice Corp"]],["<Bob address>",["Bob LLC"]]],"template":{"globalFields":["effectiveDate"],"partyFields":["name"],"title":"Mutual NDA","uri":"ipfs://example-template"}}
+{"globalValues":["2026-11-01"],"partyValues":[["<Alice address>",["Alice Corp"]],["<Bob address>",["Bob LLC"]]],"template":{"globalFields":["effectiveDate"],"partyFields":["name"],"text":["Purpose. ...","..."],"title":"Mutual Non-Disclosure Agreement"}}
 ```
 
 ### Secrets, keys and hashes
@@ -323,7 +328,7 @@ Each row compares one concept. "Today" is `src/CyberAgreementRegistry.sol`. "Pro
 
 | Concept                 | Today                                                                                   | Proposed                                                                                                                         |
 |-------------------------|-----------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
-| Template                | Today, stored onchain in `templates` (title, URI, field name arrays).                   | Proposed, an entry in the public MetaLeX catalog. The document includes it, and `terms_hash` commits to it.                      |
+| Template                | Today, stored onchain in `templates` (title, URI, field name arrays).                   | Proposed, an entry in the public MetaLeX catalog. The document includes its full text, and `terms_hash` commits to it.           |
 | Global and party values | Today, `string[]` arrays stored onchain.                                                | Proposed, fields in the encrypted document in the vault.                                                                         |
 | Parties                 | Today, `address[]` stored onchain, plus `agreementsForParty`.                           | Proposed, a fixed array in the circuit input, the invite and the collector. Nothing onchain.                                     |
 | Agreement id            | Today, `keccak256` over creator, template, values, parties, expiry.                     | Proposed, Poseidon2 over `terms_commitment`, expiry and parties. No creator role.                                                |
@@ -388,6 +393,8 @@ salt, the terms or the document text.
   retention period.
 - Each kind of unit has a retention period. The store deletes an agreement salt at the end of its period. After
   that, MetaLeX cannot read the agreement.
+- The end of the period deletes only the data key. The vault keeps the encrypted document. Each holder of the
+  invite can still fetch and decrypt it.
 - The store encrypts each data key with `ENCRYPTION_KEY`, with AES-256-GCM and a random IV, before it writes the
   row. `ENCRYPTION_KEY` decrypts all data keys. It is in a key management service (KMS), not in the database or the
   server environment. Only the store server role can ask the KMS to decrypt. The KMS logs each decrypt.
@@ -513,7 +520,8 @@ Notes:
 - The salt is the access key to the PII of one agreement. A holder of the invite sees the same data as a party.
   A party controls who gets the invite. Nobody can take back an invite after a party shares it.
 - MetaLeX can decrypt a vault blob only while the data key store keeps the salt. After the retention period, the
-  "data key store" column becomes "No" in each row. The collector, the settler and the vault never get the salt.
+  "data key store" column becomes "No" in each row. The vault still keeps the ciphertext for the parties. The
+  collector, the settler and the vault never get the salt.
 - MetaLeX runs both the vault and the collector. It can link a blob to an agreement by the IP and the time of the
   requests. This gives no plaintext.
 - The MetaLeX login (Privy) links an email to an address. So MetaLeX can link that person to each agreement,
@@ -869,8 +877,8 @@ Notes:
 - The settler works only with accounts whose authwit check reads no private state of the owner.
 - The vault must keep note messages available. A lost message makes its note unreadable. The storage durability
   of the vault is a design item.
-- The data key store keeps a salt only for the retention period. After that, a user who lost the invite cannot
-  open the document. The PoC has an in-memory store with a party-only rule and one retention period. The KMS, the
+- The data key store keeps a salt only for the retention period. After that, a user who lost the invite must get
+  it again from another party. The vault keeps the encrypted document. The PoC has an in-memory store with a party-only rule and one retention period. The KMS, the
   login check, the retention periods for each kind of unit and the rules for a cyberCorp or a group are design
   items.
 - The MetaLeX FPC with use limits is a design item. The PoC uses the test SponsoredFPC.

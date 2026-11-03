@@ -17,7 +17,10 @@ a party can open the agreement again without the invite.
 | `agreement_registry_contract/src/main.nr` | The `CyberAgreementRegistry` contract |
 | `agreement_registry_contract/src/agreement.nr` | `Agreement` struct, id, validation, consent hash, nullifiers |
 | `agreement_registry_test/src/lib.nr` | TXE tests |
-| `scripts/e2e.ts` | Lifecycle on a local network with four wallets, and an in-memory MetaLeX vault, collector and data key store |
+| `scripts/poc.ts` | The parts that `e2e.ts` and the web app share: four wallets, the registry, and an in-memory MetaLeX vault, collector and data key store |
+| `scripts/e2e.ts` | Lifecycle checks on a local network |
+| `scripts/app/` | A local web app with one page for each role: Alice, Bob, auditor and MetaLeX |
+| `scripts/journey/` | Playwright journey that drives the web app and saves a screenshot for each step |
 | `scripts/deploy.ts` | Deploy script with a fixed salt (same address on every network) |
 
 ## Commands
@@ -37,6 +40,23 @@ aztec start --local-network --port 8090
 cd scripts && npm install && AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
 ```
 
+Web app, with the local network running:
+
+```shell
+cd scripts && AZTEC_NODE_URL=http://localhost:8090 npm run app
+```
+
+Open http://localhost:8091/alice. The server runs the wallet and PXE of each user in place of the user's browser.
+Each role page is one user, because the PoC has no login.
+
+Web app journey, with the local network running. It starts the app on port 8091, or uses one that runs:
+
+```shell
+cd scripts && npx playwright install chromium && npm run journey
+```
+
+The screenshots go to `scripts/journey/test-results/`.
+
 Deploy:
 
 ```shell
@@ -53,7 +73,8 @@ Status on 2026-11-02, uncommitted, branch `feat/aztec`:
 | --- | --- | --- |
 | Compile | `aztec compile` | Pass. `finalize` has 6,617 gates (`aztec profile gates target`). |
 | Unit tests (TXE simulator) | `aztec test` | 13 of 13 pass |
-| Local network flow | `node e2e.ts` on `aztec start --local-network` | 19 of 19 checks pass |
+| Local network flow | `node e2e.ts` on `aztec start --local-network` | 20 of 20 checks pass |
+| Web app journey | `npm run journey` (Playwright, Chromium) on `aztec start --local-network` | 1 of 1 passes, three runs |
 | Deploy script | `node deploy.ts` on the local network with test account 2 | Pass |
 | Aztec mainnet | Not run | Not deployed |
 | Independent review | Not run | None |

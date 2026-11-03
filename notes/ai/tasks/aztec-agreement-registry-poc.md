@@ -39,6 +39,11 @@
   for one and two parties. Settler input has no salt. Auditor opens the document and reads "finalized".
 - Local network: Bob opens the agreement without the invite, with the salt from the data key store. The store
   refuses a non-party and has no salt after the retention period. Its row holds no plaintext salt.
+- Web app journey (Playwright): Alice drafts and signs; MetaLeX page shows no names and no salt; Bob opens the
+  invite and signs; MetaLeX finalizes (node: 6 nullifiers, no note hashes, no logs, FPC pays); the auditor sees
+  "finalized"; Bob on a new device opens it from the data key store; after the retention ends, his list is empty,
+  the vault still has the blob, and Bob opens the agreement with the invite link that Alice sends again.
+- Local network: after the retention period, the vault keeps the document and the invite opens it.
 
 ## Acceptance and current state
 
@@ -46,10 +51,13 @@
 - Contract compiles with Aztec 6.0.0: verified. `finalize` has 6,617 gates.
 - TXE tests: verified (13 of 13). The settler call gets the party scopes, because TXE accounts keep the signing
   key in a note.
-- Local network run with four separate wallets: verified (19 of 19 checks, 2026-11-02, three runs), fake proofs
+- Local network run with four separate wallets: verified (20 of 20 checks, 2026-11-02, three runs), fake proofs
   only. The data key store is in memory; its KMS key is a local random key and the login is the requester address.
 - Docs (`README.md`, `ARCHITECTURE.md`, `USER-FLOWS.md`): rewritten for the lifecycle. All five Mermaid diagrams
   render with mermaid-cli 12.1.0.
+- Web app (`aztec/scripts/app/`) and its Playwright journey: verified (1 of 1, three runs, 2026-11-02), fake proofs.
+  The server runs each user's wallet and PXE in place of the browser. User flow canvas from the journey
+  screenshots: https://claude.ai/artifact/J1aHLJzjShUcRE5HjikudE (private until shared).
 - Mainnet deployment: not done, no authority.
 
 ## Decisions and evidence
@@ -87,6 +95,13 @@
   keeps the encrypted note messages per recipient (owner, and `deliver_to` recipients) with retention. Onchain
   keeps note hashes and nullifiers only. Verified the API in aztec-nr v6.0.0 source (`note_message.nr`,
   `offchain_messages.nr`).
+- 2026-11-02 (user): Added a local web app and a Playwright journey, like the metalex-webapp cyberSign journeys.
+  The shared PoC code moved from `e2e.ts` to `scripts/poc.ts`. The app server, not the browser, runs the wallets:
+  a browser PXE needs a wasm bundle, and the PoC tests the flow, not the bundle.
+- 2026-11-02 (user): The document holds the full legal text of the template (no IPFS link), so the vault blob is
+  the whole agreement. The end of the retention period deletes only the data key; the vault keeps the encrypted
+  document for the parties. Invite links stay in the browser of each party (`localStorage`); an agreement opened
+  with a stored salt does not save a link on the device.
 
 ## Validation
 
@@ -94,7 +109,8 @@
 | --- | --- | --- |
 | Compile | `aztec compile` in `aztec/`, uncommitted on `fd9a1e65` | Passed |
 | TXE tests | `aztec test` | 13 passed; TXE cannot test rollup expiry rejection |
-| Local network | `aztec start --local-network --port 8090`, then `node e2e.ts` | 19 checks passed, three runs on 2026-11-02; `realProofs=false` |
+| Local network | `aztec start --local-network --port 8090`, then `node e2e.ts` | 20 checks passed, three runs on 2026-11-02; `realProofs=false` |
+| Web app journey | `npm run journey` in `aztec/scripts` (Playwright 1.61.0, Chromium) on the same local network | 1 passed, three runs on 2026-11-02; wallets run in the app server, not the browser |
 | Deploy script | `node deploy.ts` on the local network, test account 2 | Passed |
 
 ## Review and blockers

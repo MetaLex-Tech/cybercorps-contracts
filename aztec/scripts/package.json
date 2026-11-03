@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "e2e": "node e2e.ts",
-    "deploy": "node deploy.ts"
+    "deploy": "node deploy.ts",
+    "app": "node app/server.ts",
+    "journey": "playwright test -c journey/playwright.config.ts"
   },
   "dependencies": {
     "@aztec-labs/accounts": "6.0.0",
@@ -12,5 +14,8 @@
     "@aztec-labs/foundation": "6.0.0",
     "@aztec-labs/noir-contracts.js": "6.0.0",
     "@aztec-labs/wallets": "6.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.0"
   }
 }

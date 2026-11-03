@@ -2,3 +2,5 @@ target/
 codegenCache.json
 node_modules/
 scripts/artifacts/
+scripts/journey/test-results/
+scripts/journey/playwright-report/
