@@ -28,7 +28,6 @@ import {
   encodeInvite,
   encryptWithSalt,
   evidenceLocatorOf,
-  type Invite,
   type PublicAccount,
   termsHashOf,
 } from '../shared/agreement';
@@ -46,8 +45,6 @@ import {
 
 export type Role = 'alice' | 'bob' | 'auditor';
 export const ROLE_NAMES: Record<Role, string> = { alice: 'Alice', bob: 'Bob', auditor: 'Auditor' };
-
-type Config = Awaited<ReturnType<typeof getConfig>>;
 
 const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64');
 const fromBase64 = (text: string) => new Uint8Array(Buffer.from(text, 'base64'));
@@ -318,5 +315,3 @@ export function verifyTerms(device: Device, encoded: string, expiry: string, par
     return { agreementId: agreementId.toString(), finalized: finalized as boolean, signed, signatures };
   });
 }
-
-export type { Invite };
