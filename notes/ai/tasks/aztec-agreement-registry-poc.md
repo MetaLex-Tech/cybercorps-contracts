@@ -1,7 +1,7 @@
 # Task: Aztec private agreement registry PoC
 
 - **Status:** Ready for review (lifecycle redesign)
-- **Updated:** 2026-11-02 (local time)
+- **Updated:** 2026-11-04 (local time)
 - **Owner:** Claude Code session for the user (detoo)
 - **Collaborators / boundaries:** New files under `aztec/` only. No change to `src/`, `test/` or `script/`.
 - **Objective:** A minimal Aztec port of `CyberAgreementRegistry.createBoundContractAndSignFor`, privacy first,
@@ -41,6 +41,34 @@
     address commits to, over the authwit message hash of the recomputed agreement. Any change to a party address,
     the expiry or one byte of the document makes both proofs fail.
 
+## Invariants (BorgAuth and upgrade, 2026-11-04)
+
+14. The `BorgAuth` initializer gives `OWNER_ROLE` (99) to the first owner. A second initialize fails.
+15. Only an account with a role of `OWNER_ROLE` or higher can set a role. The owner can set any role on any
+    account, also on itself.
+16. `only_role(role, user)` passes only when the role of `user` is `role` or higher (99 > 98 > 97).
+17. Owner swap: the owner gives `OWNER_ROLE` to a new owner, then the new owner sets the old owner's role to 0.
+    After that, the old owner cannot set roles and cannot upgrade the registry.
+18. The registry keeps the auth address in its immutables hash, `poseidon2([auth])`. It has no initializer.
+19. `update_to(auth, new_class_id)` schedules the upgrade only when `auth` matches the immutables hash and the
+    caller has `OWNER_ROLE` in that auth contract.
+20. The registry has no function that changes the upgrade delay. The default delay stays in force.
+21. `finalize` and `withdraw_consent` keep their behavior (invariants 1 to 12). They make no public calls.
+
+## Acceptance tests (BorgAuth and upgrade)
+
+- TXE: the initial owner has role 99; a non-owner has role 0; a second initialize fails.
+- TXE: the owner sets admin (98) and privileged (97) roles; `only_role` passes for equal and higher roles and fails
+  for a lower role; a non-owner and an admin cannot set roles.
+- TXE: owner swap by grant and revoke; the old owner then fails `update_role` and `update_to`.
+- TXE: the owner calls `update_to` and it reaches `ContractInstanceRegistry.update`; a non-owner, an admin, and a
+  call with another auth address fail. The TXE does not publish contract classes, so the protocol registry rejects
+  the new class ("New contract class is not registered"). That message is the TXE evidence that the auth check
+  passed.
+- Local network (not done): deploy BorgAuth and the registry with the auth immutables hash, publish a new class,
+  `update_to` by the owner, and the new class runs after the default delay.
+- TXE: the 18 existing registry tests pass on a registry deployed with the auth immutables hash.
+
 ## Acceptance tests (lifecycle redesign)
 
 - TXE: two parties give authwits, a third account finalizes, `is_finalized` goes from false to true.
@@ -75,6 +103,9 @@
 - Web app (`aztec/scripts/app/`) and its Playwright journey: verified (1 of 1, three runs, 2026-11-02), fake proofs.
   The server runs each user's wallet and PXE in place of the browser. User flow canvas from the journey
   screenshots: https://claude.ai/artifact/J1aHLJzjShUcRE5HjikudE (private until shared).
+- BorgAuth and registry upgrade (2026-11-04): `contracts/borg_auth/src/main.nr` and `update_to` in the registry. TXE 32 of
+  32 (14 new). The scripts and the webapp still deploy the registry with immutables hash 0, so `update_to` fails for
+  those deployments. No local network run of an upgrade. No independent review.
 - Mainnet deployment: not done, no authority.
 
 ## Decisions and evidence
@@ -165,12 +196,24 @@
   (block 16576, 6 nullifiers) and `0x2a1cd3a7…cc3c`. Old `scripts/app` and `scripts/journey` removed. Not deployed
   to Vercel (needs the user's account); `waitUntil` on Vercel not yet observed.
 
+- 2026-11-04 (user): Implemented the BorgAuth design from the 2026-11-03 open item. `BorgAuth` keeps roles 99, 98
+  and 97 in public state, with `constructor(owner)`, owner-only `update_role`, and `only_role` / `user_role` views.
+  Owner swap is grant and revoke. Role adapters and the two-step transfer are not ported. The registry gets
+  `update_to(auth, new_class_id)`; the auth address is in the registry `immutables_hash` as `poseidon2([auth])`, so
+  the caller passes `auth` and the registry checks it. No `set_update_delay`. The auth package is `aztec/auth`
+  (Nargo package `borg_auth_contract`).
+- 2026-11-04 (user): Folder layout follows the Aztec monorepo (`aztec-labs-eng/aztec-node` v6.0.0,
+  `noir-contracts/contracts/app/*`): one crate for each contract under `aztec/contracts/` (`agreement_registry`,
+  `borg_auth`), TXE tests inside each crate (`mod test;`), cross-contract tests in the dependent crate (the
+  registry crate, like AMM with Token). The separate `aztec/test` crate (the `aztec new` scaffold shape) is removed.
+  Supersedes the "separate test crate" item of the 2026-11-02 docs cross-check. Package names are unchanged.
+
 ## Validation
 
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
 | Compile | `aztec compile` in `aztec/`, uncommitted on `fd9a1e65` | Passed |
-| TXE tests | `aztec test` | 18 passed (5 for withdraw); TXE cannot test rollup expiry rejection |
+| TXE tests | `aztec test`, uncommitted on `645598fe`, 2026-11-04, monorepo layout | 32 passed (24 registry, 8 BorgAuth) (5 for withdraw, 14 for BorgAuth and upgrade); TXE cannot test rollup expiry rejection or a real class upgrade |
 | Local network | `aztec start --local-network --port 8090`, then `node e2e.ts` | 22 checks passed, three runs on 2026-11-02, with test accounts and with env accounts; `realProofs=false` |
 | Web app journey | `npm run journey` in `aztec/scripts` (Playwright 1.61.0, Chromium) on the same local network | 1 passed, three runs on 2026-11-02; wallets run in the app server, not the browser |
 | Deploy script | `node deploy.ts` on the local network, test account 2 | Passed |

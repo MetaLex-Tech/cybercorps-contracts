@@ -1,3 +1,5 @@
+.DS_Store
+
 target/
 codegenCache.json
 node_modules/

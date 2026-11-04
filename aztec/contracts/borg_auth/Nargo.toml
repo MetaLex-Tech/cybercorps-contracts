@@ -1,7 +1,6 @@
 [package]
-name = "agreement_registry_test"
-type = "lib"
+name = "borg_auth_contract"
+type = "contract"
 
 [dependencies]
 aztec = { git="https://github.com/aztec-labs-eng/aztec-nr", tag="v6.0.0", directory="aztec" }
-agreement_registry_contract = { path = "../agreement_registry_contract" }

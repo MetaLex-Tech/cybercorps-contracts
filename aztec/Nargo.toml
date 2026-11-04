@@ -1,2 +1,2 @@
 [workspace]
-members = ["agreement_registry_contract", "agreement_registry_test"]
+members = ["contracts/agreement_registry", "contracts/borg_auth"]
