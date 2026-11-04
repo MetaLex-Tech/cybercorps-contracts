@@ -186,7 +186,7 @@ The document holds:
 - `partyValues`: for each party address, the values of that party. These hold the PII.
 
 The salt is not in the document. It is in the invite. The expiry is a field of `Agreement`. The value arrays are an
-open item (see [Limits and open items](#limits-and-open-items)).
+open item (see [Open items](#open-items)).
 
 Example document:
 
@@ -329,6 +329,11 @@ The number of nullifiers does not change with the number of parties. Each unused
 local network run measured 6 nullifiers for one party and for two parties. A copy of the contract without the
 padding gave 3 nullifiers for one party and 4 for two parties (local network, 2026-11-02). So the node shows the
 party count unless `finalize` pads it.
+
+The Aztec privacy docs say that note hashes, nullifiers and private logs "are padded to hide their true counts", but
+the tx effect that the node publishes shows the real count, as the test above shows. The padding follows the same
+page's advice to standardize tx fingerprints into privacy sets. With it, 1 and 2 parties also give the same fee and
+gas limits (local network, 2026-11-03).
 
 A party can withdraw its consent with `withdraw_consent(agreement)` before the finalize tx. The party sends this tx
 from its own account. It emits the authwit nullifier of the caller for that agreement, so a later `finalize` of the
@@ -905,32 +910,49 @@ Notes:
   agreement id and checks the finalized nullifier onchain.
 - The collector can link parties, because one agreement lists all of them.
 
-## Limits and open items
+## Limits
+
+What the design accepts today.
 
 - `MAX_PARTIES` is 4. More parties need more private calls in the finalize tx, or a commitment to the party list.
-- `withdraw_consent` follows the cancel pattern of the Aztec docs. The withdraw tx must be mined before the
-  finalize tx, because the sequencer decides the order of two pending txs. A party needs a fee payer to send it.
-  The webapp does not show a withdraw button yet.
+- The withdraw tx must be mined before the finalize tx, because the sequencer decides the order of two pending txs.
+  A party needs a fee payer to send it.
 - The settler works only with accounts whose authwit check reads no private state of the owner.
-- The vault must keep note messages available. A lost message makes its note unreadable. The storage durability
-  of the vault is a design item.
 - The data key store keeps a salt only for the retention period. After that, a user who lost the invite must get
-  it again from another party. The vault keeps the encrypted document. The PoC has an in-memory store with a
-  party-only rule and one retention period. The KMS, the login check, the retention periods for each kind of unit
-  and the rules for a cyberCorp or a group are design items.
-- The MetaLeX FPC with use limits is a design item. The PoC uses the test SponsoredFPC.
-- Counsel must confirm that an authwit is acceptable as an electronic signature. The PoC keeps no ECDSA signature
-  artifact.
-- The PoC is not deployed on Aztec mainnet. It has no independent review.
+  it again from another party. The vault keeps the encrypted document.
 - The Aztec docs say that the network is unaudited, that some circuits are under-constrained, and that the zk
   property is not yet secure. They say not to put real secrets on an Aztec network. So the PoC must not use real
   customer data on the testnet or on mainnet until Aztec removes this warning.
-- The Aztec docs say that the protocol pads the counts of note hashes, nullifiers and private logs. The tx effect
-  that the 6.0.0 local node gives does not show this: without our padding nullifiers, one party gave 3 nullifiers
-  and two parties gave 4. So `finalize` keeps its padding nullifiers.
-- The Aztec account docs do not describe a third party (the settler) that checks the authwit of another account.
-  The local network run shows that it works with the initializerless Schnorr account. Aztec Labs must confirm that
-  this is a supported pattern.
+- Every `finalize` has the same fingerprint (6 nullifiers, no notes, no logs, the same gas, the MetaLeX fee payer).
+  An observer can count MetaLeX finalizations and see their times, but not whose they are. Hiding the tx type needs
+  a fingerprint standard that many Aztec apps share; none exists yet.
+- The PoC keeps no ECDSA signature artifact. The proof of a signature is the authwit (see
+  [Proof for an auditor](#proof-for-an-auditor)).
+
+## Open items
+
+Work or decisions that are still to do.
+
+- Counsel must confirm that an authwit is acceptable as an electronic signature.
+- Independent review of the contract, then an Aztec mainnet deployment. The PoC runs on the local network and the
+  testnet only.
+- Aztec Labs must confirm that a third party (the settler) checking the authwit of another account is a supported
+  pattern. The Aztec account docs do not describe it. The local network and testnet runs show that it works with
+  the initializerless Schnorr account.
+- The registry cannot be upgraded: no function calls `ContractInstanceRegistry.update`. To match the EVM registry
+  (UUPS, upgrade gated to `OWNER_ROLE` in BorgAuth), add a BorgAuth-style auth contract on Aztec: roles in public
+  state, first owner set by its initializer, owner swap by grant and revoke. The registry keeps the auth contract's
+  address as an immutable (no initializer in the registry) and gets a public `update_to(new_class_id)` that asks the
+  auth contract for the owner role. Keep the default 1-day upgrade delay, so registry txs keep the default
+  expiration. Each new version must keep the nullifier formulas, and each PXE must register the new artifact.
+  Upgradeability weakens path 1 of the auditor proof (the code can change); path 2 is not affected. Design item;
+  invariants and TXE tests first, then an independent review.
+- The MetaLeX FPC with use limits. The PoC uses the test SponsoredFPC, which mainnet does not have.
+- The data key store in production: the KMS for `ENCRYPTION_KEY`, the login check, a retention period for each kind
+  of unit, and the rules for a cyberCorp or a group. The PoC has one retention period and a party-only rule.
+- The storage durability of the vault. When contracts make notes, the vault must keep their messages available: a
+  lost message makes its note unreadable.
+- A withdraw button in the web app. `withdraw_consent` exists in the contract and runs in `e2e.ts`.
 - Per-deal accounts: a new account and signing key for each agreement stop chain observers and evidence holders
   from linking a party's deals. Repeated names in the documents, MetaLeX (login, collector, access list) and identity
   attestations still link them. Each party then holds one key per deal (derive them from one master secret) and must

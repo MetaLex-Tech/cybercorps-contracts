@@ -181,5 +181,6 @@ No independent review. Real-proof run and mainnet deploy need a funded deployer 
 
 ## Next action and handoff
 
-User reviews the lifecycle design and docs. Open items are listed in `aztec/ARCHITECTURE.md` (consent withdrawal
+User reviews the lifecycle design and docs. Open items are listed in `aztec/ARCHITECTURE.md` (admin-gated
+upgrades with a BorgAuth-style auth contract, decided 2026-11-03 for later; consent withdrawal
 before finalize, data key store with ACL and retention periods, FPC use limits, value arrays).
