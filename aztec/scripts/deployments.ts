@@ -52,6 +52,12 @@ export const NETWORKS: Record<number, Network> = {
   },
   11155111: {
     name: 'Aztec testnet',
-    deployments: {},
+    deployments: {
+      'MetaLex-v1.0.0': {
+        root: '0x0e39c42dd2d5a1cc8a76173b7294c90a9540bda1cd957017699c1017ad0e0c70',
+        auth: '0x0970f8e12c8b3ff5dab4bb049b9802b85d313bf70f1cb8fcdef2ddb87eee0a9f',
+        registry: '0x14958bb6e18e19e04358b855e4c36805814b28a86a773625fdc645b30c060380',
+      },
+    },
   },
 };

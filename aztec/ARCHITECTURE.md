@@ -951,8 +951,8 @@ Work or decisions that are still to do.
   `update_to(auth, new_class_id)` checks `auth` against that hash, asks the auth contract for `APPROVE_UPGRADE`,
   and calls `ContractInstanceRegistry.update`. The default upgrade delay stays, so registry txs keep the default
   expiration. `scripts/deploy.ts` deploys and upgrades both contracts, and `poc.ts` uses the recorded registry.
-  The deployer stays the root on every network. Still to do: deploy on the testnet; the webapp still uses the old
-  testnet registry, which has immutables hash 0, so it cannot be upgraded; an independent review.
+  The deployer stays the root on every network. The testnet has the `MetaLex-v1.0.0` environment (2026-11-04),
+  and the webapp uses its registry. Still to do: an independent review.
   Each new version must keep the nullifier formulas, and each PXE must register the new artifact. Upgradeability
   weakens path 1 of the auditor proof (the code can change); path 2 is not affected.
 - TODO: test a real upgrade. The TXE tests (`contracts/borg_auth_v2/src/test.nr`,

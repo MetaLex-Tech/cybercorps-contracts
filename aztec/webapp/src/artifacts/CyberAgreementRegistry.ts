@@ -124,6 +124,9 @@ export class CyberAgreementRegistryContract extends ContractBase {
     /** terms_commitment_of(terms_hash: field, salt: field) */
     terms_commitment_of: ((terms_hash: FieldLike, salt: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** update_to(auth: struct, new_class_id: struct) */
+    update_to: ((auth: AztecAddressLike, new_class_id: WrappedFieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** withdraw_consent(agreement: struct) */
     withdraw_consent: ((agreement: { terms_commitment: FieldLike, expiry: (bigint | number), party_count: (bigint | number), parties: AztecAddressLike[] }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };

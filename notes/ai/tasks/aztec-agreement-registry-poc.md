@@ -289,6 +289,12 @@ root transfer, the permission check and the upgrade. The roles and the other per
   versioned, because no shared network had a v1 deployment. The record key `owner` is now `root`. The local record
   `MetaLex-v1.0.0-dev.0` was redeployed: BorgAuthV2 `0x168a…2fe2`, registry `0x0d8a…5218`.
 
+- 2026-11-04 (user): Deployed `MetaLex-v1.0.0` (the label of the upcoming production addresses) on the Aztec testnet
+  with `scripts/.env.testnet`: BorgAuthV2 `0x0970…0a9f`, registry `0x1495…0380`, root (deployer) `0x0e39…0c70`.
+  A second run sent no tx. The webapp `REGISTRY_ADDRESS` is now the testnet registry in `.env.testnet` and
+  `.env.example`, and the local `dev.0` registry in `.env.local`. The webapp artifact is regenerated from the
+  current build (class `0x028c…481f`). The old testnet registry `0x18b4…ba38` is no longer used.
+
 ## Validation
 
 | Check | Evidence and exact revision | Result / remaining limitation |
@@ -298,6 +304,7 @@ root transfer, the permission check and the upgrade. The roles and the other per
 | Local network | `aztec start --local-network --port 8090`, then `node e2e.ts` | 22 checks passed, three runs on 2026-11-02, with test accounts and with env accounts; `realProofs=false` |
 | Web app journey | `npm run journey` in `aztec/scripts` (Playwright 1.61.0, Chromium) on the same local network | 1 passed, three runs on 2026-11-02; wallets run in the app server, not the browser |
 | Deploy script | `node deploy.ts` on the local network, test account 2 | Passed |
+| Testnet, BorgAuthV2 | `node --env-file=.env.testnet deploy.ts` then `e2e.ts`, 2026-11-04, node `aztec-testnet.drpc.org` | Deploy passed, a rerun sent no tx; e2e 24 of 24 with real client proofs, finalize block 18758 |
 | Deploy script, BorgAuthV2 | `LOG_LEVEL=warn DEPLOY_SALT_LABEL=MetaLex-v1.0.0-dev.0 AZTEC_NODE_URL=http://localhost:8090 node deploy.ts` (and `--dry-run`), uncommitted on `e9602d19` | Fresh deploy, rerun with no tx, a temporary BorgAuthV2 build published and scheduled then pending, a temporary registry build published and scheduled through `require_permission`, both scheduled back after restore. Then `node e2e.ts`: 24 of 24, `all checks passed`. Not tested: a new class after the delay |
 
 ## Review and blockers
