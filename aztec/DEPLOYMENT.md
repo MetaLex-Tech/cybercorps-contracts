@@ -53,7 +53,8 @@ Use this procedure for a new network, or a new label on a network.
 3. Run `node --env-file=.env.testnet deploy.ts`. It writes the record into `NETWORKS[chainId].deployments` in
    `deployments.ts` and logs 🟢 `[record] wrote ...`.
 4. Run `deploy.ts` again. It must send no tx: each step line starts with ⚫️.
-5. Set `REGISTRY_ADDRESS` of the web app and of the scripts to the new registry address.
+5. Set `REGISTRY_ADDRESS` of the web app to the new registry address. The scripts read the registry from
+   `deployments.ts`.
 6. Commit `deployments.ts`.
 
 ## Registry upgrade

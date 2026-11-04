@@ -25,6 +25,7 @@ import { PublicKeys } from '@aztec-labs/stdlib/keys';
 import { EmbeddedWallet } from '@aztec-labs/wallets/embedded';
 import { createFundedInitializerlessAccounts } from '@aztec-labs/wallets/testing';
 import { CyberAgreementRegistryContract } from './artifacts/CyberAgreementRegistry.ts';
+import { NETWORKS } from './deployments.ts';
 
 export const MAX_PARTIES = 4;
 
@@ -400,17 +401,25 @@ export async function sponsoredFpcIn(...wallets: EmbeddedWallet[]) {
   return { address: fpc.address, fee: { paymentMethod: new SponsoredFeePaymentMethod(fpc.address) } };
 }
 
-async function registryInstanceAt(node: ReturnType<typeof createAztecNodeClient>, address: AztecAddress) {
-  const instance = await node.getContract(address);
-  if (!instance) throw new Error(`no contract instance at ${address}`);
+// The registry of the environment `DEPLOY_SALT_LABEL` on the network of `node`, as `deployments.ts` records it.
+// `deploy.ts` deploys and records it.
+async function recordedRegistryInstance(node: ReturnType<typeof createAztecNodeClient>) {
+  const label = envOf('DEPLOY_SALT_LABEL');
+  const { l1ChainId } = await node.getNodeInfo();
+  const recorded = NETWORKS[l1ChainId]?.deployments[label]?.registry;
+  if (!recorded) {
+    throw new Error(`deployments.ts has no registry for ${label} on L1 chain id ${l1ChainId}. Run deploy.ts first`);
+  }
+  const instance = await node.getContract(AztecAddress.fromStringUnsafe(recorded));
+  if (!instance) throw new Error(`no contract instance at ${recorded}`);
   return instance;
 }
 
 // Starts the four wallets and onboards Alice and Bob.
 //
 // With `SETTLER_SIGNING_KEY` set, for example on the testnet, the accounts come from the env (`SETTLER_*`,
-// `ALICE_*`, `BOB_*`) and the registry is at `REGISTRY_ADDRESS`. Without it, the local network test accounts are
-// used and the settler deploys a new registry.
+// `ALICE_*`, `BOB_*`). Without it, the local network test accounts are used. The registry is the one that
+// `deployments.ts` records for `DEPLOY_SALT_LABEL` on the network.
 export async function startPoc(nodeUrl: string) {
   const node = createAztecNodeClient(nodeUrl, nodeClientOptions());
   await waitForNode(node);
@@ -455,10 +464,8 @@ export async function startPoc(nodeUrl: string) {
   // On mainnet, MetaLeX runs its own fee payer. The parties need the FPC only to withdraw a consent.
   const sponsored = await sponsoredFpcIn(settlerWallet, aliceWallet, bobWallet);
 
-  // MetaLeX deploys the registry once (`deploy.ts` on a shared network). Any wallet can then register it.
-  const instance = fromEnv
-    ? await registryInstanceAt(node, AztecAddress.fromStringUnsafe(envOf('REGISTRY_ADDRESS')))
-    : (await CyberAgreementRegistryContract.deploy(settlerWallet).send({ from: settler })).instance;
+  // MetaLeX deploys the registry once with `deploy.ts`. Any wallet can then register it.
+  const instance = await recordedRegistryInstance(node);
   await settlerWallet.registerContract(instance, CyberAgreementRegistryContract.artifact);
   const registry = await CyberAgreementRegistryContract.at(instance.address, settlerWallet);
   const registryIn = async (wallet: EmbeddedWallet) => {

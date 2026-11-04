@@ -122,6 +122,11 @@
   wallet); (2) the dry run reports exactly whether the registry deploy publishes the class and whether a new
   environment needs an upgrade (checked on the local network with a temporary registry build). The scenario matrix
   is in `aztec/DEPLOYMENT.md`.
+- 2026-11-04 (user): The scripts read the registry from `deployments.ts` (`NETWORKS[l1ChainId].deployments[label]`
+  with `DEPLOY_SALT_LABEL`). `REGISTRY_ADDRESS` is removed from `scripts/.env.example`. `poc.ts` no longer deploys a
+  registry without BorgAuth on the local network: `deploy.ts` must run first. Local e2e: 24 of 24 checks against the
+  recorded `MetaLex-v1.0.0-dev.0` registry `0x11a5…7f95`; without the label, the run stops with
+  `DEPLOY_SALT_LABEL is not set`. The web app still reads its own `REGISTRY_ADDRESS`.
 
 ## Acceptance tests (lifecycle redesign)
 

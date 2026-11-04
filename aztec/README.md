@@ -42,7 +42,10 @@ Local network run, in two terminals:
 
 ```shell
 aztec start --local-network --port 8090
-cd scripts && npm install && AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
+cd scripts
+npm install
+DEPLOY_SALT_LABEL=MetaLex-v1.0.0-dev.0 AZTEC_NODE_URL=http://localhost:8090 node deploy.ts
+DEPLOY_SALT_LABEL=MetaLex-v1.0.0-dev.0 AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
 ```
 
 Web app: see [webapp/README.md](webapp/README.md). It runs the wallets in the browser and MetaLeX on the server
@@ -64,13 +67,14 @@ of contracts, so one network can hold staging and production. It deploys BorgAut
 registry class if it is missing, and schedules the registry upgrade if the registry runs another class. It logs the
 status of each item, and writes the deployment record into `deployments.ts` under its label. A shared network needs `DEPLOYER_SIGNING_KEY`. Only the local network can use the first test account as deployer.
 
-Put the registry address into `REGISTRY_ADDRESS` in `.env.testnet`, then:
+Then run the lifecycle checks:
 
 ```shell
 cd scripts && node --env-file=.env.testnet e2e.ts
 ```
 
-Without `SETTLER_SIGNING_KEY`, the scripts use the local network test accounts and deploy a new registry.
+The scripts use the registry that `deployments.ts` records for `DEPLOY_SALT_LABEL` on the network, so run
+`deploy.ts` first. Without `SETTLER_SIGNING_KEY`, the scripts use the local network test accounts.
 
 Networks for this PoC (Aztec docs, networks page): the testnet runs 6.0.0 at `https://aztec-testnet.drpc.org`, with
 the SponsoredFPC at `0x2d8fff82a3b0c15d0a89169e7d8d043e079ab94d52031f1de1e4972ebad169d3`. The testnet needs real

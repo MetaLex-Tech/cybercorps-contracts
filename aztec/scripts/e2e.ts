@@ -2,8 +2,11 @@
 // MetaLeX settler and an auditor. `MetaLeXServices` stands in for the MetaLeX document vault, signature collector and
 // data key store.
 //
-// Usage: AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
-//    or: node --env-file=.env.testnet e2e.ts (accounts and registry from the env, see `.env.example`)
+// Usage: DEPLOY_SALT_LABEL=MetaLex-v1.0.0-dev.0 AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
+//    or: node --env-file=.env.testnet e2e.ts (accounts from the env, see `.env.example`)
+//
+// The registry is the one that `deployments.ts` records for `DEPLOY_SALT_LABEL` on the network. Run `deploy.ts`
+// first.
 
 import { NO_FROM } from '@aztec-labs/aztec.js/account';
 import { Fr } from '@aztec-labs/aztec.js/fields';
