@@ -4,5 +4,5 @@ type = "contract"
 
 [dependencies]
 aztec = { git="https://github.com/aztec-labs-eng/aztec-nr", tag="v6.0.0", directory="aztec" }
-borg_auth_contract = { path = "../borg_auth" }
+borg_auth_v2_contract = { path = "../borg_auth_v2" }
 contract_instance_registry = { git="https://github.com/aztec-labs-eng/aztec-nr", tag="v6.0.0", directory="contract-instance-registry-interface" }

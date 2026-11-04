@@ -8,24 +8,24 @@
 // deploys it and writes the record here. A recorded address must equal the address that `deploy.ts` computes.
 
 export type Deployment = {
-  // The deployer account. It is also the BorgAuth owner, so it controls the registry upgrades.
-  owner?: string;
+  // The deployer account. It is also the BorgAuthV2 root, so it controls the upgrades.
+  root?: string;
   auth?: string;
   registry?: string;
 };
 
 // The first version of each contract. A contract address depends on the class that the contract was deployed with.
-// So a new network deploys these classes, and `deploy.ts` then upgrades the registry to the current build. Never
+// So a new network deploys these classes, and `deploy.ts` then upgrades each contract to the current build. Never
 // change a recorded artifact: each network would get other addresses. The files are copies of the compiler output.
 // See `DEPLOYMENT.md`, "New original artifacts".
 export const ORIGINAL_ARTIFACTS = {
   auth: {
-    path: 'res/BorgAuth.v1.json',
-    classId: '0x2fd993ee30e63a213a65c788cfbc5a14398377a8faf6aff3309c56b3bf2effa6',
+    path: 'res/BorgAuthV2.v1.json',
+    classId: '0x017af6dde76ac6d3db0e18ca3e935b41abf09ed5edc04199e6e97a9744d705b2',
   },
   registry: {
     path: 'res/CyberAgreementRegistry.v1.json',
-    classId: '0x2c6195f2af686c98de42be94ea60896e3ad37cf57437b70c343e96adfd920d73',
+    classId: '0x028c5742c14ca6edb0013d8143cd5c6fdacfc064041900d335ecb69446c3481f',
   },
 };
 
@@ -44,9 +44,9 @@ export const NETWORKS: Record<number, Network> = {
     name: 'local network',
     deployments: {
       'MetaLex-v1.0.0-dev.0': {
-        owner: '0x0e900d357d0a7b9de3c0293c6b1a58dccfc1862f31c745ba5d3a5a5aaf4ac1fd',
-        auth: '0x1673b63a1117306d0a8869069722dfb82ecc81d113409ad5a31c030c8d43b9d4',
-        registry: '0x11a58a84a6e705665a2bfad4872993aac7f95f5e9ed798daef46df6bf34f7f95',
+        root: '0x0e900d357d0a7b9de3c0293c6b1a58dccfc1862f31c745ba5d3a5a5aaf4ac1fd',
+        auth: '0x168a2c8d7e04ef9768f6ab9fd1d6b408c44fe296a21aabbe5c2159569fad2fe2',
+        registry: '0x0d8a32203b80c92b6c44f37a7e7cfcefb641590a6ce9cd80d43142ced6de5218',
       },
     },
   },

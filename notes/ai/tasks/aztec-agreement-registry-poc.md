@@ -41,46 +41,56 @@
     address commits to, over the authwit message hash of the recomputed agreement. Any change to a party address,
     the expiry or one byte of the document makes both proofs fail.
 
-## Invariants (BorgAuth and upgrade, 2026-11-04)
+## Invariants (BorgAuthV2 and upgrade, 2026-11-04)
 
-14. The `BorgAuth` initializer gives `OWNER_ROLE` (99) to the first owner. A second initialize fails.
-15. Only an account with a role of `OWNER_ROLE` or higher can set a role. The owner can set any role on any
-    account, also on itself.
-16. `only_role(role, user)` passes only when the role of `user` is `role` or higher (99 > 98 > 97).
-17. Owner swap: the owner gives `OWNER_ROLE` to a new owner, then the new owner sets the old owner's role to 0.
-    After that, the old owner cannot set roles and cannot upgrade the registry.
-18. The registry keeps the auth address in its immutables hash, `poseidon2([auth])`. It has no initializer.
-19. `update_to(auth, new_class_id)` schedules the upgrade only when `auth` matches the immutables hash and the
-    caller has `OWNER_ROLE` in that auth contract.
-20. The registry has no function that changes the upgrade delay. The default delay stays in force.
+BorgAuthV2 ports the minimal part of the EVM `BorgAuthV2` (branch `feat/borgauth-upgrade`): the root, the two-step
+root transfer, the permission check and the upgrade. The roles and the other permissions come later by upgrade.
+
+14. The `BorgAuthV2` initializer sets the root to its argument. A zero root fails. A second initialize fails.
+15. `has_permission(APPROVE_UPGRADE, account)` is true only for the root. Each other permission is false for each
+    account. `require_permission` fails when `has_permission` is false.
+16. Root transfer has two steps. Only the root can propose a nominee, and the nominee cannot be the root. A new
+    proposal replaces the old nominee, and a zero nominee cancels the proposal. Only the current nominee can
+    accept. Accept makes the nominee the root and clears the nominee. After that, the old root has no permission.
+17. `BorgAuthV2.update_to(new_class_id)` schedules its own upgrade only for an account with `APPROVE_UPGRADE`.
+18. Review rule (no test): each new BorgAuthV2 class keeps the storage variables in the same order and adds new
+    variables after them. It keeps `require_permission(Field, AztecAddress)` and the value of `APPROVE_UPGRADE`. A
+    class with no `update_to` and no other call to `ContractInstanceRegistry` cannot be upgraded again.
+19. The registry keeps the auth address in its immutables hash, `poseidon2([auth])`. It has no initializer.
+20. Registry `update_to(auth, new_class_id)` schedules the upgrade only when `auth` matches the immutables hash and
+    `auth` gives `APPROVE_UPGRADE` to the caller. Neither contract has a function that changes the upgrade delay.
 21. `finalize` and `withdraw_consent` keep their behavior (invariants 1 to 12). They make no public calls.
 
-## Acceptance tests (BorgAuth and upgrade)
+## Acceptance tests (BorgAuthV2 and upgrade)
 
-- TXE: the initial owner has role 99; a non-owner has role 0; a second initialize fails.
-- TXE: the owner sets admin (98) and privileged (97) roles; `only_role` passes for equal and higher roles and fails
-  for a lower role; a non-owner and an admin cannot set roles.
-- TXE: owner swap by grant and revoke; the old owner then fails `update_role` and `update_to`.
-- TXE: the owner calls `update_to` and it reaches `ContractInstanceRegistry.update`; a non-owner, an admin, and a
-  call with another auth address fail. The TXE does not publish contract classes, so the protocol registry rejects
-  the new class ("New contract class is not registered"). That message is the TXE evidence that the auth check
-  passed.
-- Local network (not done): deploy BorgAuth and the registry with the auth immutables hash, publish a new class,
-  `update_to` by the owner, and the new class runs after the default delay.
+- TXE: the initial root has `APPROVE_UPGRADE`; another account has not; an unknown permission is false for the
+  root; a zero root and a second initialize fail.
+- TXE: a non-root cannot propose; the root cannot nominate itself; a non-nominee cannot accept; a replaced
+  nominee and a cancelled nominee cannot accept; after accept, the new root has `APPROVE_UPGRADE` and the old root
+  has not.
+- TXE: the root calls `BorgAuthV2.update_to` and reaches `ContractInstanceRegistry.update`; a non-root and the old
+  root after a transfer fail.
+- TXE: the root calls the registry `update_to` and reaches `ContractInstanceRegistry.update`; a non-root, the old
+  root after a transfer, and a call with another auth address fail. The TXE does not publish contract classes, so
+  the protocol registry rejects the new class ("New contract class is not registered"). That message is the TXE
+  evidence that the auth check passed.
+- Local network: `deploy.ts` publishes a new class and schedules the upgrade of each contract. Not tested: the new
+  class runs after the default delay.
 - TXE: the 18 existing registry tests pass on a registry deployed with the auth immutables hash.
 
 ## Invariants (deploy script, 2026-11-04)
 
 22. `deploy.ts` picks the deployment record by the L1 chain id of the node. A chain without a record fails before
     any tx.
-23. The script computes each address from the recorded original artifact, the fixed salt, the deployer (the BorgAuth
-    owner) and a universal deploy. A recorded address that differs from the computed address fails before any tx.
+23. The script computes each address from the recorded original artifact, the fixed salt, the deployer (the
+    BorgAuthV2 root) and a universal deploy. A recorded address that differs from the computed address fails before any tx.
     A recorded artifact whose class id differs from its recorded class id fails before any tx.
-24. The deployer is the BorgAuth owner on every network (user, 2026-11-04: no handoff). A recorded owner that
+24. The deployer is the BorgAuthV2 root on every network (user, 2026-11-04: no handoff). A recorded root that
     differs from the deployer fails before any tx.
-25. The script sends a tx only when the chain needs it: BorgAuth deploy when it has no instance; registry deploy when
-    it has no instance; class publish when the current class is not registered; `update_to` when the registry class
-    is not the current class and no upgrade to the current class is scheduled.
+25. The script sends a tx only when the chain needs it: BorgAuthV2 deploy when it has no instance; registry deploy
+    when it has no instance; for each of the two contracts, class publish when the current class is not registered,
+    and `update_to` when the contract class is not the current class and no upgrade to the current class is
+    scheduled.
 26. A second run on the same chain state sends no tx. Each item logs one status: deployed, unchanged, published,
     scheduled (with the time of change), pending (with the time of change) or up to date.
 27. `--dry-run` sends no tx and logs what a real run would do.
@@ -162,9 +172,10 @@
 - Web app (`aztec/scripts/app/`) and its Playwright journey: verified (1 of 1, three runs, 2026-11-02), fake proofs.
   The server runs each user's wallet and PXE in place of the browser. User flow canvas from the journey
   screenshots: https://claude.ai/artifact/J1aHLJzjShUcRE5HjikudE (private until shared).
-- BorgAuth and registry upgrade (2026-11-04): `contracts/borg_auth/src/main.nr` and `update_to` in the registry. TXE 32 of
-  32 (14 new). The scripts and the webapp still deploy the registry with immutables hash 0, so `update_to` fails for
-  those deployments. No local network run of an upgrade. No independent review.
+- BorgAuthV2 and the upgrades (2026-11-04): `contracts/borg_auth_v2/src/main.nr` and `update_to` in the registry.
+  TXE 39 of 39 (21 for BorgAuthV2 and the upgrades). Local network: both contracts deploy, publish and schedule an
+  upgrade through `deploy.ts`. The webapp still uses the old testnet registry with immutables hash 0. No independent
+  review.
 - Mainnet deployment: not done, no authority.
 
 ## Decisions and evidence
@@ -267,15 +278,27 @@
   registry crate, like AMM with Token). The separate `aztec/test` crate (the `aztec new` scaffold shape) is removed.
   Supersedes the "separate test crate" item of the 2026-11-02 docs cross-check. Package names are unchanged.
 
+- 2026-11-04 (user): Port the EVM `BorgAuthV2` model (branch `feat/borgauth-upgrade`, not merged) and rename the
+  Aztec contract to `BorgAuthV2`. Only the minimal part for today: the root, the two-step root transfer
+  (`propose_root_transfer`, `accept_root_transfer`), `has_permission` / `require_permission` with one permission,
+  `APPROVE_UPGRADE` (value 1, root only), and `update_to` for BorgAuthV2 itself. Root alone approves an upgrade (no
+  approved-class check like the EVM factory). The user needs two properties: a later upgrade can match the EVM
+  features, and a later upgrade can stop all upgrades (a class without `update_to`). Storage order and
+  `require_permission` stay fixed for each later class. The numeric roles (99, 98, 97) are gone. The crate is
+  `contracts/borg_auth_v2` (package `borg_auth_v2_contract`). The v1 artifacts in `scripts/res/` were replaced, not
+  versioned, because no shared network had a v1 deployment. The record key `owner` is now `root`. The local record
+  `MetaLex-v1.0.0-dev.0` was redeployed: BorgAuthV2 `0x168a…2fe2`, registry `0x0d8a…5218`.
+
 ## Validation
 
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
 | Compile | `aztec compile` in `aztec/`, uncommitted on `fd9a1e65` | Passed |
-| TXE tests | `aztec test`, uncommitted on `645598fe`, 2026-11-04, monorepo layout | 32 passed (24 registry, 8 BorgAuth) (5 for withdraw, 14 for BorgAuth and upgrade); TXE cannot test rollup expiry rejection or a real class upgrade |
+| TXE tests | `aztec test`, uncommitted on `e9602d19`, 2026-11-04, BorgAuthV2 | 39 passed (24 registry, 15 BorgAuthV2) (6 registry upgrade); TXE cannot test rollup expiry rejection or a real class upgrade |
 | Local network | `aztec start --local-network --port 8090`, then `node e2e.ts` | 22 checks passed, three runs on 2026-11-02, with test accounts and with env accounts; `realProofs=false` |
 | Web app journey | `npm run journey` in `aztec/scripts` (Playwright 1.61.0, Chromium) on the same local network | 1 passed, three runs on 2026-11-02; wallets run in the app server, not the browser |
 | Deploy script | `node deploy.ts` on the local network, test account 2 | Passed |
+| Deploy script, BorgAuthV2 | `LOG_LEVEL=warn DEPLOY_SALT_LABEL=MetaLex-v1.0.0-dev.0 AZTEC_NODE_URL=http://localhost:8090 node deploy.ts` (and `--dry-run`), uncommitted on `e9602d19` | Fresh deploy, rerun with no tx, a temporary BorgAuthV2 build published and scheduled then pending, a temporary registry build published and scheduled through `require_permission`, both scheduled back after restore. Then `node e2e.ts`: 24 of 24, `all checks passed`. Not tested: a new class after the delay |
 
 ## Review and blockers
 

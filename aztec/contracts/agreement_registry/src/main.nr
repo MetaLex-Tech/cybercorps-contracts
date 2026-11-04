@@ -6,7 +6,7 @@ use aztec::macros::aztec;
 /// A private agreement registry. The chain keeps no agreement data. It keeps nullifiers only, and these do not show
 /// the agreement, the parties or the terms.
 ///
-/// The registry has no initializer. Its immutables hash is `poseidon2([auth])`, where `auth` is the `BorgAuth`
+/// The registry has no initializer. Its immutables hash is `poseidon2([auth])`, where `auth` is the `BorgAuthV2`
 /// contract that controls upgrades.
 #[aztec]
 pub contract CyberAgreementRegistry {
@@ -21,7 +21,7 @@ pub contract CyberAgreementRegistry {
             contract_class_id::ContractClassId, hash::poseidon2_hash, traits::ToField,
         },
     };
-    use borg_auth_contract::BorgAuth;
+    use borg_auth_v2_contract::BorgAuthV2;
     use contract_instance_registry::ContractInstanceRegistry;
     use crate::agreement::{
         Agreement, consent_hash, finalized_nullifier, MAX_PARTIES, padding_nullifier, terms_commitment,
@@ -66,7 +66,8 @@ pub contract CyberAgreementRegistry {
         self.context.push_nullifier_unsafe(compute_authwit_nullifier(signer, consent_hash(agreement.id(), signer)));
     }
 
-    /// Schedules an upgrade of this registry to `new_class_id`. Only an owner in `auth` can call it. The upgrade
+    /// Schedules an upgrade of this registry to `new_class_id`. Only an account with `APPROVE_UPGRADE` in `auth` can
+    /// call it. The upgrade
     /// takes effect after the default upgrade delay.
     ///
     /// Each new class must keep the nullifier formulas. Otherwise the finalized agreements and the withdrawn consents
@@ -78,7 +79,7 @@ pub contract CyberAgreementRegistry {
             get_contract_instance_immutables_hash_avm(self.address).unwrap(),
             "auth does not match the immutables hash",
         );
-        self.view(BorgAuth::at(auth).only_role(BorgAuth::OWNER_ROLE, self.msg_sender()));
+        self.view(BorgAuthV2::at(auth).require_permission(BorgAuthV2::APPROVE_UPGRADE, self.msg_sender()));
         self.call(ContractInstanceRegistry::at(CONTRACT_INSTANCE_REGISTRY_CONTRACT_ADDRESS).update(new_class_id));
     }
 

@@ -17,13 +17,13 @@ a party can open the agreement again without the invite.
 |------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
 | `contracts/agreement_registry/src/main.nr`     | The `CyberAgreementRegistry` contract                                                                                                   |
 | `contracts/agreement_registry/src/agreement.nr` | `Agreement` struct, id, validation, consent hash, nullifiers                                                                            |
-| `contracts/agreement_registry/src/test/`       | TXE tests: finalize, withdraw, upgrade; `utils.nr` deploys BorgAuth and the registry                                                    |
-| `contracts/borg_auth/src/main.nr`              | The `BorgAuth` contract: roles that authorize the registry upgrade                                                                      |
-| `contracts/borg_auth/src/test.nr`              | TXE tests for the roles                                                                                                                 |
+| `contracts/agreement_registry/src/test/`       | TXE tests: finalize, withdraw, upgrade; `utils.nr` deploys BorgAuthV2 and the registry                                                  |
+| `contracts/borg_auth_v2/src/main.nr`           | The `BorgAuthV2` contract: the root, who approves each upgrade. It can be upgraded                                                      |
+| `contracts/borg_auth_v2/src/test.nr`           | TXE tests for the permission, the root transfer and the upgrade                                                                         |
 | `scripts/poc.ts`                               | The parts that `e2e.ts` and the web app share: four wallets, the registry, and an in-memory MetaLeX vault, collector and data key store |
 | `scripts/e2e.ts`                               | Lifecycle checks on a local network                                                                                                     |
 | `webapp/` | The web app (TanStack Start, Postgres, Vercel) and its Playwright journey |
-| `scripts/deploy.ts`                            | Idempotent deploy and upgrade of BorgAuth and the registry. A second run sends no tx                                                    |
+| `scripts/deploy.ts`                            | Idempotent deploy and upgrade of BorgAuthV2 and the registry. A second run sends no tx                                                  |
 | `scripts/deployments.ts`                       | The recorded addresses of each network, the original artifacts and the salts                                                            |
 | `scripts/res/`                                 | The original artifacts. Each network deploys them, so it gets the same addresses                                                        |
 | `scripts/.env.example`                         | The env for a shared network: settler, Alice and Bob keys, registry address                                                             |
@@ -53,7 +53,7 @@ with Postgres, and deploys to Vercel.
 
 Testnet, or any shared network. Copy `scripts/.env.example` to `scripts/.env.testnet` (git ignores it) and fill
 in the keys that `aztec-wallet create-account` prints. The deployer and the settler can be any account type. Use two
-accounts: the deployer is the BorgAuth owner, and the settler key runs in the web app server. Alice and Bob must be
+accounts: the deployer is the BorgAuthV2 root, and the settler key runs in the web app server. Alice and Bob must be
 `schnorr_initializerless`, so that the settler can check their authwits. The SponsoredFPC pays each fee. Then run:
 
 ```shell
@@ -63,8 +63,8 @@ cd scripts && node --env-file=.env.testnet deploy.ts
 
 `deploy.ts` finds the network by its L1 chain id in `deployments.ts`, and the environment by `DEPLOY_SALT_LABEL`
 (`MetaLex-v1.0.0` for production, `MetaLex-v1.0.0-dev.0` for staging and development). Each label gives its own set
-of contracts, so one network can hold staging and production. It deploys BorgAuth and the registry if the environment does not have them, publishes the current
-registry class if it is missing, and schedules the registry upgrade if the registry runs another class. It logs the
+of contracts, so one network can hold staging and production. It deploys BorgAuthV2 and the registry if the environment does not have them. For each of the two contracts, it
+publishes the current class if it is missing, and schedules the upgrade if the contract runs another class. It logs the
 status of each item, and writes the deployment record into `deployments.ts` under its label. A shared network needs `DEPLOYER_SIGNING_KEY`. Only the local network can use the first test account as deployer.
 
 Then run the lifecycle checks:
@@ -88,7 +88,7 @@ Status on 2026-11-02, uncommitted, branch `feat/aztec`:
 | Check                             | Command                                                                                                              | Result                                                                                                                                                                                                                                                         |
 |-----------------------------------|----------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Compile                           | `aztec compile`                                                                                                      | Pass. `finalize` has 6,617 gates, `withdraw_consent` 5,245 (`aztec profile gates target`).                                                                                                                                                                     |
-| Unit tests (TXE simulator)        | `aztec test`                                                                                                         | 32 of 32 pass on 2026-11-04 (14 for `BorgAuth` and the upgrade)                                                                                                                                                                                              |
+| Unit tests (TXE simulator)        | `aztec test`                                                                                                         | 39 of 39 pass on 2026-11-04 (21 for `BorgAuthV2` and the upgrades)                                                                                                                                                                                                  |
 | Local network flow, test accounts | `node e2e.ts` on `aztec start --local-network`                                                                       | 24 of 24 checks pass, two runs                                                                                                                                                                                                                               |
 | Local network flow, env accounts  | `node --env-file=<env> e2e.ts`, keys from `aztec-wallet create-account`, registry from `deploy.ts`                   | 24 of 24 checks pass, two runs                                                                                                                                                                                                                               |
 | Web app journey, local network | `APP_URL=http://localhost:3001 bun run journey` in `webapp/`, app built with `bun run build` and run with `.env.local` | 1 of 1 passes on 2026-11-03 (33 s) |

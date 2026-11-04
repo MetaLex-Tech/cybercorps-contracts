@@ -47,7 +47,7 @@ flowchart LR
         end
         subgraph Public state
             FeeJuice[Public data tree<br/>FPC fee juice balance]
-            Auth[BorgAuth<br/>roles]
+            Auth[BorgAuthV2<br/>root]
         end
     end
     App --> PXE
@@ -61,7 +61,7 @@ flowchart LR
     PXE -->|read trees| Node
     Settler -. runs finalize locally .-> Registry
     Registry -. static call .-> Accounts
-    Registry -. update_to checks owner .-> Auth
+    Registry -. update_to checks APPROVE_UPGRADE .-> Auth
     Settler -. runs locally .-> FPC
     Settler -->|send tx| Node
     Node --> Sequencer
@@ -89,7 +89,7 @@ The legend explains the colors. See [PII: who can see what](#pii-who-can-see-wha
 | Component                         | Who runs it                                       | What it stores                                                            | What it can read                                                  |
 |-----------------------------------|---------------------------------------------------|---------------------------------------------------------------------------|-------------------------------------------------------------------|
 | `CyberAgreementRegistry` contract | Aztec network                                     | Nullifiers only (private state); the auth address in its `immutables_hash` | Nothing after the tx                                              |
-| `BorgAuth` contract               | Aztec network; MetaLeX deploys it                 | The role of each account (public state)                                   | Public data only                                                  |
+| `BorgAuthV2` contract             | Aztec network; MetaLeX deploys it                 | The root and the pending root (public state)                              | Public data only                                                  |
 | User wallet and PXE               | User (browser embedded wallet or an Aztec wallet) | Account keys                                                              | What the user opens in it                                         |
 | MetaLeX webapp                    | MetaLeX (code), user (runtime)                    | The invites that the user keeps                                           | What the user opens in it                                         |
 | Template catalog                  | MetaLeX                                           | Public legal templates. The webapp copies the full text into each document | Public data only                                                  |
@@ -379,7 +379,7 @@ Each row compares one concept. "Today" is `src/CyberAgreementRegistry.sol`. "Pro
 | Status                  | Today, `isFinalized` and `hasSigned` read storage.                                      | Proposed, the `is_finalized` utility asks the node for the finalized nullifier.                                                  |
 | Events                  | Today, public `ContractCreated`, `AgreementSigned` and `ContractFinalized` logs.        | Proposed, no events. A holder of the invite reads the status from the chain.                                                     |
 | Gas                     | Today, the signer or a relayer pays ETH.                                                | Proposed, the MetaLeX FPC pays the fee of the finalize tx.                                                                       |
-| Upgrade                 | Today, UUPS. `OWNER_ROLE` in `BorgAuth` authorizes the upgrade.                          | Proposed, `update_to` calls `ContractInstanceRegistry.update`. `OWNER_ROLE` in the Aztec `BorgAuth` authorizes it. The new class takes effect after the default upgrade delay. |
+| Upgrade                 | Today, UUPS. `OWNER_ROLE` in `BorgAuth` authorizes the upgrade.                          | Proposed, `update_to` calls `ContractInstanceRegistry.update`. `APPROVE_UPGRADE` in the Aztec `BorgAuthV2` authorizes it. The new class takes effect after the default upgrade delay. |
 
 Not in this PoC: void, open party slots, secret hash, finalizer, signer conditions, escrow signatures.
 
@@ -943,20 +943,23 @@ Work or decisions that are still to do.
 - Aztec Labs must confirm that a third party (the settler) checking the authwit of another account is a supported
   pattern. The Aztec account docs do not describe it. The local network and testnet runs show that it works with
   the initializerless Schnorr account.
-- The registry upgrade with `BorgAuth` (`contracts/borg_auth/src/main.nr`): the registry has no initializer, and its
-  `immutables_hash` is `poseidon2([auth])`. `update_to(auth, new_class_id)` checks `auth` against that hash, asks
-  the auth contract for `OWNER_ROLE`, and calls `ContractInstanceRegistry.update`. The default upgrade delay stays,
-  so registry txs keep the default expiration. The owner swaps owners by grant and revoke. BorgAuth role adapters
-  and the two-step ownership transfer are not ported. `scripts/deploy.ts` deploys BorgAuth and the registry and
-  upgrades the registry. The deployer stays the owner on every network. Still to do: deploy on the testnet (the old
-  testnet registry has immutables hash 0, so it cannot be upgraded); `poc.ts` and the webapp still deploy or use a
-  registry without BorgAuth; an independent review.
+- The upgrades with `BorgAuthV2` (`contracts/borg_auth_v2/src/main.nr`). It ports the minimal part of the EVM
+  `BorgAuthV2` (branch `feat/borgauth-upgrade`, not merged): the root, the two-step root transfer, and one
+  permission, `APPROVE_UPGRADE`, that only the root holds. The roles and the other permissions of the EVM contract
+  come later by an upgrade of BorgAuthV2. To stop all upgrades of BorgAuthV2, upgrade it to a class that has no
+  `update_to`. The registry has no initializer, and its `immutables_hash` is `poseidon2([auth])`.
+  `update_to(auth, new_class_id)` checks `auth` against that hash, asks the auth contract for `APPROVE_UPGRADE`,
+  and calls `ContractInstanceRegistry.update`. The default upgrade delay stays, so registry txs keep the default
+  expiration. `scripts/deploy.ts` deploys and upgrades both contracts, and `poc.ts` uses the recorded registry.
+  The deployer stays the root on every network. Still to do: deploy on the testnet; the webapp still uses the old
+  testnet registry, which has immutables hash 0, so it cannot be upgraded; an independent review.
   Each new version must keep the nullifier formulas, and each PXE must register the new artifact. Upgradeability
   weakens path 1 of the auditor proof (the code can change); path 2 is not affected.
-- TODO: test a real registry upgrade. The TXE tests (`contracts/agreement_registry/src/test/upgrade.nr`) cover the auth checks only. The TXE
+- TODO: test a real upgrade. The TXE tests (`contracts/borg_auth_v2/src/test.nr`,
+  `contracts/agreement_registry/src/test/upgrade.nr`) cover the auth checks only. The TXE
   does not publish contract classes, so the protocol registry rejects each new class ("New contract class is not
-  registered"). The local network run of `deploy.ts` (2026-11-04) published a new class and scheduled the upgrade
-  with `update_to`. Untested: the new class runs after the delay. Test it on a local network that can move its
+  registered"). The local network runs of `deploy.ts` (2026-11-04) published a new class and scheduled the upgrade
+  with `update_to`, for each of the two contracts. Untested: the new class runs after the delay. Test it on a local network that can move its
   clock past the delay.
 - The MetaLeX FPC with use limits. The PoC uses the test SponsoredFPC, which mainnet does not have.
 - The data key store in production: the KMS for `ENCRYPTION_KEY`, the login check, a retention period for each kind

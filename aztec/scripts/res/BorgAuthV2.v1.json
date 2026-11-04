@@ -1886,6 +1886,406 @@
       "path": "std/panic.nr",
       "source": "/// Halt the program at runtime with the given error message.\n///\n/// The provided error message must be either a `str` or a `fmtstr`.\npub fn panic<T, U>(message: T) -> U\nwhere\n    T: StringLike,\n{\n    assert(false, message);\n    crate::mem::zeroed()\n}\n\ntrait StringLike {}\n\nimpl<let N: u32> StringLike for str<N> {}\nimpl<let N: u32, T> StringLike for fmtstr<N, T> {}\n\nmod tests {\n    use crate::prelude::panic;\n\n    #[test(should_fail_with = \"OH NO\")]\n    fn panics() {\n        panic(\"OH NO\");\n    }\n}\n"
     },
+    "51": {
+      "function_locations": [
+        {
+          "name": "[T]::len",
+          "start": 138
+        },
+        {
+          "name": "[T]::push_back",
+          "start": 374
+        },
+        {
+          "name": "[T]::push_front",
+          "start": 614
+        },
+        {
+          "name": "[T]::pop_back",
+          "start": 799
+        },
+        {
+          "name": "[T]::pop_front",
+          "start": 987
+        },
+        {
+          "name": "[T]::insert",
+          "start": 1174
+        },
+        {
+          "name": "[T]::remove",
+          "start": 1418
+        },
+        {
+          "name": "[T]::append",
+          "start": 1618
+        },
+        {
+          "name": "[T]::as_array",
+          "start": 1877
+        },
+        {
+          "name": "[T]::map",
+          "start": 2226
+        },
+        {
+          "name": "[T]::mapi",
+          "start": 2560
+        },
+        {
+          "name": "[T]::for_each",
+          "start": 2863
+        },
+        {
+          "name": "[T]::for_eachi",
+          "start": 3058
+        },
+        {
+          "name": "[T]::fold",
+          "start": 3481
+        },
+        {
+          "name": "[T]::reduce",
+          "start": 3886
+        },
+        {
+          "name": "[T]::filter",
+          "start": 4222
+        },
+        {
+          "name": "[T]::join",
+          "start": 4567
+        },
+        {
+          "name": "[T]::all",
+          "start": 4941
+        },
+        {
+          "name": "[T]::any",
+          "start": 5202
+        },
+        {
+          "name": "test::map_empty",
+          "start": 5369
+        },
+        {
+          "name": "test::mapi_empty",
+          "start": 5476
+        },
+        {
+          "name": "test::for_each_empty",
+          "start": 5595
+        },
+        {
+          "name": "test::for_eachi_empty",
+          "start": 5792
+        },
+        {
+          "name": "test::map_example",
+          "start": 5990
+        },
+        {
+          "name": "test::mapi_example",
+          "start": 6196
+        },
+        {
+          "name": "test::for_each_example",
+          "start": 6414
+        },
+        {
+          "name": "test::for_eachi_example",
+          "start": 6672
+        },
+        {
+          "name": "test::len_empty",
+          "start": 6930
+        },
+        {
+          "name": "test::len_single",
+          "start": 7051
+        },
+        {
+          "name": "test::len_multiple",
+          "start": 7140
+        },
+        {
+          "name": "test::push_back_empty",
+          "start": 7243
+        },
+        {
+          "name": "test::push_back_non_empty",
+          "start": 7450
+        },
+        {
+          "name": "test::push_front_empty",
+          "start": 7672
+        },
+        {
+          "name": "test::push_front_non_empty",
+          "start": 7872
+        },
+        {
+          "name": "test::pop_back_empty",
+          "start": 8151
+        },
+        {
+          "name": "test::pop_back_one",
+          "start": 8280
+        },
+        {
+          "name": "test::pop_back_multiple",
+          "start": 8480
+        },
+        {
+          "name": "test::pop_front_empty",
+          "start": 8787
+        },
+        {
+          "name": "test::pop_front_one",
+          "start": 8918
+        },
+        {
+          "name": "test::pop_front_multiple",
+          "start": 9120
+        },
+        {
+          "name": "test::insert_beginning",
+          "start": 9371
+        },
+        {
+          "name": "test::insert_middle",
+          "start": 9590
+        },
+        {
+          "name": "test::insert_end",
+          "start": 9808
+        },
+        {
+          "name": "test::insert_end_out_of_bounds",
+          "start": 10080
+        },
+        {
+          "name": "test::remove_empty",
+          "start": 10243
+        },
+        {
+          "name": "test::remove_beginning",
+          "start": 10375
+        },
+        {
+          "name": "test::remove_middle",
+          "start": 10621
+        },
+        {
+          "name": "test::remove_end",
+          "start": 10864
+        },
+        {
+          "name": "test::remove_end_out_of_bounds",
+          "start": 11163
+        },
+        {
+          "name": "test::fold_empty",
+          "start": 11284
+        },
+        {
+          "name": "test::fold_single",
+          "start": 11448
+        },
+        {
+          "name": "test::fold_multiple",
+          "start": 11617
+        },
+        {
+          "name": "test::reduce_empty",
+          "start": 11835
+        },
+        {
+          "name": "test::reduce_single",
+          "start": 11968
+        },
+        {
+          "name": "test::reduce_multiple",
+          "start": 12134
+        },
+        {
+          "name": "test::filter_empty",
+          "start": 12305
+        },
+        {
+          "name": "test::filter_all_true",
+          "start": 12469
+        },
+        {
+          "name": "test::filter_all_false",
+          "start": 12645
+        },
+        {
+          "name": "test::filter_some",
+          "start": 12818
+        },
+        {
+          "name": "test::all_empty",
+          "start": 13007
+        },
+        {
+          "name": "test::all_true",
+          "start": 13158
+        },
+        {
+          "name": "test::all_false",
+          "start": 13322
+        },
+        {
+          "name": "test::any_empty",
+          "start": 13487
+        },
+        {
+          "name": "test::any_true",
+          "start": 13639
+        },
+        {
+          "name": "test::any_false",
+          "start": 13803
+        },
+        {
+          "name": "test::append_empty_to_empty",
+          "start": 14009
+        },
+        {
+          "name": "test::append_empty_to_non_empty",
+          "start": 14237
+        },
+        {
+          "name": "test::append_non_empty_to_empty",
+          "start": 14451
+        },
+        {
+          "name": "test::append_two_non_empty",
+          "start": 14660
+        },
+        {
+          "name": "test::as_array_single",
+          "start": 14895
+        },
+        {
+          "name": "test::as_array_multiple",
+          "start": 15066
+        },
+        {
+          "name": "test::chain_operations",
+          "start": 15329
+        },
+        {
+          "name": "test::nested_operations",
+          "start": 15581
+        },
+        {
+          "name": "test::single_element_operations",
+          "start": 15896
+        },
+        {
+          "name": "test::boundary_conditions",
+          "start": 16847
+        },
+        {
+          "name": "test::complex_predicates",
+          "start": 17490
+        },
+        {
+          "name": "test::identity_operations",
+          "start": 17992
+        },
+        {
+          "name": "test::as_array_size_mismatch",
+          "start": 18394
+        }
+      ],
+      "path": "std/vector.nr",
+      "source": "use crate::append::Append;\n\nimpl<T> [T] {\n    /// Returns the length of the vector.\n    #[builtin(array_len)]\n    pub fn len(self) -> u32 {}\n\n    /// Push a new element to the end of the vector, returning a\n    /// new vector with a length one greater than the\n    /// original unmodified vector.\n    #[builtin(vector_push_back)]\n    pub fn push_back(self, elem: T) -> Self {}\n\n    /// Push a new element to the front of the vector, returning a\n    /// new vector with a length one greater than the\n    /// original unmodified vector.\n    #[builtin(vector_push_front)]\n    pub fn push_front(self, elem: T) -> Self {}\n\n    /// Remove the last element of the vector, returning the\n    /// popped vector and the element in a tuple\n    #[builtin(vector_pop_back)]\n    pub fn pop_back(self) -> (Self, T) {}\n\n    /// Remove the first element of the vector, returning the\n    /// element and the popped vector in a tuple\n    #[builtin(vector_pop_front)]\n    pub fn pop_front(self) -> (T, Self) {}\n\n    /// Insert an element at a specified index, shifting all elements\n    /// after it to the right\n    #[builtin(vector_insert)]\n    pub fn insert(self, index: u32, elem: T) -> Self {}\n\n    /// Remove an element at a specified index, shifting all elements\n    /// after it to the left, returning the altered vector and\n    /// the removed element\n    #[builtin(vector_remove)]\n    pub fn remove(self, index: u32) -> (Self, T) {}\n\n    /// Append each element of the `other` vector to the end of `self`.\n    /// This returns a new vector and leaves both input vectors unchanged.\n    pub fn append(mut self, other: Self) -> Self {\n        for elem in other {\n            self = self.push_back(elem);\n        }\n        self\n    }\n\n    /// Converts this vector into an array of length N.\n    /// Panics if the length of this vector is not N.\n    pub fn as_array<let N: u32>(self) -> [T; N] {\n        assert(self.len() == N);\n\n        let mut array = [crate::mem::zeroed(); N];\n        for i in 0..N {\n            array[i] = self[i];\n        }\n        array\n    }\n\n    /// Apply a function to each element of the vector, returning a new vector\n    /// containing the mapped elements.\n    pub fn map<U, Env>(self, f: fn[Env](T) -> U) -> [U] {\n        let mut ret = [].as_vector();\n        for elem in self {\n            ret = ret.push_back(f(elem));\n        }\n        ret\n    }\n\n    /// Apply a function to each element of the vector with its index, returning a\n    /// new vector containing the mapped elements.\n    pub fn mapi<U, Env>(self, f: fn[Env](u32, T) -> U) -> [U] {\n        let mut ret = [].as_vector();\n        let mut index = 0;\n        for elem in self {\n            ret = ret.push_back(f(index, elem));\n            index += 1;\n        }\n        ret\n    }\n\n    /// Apply a function to each element of the vector\n    pub fn for_each<Env>(self, f: fn[Env](T) -> ()) {\n        for elem in self {\n            f(elem);\n        }\n    }\n\n    /// Apply a function to each element of the vector with its index\n    pub fn for_eachi<Env>(self, f: fn[Env](u32, T) -> ()) {\n        let mut index = 0;\n        for elem in self {\n            f(index, elem);\n            index += 1;\n        }\n    }\n\n    /// Apply a function to each element of the vector and an accumulator value,\n    /// returning the final accumulated value. This function is also sometimes\n    /// called `foldl`, `fold_left`, `reduce`, or `inject`.\n    pub fn fold<U, Env>(self, mut accumulator: U, f: fn[Env](U, T) -> U) -> U {\n        for elem in self {\n            accumulator = f(accumulator, elem);\n        }\n        accumulator\n    }\n\n    /// Apply a function to each element of the vector and an accumulator value,\n    /// returning the final accumulated value. Unlike fold, reduce uses the first\n    /// element of the given vector as its starting accumulator value.\n    pub fn reduce<Env>(self, f: fn[Env](T, T) -> T) -> T {\n        let mut accumulator = self[0];\n        for i in 1..self.len() {\n            accumulator = f(accumulator, self[i]);\n        }\n        accumulator\n    }\n\n    /// Returns a new vector containing only elements for which the given predicate\n    /// returns true.\n    pub fn filter<Env>(self, predicate: fn[Env](T) -> bool) -> Self {\n        let mut ret = [].as_vector();\n        for elem in self {\n            if predicate(elem) {\n                ret = ret.push_back(elem);\n            }\n        }\n        ret\n    }\n\n    /// Flatten each element in the vector into one value, separated by `separator`.\n    pub fn join(self, separator: T) -> T\n    where\n        T: Append,\n    {\n        let mut ret = T::empty();\n\n        if self.len() != 0 {\n            ret = self[0];\n\n            for i in 1..self.len() {\n                ret = ret.append(separator).append(self[i]);\n            }\n        }\n\n        ret\n    }\n\n    /// Returns true if all elements in the vector satisfy the predicate\n    pub fn all<Env>(self, predicate: fn[Env](T) -> bool) -> bool {\n        let mut ret = true;\n        for elem in self {\n            ret &= predicate(elem);\n        }\n        ret\n    }\n\n    /// Returns true if any element in the vector satisfies the predicate\n    pub fn any<Env>(self, predicate: fn[Env](T) -> bool) -> bool {\n        let mut ret = false;\n        for elem in self {\n            ret |= predicate(elem);\n        }\n        ret\n    }\n}\n\nmod test {\n    #[test]\n    fn map_empty() {\n        assert_eq([].as_vector().map(|x| x + 1), [].as_vector());\n    }\n\n    #[test]\n    fn mapi_empty() {\n        assert_eq([].as_vector().mapi(|i, x| i * x + 1), [].as_vector());\n    }\n\n    #[test]\n    fn for_each_empty() {\n        let empty_vector: [Field] = [].as_vector();\n        empty_vector.for_each(|_x| assert(false));\n        assert(empty_vector == [].as_vector());\n    }\n\n    #[test]\n    fn for_eachi_empty() {\n        let empty_vector: [Field] = [].as_vector();\n        empty_vector.for_eachi(|_i, _x| assert(false));\n        assert(empty_vector == [].as_vector());\n    }\n\n    #[test]\n    fn map_example() {\n        let a = [1, 2, 3].as_vector();\n        let b = a.map(|a| a * 2);\n        assert_eq(b, [2, 4, 6].as_vector());\n        assert_eq(a, [1, 2, 3].as_vector());\n    }\n\n    #[test]\n    fn mapi_example() {\n        let a = [1, 2, 3].as_vector();\n        let b = a.mapi(|i, a| i + a * 2);\n        assert_eq(b, [2, 5, 8].as_vector());\n        assert_eq(a, [1, 2, 3].as_vector());\n    }\n\n    #[test]\n    fn for_each_example() {\n        let a = [1, 2, 3].as_vector();\n        let mut b = [].as_vector();\n        let b_ref = &mut b;\n        a.for_each(|a| { *b_ref = b_ref.push_back(a * 2); });\n        assert_eq(b, [2, 4, 6].as_vector());\n    }\n\n    #[test]\n    fn for_eachi_example() {\n        let a = [1, 2, 3].as_vector();\n        let mut b = [].as_vector();\n        let b_ref = &mut b;\n        a.for_eachi(|i, a| { *b_ref = b_ref.push_back(i + a * 2); });\n        assert_eq(b, [2, 5, 8].as_vector());\n    }\n\n    #[test]\n    fn len_empty() {\n        let empty: [Field] = [].as_vector();\n        assert_eq(empty.len(), 0);\n    }\n\n    #[test]\n    fn len_single() {\n        assert_eq([42].as_vector().len(), 1);\n    }\n\n    #[test]\n    fn len_multiple() {\n        assert_eq([1, 2, 3, 4, 5].as_vector().len(), 5);\n    }\n\n    #[test]\n    fn push_back_empty() {\n        let empty: [Field] = [].as_vector();\n        let result = empty.push_back(42);\n        assert_eq(result.len(), 1);\n        assert_eq(result[0], 42);\n    }\n\n    #[test]\n    fn push_back_non_empty() {\n        let vector = [1, 2, 3].as_vector();\n        let result = vector.push_back(4);\n        assert_eq(result.len(), 4);\n        assert_eq(result, [1, 2, 3, 4].as_vector());\n    }\n\n    #[test]\n    fn push_front_empty() {\n        let empty = [].as_vector();\n        let result = empty.push_front(42);\n        assert_eq(result.len(), 1);\n        assert_eq(result[0], 42);\n    }\n\n    #[test]\n    fn push_front_non_empty() {\n        let vector = [1, 2, 3].as_vector();\n        let result = vector.push_front(0);\n        assert_eq(result.len(), 4);\n        assert_eq(result, [0, 1, 2, 3].as_vector());\n    }\n\n    #[test(should_fail_with = \"Attempt to pop from an empty vector\")]\n    fn pop_back_empty() {\n        let vector: [Field] = [].as_vector();\n        let (_, _) = vector.pop_back();\n    }\n\n    #[test]\n    fn pop_back_one() {\n        let vector = [42].as_vector();\n        let (result, elem) = vector.pop_back();\n        assert_eq(result.len(), 0);\n        assert_eq(elem, 42);\n    }\n\n    #[test]\n    fn pop_back_multiple() {\n        let vector = [1, 2, 3].as_vector();\n        let (result, elem) = vector.pop_back();\n        assert_eq(result.len(), 2);\n        assert_eq(result, [1, 2].as_vector());\n        assert_eq(elem, 3);\n    }\n\n    #[test(should_fail_with = \"Attempt to pop from an empty vector\")]\n    fn pop_front_empty() {\n        let vector: [Field] = [].as_vector();\n        let (_, _) = vector.pop_front();\n    }\n\n    #[test]\n    fn pop_front_one() {\n        let vector = [42].as_vector();\n        let (elem, result) = vector.pop_front();\n        assert_eq(result.len(), 0);\n        assert_eq(elem, 42);\n    }\n\n    #[test]\n    fn pop_front_multiple() {\n        let vector = [1, 2, 3].as_vector();\n        let (elem, result) = vector.pop_front();\n        assert_eq(result.len(), 2);\n        assert_eq(result, [2, 3].as_vector());\n        assert_eq(elem, 1);\n    }\n\n    #[test]\n    fn insert_beginning() {\n        let vector = [1, 2, 3].as_vector();\n        let result = vector.insert(0, 0);\n        assert_eq(result.len(), 4);\n        assert_eq(result, [0, 1, 2, 3].as_vector());\n    }\n\n    #[test]\n    fn insert_middle() {\n        let vector = [1, 2, 3].as_vector();\n        let result = vector.insert(1, 99);\n        assert_eq(result.len(), 4);\n        assert_eq(result, [1, 99, 2, 3].as_vector());\n    }\n\n    #[test]\n    fn insert_end() {\n        let vector = [1, 2, 3].as_vector();\n        let result = vector.insert(3, 4);\n        assert_eq(result.len(), 4);\n        assert_eq(result, [1, 2, 3, 4].as_vector());\n    }\n\n    #[test(should_fail_with = \"Index out of bounds\")]\n    fn insert_end_out_of_bounds() {\n        let vector = [1, 2].as_vector();\n        let _ = vector.insert(3, 4);\n    }\n\n    #[test(should_fail_with = \"Index out of bounds\")]\n    fn remove_empty() {\n        let vector: [Field] = [].as_vector();\n        let (_, _) = vector.remove(0);\n    }\n\n    #[test]\n    fn remove_beginning() {\n        let vector = [1, 2, 3].as_vector();\n        let (result, elem) = vector.remove(0);\n        assert_eq(result.len(), 2);\n        assert_eq(result, [2, 3].as_vector());\n        assert_eq(elem, 1);\n    }\n\n    #[test]\n    fn remove_middle() {\n        let vector = [1, 2, 3].as_vector();\n        let (result, elem) = vector.remove(1);\n        assert_eq(result.len(), 2);\n        assert_eq(result, [1, 3].as_vector());\n        assert_eq(elem, 2);\n    }\n\n    #[test]\n    fn remove_end() {\n        let vector = [1, 2, 3].as_vector();\n        let (result, elem) = vector.remove(2);\n        assert_eq(result.len(), 2);\n        assert_eq(result, [1, 2].as_vector());\n        assert_eq(elem, 3);\n    }\n\n    #[test(should_fail_with = \"Index out of bounds\")]\n    fn remove_end_out_of_bounds() {\n        let vector = [1, 2].as_vector();\n        let (_, _) = vector.remove(2);\n    }\n\n    #[test]\n    fn fold_empty() {\n        let empty = [].as_vector();\n        let result = empty.fold(10, |acc, x| acc + x);\n        assert_eq(result, 10);\n    }\n\n    #[test]\n    fn fold_single() {\n        let vector = [5].as_vector();\n        let result = vector.fold(10, |acc, x| acc + x);\n        assert_eq(result, 15);\n    }\n\n    #[test]\n    fn fold_multiple() {\n        let vector = [1, 2, 3, 4].as_vector();\n        let result = vector.fold(0, |acc, x| acc + x);\n        assert_eq(result, 10);\n    }\n\n    #[test(should_fail_with = \"Index out of bounds\")]\n    fn reduce_empty() {\n        let empty: [Field] = [].as_vector();\n        let _ = empty.reduce(|a, b| a + b);\n    }\n\n    #[test]\n    fn reduce_single() {\n        let vector = [42].as_vector();\n        let result = vector.reduce(|a, b| a + b);\n        assert_eq(result, 42);\n    }\n\n    #[test]\n    fn reduce_multiple() {\n        let vector = [1, 2, 3, 4].as_vector();\n        let result = vector.reduce(|a, b| a + b);\n        assert_eq(result, 10);\n    }\n\n    #[test]\n    fn filter_empty() {\n        let empty = [].as_vector();\n        let result = empty.filter(|x| x > 0);\n        assert_eq(result.len(), 0);\n    }\n\n    #[test]\n    fn filter_all_true() {\n        let vector = [1, 2, 3, 4].as_vector();\n        let result = vector.filter(|x| x > 0);\n        assert_eq(result, vector);\n    }\n\n    #[test]\n    fn filter_all_false() {\n        let vector = [1, 2, 3, 4].as_vector();\n        let result = vector.filter(|x| x > 10);\n        assert_eq(result.len(), 0);\n    }\n\n    #[test]\n    fn filter_some() {\n        let vector = [1, 2, 3, 4, 5].as_vector();\n        let result = vector.filter(|x| x % 2 == 0);\n        assert_eq(result, [2, 4].as_vector());\n    }\n\n    #[test]\n    fn all_empty() {\n        let empty = [].as_vector();\n        let result = empty.all(|x| x > 0);\n        assert_eq(result, true);\n    }\n\n    #[test]\n    fn all_true() {\n        let vector = [1, 2, 3, 4].as_vector();\n        let result = vector.all(|x| x > 0);\n        assert_eq(result, true);\n    }\n\n    #[test]\n    fn all_false() {\n        let vector = [1, 2, 3, 4].as_vector();\n        let result = vector.all(|x| x > 2);\n        assert_eq(result, false);\n    }\n\n    #[test]\n    fn any_empty() {\n        let empty = [].as_vector();\n        let result = empty.any(|x| x > 0);\n        assert_eq(result, false);\n    }\n\n    #[test]\n    fn any_true() {\n        let vector = [1, 2, 3, 4].as_vector();\n        let result = vector.any(|x| x > 3);\n        assert_eq(result, true);\n    }\n\n    #[test]\n    fn any_false() {\n        let vector = [1, 2, 3, 4].as_vector();\n        let result = vector.any(|x| x > 10);\n        assert_eq(result, false);\n    }\n\n    // utility method tests\n    #[test]\n    fn append_empty_to_empty() {\n        let empty1: [Field] = [].as_vector();\n        let empty2: [Field] = [].as_vector();\n        let result = empty1.append(empty2);\n        assert_eq(result.len(), 0);\n    }\n\n    #[test]\n    fn append_empty_to_non_empty() {\n        let vector = [1, 2, 3].as_vector();\n        let empty = [].as_vector();\n        let result = vector.append(empty);\n        assert_eq(result, vector);\n    }\n\n    #[test]\n    fn append_non_empty_to_empty() {\n        let empty = [].as_vector();\n        let vector = [1, 2, 3].as_vector();\n        let result = empty.append(vector);\n        assert_eq(result, vector);\n    }\n\n    #[test]\n    fn append_two_non_empty() {\n        let vector1 = [1, 2].as_vector();\n        let vector2 = [3, 4, 5].as_vector();\n        let result = vector1.append(vector2);\n        assert_eq(result, [1, 2, 3, 4, 5].as_vector());\n    }\n\n    #[test]\n    fn as_array_single() {\n        let vector = [42].as_vector();\n        let array: [Field; 1] = vector.as_array();\n        assert_eq(array[0], 42);\n    }\n\n    #[test]\n    fn as_array_multiple() {\n        let vector = [1, 2, 3].as_vector();\n        let array: [Field; 3] = vector.as_array();\n        assert_eq(array[0], 1);\n        assert_eq(array[1], 2);\n        assert_eq(array[2], 3);\n    }\n\n    // complex scenarios\n    #[test]\n    fn chain_operations() {\n        let vector = [1, 2, 3, 4, 5].as_vector();\n        let result = vector.filter(|x| x % 2 == 0).map(|x| x * 2).fold(0, |acc, x| acc + x);\n        assert_eq(result, 12); // (2*2) + (4*2) = 4 + 8 = 12\n    }\n\n    #[test]\n    fn nested_operations() {\n        let vector = [1, 2, 3, 4].as_vector();\n        let filtered = vector.filter(|x| x > 1);\n        let mapped = filtered.map(|x| x * x);\n        let sum = mapped.fold(0, |acc, x| acc + x);\n        assert_eq(sum, 29); // 2^2 + 3^2 + 4^2 = 4 + 9 + 16 = 29\n    }\n\n    #[test]\n    fn single_element_operations() {\n        let single = [42].as_vector();\n\n        // Test all operations on single element\n        assert_eq(single.len(), 1);\n\n        let pushed_back = single.push_back(99);\n        assert_eq(pushed_back, [42, 99].as_vector());\n\n        let pushed_front = single.push_front(0);\n        assert_eq(pushed_front, [0, 42].as_vector());\n\n        let (popped_back_vector, popped_back_elem) = single.pop_back();\n        assert_eq(popped_back_vector.len(), 0);\n        assert_eq(popped_back_elem, 42);\n\n        let (popped_front_elem, popped_front_vector) = single.pop_front();\n        assert_eq(popped_front_vector.len(), 0);\n        assert_eq(popped_front_elem, 42);\n\n        let inserted = single.insert(0, 0);\n        assert_eq(inserted, [0, 42].as_vector());\n\n        let (removed_vector, removed_elem) = single.remove(0);\n        assert_eq(removed_vector.len(), 0);\n        assert_eq(removed_elem, 42);\n    }\n\n    #[test]\n    fn boundary_conditions() {\n        let vector = [1, 2, 3].as_vector();\n\n        // insert at boundaries\n        let at_start = vector.insert(0, 0);\n        assert_eq(at_start, [0, 1, 2, 3].as_vector());\n\n        let at_end = vector.insert(3, 4);\n        assert_eq(at_end, [1, 2, 3, 4].as_vector());\n\n        // remove at boundaries\n        let (removed_start, elem_start) = vector.remove(0);\n        assert_eq(removed_start, [2, 3].as_vector());\n        assert_eq(elem_start, 1);\n\n        let (removed_end, elem_end) = vector.remove(2);\n        assert_eq(removed_end, [1, 2].as_vector());\n        assert_eq(elem_end, 3);\n    }\n\n    #[test]\n    fn complex_predicates() {\n        let vector = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].as_vector();\n\n        let even_greater_than_5 = vector.filter(|x| (x % 2 == 0) & (x > 5));\n        assert_eq(even_greater_than_5, [6, 8, 10].as_vector());\n\n        let all_positive_and_less_than_20 = vector.all(|x| (x > 0) & (x < 20));\n        assert_eq(all_positive_and_less_than_20, true);\n\n        let any_divisible_by_7 = vector.any(|x| x % 7 == 0);\n        assert_eq(any_divisible_by_7, true);\n    }\n\n    #[test]\n    fn identity_operations() {\n        let vector = [1, 2, 3, 4, 5].as_vector();\n\n        let mapped_identity = vector.map(|x| x);\n        assert_eq(mapped_identity, vector);\n\n        let filtered_all = vector.filter(|_| true);\n        assert_eq(filtered_all, vector);\n\n        let filtered_none = vector.filter(|_| false);\n        assert_eq(filtered_none.len(), 0);\n    }\n\n    #[test(should_fail)]\n    fn as_array_size_mismatch() {\n        let vector = [1, 2, 3].as_vector();\n        let _: [Field; 5] = vector.as_array(); // size doesn't match\n    }\n}\n"
+    },
+    "69": {
+      "function_locations": [
+        {
+          "name": "PrivateCall<M, N, T>::new",
+          "start": 1239
+        },
+        {
+          "name": "PrivateCall<M, N, T>::call",
+          "start": 1735
+        },
+        {
+          "name": "PrivateStaticCall<M, N, T>::new",
+          "start": 2771
+        },
+        {
+          "name": "PrivateStaticCall<M, N, T>::view",
+          "start": 3229
+        },
+        {
+          "name": "PublicCall<M, N, T>::new",
+          "start": 4097
+        },
+        {
+          "name": "PublicCall<M, N, T>::with_gas",
+          "start": 4281
+        },
+        {
+          "name": "PublicCall<M, N, T>::call",
+          "start": 4645
+        },
+        {
+          "name": "PublicCall<M, N, T>::enqueue",
+          "start": 5275
+        },
+        {
+          "name": "PublicCall<M, N, T>::enqueue_incognito",
+          "start": 5616
+        },
+        {
+          "name": "PublicCall<M, N, T>::enqueue_impl",
+          "start": 5774
+        },
+        {
+          "name": "PublicCall<M, N, T>::set_as_teardown",
+          "start": 6454
+        },
+        {
+          "name": "PublicCall<M, N, T>::set_as_teardown_incognito",
+          "start": 6843
+        },
+        {
+          "name": "PublicCall<M, N, T>::set_as_teardown_impl",
+          "start": 6989
+        },
+        {
+          "name": "PublicStaticCall<M, N, T>::new",
+          "start": 8039
+        },
+        {
+          "name": "PublicStaticCall<M, N, T>::with_gas",
+          "start": 8223
+        },
+        {
+          "name": "PublicStaticCall<M, N, T>::view",
+          "start": 8600
+        },
+        {
+          "name": "PublicStaticCall<M, N, T>::enqueue_view",
+          "start": 9090
+        },
+        {
+          "name": "PublicStaticCall<M, N, T>::enqueue_view_incognito",
+          "start": 9824
+        },
+        {
+          "name": "UtilityCall<M, N, T>::new",
+          "start": 10782
+        }
+      ],
+      "path": "/Users/detoo/nargo/github.com/aztec-labs-eng/aztec-nr/v6.0.0/aztec/src/context/calls.nr",
+      "source": "use crate::protocol::{abis::function_selector::FunctionSelector, address::AztecAddress, traits::{Deserialize, ToField}};\n\nuse crate::context::{gas::GasOpts, PrivateContext, PublicContext};\nuse crate::hash::{hash_args, hash_calldata_array};\nuse crate::oracle::execution_cache;\n\n// Having T associated on the structs and then instantiating it with `std::mem::zeroed()` is ugly but we need to do it\n// like this to avoid forcing users to specify the return type when calling functions on the structs (that's the only\n// way how we can specify the type when we generate the call stubs. The return types are specified in the\n// `external_functions_stubs.nr` file.)\n\n// PrivateCall\n\n#[must_use = \"Your private call needs to be passed into the `self.call(...)` method to be executed (e.g. `self.call(MyContract::at(address).my_private_function(...args))`\"]\npub struct PrivateCall<let M: u32, let N: u32, T> {\n    pub target_contract: AztecAddress,\n    pub selector: FunctionSelector,\n    pub name: str<M>,\n    args_hash: Field,\n    pub args: [Field; N],\n    return_type: T,\n}\n\nimpl<let M: u32, let N: u32, T> PrivateCall<M, N, T> {\n    pub fn new(target_contract: AztecAddress, selector: FunctionSelector, name: str<M>, args: [Field; N]) -> Self {\n        let args_hash = hash_args(args);\n        Self { target_contract, selector, name, args_hash, args, return_type: std::mem::zeroed() }\n    }\n}\n\nimpl<let M: u32, let N: u32, T> PrivateCall<M, N, T>\nwhere\n    T: Deserialize,\n{\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API: `self.call(MyContract::at(address).my_private_function(...args))` instead of\n    /// manually constructing and calling `PrivateCall`.\n    pub fn call(self, context: &mut PrivateContext) -> T {\n        execution_cache::store(self.args, self.args_hash);\n        let returns_hash =\n            context.call_private_function_with_args_hash(self.target_contract, self.selector, self.args_hash, false);\n\n        // If T is () (i.e. if the function does not return anything) then `get_preimage` will constrain that the\n        // returns hash is empty as per the protocol rules.\n        returns_hash.get_preimage()\n    }\n}\n\n// PrivateStaticCall\n\n#[must_use = \"Your private static call needs to be passed into the `self.view(...)` method to be executed (e.g. `self.view(MyContract::at(address).my_private_static_function(...args))`\"]\npub struct PrivateStaticCall<let M: u32, let N: u32, T> {\n    pub target_contract: AztecAddress,\n    pub selector: FunctionSelector,\n    pub name: str<M>,\n    args_hash: Field,\n    pub args: [Field; N],\n    return_type: T,\n}\n\nimpl<let M: u32, let N: u32, T> PrivateStaticCall<M, N, T> {\n    pub fn new(target_contract: AztecAddress, selector: FunctionSelector, name: str<M>, args: [Field; N]) -> Self {\n        let args_hash = hash_args(args);\n        Self { target_contract, selector, name, args_hash, args, return_type: std::mem::zeroed() }\n    }\n\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API: `self.view(MyContract::at(address).my_private_static_function(...args))`\n    /// instead of manually constructing and calling `PrivateCall`.\n    pub fn view(self, context: &mut PrivateContext) -> T\n    where\n        T: Deserialize,\n    {\n        execution_cache::store(self.args, self.args_hash);\n        let returns =\n            context.call_private_function_with_args_hash(self.target_contract, self.selector, self.args_hash, true);\n        returns.get_preimage()\n    }\n}\n\n// PublicCall\n\n#[must_use = \"Your public call needs to be passed into the `self.call(...)`, `self.enqueue(...)` or `self.enqueue_incognito(...)` method to be executed (e.g. `self.call(MyContract::at(address).my_public_function(...args))`\"]\npub struct PublicCall<let M: u32, let N: u32, T> {\n    pub target_contract: AztecAddress,\n    pub selector: FunctionSelector,\n    pub name: str<M>,\n    pub args: [Field; N],\n    gas_opts: GasOpts,\n    return_type: T,\n}\n\nimpl<let M: u32, let N: u32, T> PublicCall<M, N, T> {\n    pub fn new(target_contract: AztecAddress, selector: FunctionSelector, name: str<M>, args: [Field; N]) -> Self {\n        Self { target_contract, selector, name, args, gas_opts: GasOpts::default(), return_type: std::mem::zeroed() }\n    }\n\n    pub fn with_gas(mut self, gas_opts: GasOpts) -> Self {\n        self.gas_opts = gas_opts;\n        self\n    }\n\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API: `self.call(MyContract::at(address).my_public_function(...args))` instead of\n    /// manually constructing and calling `PublicCall`.\n    pub unconstrained fn call(self, context: PublicContext) -> T\n    where\n        T: Deserialize,\n    {\n        let returns = context.call_public_function(self.target_contract, self.selector, self.args, self.gas_opts);\n        // If T is () (i.e. if the function does not return anything) then `as_array` will constrain that `returns` has\n        // a length of 0 (since that is ()'s deserialization length).\n        Deserialize::deserialize(returns.as_array())\n    }\n\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API: `self.enqueue(MyContract::at(address).my_public_function(...args))` instead of\n    /// manually constructing and calling `PublicCall`.\n    pub fn enqueue(self, context: &mut PrivateContext) {\n        self.enqueue_impl(context, false, false)\n    }\n\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API: `self.enqueue_incognito(MyContract::at(address).my_public_function(...args))`\n    /// instead of manually constructing and calling `PublicCall`.\n    pub fn enqueue_incognito(self, context: &mut PrivateContext) {\n        self.enqueue_impl(context, false, true)\n    }\n\n    fn enqueue_impl(self, context: &mut PrivateContext, is_static_call: bool, hide_msg_sender: bool) {\n        let calldata = [self.selector.to_field()].concat(self.args);\n        let calldata_hash = hash_calldata_array(calldata);\n        execution_cache::store(calldata, calldata_hash);\n        context.call_public_function_with_calldata_hash(\n            self.target_contract,\n            calldata_hash,\n            is_static_call,\n            hide_msg_sender,\n        )\n    }\n\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API: `self.set_as_teardown(MyContract::at(address).my_public_function(...args))`\n    /// instead of manually constructing and setting the teardown function `PublicCall`.\n    pub fn set_as_teardown(self, context: &mut PrivateContext) {\n        self.set_as_teardown_impl(context, false);\n    }\n\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API:\n    /// `self.set_as_teardown_incognito(MyContract::at(address).my_public_function(...args))` instead of manually\n    /// constructing and setting the teardown function `PublicCall`.\n    pub fn set_as_teardown_incognito(self, context: &mut PrivateContext) {\n        self.set_as_teardown_impl(context, true);\n    }\n\n    fn set_as_teardown_impl(self, context: &mut PrivateContext, hide_msg_sender: bool) {\n        let calldata = [self.selector.to_field()].concat(self.args);\n        let calldata_hash = hash_calldata_array(calldata);\n        execution_cache::store(calldata, calldata_hash);\n        context.set_public_teardown_function_with_calldata_hash(\n            self.target_contract,\n            calldata_hash,\n            false,\n            hide_msg_sender,\n        )\n    }\n}\n\n// PublicStaticCall\n\n#[must_use = \"Your public static call needs to be passed into the `self.view(...)`, `self.enqueue_view(...)` or `self.enqueue_view_incognito(...)` method to be executed (e.g. `self.view(MyContract::at(address).my_public_static_function(...args))`\"]\npub struct PublicStaticCall<let M: u32, let N: u32, T> {\n    pub target_contract: AztecAddress,\n    pub selector: FunctionSelector,\n    pub name: str<M>,\n    pub args: [Field; N],\n    return_type: T,\n    gas_opts: GasOpts,\n}\n\nimpl<let M: u32, let N: u32, T> PublicStaticCall<M, N, T> {\n    pub fn new(target_contract: AztecAddress, selector: FunctionSelector, name: str<M>, args: [Field; N]) -> Self {\n        Self { target_contract, selector, name, args, return_type: std::mem::zeroed(), gas_opts: GasOpts::default() }\n    }\n\n    pub fn with_gas(mut self, gas_opts: GasOpts) -> Self {\n        self.gas_opts = gas_opts;\n        self\n    }\n\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API: `self.view(MyContract::at(address).my_public_static_function(...args))`\n    /// instead of manually constructing and calling `PublicStaticCall`.\n    pub unconstrained fn view(self, context: PublicContext) -> T\n    where\n        T: Deserialize,\n    {\n        let returns =\n            context.static_call_public_function(self.target_contract, self.selector, self.args, self.gas_opts);\n        Deserialize::deserialize(returns.as_array())\n    }\n\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API:\n    /// `self.enqueue_view(MyContract::at(address).my_public_static_function(...args))` instead of manually\n    /// constructing and calling `PublicStaticCall`.\n    pub fn enqueue_view(self, context: &mut PrivateContext) {\n        let calldata = [self.selector.to_field()].concat(self.args);\n        let calldata_hash = hash_calldata_array(calldata);\n        execution_cache::store(calldata, calldata_hash);\n        context\n            .call_public_function_with_calldata_hash(\n                self.target_contract,\n                calldata_hash,\n                /*static=*/\n                true,\n                false,\n            )\n    }\n\n    /// **DEPRECATED**.\n    ///\n    /// Please use the new contract API:\n    /// `self.enqueue_view_incognito(MyContract::at(address).my_public_static_function(...args))` instead of manually\n    /// constructing and calling `PublicStaticCall`.\n    pub fn enqueue_view_incognito(self, context: &mut PrivateContext) {\n        let calldata = [self.selector.to_field()].concat(self.args);\n        let calldata_hash = hash_calldata_array(calldata);\n        execution_cache::store(calldata, calldata_hash);\n        context\n            .call_public_function_with_calldata_hash(\n                self.target_contract,\n                calldata_hash,\n                /*static=*/\n                true,\n                true,\n            )\n    }\n}\n\n// UtilityCall\n\n#[must_use = \"Your utility call needs to be passed into `self.call(...)` (utility context) or `self.utility.call(...)` (private context) to be executed\"]\npub struct UtilityCall<let M: u32, let N: u32, T> {\n    pub target_contract: AztecAddress,\n    pub selector: FunctionSelector,\n    pub name: str<M>,\n    pub args: [Field; N],\n    return_type: T,\n}\n\nimpl<let M: u32, let N: u32, T> UtilityCall<M, N, T> {\n    pub fn new(target_contract: AztecAddress, selector: FunctionSelector, name: str<M>, args: [Field; N]) -> Self {\n        Self { target_contract, selector, name, args, return_type: std::mem::zeroed() }\n    }\n}\n"
+    },
     "77": {
       "function_locations": [
         {
@@ -2596,6 +2996,24 @@
       "path": "/Users/detoo/nargo/github.com/aztec-labs-eng/aztec-nr/v6.0.0/aztec/src/macros/aztec.nr",
       "source": "mod compute_note_hash_and_nullifier;\n\nuse crate::{\n    macros::{\n        calls_generation::{\n            external_functions::{generate_external_function_calls, generate_external_function_self_calls_structs},\n            internal_functions::generate_call_internal_struct,\n        },\n        dispatch::generate_public_dispatch,\n        emit_public_init_nullifier::generate_emit_public_init_nullifier,\n        internals_functions_generation::{create_fn_abi_exports, process_functions},\n        offchain_receive::{\n            OFFCHAIN_RECEIVE_FN_NAME, OFFCHAIN_RECEIVE_PARAM_NAME, offchain_receive_param_type,\n            OFFCHAIN_RECEIVE_RETURN_TYPE,\n        },\n        storage::STORAGE_LAYOUT_NAME,\n        utils::{is_fn_contract_library_method, is_fn_external, is_fn_internal, is_fn_test, module_has_storage},\n    },\n    messages::discovery::{CustomMessageHandler, CustomSyncHandler},\n};\n\nuse compute_note_hash_and_nullifier::generate_contract_library_methods_compute_note_hash_and_nullifier;\n\n/// Configuration for the [`aztec`] macro.\n///\n/// This type lets users override different parts of the default aztec-nr contract behavior, such\n/// as message handling and state synchronization. These are advanced features that require careful\n/// understanding of the behavior of these systems.\n///\n/// ## Examples\n///\n/// ```noir\n/// #[aztec(aztec::macros::AztecConfig::new().custom_message_handler(my_handler))]\n/// contract MyContract { ... }\n/// ```\npub struct AztecConfig {\n    custom_message_handler: Option<CustomMessageHandler>,\n    custom_sync_state: Option<CustomSyncHandler>,\n}\n\nimpl AztecConfig {\n    /// Creates a new `AztecConfig` with default values.\n    ///\n    /// Calling `new` is equivalent to invoking the [`aztec`] macro with no parameters. The different methods\n    /// (e.g. [`AztecConfig::custom_message_handler`]) can then be used to change the default behavior.\n    pub comptime fn new() -> Self {\n        Self { custom_message_handler: Option::none(), custom_sync_state: Option::none() }\n    }\n\n    /// Sets a handler for custom messages.\n    ///\n    /// This enables contracts to process non-standard messages (i.e. any with a message type that is not in\n    /// [`crate::messages::msg_type`]).\n    ///\n    /// `handler` must be a function that conforms to the\n    /// [`crate::messages::discovery::CustomMessageHandler`] type signature.\n    pub comptime fn custom_message_handler(&mut self, handler: CustomMessageHandler) -> Self {\n        self.custom_message_handler = Option::some(handler);\n        *self\n    }\n\n    /// Overrides the default state synchronization logic.\n    ///\n    /// The generated `sync_state` function will call `handler` instead of\n    /// [`crate::messages::discovery::do_sync_state`]. The handler receives all of the same parameters, so it can\n    /// run custom logic (e.g. fetching and decrypting custom logs) before, after, or instead of calling\n    /// `do_sync_state`.\n    ///\n    /// `handler` must be a function that conforms to the\n    /// [`crate::messages::discovery::CustomSyncHandler`] type signature.\n    pub comptime fn custom_sync_state(&mut self, handler: CustomSyncHandler) -> Self {\n        self.custom_sync_state = Option::some(handler);\n        *self\n    }\n}\n\n/// Enables aztec-nr features on a `contract`.\n///\n/// All aztec-nr contracts should have this macro invoked on them, as it is the one that processes all contract\n/// functions, notes, storage, generates interfaces for external calls, and creates the message processing\n/// boilerplate.\n///\n/// ## Examples\n///\n/// Most contracts can simply invoke the macro with no parameters, resulting in default aztec-nr behavior:\n/// ```noir\n/// #[aztec]\n/// contract MyContract { ... }\n/// ```\n///\n/// Advanced contracts can use [`AztecConfig`] to customize parts of its behavior, such as message\n/// processing.\n/// ```noir\n/// #[aztec(aztec::macros::AztecConfig::new().custom_message_handler(my_handler))]\n/// contract MyAdvancedContract { ... }\n/// ```\n#[varargs]\npub comptime fn aztec(m: Module, args: [AztecConfig]) -> Quoted {\n    let num_args = args.len();\n    let config = if num_args == 0 {\n        AztecConfig::new()\n    } else if num_args == 1 {\n        args[0]\n    } else {\n        panic(f\"#[aztec] expects 0 or 1 arguments, got {num_args}\")\n    };\n\n    // Functions that don't have #[external(...)], #[contract_library_method], or #[test] are not allowed in contracts.\n    check_each_fn_macroified(m);\n\n    // We generate new functions prefixed with `__aztec_nr_internals__` and we replace the original functions' bodies\n    // with `static_assert(false, ...)` to prevent them from being called directly from within the contract.\n    let functions = process_functions(m);\n\n    // We generate structs and their implementations necessary for convenient functions calls.\n    let interface = generate_contract_interface(m);\n    let self_call_structs = generate_external_function_self_calls_structs(m);\n    let call_internal_struct = generate_call_internal_struct(m);\n\n    // We generate ABI exports for all the external functions in the contract.\n    let fn_abi_exports = create_fn_abi_exports(m);\n\n    // We generate `_compute_note_hash`, `_compute_note_nullifier` (and the deprecated\n    // `_compute_note_hash_and_nullifier` wrapper) only if they are not already implemented.\n    // If they are implemented we just insert empty quotes.\n    let contract_library_method_compute_note_hash_and_nullifier = if !m.functions().any(|f| {\n        // Note that we don't test for `_compute_note_hash` or `_compute_note_nullifier` in order to make this simpler\n        // - users must either implement all three or none.\n        // Down the line we'll remove this check and use `AztecConfig`.\n        f.name() == quote { _compute_note_hash_and_nullifier }\n    }) {\n        generate_contract_library_methods_compute_note_hash_and_nullifier()\n    } else {\n        quote {}\n    };\n    let process_custom_message_option = if config.custom_message_handler.is_some() {\n        let handler = config.custom_message_handler.unwrap();\n        quote { Option::some($handler) }\n    } else {\n        quote { Option::<aztec::messages::discovery::CustomMessageHandler>::none() }\n    };\n\n    let offchain_inbox_sync_option = quote {\n        Option::some(aztec::messages::processing::offchain::sync_inbox)\n    };\n\n    if m.functions().any(|f| f.name() == quote { sync_state }) {\n        panic(\n            \"User-defined 'sync_state' is not allowed. Use AztecConfig::custom_sync_state() to customize sync behavior.\",\n        );\n    }\n\n    let custom_sync_handler = if config.custom_sync_state.is_some() {\n        let handler = config.custom_sync_state.unwrap();\n        Option::some(quote { $handler })\n    } else {\n        Option::none()\n    };\n\n    let sync_state_fn_and_abi_export = generate_sync_state(\n        process_custom_message_option,\n        offchain_inbox_sync_option,\n        custom_sync_handler,\n    );\n\n    if m.functions().any(|f| f.name() == quote { offchain_receive }) {\n        panic(\n            \"User-defined 'offchain_receive' is not allowed. The function is auto-injected by the #[aztec] macro. See https://docs.aztec.network/errors/7\",\n        );\n    }\n    let offchain_receive_fn_and_abi_export = generate_offchain_receive();\n\n    let (has_public_init_nullifier_fn, emit_public_init_nullifier_fn_body) = generate_emit_public_init_nullifier(m);\n    let public_dispatch = generate_public_dispatch(m, has_public_init_nullifier_fn);\n\n    quote {\n        $interface\n        $self_call_structs\n        $call_internal_struct\n        $functions\n        $fn_abi_exports\n        $contract_library_method_compute_note_hash_and_nullifier\n        $public_dispatch\n        $sync_state_fn_and_abi_export\n        $emit_public_init_nullifier_fn_body\n        $offchain_receive_fn_and_abi_export\n    }\n}\n\ncomptime fn generate_contract_interface(m: Module) -> Quoted {\n    let calls = generate_external_function_calls(m);\n\n    let module_name = m.name();\n\n    let has_storage_layout = module_has_storage(m) & STORAGE_LAYOUT_NAME.get(m).is_some();\n    let storage_layout_getter = if has_storage_layout {\n        let storage_layout_name = STORAGE_LAYOUT_NAME.get(m).unwrap();\n        quote {\n            pub fn storage_layout() -> StorageLayoutFields {\n                $storage_layout_name.fields\n            }\n        }\n    } else {\n        quote {}\n    };\n\n    let library_storage_layout_getter = if has_storage_layout {\n        quote {\n            #[contract_library_method]\n            $storage_layout_getter\n        }\n    } else {\n        quote {}\n    };\n\n    quote {\n        pub struct $module_name {\n            pub target_contract: aztec::protocol::address::AztecAddress\n        }\n\n        impl $module_name {\n            $calls\n\n            pub fn at(\n                addr: aztec::protocol::address::AztecAddress\n            ) -> Self {\n                Self { target_contract: addr }\n            }\n\n            pub fn interface() -> Self {\n                Self { target_contract: aztec::protocol::address::AztecAddress::zero() }\n            }\n\n            $storage_layout_getter\n        }\n\n        #[contract_library_method]\n        pub fn at(\n            addr: aztec::protocol::address::AztecAddress\n        ) -> $module_name {\n            $module_name { target_contract: addr }\n        }\n\n        #[contract_library_method]\n        pub fn interface() -> $module_name {\n            $module_name { target_contract: aztec::protocol::address::AztecAddress::zero() }\n        }\n\n        $library_storage_layout_getter\n\n    }\n}\n\n/// Generates the `sync_state` utility function that performs message discovery.\ncomptime fn generate_sync_state(\n    process_custom_message_option: Quoted,\n    offchain_inbox_sync_option: Quoted,\n    custom_sync_handler: Option<Quoted>,\n) -> Quoted {\n    let body = if custom_sync_handler.is_some() {\n        let handler = custom_sync_handler.unwrap();\n        quote {\n            $handler(\n                address,\n                _compute_note_hash,\n                _compute_note_nullifier,\n                $process_custom_message_option,\n                $offchain_inbox_sync_option,\n                scope,\n            );\n        }\n    } else {\n        quote {\n            aztec::messages::discovery::do_sync_state(\n                address,\n                _compute_note_hash,\n                _compute_note_nullifier,\n                $process_custom_message_option,\n                $offchain_inbox_sync_option,\n                scope,\n            );\n        }\n    };\n\n    quote {\n        pub struct sync_state_parameters {\n            pub scope: aztec::protocol::address::AztecAddress,\n        }\n\n        #[abi(functions)]\n        pub struct sync_state_abi {\n            parameters: sync_state_parameters,\n        }\n\n        #[aztec::macros::internals_functions_generation::abi_attributes::abi_utility]\n        unconstrained fn sync_state(scope: aztec::protocol::address::AztecAddress) {\n            aztec::oracle::version::assert_compatible_oracle_version();\n            let address = aztec::context::UtilityContext::new().this_address();\n            $body\n        }\n    }\n}\n\n/// Generates an `offchain_receive` utility function that lets callers add messages to the offchain message inbox.\n///\n/// For more details, see `aztec::messages::processing::offchain::receive`.\ncomptime fn generate_offchain_receive() -> Quoted {\n    let param_type = offchain_receive_param_type(quote { aztec });\n    let parameters_struct_name = f\"{OFFCHAIN_RECEIVE_FN_NAME}_parameters\".quoted_contents();\n    let abi_struct_name = f\"{OFFCHAIN_RECEIVE_FN_NAME}_abi\".quoted_contents();\n\n    quote {\n        pub struct $parameters_struct_name {\n            pub $OFFCHAIN_RECEIVE_PARAM_NAME: $param_type,\n        }\n\n        #[abi(functions)]\n        pub struct $abi_struct_name {\n            parameters: $parameters_struct_name,\n        }\n\n        /// Receives offchain messages into this contract's offchain inbox for subsequent processing.\n        ///\n        /// Each message is routed to the inbox scoped to its `recipient` field.\n        ///\n        /// For more details, see `aztec::messages::processing::offchain::receive`.\n        ///\n        /// This function is automatically injected by the `#[aztec]` macro.\n        #[aztec::macros::internals_functions_generation::abi_attributes::abi_utility]\n        unconstrained fn $OFFCHAIN_RECEIVE_FN_NAME($OFFCHAIN_RECEIVE_PARAM_NAME: $param_type) -> $OFFCHAIN_RECEIVE_RETURN_TYPE {\n            aztec::oracle::version::assert_compatible_oracle_version();\n            let address = aztec::context::UtilityContext::new().this_address();\n            aztec::messages::processing::offchain::receive(address, $OFFCHAIN_RECEIVE_PARAM_NAME);\n        }\n    }\n}\n\n/// Checks that all functions in the module have a context macro applied.\n///\n/// Non-macroified functions are not allowed in contracts. They must all be one of\n/// [`crate::macros::functions::external`], [`crate::macros::functions::internal`] or `test`.\ncomptime fn check_each_fn_macroified(m: Module) {\n    for f in m.functions() {\n        let name = f.name();\n        if !is_fn_external(f) & !is_fn_contract_library_method(f) & !is_fn_internal(f) & !is_fn_test(f) {\n            // We  don't suggest that #[contract_library_method] is allowed because we don't want to introduce another\n            // concept\n            panic(\n                f\"Function {name} must be marked as either #[external(...)], #[internal(...)], or #[test]\",\n            );\n        }\n    }\n}\n"
     },
+    "115": {
+      "function_locations": [
+        {
+          "name": "generate_private_internal_function_call",
+          "start": 541
+        },
+        {
+          "name": "generate_public_internal_function_call",
+          "start": 1586
+        },
+        {
+          "name": "generate_call_internal_struct",
+          "start": 2841
+        }
+      ],
+      "path": "/Users/detoo/nargo/github.com/aztec-labs-eng/aztec-nr/v6.0.0/aztec/src/macros/calls_generation/internal_functions.nr",
+      "source": "//! Generates functionality such that the following API for performing calls to `#[internal(\"...\")]` functions is\n//! available:\n//!\n//! ```noir\n//! self.internal.my_internal_function(...)\n//! ```\n//!\n//! Injected into the contract by the `#[aztec]` macro.\n\nuse crate::macros::internals_functions_generation::internal_functions_registry;\n\n/// Generates a method for the `CallInternal` struct that makes a call to the `#[internal(\"private\")]` function `f`.\ncomptime fn generate_private_internal_function_call(f: FunctionDefinition) -> Quoted {\n    let original_function_name = f.name();\n    let original_return_type = f.return_type();\n    let original_params = f\n        .parameters()\n        .map(|param| {\n            let param_name = param.name();\n            let param_type = param.typ();\n            quote { $param_name: $param_type }\n        })\n        .join(quote {, });\n\n    let params_at_callsite = f\n        .parameters()\n        .map(|param| {\n            let param_name = param.name();\n            quote { $param_name }\n        })\n        .join(quote {, });\n\n    let fn_name = f\"__aztec_nr_internals__{original_function_name}\".quoted_contents();\n\n    quote {\n        pub fn $original_function_name(self: CallInternal<&mut aztec::context::PrivateContext>, $original_params) -> $original_return_type {\n            $fn_name(self.context, $params_at_callsite)\n        }\n    }\n}\n\n/// Generates a method for the `CallInternal` struct that makes a call to the `#[internal(\"public\")]` function `f`.\ncomptime fn generate_public_internal_function_call(f: FunctionDefinition) -> Quoted {\n    let original_function_name = f.name();\n    let original_return_type = f.return_type();\n    let original_params = f\n        .parameters()\n        .map(|param| {\n            let param_name = param.name();\n            let param_type = param.typ();\n            quote { $param_name: $param_type }\n        })\n        .join(quote {, });\n\n    let params_at_callsite = f\n        .parameters()\n        .map(|param| {\n            let param_name = param.name();\n            quote { $param_name }\n        })\n        .join(quote {, });\n\n    let fn_name = f\"__aztec_nr_internals__{original_function_name}\".quoted_contents();\n\n    quote {\n        pub unconstrained fn $original_function_name(self: CallInternal<aztec::context::PublicContext>, $original_params) -> $original_return_type {\n            $fn_name(self.context, $params_at_callsite)\n        }\n    }\n}\n\n/// Generates a struct which is injected into contracts via the `#[aztec]` macro and which is then instantiated in the\n/// external and internal functions' bodies and provided into the `ContractSelf` struct. This then allows for the\n/// following API:\n///\n/// ```noir\n/// self.internal.my_internal_function(arg1, arg2);\n/// ```\npub(crate) comptime fn generate_call_internal_struct(m: Module) -> Quoted {\n    let private_internal_functions = internal_functions_registry::get_private_functions(m);\n    let public_internal_functions = internal_functions_registry::get_public_functions(m);\n\n    let private_internal_functions_calls =\n        private_internal_functions.map(|function| generate_private_internal_function_call(function)).join(quote {});\n    let public_internal_functions_calls =\n        public_internal_functions.map(|function| generate_public_internal_function_call(function)).join(quote {});\n\n    quote {\n        pub struct CallInternal<Context> {\n            pub context: Context,\n        }\n\n        impl CallInternal<&mut aztec::context::PrivateContext> {\n            $private_internal_functions_calls\n        }\n\n        impl CallInternal<aztec::context::PublicContext> {\n            $public_internal_functions_calls\n        }\n    }\n}\n"
+    },
     "117": {
       "function_locations": [
         {
@@ -2701,6 +3119,20 @@
       ],
       "path": "/Users/detoo/nargo/github.com/aztec-labs-eng/aztec-nr/v6.0.0/aztec/src/macros/internals_functions_generation/external/public.nr",
       "source": "use crate::macros::{\n    internals_functions_generation::external::helpers::{create_authorize_once_check, get_abi_relevant_attributes},\n    utils::{\n        fn_has_authorize_once, fn_has_noinitcheck, is_fn_initializer, is_fn_only_self, is_fn_view,\n        module_has_initializer, module_has_storage,\n    },\n};\n\n/// Emits a per-contract helper that creates the `self` value from a `PublicContext` already in scope.\n///\n/// This is the shared helper used by both:\n/// - public external functions, via [`generate_public_self_creator`], which constructs a fresh `PublicContext` from\n///   `calldata_copy` and then delegates to this helper; and\n/// - public internal functions and `#[contract_library_method]` bodies, which already receive `context` as a\n///   parameter and call this helper directly to skip the `calldata_copy` step.\npub(crate) comptime fn generate_public_self_creator_from_context(m: Module) -> Quoted {\n    let (storage_type, storage_init) = if module_has_storage(m) {\n        (quote { Storage<aztec::context::PublicContext> }, quote { let storage = Storage::init(context); })\n    } else {\n        // Contract does not have Storage defined, so we set storage to the unit type `()`. ContractSelfPublic requires\n        // a storage struct in its constructor. Using an Option type would lead to worse developer experience and\n        // higher constraint counts so we use the unit type `()` instead.\n        (quote { () }, quote { let storage = (); })\n    };\n\n    quote {\n        #[contract_library_method]\n        unconstrained fn __aztec_nr_internals__create_public_self_from_context(context: aztec::context::PublicContext) -> aztec::contract_self::ContractSelfPublic<$storage_type, CallSelf<aztec::context::PublicContext>, CallSelfStatic<aztec::context::PublicContext>, CallInternal<aztec::context::PublicContext>> {\n            $storage_init\n            let self_address = context.this_address();\n            let call_self: CallSelf<aztec::context::PublicContext> = CallSelf { address: self_address, context };\n            let call_self_static: CallSelfStatic<aztec::context::PublicContext> = CallSelfStatic { address: self_address, context };\n            let internal: CallInternal<aztec::context::PublicContext> = CallInternal { context };\n            aztec::contract_self::ContractSelfPublic::new(context, storage, call_self, call_self_static, internal)\n        }\n    }\n}\n\n/// Generates the per-contract helper that builds public `self`.\n///\n/// Each public external function calls this helper instead of inlining the construction, so the same preamble does not\n/// appear duplicated in every public function body. We let Noir's inliner decide whether to inline the helper at each\n/// call site rather than forcing it via macro expansion.\n///\n/// The helper is generic over the calldata length `N` because `PublicContext::new` takes a closure that reads `N`\n/// fields from calldata. Noir monomorphizes one copy per distinct `N`, so public functions with the same number of\n/// serialized args reuse the same compiled code.\npub(crate) comptime fn generate_public_self_creator(m: Module) -> Quoted {\n    let storage_type = if module_has_storage(m) {\n        quote { Storage<aztec::context::PublicContext> }\n    } else {\n        quote { () }\n    };\n\n    quote {\n        #[contract_library_method]\n        unconstrained fn __aztec_nr_internals__create_public_self<let N: u32>() -> aztec::contract_self::ContractSelfPublic<$storage_type, CallSelf<aztec::context::PublicContext>, CallSelfStatic<aztec::context::PublicContext>, CallInternal<aztec::context::PublicContext>> {\n            // Unlike in the private case, in public the `context` does not need to receive the hash of the original\n            // params.\n            let context = aztec::context::PublicContext::new(|| {\n                // We start from 1 because we skip the selector for the dispatch function.\n                let serialized_args : [Field; N] = aztec::oracle::avm::calldata_copy(1, N);\n                aztec::hash::hash_args(serialized_args)\n            });\n            __aztec_nr_internals__create_public_self_from_context(context)\n        }\n    }\n}\n\npub(crate) comptime fn generate_public_external(f: FunctionDefinition) -> Quoted {\n    let module_has_initializer = module_has_initializer(f.module());\n\n    // Public functions undergo a lot of transformations from their Aztec.nr form.\n    let original_params = f.parameters().map(|param| (param.name(), param.typ()));\n\n    let args_len_quote = if original_params.len() == 0 {\n        // If the function has no parameters, we set the args_len to 0.\n        quote { 0 }\n    } else {\n        // The following will give us <type_of_struct_member_1 as Serialize>::N + <type_of_struct_member_2 as\n        // Serialize>::N + ...\n        original_params\n            .map(|(_, param_type): (Quoted, Type)| {\n                quote {\n            <$param_type as $crate::protocol::traits::Serialize>::N\n        }\n            })\n            .join(quote {+})\n    };\n\n    let contract_self_creation = quote {\n        #[allow(unused_variables)]\n        let mut self = __aztec_nr_internals__create_public_self::<$args_len_quote>();\n    };\n\n    let original_function_name = f.name();\n\n    // Modifications introduced by the different marker attributes.\n    let internal_check = if is_fn_only_self(f) {\n        let assertion_message = f\"Function {original_function_name} can only be called by the same contract\";\n        quote { assert(self.msg_sender() == self.address, $assertion_message); }\n    } else {\n        quote {}\n    };\n\n    let view_check = if is_fn_view(f) {\n        let assertion_message = f\"Function {original_function_name} can only be called statically\".as_quoted_str();\n        quote { assert(self.context.is_static_call(), $assertion_message); }\n    } else {\n        quote {}\n    };\n\n    let (assert_initializer, mark_as_initialized) = if is_fn_initializer(f) {\n        (\n            quote {\n                aztec::macros::functions::initialization_utils::assert_initialization_matches_address_preimage_public(self.context);\n            },\n            quote {\n                aztec::macros::functions::initialization_utils::mark_as_initialized_from_public_initializer(self.context);\n            },\n        )\n    } else {\n        (quote {}, quote {})\n    };\n\n    // Initialization checks are not included in contracts that don't have initializers.\n    let init_check = if module_has_initializer & !fn_has_noinitcheck(f) & !is_fn_initializer(f) {\n        quote { aztec::macros::functions::initialization_utils::assert_is_initialized_public(self.context); }\n    } else {\n        quote {}\n    };\n\n    // Inject the authwit check if the function is marked with #[authorize_once].\n    let authorize_once_check = if fn_has_authorize_once(f) {\n        create_authorize_once_check(f, false)\n    } else {\n        quote {}\n    };\n\n    let to_prepend = quote {\n        $contract_self_creation\n        $assert_initializer\n        $init_check\n        $internal_check\n        $view_check\n        $authorize_once_check\n    };\n\n    // `mark_as_initialized` is placed after the user's function body. If it ran at the beginning, the contract\n    // would appear initialized while the initializer is still running, allowing contracts called by the initializer\n    // to re-enter into a half-initialized contract.\n    let to_append = quote {\n        $mark_as_initialized\n    };\n\n    let fn_name = f\"__aztec_nr_internals__{original_function_name}\".quoted_contents();\n    let body = f.body();\n    let return_type = f.return_type();\n\n    // New function parameters are the same as the original function's ones.\n    let params = original_params.map(|(param_name, param_type)| quote { $param_name: $param_type }).join(quote {, });\n\n    // Preserve all attributes that are relevant to the function's ABI.\n    let abi_relevant_attributes = get_abi_relevant_attributes(f);\n\n    // All public functions are automatically made unconstrained, even if they were not marked as such. This is because\n    // instead of compiling into a circuit, they will compile to bytecode that will be later transpiled into AVM\n    // bytecode.\n    quote {\n        #[aztec::macros::internals_functions_generation::abi_attributes::abi_public]\n        $abi_relevant_attributes\n        unconstrained fn $fn_name($params) -> pub $return_type {\n            $to_prepend\n            $body\n            $to_append\n        }\n    }\n}\n"
+    },
+    "131": {
+      "function_locations": [
+        {
+          "name": "generate_private_internal",
+          "start": 382
+        },
+        {
+          "name": "generate_public_internal",
+          "start": 3055
+        }
+      ],
+      "path": "/Users/detoo/nargo/github.com/aztec-labs-eng/aztec-nr/v6.0.0/aztec/src/macros/internals_functions_generation/internal.nr",
+      "source": "use crate::macros::utils::module_has_storage;\n\n/// Generates a private internal function based on the function that was originally marked with #[internal(\"private\")].\n/// For more details on why we do this instead of just transforming the original function, see the documentation of\n/// this module.\npub(crate) comptime fn generate_private_internal(f: FunctionDefinition) -> Quoted {\n    let original_function_name = f.name();\n    let fn_name = f\"__aztec_nr_internals__{original_function_name}\".quoted_contents();\n    let return_type = f.return_type();\n\n    let original_params = f\n        .parameters()\n        .map(|param| {\n            let param_name = param.name();\n            let param_type = param.typ();\n            quote { $param_name: $param_type }\n        })\n        .join(quote {, });\n\n    let params = quote {\n        context: &mut aztec::context::PrivateContext,\n        $original_params\n    };\n\n    let storage_init = if module_has_storage(f.module()) {\n        quote {\n            let storage = Storage::init(context);\n        }\n    } else {\n        quote {\n            let storage = ();\n        }\n    };\n\n    let body = f.body();\n\n    // Internal functions are inlined within external functions. For this reason we mark them with\n    // #[contract_library_method] to prevent them from being compiled as entry points.\n    quote {\n        #[contract_library_method]\n        fn $fn_name($params) -> $return_type {\n            #[allow(unused_variables)]\n            let mut self = {\n                $storage_init\n                let self_address = context.this_address();\n                let call_self: CallSelf<&mut aztec::context::PrivateContext> = CallSelf { address: self_address, context };\n                let enqueue_self: EnqueueSelf<&mut aztec::context::PrivateContext> = EnqueueSelf { address: self_address, context };\n                let call_self_static: CallSelfStatic<&mut aztec::context::PrivateContext> = CallSelfStatic { address: self_address, context };\n                let enqueue_self_static: EnqueueSelfStatic<&mut aztec::context::PrivateContext> = EnqueueSelfStatic { address: self_address, context };\n                let internal: CallInternal<&mut aztec::context::PrivateContext> = CallInternal { context };\n                let call_self_utility = CallSelfUtility { address: self_address };\n                let utility: aztec::contract_self::PrivateUtilityCalls<CallSelfUtility> = aztec::contract_self::PrivateUtilityCalls { call_self: call_self_utility };\n                aztec::contract_self::ContractSelfPrivate::new(context, storage, call_self, enqueue_self, call_self_static, enqueue_self_static, internal, utility)\n            };\n            \n            $body\n        }\n    }\n}\n\n/// Generates a public internal function based on the function that was originally marked with #[internal(\"public\")].\n/// For more details on why we do this instead of just transforming the original function, see the documentation of\n/// this module.\npub(crate) comptime fn generate_public_internal(f: FunctionDefinition) -> Quoted {\n    let original_function_name = f.name();\n    let fn_name = f\"__aztec_nr_internals__{original_function_name}\".quoted_contents();\n    let return_type = f.return_type();\n\n    let original_params = f\n        .parameters()\n        .map(|param| {\n            let param_name = param.name();\n            let param_type = param.typ();\n            quote { $param_name: $param_type }\n        })\n        .join(quote {, });\n\n    let params = quote {\n        context: aztec::context::PublicContext,\n        $original_params\n    };\n\n    let body = f.body();\n\n    // Internal public functions are marked as unconstrained because they are inlined within external public functions,\n    // which are also compiled as unconstrained and later transpiled to AVM bytecode. Since these internal functions\n    // are intended to be inlined, we mark them with #[contract_library_method] to prevent them from being compiled as\n    // entry points.\n    quote {\n        #[contract_library_method]\n        unconstrained fn $fn_name($params) -> $return_type {\n            #[allow(unused_variables)]\n            let mut self = __aztec_nr_internals__create_public_self_from_context(context);\n\n            $body\n        }\n    }\n}\n"
     },
     "142": {
       "function_locations": [
@@ -3988,24 +4420,6 @@
       "path": "/Users/detoo/nargo/github.com/aztec-labs-eng/aztec-nr/v6.0.0/aztec/src/partial_notes/mod.nr",
       "source": "mod fsm;\n\nuse crate::{\n    messages::{\n        discovery::{ComputeNoteHash, ComputeNoteNullifier},\n        encoding::MAX_MESSAGE_CONTENT_LEN,\n        logs::partial_note::{decode_partial_note_private_message, MAX_PARTIAL_NOTE_PRIVATE_PACKED_LEN},\n        processing::{get_pending_partial_notes_completion_logs, ResolvedTx},\n    },\n    oracle::block_reference::BlockReference,\n};\n\nuse crate::logging::{aztecnr_debug_log_format, aztecnr_warn_log_format};\nuse crate::protocol::{address::AztecAddress, traits::{Deserialize, Serialize}};\nuse fsm::PartialNoteFsm;\n\n/// A partial note that was delivered but is still pending completion. Contains the information necessary to find the\n/// log that will complete it and lead to a note being discovered and delivered.\n#[derive(Serialize, Deserialize)]\npub(crate) struct DeliveredPendingPartialNote {\n    pub(crate) owner: AztecAddress,\n    pub(crate) randomness: Field,\n    pub(crate) note_completion_log_tag: Field,\n    pub(crate) note_type_id: Field,\n    pub(crate) packed_private_note_content: BoundedVec<Field, MAX_PARTIAL_NOTE_PRIVATE_PACKED_LEN>,\n}\n\npub(crate) unconstrained fn process_partial_note_private_msg(\n    contract_address: AztecAddress,\n    msg_metadata: u64,\n    msg_content: BoundedVec<Field, MAX_MESSAGE_CONTENT_LEN>,\n    resolved_tx: ResolvedTx,\n    recipient: AztecAddress,\n) {\n    let decoded = decode_partial_note_private_message(msg_metadata, msg_content);\n\n    if decoded.is_some() {\n        let (owner, randomness, note_completion_log_tag, note_type_id, packed_private_note_content) = decoded.unwrap();\n\n        PartialNoteFsm::init(\n            contract_address,\n            recipient,\n            DeliveredPendingPartialNote {\n                owner,\n                randomness,\n                note_completion_log_tag,\n                note_type_id,\n                packed_private_note_content,\n            },\n            BlockReference { block_number: resolved_tx.block_number, block_hash: resolved_tx.block_hash },\n        );\n    } else {\n        aztecnr_warn_log_format!(\n            \"Could not decode partial note private message from tx {0}, ignoring\",\n        )(\n            [resolved_tx.tx_hash],\n        );\n    }\n}\n\n/// Drives every active partial-note FSM forward.\npub(crate) unconstrained fn sync(\n    contract_address: AztecAddress,\n    compute_note_hash: ComputeNoteHash,\n    compute_note_nullifier: ComputeNoteNullifier,\n    scope: AztecAddress,\n) {\n    // `load_all` is a relatively expensive oracle round-trip, so we call it once and reuse the result.\n    let active_partial_note_fsms = PartialNoteFsm::load_all(contract_address, scope);\n\n    // Fetching completion logs is the dominant cost of partial note contract sync (a node round-trip each) and only\n    // pending notes need them, so we batch that fetch for the pending subset and then drive the FSMs in two passes:\n    //  1. Step each pending FSM with its freshly-fetched completion logs, giving found logs a chance to complete notes.\n    //  2. Step every active FSM with no logs, which is where completed-and-finalized FSMs terminate.\n    // Keeping both the completion and termination logic inside `PartialNoteFsm::step` is what lets the orchestrator\n    // stay this small, the price is the somewhat less elegant two-pass shape that the batched fetch forces on us.\n    let pending_partial_note_fsms = active_partial_note_fsms.filter(|fsm: PartialNoteFsm| fsm.is_pending());\n    let pending_partial_notes = pending_partial_note_fsms.map(|fsm: PartialNoteFsm| fsm.read_pending_partial_note());\n\n    aztecnr_debug_log_format!(\"{} pending partial notes\")([pending_partial_notes.len() as Field]);\n\n    let completion_logs = get_pending_partial_notes_completion_logs(contract_address, pending_partial_notes);\n    assert_eq(completion_logs.len(), pending_partial_notes.len());\n\n    pending_partial_note_fsms.for_each(|i, fsm: PartialNoteFsm| {\n        fsm.step(Option::some(completion_logs.get(i)), compute_note_hash, compute_note_nullifier);\n    });\n\n    active_partial_note_fsms.for_each(|_i, fsm: PartialNoteFsm| {\n        fsm.step(Option::none(), compute_note_hash, compute_note_nullifier);\n    });\n}\n"
     },
-    "236": {
-      "function_locations": [
-        {
-          "name": "<impl StateVariable<1, Context> for Map<K, V, Context>>::new",
-          "start": 4080
-        },
-        {
-          "name": "<impl StateVariable<1, Context> for Map<K, V, Context>>::get_storage_slot",
-          "start": 4265
-        },
-        {
-          "name": "Map<K, V, Context>::at",
-          "start": 4999
-        }
-      ],
-      "path": "/Users/detoo/nargo/github.com/aztec-labs-eng/aztec-nr/v6.0.0/aztec/src/state_vars/map.nr",
-      "source": "use crate::protocol::{storage::map::derive_storage_slot_in_map, traits::ToField};\nuse crate::state_vars::StateVariable;\n\n/// A key-value container for state variables.\n///\n/// A `Map` wraps another state variable type (the 'value') and creates independent instances of it for each key,\n/// resulting in effectively as many state variables as there are key values. This behavior is similar to a Solidity\n/// `mapping (K => V)`.\n///\n/// ## Use Cases\n///\n/// Any scenario in which a fixed number of variables is insufficient to represent contract state requires `Map` e.g.\n/// per-election configuration in a voting contract, per-user state, etc. `Map` also composes naturally into more\n/// complex containers: an array could be implemented as a `Map` with indices as keys.\n///\n/// Note that some private state variables, such as [`PrivateMutable`](crate::state_vars::PrivateMutable) and\n/// [`PrivateSet`](crate::state_vars::PrivateSet) cannot be wrapped in a `Map`. These types implement the\n/// [`OwnedStateVariable`](crate::state_vars::OwnedStateVariable) trait, and as such should instead be wrapped using the\n/// [`Owned`](crate::state_vars::Owned) container, which can be thought of as a specialization of `Map` for private\n/// state 'owned' by a single account.\n///\n/// ## Examples\n///\n/// Since `Map` is also a [`StateVariable`], it is declared in the contract's\n/// [`#[storage]`](crate::macros::storage::storage) struct along with all others:\n///\n/// ```noir\n/// #[storage]\n/// struct Storage<C> {\n///     is_admin: Map<AztecAddress, PublicMutable<bool, C>, C>,\n///     vote_tallies: Map<ElectionId, PublicMutable<u128, C>, C>,\n/// }\n/// ```\n///\n/// ### Multiple `Map`s\n///\n/// There is no limit to how many `Map` containers a contract can have, and `Map`s can themselves wrap other `Map`s,\n/// resulting in nested layouts.\n///\n/// ```noir\n/// #[storage]\n/// struct Storage<C> {\n///     // A nested map where the first key is an address and the second a `Year` type, such that\n///     // self.storage.user_yearly_config.at(user).at(year) results in distinct `UserConfig` variables for each\n///     // `(user, year)` tuple.\n///     user_yearly_config: Map<AztecAddress, Map<Year, UserConfig<C>, C>, C>,\n/// }\n/// ```\n///\n/// ## Requirements\n///\n/// The value type `V` must implement the [`StateVariable`] trait. The key type `K` must implement the [`ToField`] trait\n/// in such a way that the `Field` representation is unique for each key.\n///\n/// For key types that cannot be converted into a `Field`, consider wrapping them in a type that implements `ToField` as\n/// the hash of the key.\n///\n/// ```noir\n/// struct MyKey {\n///     a: Field,\n///     b: Field,\n/// }\n///\n/// struct MyKeyWrapper {\n///     inner: MyKey,\n/// }\n///\n/// impl ToField for MyKeyWrapper {\n///     fn to_field(self) -> Field {\n///         poseidon2_hash([self.inner.a, self.inner.b])\n///     }\n/// }\n///\n/// #[storage]\n/// struct Storage<C> {\n///     a: Map<MyKeyWrapper, PublicMutable<bool, C>, C>,\n/// }\n/// ```\n///\n/// ## Implementation Details\n///\n/// Like all other state variables, `Map` gets assigned a unique storage slot. It uses this value to derive unique\n/// storage slots for each key, resulting in independent state variables. Nothing gets stored at `Map`'s storage slot.\n/// This is equivalent to Solidity's implementation of `mapping`.\n///\n/// Because the storage slot derivation is done using a hash function, it is not possible to compute the key (preimage)\n/// used to obtain a given derived state variable slot.\npub struct Map<K, V, Context> {\n    pub context: Context,\n    storage_slot: Field,\n}\n\n// Map reserves a single storage slot regardless of what it stores because nothing is stored at said slot: it is only\n// used to derive the storage slots of nested state variables, which is expected to never result in collisions or slots\n// being close to one another due to these being hashes. This mirrors the strategy adopted by Solidity mappings.\nimpl<K, V, Context> StateVariable<1, Context> for Map<K, V, Context> {\n    fn new(context: Context, storage_slot: Field) -> Self {\n        assert(storage_slot != 0, \"Storage slot 0 not allowed. Storage slots must start from 1.\");\n        Map { context, storage_slot }\n    }\n\n    fn get_storage_slot(self) -> Field {\n        self.storage_slot\n    }\n}\n\nimpl<K, V, Context> Map<K, V, Context> {\n    /// Returns the state variable for a key.\n    ///\n    /// This derives a unique storage slot for `key` and returns a state variable of type `V` at that slot. It is\n    /// equivalent to accessing a `mapping` via the `[]` operator in Solidity (e.g. `balances[user]` would be\n    /// `balances.at(user)`).\n    ///\n    /// ## Example\n    ///\n    /// ```noir\n    /// #[external(\"utility\")]\n    /// fn get_election_vote_tallies(election: ElectionId) -> u128 {\n    ///     self.storage.vote_tallies.at(election).read()\n    /// }\n    /// ```\n    pub fn at<let N: u32>(self, key: K) -> V\n    where\n        K: ToField,\n        V: StateVariable<N, Context>,\n    {\n        V::new(\n            self.context,\n            derive_storage_slot_in_map(self.storage_slot, key),\n        )\n    }\n}\n"
-    },
     "249": {
       "function_locations": [
         {
@@ -4704,20 +5118,6 @@
       "path": "/Users/detoo/nargo/github.com/AztecProtocol/aztec-packages/v6.0.0/noir-projects/fnd/noir-protocol-circuits/crates/types/src/poseidon2.nr",
       "source": "use crate::constants::TWO_POW_64;\nuse crate::traits::{Deserialize, Serialize};\nuse std::meta::derive;\n// NB: This is a clone of noir/noir-repo/noir_stdlib/src/hash/poseidon2.nr\n// It exists as we sometimes need to perform custom absorption, but the stdlib version\n// has a private absorb() method (it's also designed to just be a hasher)\n// Can be removed when standalone noir poseidon lib exists: See noir#6679\n// TODO: Poseidon is stand-alone now\n\nglobal RATE: u32 = 3;\n\n#[derive(Deserialize, Eq, Serialize)]\npub struct Poseidon2Sponge {\n    pub cache: [Field; 3],\n    pub state: [Field; 4],\n    pub cache_size: u32,\n    pub squeeze_mode: bool, // 0 => absorb, 1 => squeeze\n}\n\nimpl Poseidon2Sponge {\n    #[no_predicates]\n    pub fn hash<let N: u32>(input: [Field; N], message_size: u32) -> Field {\n        Poseidon2Sponge::hash_internal(input, message_size)\n    }\n\n    pub fn new(iv: Field) -> Poseidon2Sponge {\n        let mut result =\n            Poseidon2Sponge { cache: [0; 3], state: [0; 4], cache_size: 0, squeeze_mode: false };\n        result.state[RATE] = iv;\n        result\n    }\n\n    fn perform_duplex(&mut self) {\n        // add the cache into sponge state\n        for i in 0..RATE {\n            // We effectively zero-pad the cache by only adding to the state\n            // cache that is less than the specified `cache_size`\n            if i < self.cache_size {\n                self.state[i] += self.cache[i];\n            }\n        }\n        self.state = std::hash::poseidon2_permutation(self.state);\n    }\n\n    pub fn absorb(&mut self, input: Field) {\n        assert(!self.squeeze_mode);\n        if self.cache_size == RATE {\n            // If we're absorbing, and the cache is full, apply the sponge permutation to compress the cache\n            self.perform_duplex();\n            self.cache[0] = input;\n            self.cache_size = 1;\n        } else {\n            // If we're absorbing, and the cache is not full, add the input into the cache\n            self.cache[self.cache_size] = input;\n            self.cache_size += 1;\n        }\n    }\n\n    pub fn squeeze(&mut self) -> Field {\n        assert(!self.squeeze_mode);\n        // If we're in absorb mode, apply sponge permutation to compress the cache.\n        self.perform_duplex();\n        self.squeeze_mode = true;\n\n        // Pop one item off the top of the permutation and return it.\n        self.state[0]\n    }\n\n    fn hash_internal<let N: u32>(input: [Field; N], in_len: u32) -> Field {\n        let iv: Field = (in_len as Field) * TWO_POW_64;\n        let mut sponge = Poseidon2Sponge::new(iv);\n        for i in 0..input.len() {\n            if i < in_len {\n                sponge.absorb(input[i]);\n            }\n        }\n\n        sponge.squeeze()\n    }\n}\n"
     },
-    "428": {
-      "function_locations": [
-        {
-          "name": "derive_storage_slot_in_map",
-          "start": 274
-        },
-        {
-          "name": "test::test_derive_storage_slot_in_map_matches_typescript",
-          "start": 587
-        }
-      ],
-      "path": "/Users/detoo/nargo/github.com/AztecProtocol/aztec-packages/v6.0.0/noir-projects/fnd/noir-protocol-circuits/crates/types/src/storage/map.nr",
-      "source": "use crate::{\n    constants::DOM_SEP__PUBLIC_STORAGE_MAP_SLOT, hash::poseidon2_hash_with_separator,\n    traits::ToField,\n};\n\n// TODO: Move this to src/public_data/storage/map.nr\npub fn derive_storage_slot_in_map<K>(storage_slot: Field, key: K) -> Field\nwhere\n    K: ToField,\n{\n    poseidon2_hash_with_separator(\n        [storage_slot, key.to_field()],\n        DOM_SEP__PUBLIC_STORAGE_MAP_SLOT,\n    )\n}\n\nmod test {\n    use crate::{address::AztecAddress, storage::map::derive_storage_slot_in_map, traits::FromField};\n\n    #[test]\n    fn test_derive_storage_slot_in_map_matches_typescript() {\n        let map_slot = 0x132258fb6962c4387ba659d9556521102d227549a386d39f0b22d1890d59c2b5;\n        let key = AztecAddress::from_field(\n            0x302dbc2f9b50a73283d5fb2f35bc01eae8935615817a0b4219a057b2ba8a5a3f,\n        );\n\n        let slot = derive_storage_slot_in_map(map_slot, key);\n\n        // The following value was generated by `map_slot.test.ts`\n        let slot_from_typescript =\n            0x2d225f361108379adc2da91378b9702675c5546b57e78bafc1e74ec7fec55967;\n\n        assert_eq(slot, slot_from_typescript);\n    }\n}\n"
-    },
     "435": {
       "function_locations": [
         {
@@ -4755,156 +5155,6 @@
       ],
       "path": "/Users/detoo/nargo/github.com/AztecProtocol/aztec-packages/v6.0.0/noir-projects/fnd/noir-protocol-circuits/crates/types/src/traits/to_field.nr",
       "source": "use crate::utils::field::field_from_bytes;\n\npub trait ToField {\n    fn to_field(self) -> Field;\n}\n\nimpl ToField for Field {\n    #[inline_always]\n    fn to_field(self) -> Field {\n        self\n    }\n}\n\nimpl ToField for bool {\n    #[inline_always]\n    fn to_field(self) -> Field {\n        self as Field\n    }\n}\nimpl ToField for u8 {\n    #[inline_always]\n    fn to_field(self) -> Field {\n        self as Field\n    }\n}\nimpl ToField for u16 {\n    fn to_field(self) -> Field {\n        self as Field\n    }\n}\nimpl ToField for u32 {\n    #[inline_always]\n    fn to_field(self) -> Field {\n        self as Field\n    }\n}\nimpl ToField for u64 {\n    #[inline_always]\n    fn to_field(self) -> Field {\n        self as Field\n    }\n}\nimpl ToField for u128 {\n    #[inline_always]\n    fn to_field(self) -> Field {\n        self as Field\n    }\n}\nimpl<let N: u32> ToField for str<N> {\n    #[inline_always]\n    fn to_field(self) -> Field {\n        assert(N < 32, \"String doesn't fit in a field, consider using Serialize instead\");\n        field_from_bytes(self.as_bytes(), true)\n    }\n}\n"
-    },
-    "436": {
-      "function_locations": [
-        {
-          "name": "<impl Packable for bool>::pack",
-          "start": 564
-        },
-        {
-          "name": "<impl Packable for bool>::unpack",
-          "start": 946
-        },
-        {
-          "name": "<impl Packable for u8>::pack",
-          "start": 1397
-        },
-        {
-          "name": "<impl Packable for u8>::unpack",
-          "start": 1499
-        },
-        {
-          "name": "<impl Packable for u16>::pack",
-          "start": 1651
-        },
-        {
-          "name": "<impl Packable for u16>::unpack",
-          "start": 1753
-        },
-        {
-          "name": "<impl Packable for u32>::pack",
-          "start": 1906
-        },
-        {
-          "name": "<impl Packable for u32>::unpack",
-          "start": 2008
-        },
-        {
-          "name": "<impl Packable for u64>::pack",
-          "start": 2161
-        },
-        {
-          "name": "<impl Packable for u64>::unpack",
-          "start": 2263
-        },
-        {
-          "name": "<impl Packable for u128>::pack",
-          "start": 2418
-        },
-        {
-          "name": "<impl Packable for u128>::unpack",
-          "start": 2520
-        },
-        {
-          "name": "<impl Packable for Field>::pack",
-          "start": 2678
-        },
-        {
-          "name": "<impl Packable for Field>::unpack",
-          "start": 2771
-        },
-        {
-          "name": "<impl Packable for i8>::pack",
-          "start": 2915
-        },
-        {
-          "name": "<impl Packable for i8>::unpack",
-          "start": 3023
-        },
-        {
-          "name": "<impl Packable for i16>::pack",
-          "start": 3181
-        },
-        {
-          "name": "<impl Packable for i16>::unpack",
-          "start": 3290
-        },
-        {
-          "name": "<impl Packable for i32>::pack",
-          "start": 3450
-        },
-        {
-          "name": "<impl Packable for i32>::unpack",
-          "start": 3559
-        },
-        {
-          "name": "<impl Packable for i64>::pack",
-          "start": 3719
-        },
-        {
-          "name": "<impl Packable for i64>::unpack",
-          "start": 3828
-        },
-        {
-          "name": "<impl Packable for super::point::EmbeddedCurvePoint>::pack",
-          "start": 3997
-        },
-        {
-          "name": "<impl Packable for super::point::EmbeddedCurvePoint>::unpack",
-          "start": 4079
-        },
-        {
-          "name": "<impl Packable for [T; M]>::pack",
-          "start": 4290
-        },
-        {
-          "name": "<impl Packable for [T; M]>::unpack",
-          "start": 4652
-        },
-        {
-          "name": "test_u16_packing",
-          "start": 4897
-        },
-        {
-          "name": "test_i8_packing",
-          "start": 4993
-        },
-        {
-          "name": "test_i16_packing",
-          "start": 5089
-        },
-        {
-          "name": "test_i32_packing",
-          "start": 5187
-        },
-        {
-          "name": "test_i64_packing",
-          "start": 5285
-        },
-        {
-          "name": "test_bool_unpack_accepts_canonical_values",
-          "start": 5408
-        },
-        {
-          "name": "test_bool_unpack_rejects_even_non_bool",
-          "start": 5594
-        },
-        {
-          "name": "test_bool_unpack_rejects_odd_non_bool",
-          "start": 5827
-        },
-        {
-          "name": "test_bool_unpack_rejects_large_field",
-          "start": 6058
-        },
-        {
-          "name": "test_bool_pack_unpack_roundtrip",
-          "start": 6145
-        }
-      ],
-      "path": "/Users/detoo/nargo/github.com/AztecProtocol/aztec-packages/v6.0.0/noir-projects/fnd/noir-protocol-circuits/crates/types/src/type_packing.nr",
-      "source": "use crate::traits::{Deserialize, Packable, Serialize};\n\nglobal BOOL_PACKED_LEN: u32 = 1;\nglobal U8_PACKED_LEN: u32 = 1;\nglobal U16_PACKED_LEN: u32 = 1;\nglobal U32_PACKED_LEN: u32 = 1;\nglobal U64_PACKED_LEN: u32 = 1;\nglobal U128_PACKED_LEN: u32 = 1;\nglobal FIELD_PACKED_LEN: u32 = 1;\nglobal I8_PACKED_LEN: u32 = 1;\nglobal I16_PACKED_LEN: u32 = 1;\nglobal I32_PACKED_LEN: u32 = 1;\nglobal I64_PACKED_LEN: u32 = 1;\nglobal POINT_PACKED_LEN: u32 = 2;\n\nimpl Packable for bool {\n    let N: u32 = BOOL_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as Field]\n    }\n\n    /// Unpacks a `bool`, constraining the field to be a canonical boolean. A field outside `{0, 1}` is\n    /// rejected (rather than silently reinterpreted), so an arbitrary-origin field cannot be misread.\n    /// `pack` always emits `0` or `1`, so round-tripping is unaffected.\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> bool {\n        let v = fields[0];\n        // v * v == v holds iff v is 0 or 1: a single degree-2 constraint that both validates the field\n        // is a canonical bool and avoids the byte-range decomposition that a cast to u8 would require.\n        assert(v * v == v, \"Packable::unpack: bool field must be 0 or 1\");\n        v == 1\n    }\n}\n\nimpl Packable for u8 {\n    let N: u32 = U8_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as Field]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0] as u8\n    }\n}\n\nimpl Packable for u16 {\n    let N: u32 = U16_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as Field]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0] as u16\n    }\n}\n\nimpl Packable for u32 {\n    let N: u32 = U32_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as Field]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0] as u32\n    }\n}\n\nimpl Packable for u64 {\n    let N: u32 = U64_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as Field]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0] as u64\n    }\n}\n\nimpl Packable for u128 {\n    let N: u32 = U128_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as Field]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0] as u128\n    }\n}\n\nimpl Packable for Field {\n    let N: u32 = FIELD_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0]\n    }\n}\n\nimpl Packable for i8 {\n    let N: u32 = I8_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as u8 as Field]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0] as u8 as i8\n    }\n}\n\nimpl Packable for i16 {\n    let N: u32 = I16_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as u16 as Field]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0] as u16 as i16\n    }\n}\n\nimpl Packable for i32 {\n    let N: u32 = I32_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as u32 as Field]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0] as u32 as i32\n    }\n}\n\nimpl Packable for i64 {\n    let N: u32 = I64_PACKED_LEN;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        [self as u64 as Field]\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        fields[0] as u64 as i64\n    }\n}\n\nimpl Packable for super::point::EmbeddedCurvePoint {\n    let N: u32 = POINT_PACKED_LEN;\n    fn pack(self) -> [Field; Self::N] {\n        self.serialize()\n    }\n\n    fn unpack(packed: [Field; Self::N]) -> Self {\n        Self::deserialize(packed)\n    }\n}\n\nimpl<T, let M: u32> Packable for [T; M]\nwhere\n    T: Packable,\n{\n    let N: u32 = M * <T as Packable>::N;\n\n    #[inline_always]\n    fn pack(self) -> [Field; Self::N] {\n        let mut result: [Field; Self::N] = std::mem::zeroed();\n        for i in 0..M {\n            let serialized = self[i].pack();\n            for j in 0..<T as Packable>::N {\n                result[i * <T as Packable>::N + j] = serialized[j];\n            }\n        }\n        result\n    }\n\n    #[inline_always]\n    fn unpack(fields: [Field; Self::N]) -> Self {\n        let mut reader = crate::utils::reader::Reader::new(fields);\n        let result: [T; M] = std::mem::zeroed();\n        reader.read_struct_array::<T, <T as Packable>::N, M>(Packable::unpack, result)\n    }\n}\n\n#[test]\nfn test_u16_packing() {\n    let a: u16 = 10;\n    assert_eq(a, u16::unpack(a.pack()));\n}\n\n#[test]\nfn test_i8_packing() {\n    let a: i8 = -10;\n    assert_eq(a, i8::unpack(a.pack()));\n}\n\n#[test]\nfn test_i16_packing() {\n    let a: i16 = -10;\n    assert_eq(a, i16::unpack(a.pack()));\n}\n\n#[test]\nfn test_i32_packing() {\n    let a: i32 = -10;\n    assert_eq(a, i32::unpack(a.pack()));\n}\n\n#[test]\nfn test_i64_packing() {\n    let a: i64 = -10;\n    assert_eq(a, i64::unpack(a.pack()));\n}\n\n#[test]\nfn test_bool_unpack_accepts_canonical_values() {\n    assert_eq(bool::unpack([0]), false);\n    assert_eq(bool::unpack([1]), true);\n}\n\n#[test(should_fail_with = \"bool field must be 0 or 1\")]\nfn test_bool_unpack_rejects_even_non_bool() {\n    // 2 has LSB 0, so the previous LSB-based unpack silently returned false; now it is rejected.\n    let _ = bool::unpack([2]);\n}\n\n#[test(should_fail_with = \"bool field must be 0 or 1\")]\nfn test_bool_unpack_rejects_odd_non_bool() {\n    // 3 has LSB 1, so the previous LSB-based unpack silently returned true; now it is rejected.\n    let _ = bool::unpack([3]);\n}\n\n#[test(should_fail_with = \"bool field must be 0 or 1\")]\nfn test_bool_unpack_rejects_large_field() {\n    let _ = bool::unpack([1000000]);\n}\n\n#[test]\nfn test_bool_pack_unpack_roundtrip() {\n    // `pack` always emits 0 or 1, so it round-trips through the canonical-bool check in `unpack`.\n    assert_eq(true.pack(), [1]);\n    assert_eq(false.pack(), [0]);\n    assert_eq(bool::unpack(true.pack()), true);\n    assert_eq(bool::unpack(false.pack()), false);\n}\n"
     },
     "443": {
       "function_locations": [
@@ -5497,24 +5747,44 @@
     "471": {
       "function_locations": [
         {
-          "name": "BorgAuth::constructor",
-          "start": 716
+          "name": "BorgAuthV2::constructor",
+          "start": 1444
         },
         {
-          "name": "BorgAuth::update_role",
-          "start": 1048
+          "name": "BorgAuthV2::holds",
+          "start": 1696
         },
         {
-          "name": "BorgAuth::only_role",
-          "start": 1366
+          "name": "BorgAuthV2::has_permission",
+          "start": 1905
         },
         {
-          "name": "BorgAuth::user_role",
-          "start": 1549
+          "name": "BorgAuthV2::require_permission",
+          "start": 2069
+        },
+        {
+          "name": "BorgAuthV2::root_authority",
+          "start": 2247
+        },
+        {
+          "name": "BorgAuthV2::pending_root_authority",
+          "start": 2385
+        },
+        {
+          "name": "BorgAuthV2::propose_root_transfer",
+          "start": 2599
+        },
+        {
+          "name": "BorgAuthV2::accept_root_transfer",
+          "start": 2914
+        },
+        {
+          "name": "BorgAuthV2::update_to",
+          "start": 3416
         }
       ],
-      "path": "/Users/detoo/Dropbox/works/MetaLex/projects/cybercorps-contracts/aztec/contracts/borg_auth/src/main.nr",
-      "source": "mod test;\n\nuse aztec::macros::aztec;\n\n/// A role list for MetaLeX contracts, like the EVM `BorgAuth`. Roles are public state. A higher role includes the\n/// lower roles.\n#[aztec]\npub contract BorgAuth {\n    use aztec::{\n        macros::{functions::{external, initializer, view}, storage::storage},\n        protocol::address::AztecAddress,\n        state_vars::{Map, PublicMutable},\n    };\n\n    pub global OWNER_ROLE: u8 = 99;\n    pub global ADMIN_ROLE: u8 = 98;\n    pub global PRIVILEGED_ROLE: u8 = 97;\n\n    #[storage]\n    struct Storage<Context> {\n        user_roles: Map<AztecAddress, PublicMutable<u8, Context>, Context>,\n    }\n\n    #[initializer]\n    #[external(\"public\")]\n    fn constructor(owner: AztecAddress) {\n        self.storage.user_roles.at(owner).write(OWNER_ROLE);\n    }\n\n    /// Sets the role of `user`. Only the owner can call it. To swap owners, the owner gives `OWNER_ROLE` to the new\n    /// owner, and the new owner sets the role of the old owner to 0.\n    #[external(\"public\")]\n    fn update_role(user: AztecAddress, role: u8) {\n        assert(self.storage.user_roles.at(self.msg_sender()).read() >= OWNER_ROLE, \"BorgAuth: not authorized\");\n        self.storage.user_roles.at(user).write(role);\n    }\n\n    /// Fails if the role of `user` is lower than `role`.\n    #[external(\"public\")]\n    #[view]\n    fn only_role(role: u8, user: AztecAddress) {\n        assert(self.storage.user_roles.at(user).read() >= role, \"BorgAuth: not authorized\");\n    }\n\n    #[external(\"public\")]\n    #[view]\n    fn user_role(user: AztecAddress) -> u8 {\n        self.storage.user_roles.at(user).read()\n    }\n}\n"
+      "path": "/Users/detoo/Dropbox/works/MetaLex/projects/cybercorps-contracts/aztec/contracts/borg_auth_v2/src/main.nr",
+      "source": "mod test;\n\nuse aztec::macros::aztec;\n\n/// The permission list for MetaLeX contracts, like the EVM `BorgAuthV2`. The state is public.\n///\n/// This version has the root and one permission, `APPROVE_UPGRADE`. A later version adds the roles and the other\n/// permissions of the EVM contract by an upgrade. Each new version must keep the storage variables in this order and\n/// add new variables after them. It must also keep `require_permission` and the permission values, because other\n/// contracts call it.\n///\n/// To stop all upgrades of this contract, upgrade it to a version that has no `update_to`.\n#[aztec]\npub contract BorgAuthV2 {\n    use aztec::{\n        macros::{functions::{external, initializer, internal, view}, storage::storage},\n        protocol::{\n            address::AztecAddress, constants::CONTRACT_INSTANCE_REGISTRY_CONTRACT_ADDRESS,\n            contract_class_id::ContractClassId,\n        },\n        state_vars::PublicMutable,\n    };\n    use contract_instance_registry::ContractInstanceRegistry;\n\n    /// The EVM uses the keccak256 of the name. A bytes32 does not fit in a Field, so each permission is a number.\n    pub global APPROVE_UPGRADE: Field = 1;\n\n    #[storage]\n    struct Storage<Context> {\n        root_authority: PublicMutable<AztecAddress, Context>,\n        pending_root_authority: PublicMutable<AztecAddress, Context>,\n    }\n\n    #[initializer]\n    #[external(\"public\")]\n    fn constructor(root: AztecAddress) {\n        assert(!root.is_zero(), \"BorgAuthV2: zero address\");\n        self.storage.root_authority.write(root);\n    }\n\n    /// Root alone holds `APPROVE_UPGRADE`.\n    #[internal(\"public\")]\n    fn holds(permission: Field, account: AztecAddress) -> bool {\n        (permission == APPROVE_UPGRADE) & (account == self.storage.root_authority.read())\n    }\n\n    #[external(\"public\")]\n    #[view]\n    fn has_permission(permission: Field, account: AztecAddress) -> bool {\n        self.internal.holds(permission, account)\n    }\n\n    #[external(\"public\")]\n    #[view]\n    fn require_permission(permission: Field, account: AztecAddress) {\n        assert(self.internal.holds(permission, account), \"BorgAuthV2: permission denied\");\n    }\n\n    #[external(\"public\")]\n    #[view]\n    fn root_authority() -> AztecAddress {\n        self.storage.root_authority.read()\n    }\n\n    #[external(\"public\")]\n    #[view]\n    fn pending_root_authority() -> AztecAddress {\n        self.storage.pending_root_authority.read()\n    }\n\n    /// A zero nominee cancels the proposal. The root itself is never zero.\n    #[external(\"public\")]\n    fn propose_root_transfer(nominee: AztecAddress) {\n        let root = self.storage.root_authority.read();\n        assert(self.msg_sender() == root, \"BorgAuthV2: unauthorized\");\n        assert(nominee != root, \"BorgAuthV2: nominee is root\");\n        self.storage.pending_root_authority.write(nominee);\n    }\n\n    #[external(\"public\")]\n    fn accept_root_transfer() {\n        let nominee = self.storage.pending_root_authority.read();\n        assert(!nominee.is_zero() & (self.msg_sender() == nominee), \"BorgAuthV2: unauthorized\");\n        self.storage.root_authority.write(nominee);\n        self.storage.pending_root_authority.write(AztecAddress::zero());\n    }\n\n    /// Schedules an upgrade of this contract to `new_class_id`. The upgrade takes effect after the default upgrade\n    /// delay.\n    #[external(\"public\")]\n    fn update_to(new_class_id: ContractClassId) {\n        assert(self.internal.holds(APPROVE_UPGRADE, self.msg_sender()), \"BorgAuthV2: permission denied\");\n        self.call(ContractInstanceRegistry::at(CONTRACT_INSTANCE_REGISTRY_CONTRACT_ADDRESS).update(new_class_id));\n    }\n}\n"
     }
   },
   "functions": [
@@ -5522,13 +5792,37 @@
       "abi": {
         "abi_version": 1,
         "error_types": {
-          "13455385521185560676": {
+          "10626851675349249230": {
             "error_kind": "string",
-            "string": "Storage slot 0 not allowed. Storage slots must start from 1."
+            "string": "BorgAuthV2: unauthorized"
           },
+          "459713770342432051": {
+            "error_kind": "string",
+            "string": "Not initialized"
+          }
+        },
+        "parameters": [],
+        "return_type": null
+      },
+      "bytecode": "JwACBAEoAAABBIBFJwAABEUlAAAAPScCAgQAJwIDBAAfCgACAAMARSUAAABoJwICBEUnAgMEADsOAAMAAiwAAEMAMGROcuExoCm4UEW2gYFYXSgz6Eh5uXCRQ+H1k/AAAAAnAEQAACYeAgACAB4CAAIAJwICBAMtCAADAAgAAgAlAAABCS0CAAAeAgACACcCAwACLyoAAwACAAQKIgREAh4CAAUBCiIFQwYWCgYHHAoHCAAEKggFBycCBQEACioGBQgkAgAIAAAA0ycCCQQAPAYJAQoqBwQGJAIABgAAAOUlAAACOwoqAgUGJAIABgAAAPclAAACOycCAgABMAoABAACMAgARAADJh4CAAIAKQIAAwDHMvl3KwIABAAAAAAAAAAAAgAAAAAAAAAALQgBBScCBgQFAAgBBgEnAwUEAQAiBQIGLQoGBy0OAwcAIgcCBy0OAgcAIgcCBy0MRAcAIgcCBy0OBActCAECJwIDBAUACAEDAScDAgQBACIFAgMAIgICBD8PAAMABCcCAwQBACoCAwQtCwQEHgIAAgApAgAFAANtUn8rAgAGAAAAAAAAAAADAAAAAAAAAAAtCAEHJwIIBAUACAEIAScDBwQBACIHAggtCggJLQ4FCQAiCQIJLQ4CCQAiCQIJLQ4ECQAiCQIJLQ4GCS0IAQInAgQEBQAIAQQBJwMCBAEAIgcCBAAiAgIFPw8ABAAFACoCAwQtCwQEMwoABAACJwIDAQEkAgACAAACOiUAAAJNJioBAAEFk3opS5X07M48BAIBJioBAAEFBmE7PQudvTM8BAIBJg==",
+      "custom_attributes": [
+        "abi_public"
+      ],
+      "debug_symbols": "tVjdbuI8EH2XXHPh+fMPr7JaVbSlKyREKxY+6VPFu+8YPE7Slb0t0BtyGCfHM+Mz9iTvw/P68fjrYbN7ef09LH+8D4/7zXa7+fWwfX1aHTavO7W+Dy7/gONhKQu9pmGZ9Ar6H1wGqQAkA7EAMgsFBV4Bo4KYQShAZFhivsfrPMgZZEu+OTgDXIZCKiBmS348pgJSsaBDA6EAAAUpA18AsoFUAJkle3gB+jjpXChoQOOiPJQ9ZFSQPeQ8RXYsA3LOABuwITALmAXNkjN2BoQGQgEMBnwBYlPk1F2AEormkDwZiAUEswSzRLNEs+TUCWSQLoAdG8j3aOwM+pTPFsQC2Cw5UWcgNiRm8WbxZglgQAqIzgAbSAUkmyLFC5C8uJ4y8AXkxb0As6BZ0CxklpxVr+FIXuULyPeoxuTsfMggFJBX2YfTaTFYOTwc9ut1roZJfWjVvK32691hWO6O2+1i+G+1PZ5v+v222p2vh9VeRzXT692zXpXwZbNdZ3RajE+79qPiUihPC0isBFppMwpoU7DzWCgYkJsU2KbQWrMYIIFrUlCbAp0gFQ7FFCpJCDMO7nCEaAxpEkeSz8aBGMAYtD6acfg2BTFLodC6lEoRYcYQ7pCJeGsmOrryWkaFwUvyzUx0KDDR6EQYpamFPpdmR5seosnbI2DlQE5zjs6iEga2fCr23MonUI/E+bqu6CI2SfgOKwty69L+IxZ0YyyT1f3oRkelesRYqZB3eI3GMCULhRxQWyCpzRERTacRGSoHef9ZN3TuVN0gbrqBvT0UqhusfUur6rG394BH80MxNxWGvaXlGorv7IB9NyRUN4JLTTc6GuWqL2YcVS7X5XMSycd8dgSanIkr4RgE8xfUWYvEhdCURVdZdfciQNekoA5HSHUjDonaOyBBTxVA46EE0tx3qLeNandZoyHx1CTp6dNH6zUoIF2zaxBQ1TjETlLlDkn190hquEdS47cmVZtdtjZSu+3JcT9PKrt7dHDwjY2L9u+TSEI7ko5KQ6xnW0i+w9E568FBsFUBPW/HLYjS/GjijlBTAtuEUppI7C+OrlBr9xMnXZjMd0LudaSBLBTtpdxVHDyesuyE2xydw55SVYfSjacshC+4EerB4mLbjZ7CYu0EJUZpqkPwDrUi9J21EqG+PEaO7Uikp3NXtw7VPDabSelIVJKzlGov6Zsyl3CPgpN4e8FJurXgfG8rxVjfQzGm6zhofP2avsv+xYE3F1zPjc8WXF9jiJOl9dDSmO+RjE0p8ITia/ViFKrYD/XyU/+unjb72RfSUybbb1aP23X5+3LcPU1GD/+/2Yh9YX3bvz6tn4/7dWaafGbVL1U/9FvrApz/ecrz/QE=",
+      "is_unconstrained": true,
+      "name": "accept_root_transfer"
+    },
+    {
+      "abi": {
+        "abi_version": 1,
+        "error_types": {
           "14415304921900233953": {
             "error_kind": "string",
             "string": "Initializer address is not the contract deployer"
+          },
+          "8495619526896312545": {
+            "error_kind": "string",
+            "string": "BorgAuthV2: zero address"
           },
           "9967937311635654895": {
             "error_kind": "string",
@@ -5537,7 +5831,7 @@
         },
         "parameters": [
           {
-            "name": "owner",
+            "name": "root",
             "type": {
               "fields": [
                 {
@@ -5555,12 +5849,12 @@
         ],
         "return_type": null
       },
-      "bytecode": "JwACBAEoAAABBIBFJwAABEUlAAAAQScCAwQBJwIEBAAfCgADAAQARC0IRAIlAAAAZycCAgRFJwIDBAA7DgADAAIsAABDADBkTnLhMaApuFBFtoGBWF0oM+hIeblwkUPh9ZPwAAAAJh4CAAMAHgIAAwAeAgADAC0IAQQnAgUEAwAIAQUBJwMEBAEAIgQCBTYOAAMABQAnAgUEAQAqBAUGLQsGBicCBwQCACoEBwgtCwgIHAoGBAAEKgQICScCBAEBJAIABgAAANEnAggEADwGCAEtCAEGJwIIBAMACAEIAScDBgQBACIGAgg2DgADAAgCACoGBQMtCwMDACoGBwgtCwgIHAoDBgAEKgYICiQCAAMAAAEdJwIGBAA8BgYBJwIDBAAtCAEGJwIIBAIACAEIAScDBgQBACIGAggfOgAFAAMACAAqBgUDLQsDAxwKAwgEHAoIBgAtCAEDJwIIBAIACAEIAScDAwQBACIDAggfOgAFAAUACAAqAwUILQsICCcCAwAAKQIACwDVLeNrKwIADAAAAAAAAAAAAgAAAAAAAAAALQgBDScCDgQFAAgBDgEnAw0EAQAiDQIOLQoODy0OCw8AIg8CDy0OCA8AIg8CDy0OAw8AIg8CDy0ODA8tCAEIJwILBAUACAELAScDCAQBACINAgsAIggCDj8PAAsADgAqCAULLQsLCykCAAgAFvivJysCAA0AAAAAAAAAAAMAAAAAAAAAAC0IAQ4nAg8EBQAIAQ8BJwMOBAEAIg4CDy0KDxAtDggQACIQAhAtDgYQACIQAhAtDgsQACIQAhAtDg0QLQgBBicCCAQFAAgBCAEnAwYEAQAiDgIIACIGAgs/DwAIAAsAKgYFCC0LCAgKKgoIBiQCAAYAAAKfJQAABMQKKgkDBh4CAAgBCiIIQwoWCgoLHAoLDgAEKg4ICycCCAEACioKCA4kAgAOAAAC1ycCDwQAPAYPAQoqCQsKEioGCgkkAgAJAAAC7iUAAATWKQIABgDvUlNNJwIJAAEtCAEKJwILBAUACAELAScDCgQBACIKAgstCgsOLQ4GDgAiDgIOLQ4JDgAiDgIOLQ4CDgAiDgIOLQ4NDi0IAQInAgYEBQAIAQYBJwMCBAEAIgoCBgAiAgIJPw8ABgAJACoCBQYtCwYGCioGAwIKKgIICSQCAAkAAAN6JQAABOgnAgIAYzAKAAIABh4CAAIALQgBBicCCAQDAAgBCAEnAwYEAQAiBgIINg4AAgAIAgAqBgUILQsICAAqBgcJLQsJCRwKCAYABCoGCQckAgAIAAAD1icCBgQAPAYGASkCAAQA7eAidi0IAQYnAggEBQAIAQgBJwMGBAEAIgYCCC0KCAktDgQJACIJAgktDgIJACIJAgktDgcJACIJAgktDg0JLQgBAicCBAQFAAgBBAEnAwIEAQAiBgIEACICAgc/DwAEAAcAKgIFBC0LBAQ0AgAEHgIAAgApAgAEAMcy+XctCAEGJwIHBAUACAEHAScDBgQBACIGAgctCgcILQ4ECAAiCAIILQ4CCAAiCAIILQ4DCAAiCAIILQ4MCC0IAQInAgMEBQAIAQMBJwMCBAEAIgYCAwAiAgIEPw8AAwAEACoCBQMtCwMDNAIAAyYqAQABBYpVOiwrZ8jvPAQCASYqAQABBcgNc3NuzbThPAQCASYqAQABBbq7IdeCMxhkPAQCASY=",
+      "bytecode": "JwACBAEoAAABBIBFJwAABEUlAAAAQScCAwQBJwIEBAAfCgADAAQARC0IRAIlAAAAZycCAgRFJwIDBAA7DgADAAIsAABDADBkTnLhMaApuFBFtoGBWF0oM+hIeblwkUPh9ZPwAAAAJh4CAAMAHgIAAwAeAgADAC0IAQQnAgUEAwAIAQUBJwMEBAEAIgQCBTYOAAMABQAnAgUEAQAqBAUGLQsGBicCBwQCACoEBwgtCwgIHAoGBAAEKgQICScCBAEBJAIABgAAANEnAggEADwGCAEtCAEGJwIIBAMACAEIAScDBgQBACIGAgg2DgADAAgCACoGBQMtCwMDACoGBwgtCwgIHAoDBgAEKgYICiQCAAMAAAEdJwIGBAA8BgYBJwIDBAAtCAEGJwIIBAIACAEIAScDBgQBACIGAggfOgAFAAMACAAqBgUDLQsDAxwKAwgEHAoIBgAtCAEDJwIIBAIACAEIAScDAwQBACIDAggfOgAFAAUACAAqAwUILQsICCcCAwAAKQIACwDVLeNrKwIADAAAAAAAAAAAAgAAAAAAAAAALQgBDScCDgQFAAgBDgEnAw0EAQAiDQIOLQoODy0OCw8AIg8CDy0OCA8AIg8CDy0OAw8AIg8CDy0ODA8tCAEIJwILBAUACAELAScDCAQBACINAgsAIggCDj8PAAsADgAqCAULLQsLCykCAAgAFvivJysCAA0AAAAAAAAAAAMAAAAAAAAAAC0IAQ4nAg8EBQAIAQ8BJwMOBAEAIg4CDy0KDxAtDggQACIQAhAtDgYQACIQAhAtDgsQACIQAhAtDg0QLQgBBicCCAQFAAgBCAEnAwYEAQAiDgIIACIGAgs/DwAIAAsAKgYFCC0LCAgKKgoIBiQCAAYAAAKfJQAABE8KKgkDBh4CAAgBCiIIQwoWCgoLHAoLDgAEKg4ICycCCAEACioKCA4kAgAOAAAC1ycCDwQAPAYPAQoqCQsKEioGCgkkAgAJAAAC7iUAAARhCioCAwYKKgYICSQCAAkAAAMFJQAABHMnAgYAATAKAAIABh4CAAIALQgBBicCCAQDAAgBCAEnAwYEAQAiBgIINg4AAgAIAgAqBgUILQsICAAqBgcJLQsJCRwKCAYABCoGCQckAgAIAAADYScCBgQAPAYGASkCAAQA7eAidi0IAQYnAggEBQAIAQgBJwMGBAEAIgYCCC0KCAktDgQJACIJAgktDgIJACIJAgktDgcJACIJAgktDg0JLQgBAicCBAQFAAgBBAEnAwIEAQAiBgIEACICAgc/DwAEAAcAKgIFBC0LBAQ0AgAEHgIAAgApAgAEAMcy+XctCAEGJwIHBAUACAEHAScDBgQBACIGAgctCgcILQ4ECAAiCAIILQ4CCAAiCAIILQ4DCAAiCAIILQ4MCC0IAQInAgMEBQAIAQMBJwMCBAEAIgYCAwAiAgIEPw8AAwAEACoCBQMtCwMDNAIAAyYqAQABBYpVOiwrZ8jvPAQCASYqAQABBcgNc3NuzbThPAQCASYqAQABBXXmgPKvhuDhPAQCASY=",
       "custom_attributes": [
         "abi_public",
         "abi_initializer"
       ],
-      "debug_symbols": "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",
+      "debug_symbols": "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",
       "is_unconstrained": true,
       "name": "constructor"
     },
@@ -5568,17 +5862,9 @@
       "abi": {
         "abi_version": 1,
         "error_types": {
-          "13455385521185560676": {
+          "11440095462901124278": {
             "error_kind": "string",
-            "string": "Storage slot 0 not allowed. Storage slots must start from 1."
-          },
-          "14677572522926173230": {
-            "error_kind": "string",
-            "string": "BorgAuth: not authorized"
-          },
-          "15782500856405024517": {
-            "error_kind": "string",
-            "string": "Function only_role can only be called statically"
+            "string": "Function has_permission can only be called statically"
           },
           "459713770342432051": {
             "error_kind": "string",
@@ -5587,116 +5873,14 @@
         },
         "parameters": [
           {
-            "name": "role",
+            "name": "permission",
             "type": {
-              "kind": "integer",
-              "sign": "unsigned",
-              "width": 8
+              "kind": "field"
             },
             "visibility": "private"
           },
           {
-            "name": "user",
-            "type": {
-              "fields": [
-                {
-                  "name": "inner",
-                  "type": {
-                    "kind": "field"
-                  }
-                }
-              ],
-              "kind": "struct",
-              "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
-            },
-            "visibility": "private"
-          }
-        ],
-        "return_type": null
-      },
-      "bytecode": "JwACBAEoAAABBIBJJwAABEklAAAASicCBAQCJwIFBAAfCgAEAAUARxwAR0cCLQhHAi0ISAMlAAAAbycCAgRJJwIDBAA7DgADAAInAEMAACcARAEBJwBFBAErAABGAAAAAAAAAAADAAAAAAAAAAAmHgIABAAeAgAEACcCBAQFLQgABQAIAAQAJQAAAWctAgAAHgIABAkkAgAEAAAAoiUAAAJ6KQIABADvUlNNJwIFAAEtCAEGJwIHBAUACAEHAScDBgQBACIGAgctCgcILQ4ECAAiCAIILQ4FCAAiCAIILQ4DCAAiCAIILQxGCC0IAQMnAgQEBQAIAQQBJwMDBAEAIgYCBAAiAwIFPw8ABAAFACIDRQQtCwQECiIEQwMnAgUBAAoqAwUGJAIABgAAATMlAAACjB4CAAMALyoABAADAAYcCgYEAhwKBAMAHAoDBAIMKgQCAwoqAwUCJAIAAgAAAWYlAAACniYeAgACACkCAAMAxzL5dysCAAQAAAAAAAAAAAIAAAAAAAAAAC0IAQUnAgYEBQAIAQYBJwMFBAEAIgUCBi0KBgctDgMHACIHAgctDgIHACIHAgctDEMHACIHAgctDgQHLQgBAicCAwQFAAgBAwEnAwIEAQAiBQIDACICAgQ/DwADAAQAIgJFAy0LAwMeAgACACkCAAQAA21Sfy0IAQUnAgYEBQAIAQYBJwMFBAEAIgUCBi0KBgctDgQHACIHAgctDgIHACIHAgctDgMHACIHAgctDEYHLQgBAicCAwQFAAgBAwEnAwIEAQAiBQIDACICAgQ/DwADAAQAIgJFAy0LAwMzCgADAAIkAgACAAACeSUAAAKwJioBAAEF2wa06N1R3wU8BAIBJioBAAEFursh14IzGGQ8BAIBJioBAAEFy7E2ccoMbC48BAIBJioBAAEFBmE7PQudvTM8BAIBJg==",
-      "custom_attributes": [
-        "abi_public",
-        "abi_view"
-      ],
-      "debug_symbols": "tZjRbiI7DIbfhetexHHsxH2Vo1VFW7pCQrRiy5GOKt792BCHgd1kWWBvyodn+Md27MSdr9nr4nn7/Wm5fnv/MXv852v2vFmuVsvvT6v3l/nn8n2t1q9ZsD8AMHukB/3k2aPoZ9TvEAy4AgYHqpDckpICGohCUqBcgePsMYJCBgeuUIIDVRC3SLXEEBySQ6kA6JArxOhQHxERHEwQDaSC+XwAt5BbyC3slmxuJANysHtYodg92UAqSLVgiA7qIaoOglpQ04xRBdEuRaqAbjFXsShYelEMqAKhgz4rRQXzMNnNGSuIW6QcIAV0cAu4BdxiqTsAV7DUHYAqmD8HSA5SwRyjYJAr2LofwC3ZLdktxS1F3SBdpiToYPdonslyyGohK9ADUAXL4QHcgm7BZpEKCR1KBXJl83kP7I9grmDrzmiQHKRCcUtxi7hFqoWDuaFRMAQHu0fLhvfOZwPzJ+92DzPvyqfPzWJhTTlpU23ej/lmsf6cPa63q9XD7N/5aru/6cfHfL3//Jxv9Kqmc7F+1U8VfFuuFka7h+OvQ/+nFCTXX2uSSxOAWE4koC+RAscqkSCmrkTsS0ARjwEEQlcC+xIxkHXtXkMZcxPJ+UQjDTRycQWZxCF0aRwxZnAF7c5uHNyXwJSoSmBiahIFThTyHTJRbs3EoK6YAlcFJuFuJkalmbGVZuZ+XcGgNlHPOPF0gh5evVzAqDpD8VgAglyTDo0ltFhKviYdgMVXVeM4epHyaWUAjbqdqHV7OBZXRD7VGBRoLB6JnjZHL84XJY/yCdl3DAhxEgvKmR+DEhUBd0SEcl9DRs3mKcUyiYXSacOHUceX1vE6DVyngVh+tWv8pDGoUZTWsSnAcWUhX+xGCpmbREldN8YFFqQVGHC3wOJAI6F4SnX8OC6LDm1/oFFS05ik9Fzj0n6LodtvcVCjDMW3MI4Q+6GMajTmY5XG6UZ4toVhGIkEbseKjtOxKwJ3OFgw3nqy/CaWGI6xTA6XczcGRz0SeZEhh9g/7Mcrg5OVydJ1ZLCdArWOAZpMT+msYy6tVOxX6lCi9T4kkmskKLG3nM7b0+P6VCKFewxx8BdnF0pxEknuRzIYR3Np9ZWFBxrpHudkotvPycS3npNpNJRm9FB0PwtXaejBJu2Aov4BleTmc3LsxmXn5KjCStuNqRTqVgfFO/QK4d/slQJtSC+p9COhUZ2HtnVozcfuhk6DEiUJnlLdz7lb5nSXwZTuMJjSzYMp32Ew5TsMpnz7YMp3GEzHNRbjZGkZejXGI5HUBg9IE4k/65f2j6CEs375pl/nL8vNybvanYltlvPn1aJ+fduuXyZXP//78Cv+rvdj8/6yeN1uFqY0feGrL5X0Fc2D9ti3nT3vfw==",
-      "is_unconstrained": true,
-      "name": "only_role"
-    },
-    {
-      "abi": {
-        "abi_version": 1,
-        "error_types": {
-          "13455385521185560676": {
-            "error_kind": "string",
-            "string": "Storage slot 0 not allowed. Storage slots must start from 1."
-          },
-          "14677572522926173230": {
-            "error_kind": "string",
-            "string": "BorgAuth: not authorized"
-          },
-          "459713770342432051": {
-            "error_kind": "string",
-            "string": "Not initialized"
-          }
-        },
-        "parameters": [
-          {
-            "name": "user",
-            "type": {
-              "fields": [
-                {
-                  "name": "inner",
-                  "type": {
-                    "kind": "field"
-                  }
-                }
-              ],
-              "kind": "struct",
-              "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
-            },
-            "visibility": "private"
-          },
-          {
-            "name": "role",
-            "type": {
-              "kind": "integer",
-              "sign": "unsigned",
-              "width": 8
-            },
-            "visibility": "private"
-          }
-        ],
-        "return_type": null
-      },
-      "bytecode": "JwACBAEoAAABBIBKJwAABEolAAAASicCBAQCJwIFBAAfCgAEAAUASBwASUkCLQhIAi0ISQMlAAAAlCcCAgRKJwIDBAA7DgADAAInAEMCYywAAEQAMGROcuExoCm4UEW2gYFYXSgz6Eh5uXCRQ+H1k/AAAAAnAEUAACcARgQBKwAARwAAAAAAAAAAAwAAAAAAAAAAJh4CAAQAHgIABAAnAgQEBS0IAAUACAAEACUAAAIxLQIAAB4CAAQBCiIERAUWCgUGHAoGBwAEKgcEBicCBAEACioFBAckAgAHAAAA6CcCCAQAPAYIASkCAAUA71JTTScCBwABLQgBCCcCCQQFAAgBCQEnAwgEAQAiCAIJLQoJCi0OBQoAIgoCCi0OBwoAIgoCCi0OBgoAIgoCCi0MRwotCAEGJwIJBAUACAEJAScDBgQBACIIAgkAIgYCCj8PAAkACgAiBkYILQsICAoiCEUGCioGBAkkAgAJAAABdCUAAANJHgIABgAvKgAIAAYACRwKCQgCHAoIBgAcCgYIAgwiCEMGCioGBAgkAgAIAAABpyUAAANbLQgBBicCCAQFAAgBCAEnAwYEAQAiBgIILQoICS0OBQkAIgkCCS0OBwkAIgkCCS0OAgkAIgkCCS0MRwktCAECJwIFBAUACAEFAScDAgQBACIGAgUAIgICBz8PAAUABwAiAkYFLQsFBQoiBUUCCioCBAYkAgAGAAACJSUAAANJHAoDAgAwCgACAAUmHgIAAgApAgADAMcy+XcrAgAEAAAAAAAAAAACAAAAAAAAAAAtCAEFJwIGBAUACAEGAScDBQQBACIFAgYtCgYHLQ4DBwAiBwIHLQ4CBwAiBwIHLQxFBwAiBwIHLQ4EBy0IAQInAgMEBQAIAQMBJwMCBAEAIgUCAwAiAgIEPw8AAwAEACICRgMtCwMDHgIAAgApAgAEAANtUn8tCAEFJwIGBAUACAEGAScDBQQBACIFAgYtCgYHLQ4EBwAiBwIHLQ4CBwAiBwIHLQ4DBwAiBwIHLQxHBy0IAQInAgMEBQAIAQMBJwMCBAEAIgUCAwAiAgIEPw8AAwAEACICRgMtCwMDMwoAAwACJwIDAQEkAgACAAADSCUAAANtJioBAAEFursh14IzGGQ8BAIBJioBAAEFy7E2ccoMbC48BAIBJioBAAEFBmE7PQudvTM8BAIBJg==",
-      "custom_attributes": [
-        "abi_public"
-      ],
-      "debug_symbols": "tZnRTiM7DIbfpddcxLGdOLzKarUqUFaVqoK6cKQjxLsfm4nTac8mdJnuDXz1ZP5xHMeetG+rh83d688f2/3j06/V7be31d1hu9ttf/7YPd2vX7ZPe7W+rYL9AZLVLd+sgHF1W+y/foagkNAhV8jRwS0CCmSQFJJCAQeeLsUQHMwiChAc3BLRQSqgPiuqX5HAIVXg4MAVkluSW7JbMjlIBUGHXKH4s0p9BAZwMMFsUCoAObgluiW6Bd1C5oYYsIOOQQ0dso5BMCgVLM4fYHFGu93ijLooKHo72aUSHKqFLLwUDcyCChbeCaSChZeDQa5g4Z3ALeQWcguDA1ewOE9ADqVC9kdYnD9ATNAcs9z4AMuNCaqFAzi4BdwC5oY6zzE62BhdFEYbkwxSBSIH9Sfp09nCm+yupIOTXUo6OJty5gqlWpLFcIJ6KYFbwC3RLbbcE0gFRIdcwYI5gT/CgjmBCZJBqWDBnMAt2S3ZLeIWS4DMBuxgYzS1ctAxopYM6JArWAwncAu6Bd1iG20CrmAbbQJXNp8/IPkjklSwpJVskCpYcZjALcUtpVokgIO5obMQiA46puhSijlfwCBXQDZ4f79ZeUH78XLYbKyezSqc1r3n9WGzf1nd7l93u5vVP+vd68egX8/r/cf/l/VBr+pDNvsH/a+Cj9vdxuj95nh36N/KoeR6N2vpbAIQ5UQC+hIUUqwSBJG6ErEvAVJ8DlqAQ1cC+xJanSNWDWXMTSTnEw0aaFgaTgplNo/Cl84jxgyugBm780h9CSTiKoGUuEkInCjkK0RClkZikFdJK2JV0EKRupEYSEAonlcA4TgLyqehgFFuQkwtN7kbTRitKaRYPBiglbEXTsDRqroEpn48P3GDc3Mjh9J1gwfhiL7NtF0eI8pfi+dsJufxHKRnCZ5aJR4nQXR5WiTfIJoh0E+LMqp6zK3qhWNaREynW33gRxSPJZZj3aTzogejmUBuGR7ibEmxnPkxSIxSwB0phXNfY5ieXjBQZnPh00WJo9IZpVW+KOVrGojyu+r5P41R+SytclGA48pCvtgNCrnleBDqujFOsFBagkHqJ9hAg7BA263huCyRyh9oCDWNWUjPNS7cbzCL6Pl+w0GOJhCvXSlC7LqBoxzVo1DL0phnxeesACKNRI6zUZZuMUe+QoPFtLTDfjKXVs6VZ0323I1Bo0dmaJ0pxL4j45XB2crkbmuiUZpx2zHAs7dIOtsxl2Yq9jvDUIKlSaTwJQltzk1itijnEkTL+xPx0v5E6Rr9ifLy/kSytD9RWd6fhhoX9ieGxf1p5Mal/WmcYJf1J6bl/Wmssbw/zfZbnLlxvt94kKO5tNNKLtjvTzzM0eNuUe63Fh6sLVB7OwaK0K2CnziCxyMkcLc9pVGeIgdv2coJuyKDto9JWkRyxK+cI1m/qvNEJZl/uXC6uomu0K8T/8UTMVOczST3ZzLKU2ndWr+CGmjINap6Ksureg5Lq3qG0aKgT0XfDsOXNLQMl1ZOuV9OMy6u6mM3LqvqowyT9v7DItzNjpyusFdy/pt7RaB9Kykk/ZmMSmkIrXRozsfu67GMHCnBQ6pvx6mb5nKVY75c4Zgvi4/5coVjvlzhmC/Lj/lyhWP+OMdinC1tgm6ODXt+O8YBzST+bL+4hGbs2X75rh/X99vDyY+n7yZ22K7vdpv68fF1fz+7+vLvs1/xH1+fD0/3m4fXw8aUZr/A6k8g3/Q14wa4fH+35/0H",
-      "is_unconstrained": true,
-      "name": "update_role"
-    },
-    {
-      "abi": {
-        "abi_version": 1,
-        "error_types": {
-          "13455385521185560676": {
-            "error_kind": "string",
-            "string": "Storage slot 0 not allowed. Storage slots must start from 1."
-          },
-          "1554780549764357016": {
-            "error_kind": "string",
-            "string": "Function user_role can only be called statically"
-          },
-          "459713770342432051": {
-            "error_kind": "string",
-            "string": "Not initialized"
-          }
-        },
-        "parameters": [
-          {
-            "name": "user",
+            "name": "account",
             "type": {
               "fields": [
                 {
@@ -5714,21 +5898,240 @@
         ],
         "return_type": {
           "abi_type": {
-            "kind": "integer",
-            "sign": "unsigned",
-            "width": 8
+            "kind": "boolean"
           },
           "visibility": "public"
         }
       },
-      "bytecode": "JwACBAEoAAABBIBJJwAABEklAAAARScCAwQBJwIEBAAfCgADAAQARy0IRwIlAAAAai0CAkgnAgMESCcCBAQBOw4ABAADJwBDAAAnAEQBAScARQQBKwAARgAAAAAAAAAAAwAAAAAAAAAAJh4CAAMAHgIAAwAnAgMEBC0IAAQACAADACUAAAFPLQIAAB4CAAMJJAIAAwAAAJ0lAAACYikCAAMA71JTTScCBAABLQgBBScCBgQFAAgBBgEnAwUEAQAiBQIGLQoGBy0OAwcAIgcCBy0OBAcAIgcCBy0OAgcAIgcCBy0MRgctCAECJwIDBAUACAEDAScDAgQBACIFAgMAIgICBD8PAAMABAAiAkUDLQsDAwoiA0MCJwIEAQAKKgIEBSQCAAUAAAEuJQAAAnQeAgACAC8qAAMAAgAEHAoEAwIcCgMCABwKAgMCLQoDAiYeAgACACkCAAMAxzL5dysCAAQAAAAAAAAAAAIAAAAAAAAAAC0IAQUnAgYEBQAIAQYBJwMFBAEAIgUCBi0KBgctDgMHACIHAgctDgIHACIHAgctDEMHACIHAgctDgQHLQgBAicCAwQFAAgBAwEnAwIEAQAiBQIDACICAgQ/DwADAAQAIgJFAy0LAwMeAgACACkCAAQAA21Sfy0IAQUnAgYEBQAIAQYBJwMFBAEAIgUCBi0KBgctDgQHACIHAgctDgIHACIHAgctDgMHACIHAgctDEYHLQgBAicCAwQFAAgBAwEnAwIEAQAiBQIDACICAgQ/DwADAAQAIgJFAy0LAwMzCgADAAIkAgACAAACYSUAAAKGJioBAAEFFZOwrCRkG5g8BAIBJioBAAEFursh14IzGGQ8BAIBJioBAAEFBmE7PQudvTM8BAIBJg==",
+      "bytecode": "JwACBAEoAAABBIBIJwAABEglAAAASScCBAQCJwIFBAAfCgAEAAUARS0IRQItCEYDJQAAAFQtAgJHJwIDBEcnAgQEATsOAAQAAycAQwABJwBEAQEmHgIABAAeAgAEACcCBAQFLQgABQAIAAQAJQAAALItAgAAHgIABAkkAgAEAAAAhyUAAAHkHgIABAAeAgAEAAoiAkMEHgIAAgAvKABDAAIABQoqAwUCBCoEAgMtCgMCJh4CAAIAKQIAAwDHMvl3JwIEAAArAgAFAAAAAAAAAAACAAAAAAAAAAAtCAEGJwIHBAUACAEHAScDBgQBACIGAgctCgcILQ4DCAAiCAIILQ4CCAAiCAIILQ4ECAAiCAIILQ4FCC0IAQInAgMEBQAIAQMBJwMCBAEAIgYCAwAiAgIEPw8AAwAEJwIDBAEAKgIDBC0LBAQeAgACACkCAAUAA21SfysCAAYAAAAAAAAAAAMAAAAAAAAAAC0IAQcnAggEBQAIAQgBJwMHBAEAIgcCCC0KCAktDgUJACIJAgktDgIJACIJAgktDgQJACIJAgktDgYJLQgBAicCBAQFAAgBBAEnAwIEAQAiBwIEACICAgU/DwAEAAUAKgIDBC0LBAQzCgAEAAIkAgACAAAB4yUAAAH2JioBAAEFnsNiNhbHjLY8BAIBJioBAAEFBmE7PQudvTM8BAIBJg==",
       "custom_attributes": [
         "abi_public",
         "abi_view"
       ],
-      "debug_symbols": "tVjbbts4EP0XPeeBc+PFv1IUgZM4hQHDCVx7gUXgf99hxKFlbcm6kfsSHx/JRzPDMxxGH8PL5un043G7f337Oay+fQxPh+1ut/3xuHt7Xh+3b3tlPwaX/4Dzw0oeBgAYVil/6ndwChAMSAHkDFQmKSAFzApYgaCBMKwQFHhfQAADUkB0BoxJxqTKpBGgIwOxAEAD5VmIYKA8FHPMSBmwgVQAG8PGiDFijM9haDoYnIF8j88g3xMURDZgTAojIKcREmWgDGmZCVSQ8iV0BozJVWWtKrFeYp9BKiAYk58+ArsUjYnGJGNSHAHnMEYQCsirPQJfADoDYiALRgVEBmIBbAwbI8aIMT6HkTJIBQS9RzADvUcyE0MBCQz4EYgDA8aAMbmGI0gFIBsoypJjHkF5hDAaUEGv3hBxBqQAb4w3JhgTjIkahscMfAHZtJ4zyIyusnecwfn8MFjHPR4Pm01uuEkLamO+rw+b/XFY7U+73cPwz3p3+rzp5/t6//l5XB/0qppis3/RTxV83e42GZ0fLr927Z+KS6H8WusWqwBgvJKAtgS7nOWnBANyUwLbEhCT5QAJXFOC2hLoJHfkp4ZiClUkhCsN7miEaAppkkeSW/NADGAKFKiZh29LELMUCWL1iElEuFIId6hEXFqJjq+89mVR8Or7ZiV61gxUrRl821fQ8Sbp3EpWTgB2rVpAz50uWi4ALn2lHJqLq7nE8JVygIhloo16MQaHa2eA9LpdpHa7u2gg+WuNjkExWiY6QC5RzBcl9OoJwXYMcDipKKVZHB2LpgQWSEoS2hqp12zWKBQnuQhfN7zrdXysHa8D/msaRPFXu8b/NDoepVQ7lh1cVhbCzWHo9PdVInIzjL7BXKoGA980GHY0mJKVlDWQiwanP9CIXDUmJZ1r3Npvkx1s3m/Y8aiHaFuY1+NoO5WeR/VIWV2K041wtoWR64k4X8eKnpCxKQJ3GCyESyfLb3JBd8llsjTzMDqjnkTMZOQdtod9f2VosjIhNQPxPZu5i80mpyeedUxvuLA3swvH6aC8dirFe6xt+ounBj2ETzIJzUy449IQ68qG5DsaeI8JxbR8QjEvnVAsvUUhS0V3EvclDR0pqY4GaY8GDosnVD+M2yZUz2Gx7oMSJ6eouTvE3aFXBP5mr0Sox+PIsZ0J9Xzu6tahnsfmViodi+r/t1ZS3Ul90+Yi92g48csbTsLShpO4/EjY1bjxSOjd4obrhXFrw/U9hjhZWg8tj/meCNeRDzyR+LN+qf+CJTfrl+/6df28PVy9AT1nscN2/bTblK+vp/3z5Orx33e7Ym9Q3w9vz5uX02GTlSavUfWl0DfQHADx+zk/7z8=",
+      "debug_symbols": "tVjtbuI6EH2X/OaH58se8yqrVUVbukJCtGLhSlcV737HbcYJ3LXVAvunORwnJ57xmbGb9+F5/Xj89bDZvbz+HpY/3ofH/Wa73fx62L4+rQ6b152x70Mof5SHpSwGzcMyL4ZsvyDYNX9eIZADHQE4A8kAGUA0wAYoOJBhieUeNgYLw4Wx94AYQ1CAMVQejyZIZSjaKygaSAXYbEBtiMtQRgfpEyDoCBAd+BA5Q86wMxxHUKbxCcRBHkFkB/6KRA6KYDKg4CCOIDuTR4YCOHAGyjS0gDQCdAbtHrG0ENlTUpiSug8QnYkyguRDyRl1RiuTR5DJgX4CDuggjQDAQRwBmmAMBbCDPAJyhpxhZ9iZktVo4XAMDso9ttxcJh+5AC3gdFoM7sqHw369Lqac2dTM+7bar3eHYbk7breL4Z/V9vhx0++31e7jeljtbdReu94929UEXzbbdUGnxfR0aD8qIafxaQHRKgCoZxLQluAQcZRgQG5KYFsCNHsMkCE0JagtgUGQRg3DlKpISmca3NFI6gp5FkeWr8ZhhQiuQImaccS2BHEptw8J4ihVQuFMId0hE3prJjq+ihLiqBAlx2YmetZMVK2ZYttX0PEmAUD2dIL15FYuoOfOoB4LQMjXpMNiCTUWTdekwwpDao3QlA5O584odzWXFag6g2EWCZxHAh2DMgh7uSPMVpYu5pFur3fQO9i8GOA2n/dC+WrJI9xc84h3yAbSzdnomANS8JqFRLFt0q6GYNXQttGxoxFBfR4RAasGcj7X6KwsYWJPqeFZB7pMqfZEQqxri0GxKZLvsLgUbt7c+rFgmGKZdfXLaXSMSiJeLxQDXukyhskhbZdRZ6/nGgozTgn9ltXjNInUnERvV+DorVRY5zvcRRz32O3pb273wjiLJDUj4Y5G0uqMlGNHA3pbNaTaPMyt0xZHZtczlY5HcwY3R86S2hrU6+m1d+h0rGbhc4XuaZQ8FOtE4SoNDvX4w0G4rdE7kebqDpObdidI35hGilVC29PoOUxrHxVVabvjHn1Uwt+sFYV6rlXWZiTSPZKG2jrM89hsxdKxqOTgKbVOHJs2F75HwYncXnASby046R7ltB7lUPN1GkT6p+Pg/zTyzQXXm8ZXC67vMcTZ0kZoeSz2RKZ9Fngm8b16qf875XBRLz/t5+ppsz/7vHcqYvvN6nG7Hn++HHdPs9HDv28+4p8H3/avT+vn435dlKZvhOXz0I8si5x+nsrb/gM=",
       "is_unconstrained": true,
-      "name": "user_role"
+      "name": "has_permission"
+    },
+    {
+      "abi": {
+        "abi_version": 1,
+        "error_types": {
+          "459713770342432051": {
+            "error_kind": "string",
+            "string": "Not initialized"
+          },
+          "5186345959665386467": {
+            "error_kind": "string",
+            "string": "Function pending_root_authority can only be called statically"
+          }
+        },
+        "parameters": [],
+        "return_type": {
+          "abi_type": {
+            "fields": [
+              {
+                "name": "inner",
+                "type": {
+                  "kind": "field"
+                }
+              }
+            ],
+            "kind": "struct",
+            "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+          },
+          "visibility": "public"
+        }
+      },
+      "bytecode": "JwACBAEoAAABBIBFJwAABEUlAAAAQScCAgQAJwIDBAAfCgACAAMARCUAAABHLQICRCcCAwREJwIEBAE7DgAEAAMnAEMBASYeAgACAB4CAAIAJwICBAMtCAADAAgAAgAlAAAAkS0CAAAeAgACCSQCAAIAAAB6JQAAAcMeAgACACcCAwACLyoAAwACAAQtCgQCJh4CAAIAKQIAAwDHMvl3JwIEAAArAgAFAAAAAAAAAAACAAAAAAAAAAAtCAEGJwIHBAUACAEHAScDBgQBACIGAgctCgcILQ4DCAAiCAIILQ4CCAAiCAIILQ4ECAAiCAIILQ4FCC0IAQInAgMEBQAIAQMBJwMCBAEAIgYCAwAiAgIEPw8AAwAEJwIDBAEAKgIDBC0LBAQeAgACACkCAAUAA21SfysCAAYAAAAAAAAAAAMAAAAAAAAAAC0IAQcnAggEBQAIAQgBJwMHBAEAIgcCCC0KCAktDgUJACIJAgktDgIJACIJAgktDgQJACIJAgktDgYJLQgBAicCBAQFAAgBBAEnAwIEAQAiBwIEACICAgU/DwAEAAUAKgIDBC0LBAQzCgAEAAIkAgACAAABwiUAAAHVJioBAAEFR/maLAAjQ+M8BAIBJioBAAEFBmE7PQudvTM8BAIBJg==",
+      "custom_attributes": [
+        "abi_public",
+        "abi_view"
+      ],
+      "debug_symbols": "tVhRbiMhDL3LfOcDG4MhV6mqKm2nVaRREk2TlVZV7r6mwWSmu7Btkv6EN2Z4YPNsyLx3z/3j4fVhvXnZvnXLu/fucVwPw/r1Ydg+rfbr7Uas751JPwzd0i069t0yLrogT2Ck9ac2mty6UwvGKCABNoEogAQAZ4DYLTG9g2JBFGAxAxIelOnACY+FBGIGnjIIToF2Re2K2YKGFKgFrALOIC3jBHwGFhTkKZCMgkRoEwgZOKtALV4tXi2sFk7LEN8xkAK1xPQOJyCjSCzWcAaolhSfE9AuUgupxanF+Qy8UeAUxAyYFOgUwSpIhF5ABAX+BMiAArWAWkAtKarECXAGKaoUExCLk32ntMvOHI+LTvX2sB/7PsltIkCR5W419pt9t9wchmHR/VoNh4+X3narzUe7X43SK5T95llaIXxZD31Cx8V5tKkPdSZyHu3AhUIAGGYUUKeQYGCmIECqUmCdQpSsPkAEU6WwdQo0Dm3mEGy5kDDPOKjBwUEZ4sSP6L7qByKDMli2VT98ncKKODKFJe8KRYAZA98gEuHaSDR05Z3xmcG76KuRaEmTbZEm+7quoKFNCwBRwwlAphYLaKnTBPUFpJpfEg7xxRRfAl8SDrRRhYFkz8IgnisDXGNXIGhIPQIWDqQ452gJFJlUXoInG/M5pNwiMb7IHE3AKkm4gdCTBK5T+n98QXP2ZSL2T8vAllCd08ohxxZepDHypBqjMM2XuUDwFlUU6QeLhyOceMJ1Txoy5VACytE3OLiV+MB6tIFs8jn15UowZ2nINEZQecTouM4RW6dCSblwPqTJ0fx4bJUPtuqKJLC5iEPuP1pMyTiqczSKqY1FHUJ3LmPA31gG+0IR6stoKSyU8uNCcFV1WHeDXLH+J3MlQDklA4W6J6Glc1NKh2geqxXMNiTqotGQSgHzVZmTuUXCEVyfcITXJhy1SimGcheUPzuXcVgb/nWf/IvDXZ1wrWV8NeHaGkOcbK2H6v28RULlpAWaUHwvX8pNLJpP+XIvj6un9Tj7DHBMZON69Tj0+fHlsHma9O5/77RHPyPsxu1T/3wY+8R0/paQ/i3ehbCI5v6YZvsD",
+      "is_unconstrained": true,
+      "name": "pending_root_authority"
+    },
+    {
+      "abi": {
+        "abi_version": 1,
+        "error_types": {
+          "10626851675349249230": {
+            "error_kind": "string",
+            "string": "BorgAuthV2: unauthorized"
+          },
+          "11749533293793027201": {
+            "error_kind": "string",
+            "string": "BorgAuthV2: nominee is root"
+          },
+          "459713770342432051": {
+            "error_kind": "string",
+            "string": "Not initialized"
+          }
+        },
+        "parameters": [
+          {
+            "name": "nominee",
+            "type": {
+              "fields": [
+                {
+                  "name": "inner",
+                  "type": {
+                    "kind": "field"
+                  }
+                }
+              ],
+              "kind": "struct",
+              "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+            },
+            "visibility": "private"
+          }
+        ],
+        "return_type": null
+      },
+      "bytecode": "JwACBAEoAAABBIBFJwAABEUlAAAAQScCAwQBJwIEBAAfCgADAAQARC0IRAIlAAAAZycCAgRFJwIDBAA7DgADAAIsAABDADBkTnLhMaApuFBFtoGBWF0oM+hIeblwkUPh9ZPwAAAAJh4CAAMAHgIAAwAnAgMEBC0IAAQACAADACUAAAECLQIAAB4CAAMAJwIEAAEvKgAEAAMABR4CAAMBCiIDQwQWCgQGHAoGBwAEKgcDBicCAwEACioEAwckAgAHAAAAzScCCAQAPAYIAQoqBgUEJAIABAAAAN8lAAACOQoqAgUECioEAwUkAgAFAAAA9iUAAAJLJwIDAAIwCgACAAMmHgIAAgApAgADAMcy+XcnAgQAACsCAAUAAAAAAAAAAAIAAAAAAAAAAC0IAQYnAgcEBQAIAQcBJwMGBAEAIgYCBy0KBwgtDgMIACIIAggtDgIIACIIAggtDgQIACIIAggtDgUILQgBAicCAwQFAAgBAwEnAwIEAQAiBgIDACICAgQ/DwADAAQnAgMEAQAqAgMELQsEBB4CAAIAKQIABQADbVJ/KwIABgAAAAAAAAAAAwAAAAAAAAAALQgBBycCCAQFAAgBCAEnAwcEAQAiBwIILQoICS0OBQkAIgkCCS0OAgkAIgkCCS0OBAkAIgkCCS0OBgktCAECJwIEBAUACAEEAScDAgQBACIHAgQAIgICBT8PAAQABQAqAgMELQsEBDMKAAQAAicCAwEBJAIAAgAAAjglAAACXSYqAQABBZN6KUuV9OzOPAQCASYqAQABBaMOukdtKKSBPAQCASYqAQABBQZhOz0Lnb0zPAQCASY=",
+      "custom_attributes": [
+        "abi_public"
+      ],
+      "debug_symbols": "tVjbbts4EP0XP+eBcyWZXymKwEmcwoDhBK69wCLwv++w5lByumQT232xjkfS0VzODCm9L55Xj4cfD+vty+vPxf2398Xjbr3ZrH88bF6flvv169as74tQfiDQ4l7u7JgW99mOYP8hFJAqQHQQKyC3kBpQAwwGUgFagfDiHrGAbIANKDtI9VQkB8VSeBI5cEvWE8AADsRANADBQaoAy+25ALOQeYhEFRQPT8AIySJGAQflYvMZ1S5m8xAjOogV5HQCFNBBPUXgFnALugW1AgoOxEGugNmBP0LIQSG0kEnBgVYQ3RLdktyS3JKLG7GAeAIc0IFdI5YNBrtLigVDBewWlgrET4lb1C3aLLmCUtMTSBUkdBAryP6IUtwCJBTCXAA7yBWAW8At6BZ0S8mqWjjCwYFdoyYtKc4rFSAVlCorHY93C2+Hh/1utSrdMOsP65q35W613S/ut4fN5m7xz3Jz+HXRz7fl9tdxv9zZWXvaavtsRyN8WW9WBR3vprtD/1YLMta7BSQ1AsB0RgF9CqskVgoG5C4F9ikgZY8BMoQuBfUprCeRKodhio0kxjMOHnDE5Ax5FkeWz8aBGMEZKFI3Du1TWDNKpSDTdqNIcMYQb5CJdG0mBrpSCVoZVLJ2MzGgQEUXBapgo+B4ngoYaFMhubwVYeJAzuccg6ISRvZ8Glbu5RNoRBK01RVDwi4J36CyINeW9g+xtMoYnlX3oxsDlZKItwppwEs0hjp1mybtCyQPhhegtuEl3XbDkRugZcE/+WFbjG5pEUZtn1s2BqNn7IbE5kYMuevGoLTcCsuMk7zksnzOIvmYz4FAc3CBZpyCYP68LJQ9DxGlK4sRRWRsFBK7FJiuTOXQB5LmQ8qXhZGbMBOHLgUNhBlzG+QxU3+C0miCMtC0qIF05xaNpg5JcH0bVuqSDCYoafLCUkS6ZOoIN3kJp/l250NS9QaDnOJfXKOFcRZJ7Ecy6PeY2hiPWfscPPADAkSvCtjSMmmdbG05YxkINWfwhst5JrHfOIZCbQt9mvbCLOezh2nYtdPkmLfcFzg4gLctB+E+x2CI2gtXahwwDUGIX3AjtlEeUt+NkcJS2/RIStJXR7rFxj7/zV5J0N6TEqduJAIjnYc2Okzz2N03yUCikoOn1LZN2pW50C0aTvj6hhO5tuFkNEoxtU0gzpfJr3AQpf97bfuNI13dcCM3PttwY40hzkqr0NOYjkimvYt9TYML+8UpTLEf+uW7/V0+rXdnHwOPhWy3Xj5uVvXvy2H7NDu7//fNz/jHxLfd69Pq+bBbFabZF0X7uPMNbLcAIX8/luf9Bw==",
+      "is_unconstrained": true,
+      "name": "propose_root_transfer"
+    },
+    {
+      "abi": {
+        "abi_version": 1,
+        "error_types": {
+          "2532431590566296083": {
+            "error_kind": "string",
+            "string": "BorgAuthV2: permission denied"
+          },
+          "2667463251907752812": {
+            "error_kind": "string",
+            "string": "Function require_permission can only be called statically"
+          },
+          "459713770342432051": {
+            "error_kind": "string",
+            "string": "Not initialized"
+          }
+        },
+        "parameters": [
+          {
+            "name": "permission",
+            "type": {
+              "kind": "field"
+            },
+            "visibility": "private"
+          },
+          {
+            "name": "account",
+            "type": {
+              "fields": [
+                {
+                  "name": "inner",
+                  "type": {
+                    "kind": "field"
+                  }
+                }
+              ],
+              "kind": "struct",
+              "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+            },
+            "visibility": "private"
+          }
+        ],
+        "return_type": null
+      },
+      "bytecode": "JwACBAEoAAABBIBHJwAABEclAAAARScCBAQCJwIFBAAfCgAEAAUARS0IRQItCEYDJQAAAFAnAgIERycCAwQAOw4AAwACJwBDAAEnAEQBASYeAgAEAB4CAAQAJwIEBAUtCAAFAAgABAAlAAAAvy0CAAAeAgAECSQCAAQAAACDJQAAAfEeAgAEAB4CAAQAHgIABAAvKABDAAQABQoiAkMEJAIABAAAAKwlAAACAwoqAwUCJAIAAgAAAL4lAAACAyYeAgACACkCAAMAxzL5dycCBAAAKwIABQAAAAAAAAAAAgAAAAAAAAAALQgBBicCBwQFAAgBBwEnAwYEAQAiBgIHLQoHCC0OAwgAIggCCC0OAggAIggCCC0OBAgAIggCCC0OBQgtCAECJwIDBAUACAEDAScDAgQBACIGAgMAIgICBD8PAAMABCcCAwQBACoCAwQtCwQEHgIAAgApAgAFAANtUn8rAgAGAAAAAAAAAAADAAAAAAAAAAAtCAEHJwIIBAUACAEIAScDBwQBACIHAggtCggJLQ4FCQAiCQIJLQ4CCQAiCQIJLQ4ECQAiCQIJLQ4GCS0IAQInAgQEBQAIAQQBJwMCBAEAIgcCBAAiAgIFPw8ABAAFACoCAwQtCwQEMwoABAACJAIAAgAAAfAlAAACFSYqAQABBSUEu7HdXrNsPAQCASYqAQABBSMlAR09rnoTPAQCASYqAQABBQZhOz0Lnb0zPAQCASY=",
+      "custom_attributes": [
+        "abi_public",
+        "abi_view"
+      ],
+      "debug_symbols": "tVhbbtswELyLvv3BffGRqxRF4CRKYcBwAscuUAS+e5cJl5bSkk0t58caj6QRdzm7lPg6PIx3xx+3m93j08tw8+11uNtvttvNj9vt0/36sHnaKfs6uPwT9VdWQ5ThJq2GpP/A6VHKMb0fwbEBY4AUUAZRAStAXwDBcIP5GlIGM8PKUGZYGUIFooKUb5dUgA8FBDRgTB7dG0hZx2egOqw66KQAcAXkp78DO8V2io0RY6QyqQBPBmIBeTzvIBQQ7RHRhpETx5wBG0jvgBwbMAaMAWMwD0OngcgZqEy+JipgvUsyI1RAMCbEAqKdisYkY1Jh2KEBXwCAASkAnQE2kAqgLBgyCAUwGjBGjBFjvDE5q6LhcCADeo1Xb3AevAcFeZY9nE6rwfx6e9iPY7brxMBq6+f1ftwdhpvdcbtdDT/X2+PbRS/P693b8bDe61nVHncPelTBx812zOi0Ot/t2reKS6HcLSCxCgDGmQS0JTTNWCQYkJsS2JaAmCwGrQDXlKC2hNYJUtFQTKGKhDDT4I5GiKaQJnEk+WwciAFMgQI14/BtCa0CKRLEXqpEhJlCuEIm4tJMdHzlxfmi4CX5ZiZ61gxUrRl821fQ8SYBQLJ0ArBr5QJ67nTRYgFdHi5Jh8biaiwxXJIOPI9Cl4KzMTjMnQHS0QCqzmCYRALzSKBjUO2hbOWOMJlZ+jCOsLzeIV7B5tkAy3zeC+WzJY+wuOYRr5ANpMXZ6JgDgthaACFy06TYMamHaHXvEbBqIKe5Rq+LYmBLh+JJ9/iYjtATcb7Oi5YfNkWuYVNcbNN/xILuHMukI38YBvV8KmJeJ+/wkkaILqTaxbxrGqTXS9lbAxKO03VhLkF8hVkh+cJFUhgnkYR2JJ2JDbHOSUi+oxF7C5x+kljZqk/OCwOpUWYqHZOmBOawlCQ0Ndj1OmGt2nh+GWXhuQL0JoUsFO0B7iINdvWlgZ1wW6PTSylVd6jcuadD+I9hBF8lYnsYPYfF2sEkRmm6g/013qzDV9ZKhPo2GDm2I0k9n7vaOtTz2GyC0htIcpZS7YG+aXOBaxSc4PKCE1pacNJrpbpZYFOLMV2mQRT/9hL1h4ZfXHC9YXy24PoeQ5xMrX7ltzzWE+G6WOuGElxYL/WLI7kP9fJd/67vN/vZdtkpi+0367vtWP4+Hnf3k7OHX892xrbbnvdP9+PDcT9mpfOeW95v+ZbSSn3+/ZQf9xs=",
+      "is_unconstrained": true,
+      "name": "require_permission"
+    },
+    {
+      "abi": {
+        "abi_version": 1,
+        "error_types": {
+          "13044228062218889604": {
+            "error_kind": "string",
+            "string": "Function root_authority can only be called statically"
+          },
+          "459713770342432051": {
+            "error_kind": "string",
+            "string": "Not initialized"
+          }
+        },
+        "parameters": [],
+        "return_type": {
+          "abi_type": {
+            "fields": [
+              {
+                "name": "inner",
+                "type": {
+                  "kind": "field"
+                }
+              }
+            ],
+            "kind": "struct",
+            "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+          },
+          "visibility": "public"
+        }
+      },
+      "bytecode": "JwACBAEoAAABBIBFJwAABEUlAAAAQScCAgQAJwIDBAAfCgACAAMARCUAAABHLQICRCcCAwREJwIEBAE7DgAEAAMnAEMBASYeAgACAB4CAAIAJwICBAMtCAADAAgAAgAlAAAAkS0CAAAeAgACCSQCAAIAAAB6JQAAAcMeAgACACcCAwABLyoAAwACAAQtCgQCJh4CAAIAKQIAAwDHMvl3JwIEAAArAgAFAAAAAAAAAAACAAAAAAAAAAAtCAEGJwIHBAUACAEHAScDBgQBACIGAgctCgcILQ4DCAAiCAIILQ4CCAAiCAIILQ4ECAAiCAIILQ4FCC0IAQInAgMEBQAIAQMBJwMCBAEAIgYCAwAiAgIEPw8AAwAEJwIDBAEAKgIDBC0LBAQeAgACACkCAAUAA21SfysCAAYAAAAAAAAAAAMAAAAAAAAAAC0IAQcnAggEBQAIAQgBJwMHBAEAIgcCCC0KCAktDgUJACIJAgktDgIJACIJAgktDgQJACIJAgktDgYJLQgBAicCBAQFAAgBBAEnAwIEAQAiBwIEACICAgU/DwAEAAUAKgIDBC0LBAQzCgAEAAIkAgACAAABwiUAAAHVJioBAAEFtQZoT7G9KYQ8BAIBJioBAAEFBmE7PQudvTM8BAIBJg==",
+      "custom_attributes": [
+        "abi_public",
+        "abi_view"
+      ],
+      "debug_symbols": "tZjRTuswDIbfpde7iB0nTvYqRwgNKGhStU1lO9IR2rsfh8VZyyE5sI0b+s9tv9bub6f0rXvqHw4v9+vN8/a1W/566x7G9TCsX+6H7eNqv95uJPrWmfSHoVu6Rce+W8ZFF+QXGNn60zaavHWnLRijgkTYJKIIEgGcBWK3xHQMSgRRhMUsSDgolwMnHAtJxCw8ZRGcCt0VdVfMETSkQiNgVXAW6TZOwmdhQUW+BJJRkYA2iZCFsyo04jXiNcIa4XQbkjsGUqGRmI7hJOQskog1nAVqJNXnJHQXaYQ04jTifBbeqHAqYhZMKvQSwapIQC8iggp/EmRAhUZAI6CRVFXiJDiLVFWKSUjEyXOn9JSdOR4Xnfrtfj/2fbLbxIBiy91q7Df7brk5DMOi+70aDu8Hve5Wm/ftfjXKXkH2myfZCvB5PfRJHRfns039VGci57MduFAAgGGGgDpCioEZQYBURWAdIU7WHCCCqSJsHYHGoc0M0ZYLhHnGoAaDgxLiJI/ovpoHIoMSLNtqHr6OsGKOjLDkXUEEmBH4BpUI11ai4SvvjM8E76KvVqJlTbbFmuzrvoKGNy0ARC0nAJlaLaDlThM0F5Bpfkk5JBdTcgl8STkQnZYDZXgWBPHcGeAaTwWCMjwCFgZSnDNaBkUmtZfoyYP5WFJuQYwvNkcTsAoJNzB6ssB1Tv9PLmjOuUzM/uE2sGVU53RyyLKFF3mMPKnHKEz7ZW4QvMUURfrB4eEIJ5lwPZOGTTmUgnL0DQa3Gh9YlzaQh3xuOnklmFMaNo0R1B4xOq4zYmtVKC0Xzos0OZovj63xwVZTkQY2FzHk/UeHKRlHdUZjmNpY3CG48/oG/I3bYF8QoX4bLYeFMn5cCK7qDutu0CvW/2SvBCirZKBQzyS0fG7K6BDPY3WC2YZFXTRaUhlgvmpzMrdoOILrG47w2oaj1ijFAJ+u199hWBs+e5/8h+GubrjWbXy14doeQ5w8Wg/V9/MWhMpKCzRBfK9fyptYNB/65U5+rh7X4+wzwDHBxvXqYejzz+fD5nGyd/9np3v0M8Ju3D72T4exT6Tzt4T03+KvEBbR3B3T1f4C",
+      "is_unconstrained": true,
+      "name": "root_authority"
+    },
+    {
+      "abi": {
+        "abi_version": 1,
+        "error_types": {
+          "2532431590566296083": {
+            "error_kind": "string",
+            "string": "BorgAuthV2: permission denied"
+          },
+          "459713770342432051": {
+            "error_kind": "string",
+            "string": "Not initialized"
+          },
+          "8502498164115016271": {
+            "error_kind": "string",
+            "string": "semantic length returned from oracle does not match data"
+          }
+        },
+        "parameters": [
+          {
+            "name": "new_class_id",
+            "type": {
+              "fields": [
+                {
+                  "name": "inner",
+                  "type": {
+                    "kind": "field"
+                  }
+                }
+              ],
+              "kind": "struct",
+              "path": "aztec::protocol_types::contract_class_id::ContractClassId"
+            },
+            "visibility": "private"
+          }
+        ],
+        "return_type": null
+      },
+      "bytecode": "JwACBAEoAAABBIBIJwAABEglAAAAQScCAwQBJwIEBAAfCgADAAQARy0IRwIlAAAAeicCAgRIJwIDBAA7DgADAAInAEMAAScARAACLAAARQAwZE5y4TGgKbhQRbaBgVhdKDPoSHm5cJFD4fWT8AAAACkAAEYE/////yYeAgADAB4CAAMAJwIDBAQtCAAEAAgAAwAlAAACHS0CAAAeAgADAQoiA0UEFgoEBRwKBQYABCoGAwUnAgMBAAoqBAMGJAIABgAAAM4nAgcEADwGBwEeAgADAB4CAAMAHgIAAwAvKABDAAMABAoqBQQDJAIAAwAAAPclAAADVCkCAAMA+pECyy0IAQQnAgUEAwAIAQUBJwMEBAEAIgQCBS0KBQYtDgMGACIGAgYtDgIGJwICBAIAIgQCAzkDgABGAEYARAACAAMgAgACIQIAAycCBAQALQgBBicCBQQAACIGAggtCwgIJwIJBAMAKgYJByI6AAMABAAHLQoDCCcDBgQBACIGAgktDggJACIJAgktDggJJwIKBAMAKggKCQAIAQkBJwIJBAAtCggKBiIKAgoKKgUJCyQCAAsAAAG/LQoFBSMAAAHDLQoKBSQCAAsAAAHdCioFCgwkAgAMAAAB3SUAAANmJAIAAgAAAgYjAAAB6gAiBgIDLQsDAycCBwQDACoGBwI8DgUCIwAAAgYKKgUEAiQCAAIAAAIcJwIDBAA8BgMBJh4CAAIAKQIAAwDHMvl3JwIEAAArAgAFAAAAAAAAAAACAAAAAAAAAAAtCAEGJwIHBAUACAEHAScDBgQBACIGAgctCgcILQ4DCAAiCAIILQ4CCAAiCAIILQ4ECAAiCAIILQ4FCC0IAQInAgMEBQAIAQMBJwMCBAEAIgYCAwAiAgIEPw8AAwAEJwIDBAEAKgIDBC0LBAQeAgACACkCAAUAA21SfysCAAYAAAAAAAAAAAMAAAAAAAAAAC0IAQcnAggEBQAIAQgBJwMHBAEAIgcCCC0KCAktDgUJACIJAgktDgIJACIJAgktDgQJACIJAgktDgYJLQgBAicCBAQFAAgBBAEnAwIEAQAiBwIEACICAgU/DwAEAAUAKgIDBC0LBAQzCgAEAAInAgMBASQCAAIAAANTJQAAA3gmKgEAAQUjJQEdPa56EzwEAgEmKgEAAQV1/vEIN3yKTzwEAgEmKgEAAQUGYTs9C529MzwEAgEm",
+      "custom_attributes": [
+        "abi_public"
+      ],
+      "debug_symbols": "tVnRbts6DP2XPPdBpERS6q8Mw5B12RAgSIusvcDF0H8fWYuy3VVam2QvyQkdHVPUIUXZvzbfdl+ffnzZH7/f/9zcfvq1+XraHw77H18O93fbx/39Ua2/NsE+AHFzSzf6LZvbot9Rf0MwIBUkcMAVkFuIFCQFrGTABshBqZckOTBLVpCTA7cUmQAGdKD3Qh2FoPdCs4BaollQLZEN6PAoCmKqIKEDJUyogLgC83ACVIG4RdyS3WIeTiBXUKIDY1Y3ork6AbegDWcDNjwb0OGkgYoxOpAKzNUJuMWiOgGugN0iPlycMLsl+/DihKUOTwEcuAXcAm4xnydAFUS3uD+JSgWcKpB6r1Tsz2iAHJQJUEgO3ALmvAaKMFYQwQFXYGIjMaAWjgpMYy/AVvAFZHDgl4pfKtXCIThollIBRAe5AsuBCUgFERxUNzgZIRlIDkoF5BZyC7uF3WIaY9UGm8Ym0Cz2H009LjpK1CIhVoBuMSG9gOiXoluSW5JbCB1wBSakCVAFJv4J+C0sPV+ASUuyAanApDWBaskBHbgF3GJRFZ1OtlWegP4ngwJzPqOBXIGtcsbn55uNl6Yvj6fdzirTolZpBXvYnnbHx83t8elwuNn8tz08vfzp58P2+PL9uD3pVZXk7vhNv5Xw+/6wM/R8M48O/aEqU6mjCSg3AsC8ooA+heYZVooEmLoU2KfQkuhzgAKhSxH7FBg0vyqH4iiNRGTFkQYctpITQ1nMo9B754Eo4Axavbrz4D5FTIkqRUxMjSLDikGuEIl8aSQGumIKXBm0PnA3EmEUCQktEnmORJJ1KGCkTUBu2qRuNGG0psBYPBjACXvhhDiai1NE7sfzL26QNDcklK4bNAgHekRTwlkXdF48FzN5Hc+BPEtwaRWcJ5HS+2URY5MFYV8WZRTMxoEJZi8AXqV6GIXCdu4pFLo4M0dc+4Fwed1DvEK6Y7y48sHlpQ/p4tqHfI1oyMXRGIgDhHxPBMmpK1IciFQbNU94RpiFjqmsN8VRsqA2Sh5SlEXGvgpHhBFJ4LYuGHK3AsZryDReLNO/zKXVQMWLnem1GyOdEkEr5wHP2R/1IOSFNBL2q9iIgiI2igRdijjY54nZNyZiyb2MiwOZppkicZmXldcqTaNsoRBaHaQw6N1gOBV6ayrxI260kg6q1m6ypGEfmrlt0xS72hg7Eps6FCfqOjIQKerhyx3hZQf2MUdKbo5o99B1ZFhNWy1EkbMdkbRwBLqOjHb93BSC2oWc6UhqByZtKPuOEAyTX95qYf4oZKO0K7nJPQTopR3FUffRNphV90HvLkH6uMJXhVJeHv3WFERX2BiI/+F5RTW1mIn0ZzIoppLbtiCFBxyDZYUA0joH3arm3lQfcK3PkIPZlAJeT0sh6XMMRdoahzznSqJ1o86jLV/inPgpnMWhT/Pa7qLVuc8xONbH0tShdHMxBfmAG9LOPSH33RgpbK4+lBfH2dfq4Gsc7flfnu31SWR7ZpRT7s5ERnU0hFY6VPPY7cNktOWX4CHVNoy7Mhe8RsJJvDzhJF2acDIqpZjbGQxzOY8jxvzWOe4PDrk44UZuvDfhxhpDXCwtd/fqPCKZn5nomyA4M1+cglZ9h+XLZ/25vdufVi+pno3stN9+Pezqz+9Px7vF1cf/H/yKv+R6ON3f7b49nXbGtHjTpc/AP9mjCiD+/Gz3+w0=",
+      "is_unconstrained": true,
+      "name": "update_to"
     },
     {
       "abi": {
@@ -5877,6 +6280,10 @@
       "abi": {
         "abi_version": 1,
         "error_types": {
+          "10626851675349249230": {
+            "error_kind": "string",
+            "string": "BorgAuthV2: unauthorized"
+          },
           "11194752367584870169": {
             "error_kind": "fmtstring",
             "item_types": [
@@ -5886,29 +6293,45 @@
             ],
             "length": 27
           },
-          "13455385521185560676": {
+          "11440095462901124278": {
             "error_kind": "string",
-            "string": "Storage slot 0 not allowed. Storage slots must start from 1."
+            "string": "Function has_permission can only be called statically"
+          },
+          "11749533293793027201": {
+            "error_kind": "string",
+            "string": "BorgAuthV2: nominee is root"
+          },
+          "13044228062218889604": {
+            "error_kind": "string",
+            "string": "Function root_authority can only be called statically"
           },
           "14415304921900233953": {
             "error_kind": "string",
             "string": "Initializer address is not the contract deployer"
           },
-          "14677572522926173230": {
+          "2532431590566296083": {
             "error_kind": "string",
-            "string": "BorgAuth: not authorized"
+            "string": "BorgAuthV2: permission denied"
           },
-          "1554780549764357016": {
+          "2667463251907752812": {
             "error_kind": "string",
-            "string": "Function user_role can only be called statically"
-          },
-          "15782500856405024517": {
-            "error_kind": "string",
-            "string": "Function only_role can only be called statically"
+            "string": "Function require_permission can only be called statically"
           },
           "459713770342432051": {
             "error_kind": "string",
             "string": "Not initialized"
+          },
+          "5186345959665386467": {
+            "error_kind": "string",
+            "string": "Function pending_root_authority can only be called statically"
+          },
+          "8495619526896312545": {
+            "error_kind": "string",
+            "string": "BorgAuthV2: zero address"
+          },
+          "8502498164115016271": {
+            "error_kind": "string",
+            "string": "semantic length returned from oracle does not match data"
           },
           "9967937311635654895": {
             "error_kind": "string",
@@ -5926,11 +6349,11 @@
         ],
         "return_type": null
       },
-      "bytecode": "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",
+      "bytecode": "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",
       "custom_attributes": [
         "abi_public"
       ],
-      "debug_symbols": "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",
+      "debug_symbols": "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",
       "is_unconstrained": true,
       "name": "public_dispatch"
     },
@@ -6088,20 +6511,20 @@
       "name": "sync_state"
     }
   ],
-  "name": "BorgAuth",
+  "name": "BorgAuthV2",
   "noir_version": "1.0.0-rc.3+5a7ee9bf5ed8973076df7bb0d2b723024db09ae7",
   "outputs": {
     "globals": {
       "storage": [
         {
-          "name": "STORAGE_LAYOUT_BorgAuth",
+          "name": "STORAGE_LAYOUT_BorgAuthV2",
           "value": {
             "fields": [
               {
                 "name": "contract_name",
                 "value": {
                   "kind": "string",
-                  "value": "BorgAuth"
+                  "value": "BorgAuthV2"
                 }
               },
               {
@@ -6109,7 +6532,7 @@
                 "value": {
                   "fields": [
                     {
-                      "name": "user_roles",
+                      "name": "root_authority",
                       "value": {
                         "fields": [
                           {
@@ -6118,6 +6541,22 @@
                               "kind": "integer",
                               "sign": false,
                               "value": "0000000000000000000000000000000000000000000000000000000000000001"
+                            }
+                          }
+                        ],
+                        "kind": "struct"
+                      }
+                    },
+                    {
+                      "name": "pending_root_authority",
+                      "value": {
+                        "fields": [
+                          {
+                            "name": "slot",
+                            "value": {
+                              "kind": "integer",
+                              "sign": false,
+                              "value": "0000000000000000000000000000000000000000000000000000000000000002"
                             }
                           }
                         ],
@@ -6141,9 +6580,23 @@
             {
               "name": "parameters",
               "type": {
+                "fields": [],
+                "kind": "struct",
+                "path": "BorgAuthV2::accept_root_transfer_parameters"
+              }
+            }
+          ],
+          "kind": "struct",
+          "path": "BorgAuthV2::accept_root_transfer_abi"
+        },
+        {
+          "fields": [
+            {
+              "name": "parameters",
+              "type": {
                 "fields": [
                   {
-                    "name": "owner",
+                    "name": "root",
                     "type": {
                       "fields": [
                         {
@@ -6159,12 +6612,54 @@
                   }
                 ],
                 "kind": "struct",
-                "path": "BorgAuth::constructor_parameters"
+                "path": "BorgAuthV2::constructor_parameters"
               }
             }
           ],
           "kind": "struct",
-          "path": "BorgAuth::constructor_abi"
+          "path": "BorgAuthV2::constructor_abi"
+        },
+        {
+          "fields": [
+            {
+              "name": "parameters",
+              "type": {
+                "fields": [
+                  {
+                    "name": "permission",
+                    "type": {
+                      "kind": "field"
+                    }
+                  },
+                  {
+                    "name": "account",
+                    "type": {
+                      "fields": [
+                        {
+                          "name": "inner",
+                          "type": {
+                            "kind": "field"
+                          }
+                        }
+                      ],
+                      "kind": "struct",
+                      "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+                    }
+                  }
+                ],
+                "kind": "struct",
+                "path": "BorgAuthV2::has_permission_parameters"
+              }
+            },
+            {
+              "name": "return_type",
+              "type": {
+                "kind": "boolean"
+              }
+            }
+          ],
+          "kind": "struct",
+          "path": "BorgAuthV2::has_permission_abi"
         },
         {
           "fields": [
@@ -6275,12 +6770,41 @@
                   }
                 ],
                 "kind": "struct",
-                "path": "BorgAuth::offchain_receive_parameters"
+                "path": "BorgAuthV2::offchain_receive_parameters"
               }
             }
           ],
           "kind": "struct",
-          "path": "BorgAuth::offchain_receive_abi"
+          "path": "BorgAuthV2::offchain_receive_abi"
+        },
+        {
+          "fields": [
+            {
+              "name": "parameters",
+              "type": {
+                "fields": [],
+                "kind": "struct",
+                "path": "BorgAuthV2::pending_root_authority_parameters"
+              }
+            },
+            {
+              "name": "return_type",
+              "type": {
+                "fields": [
+                  {
+                    "name": "inner",
+                    "type": {
+                      "kind": "field"
+                    }
+                  }
+                ],
+                "kind": "struct",
+                "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+              }
+            }
+          ],
+          "kind": "struct",
+          "path": "BorgAuthV2::pending_root_authority_abi"
         },
         {
           "fields": [
@@ -6289,15 +6813,7 @@
               "type": {
                 "fields": [
                   {
-                    "name": "role",
-                    "type": {
-                      "kind": "integer",
-                      "sign": "unsigned",
-                      "width": 8
-                    }
-                  },
-                  {
-                    "name": "user",
+                    "name": "nominee",
                     "type": {
                       "fields": [
                         {
@@ -6313,12 +6829,77 @@
                   }
                 ],
                 "kind": "struct",
-                "path": "BorgAuth::only_role_parameters"
+                "path": "BorgAuthV2::propose_root_transfer_parameters"
               }
             }
           ],
           "kind": "struct",
-          "path": "BorgAuth::only_role_abi"
+          "path": "BorgAuthV2::propose_root_transfer_abi"
+        },
+        {
+          "fields": [
+            {
+              "name": "parameters",
+              "type": {
+                "fields": [
+                  {
+                    "name": "permission",
+                    "type": {
+                      "kind": "field"
+                    }
+                  },
+                  {
+                    "name": "account",
+                    "type": {
+                      "fields": [
+                        {
+                          "name": "inner",
+                          "type": {
+                            "kind": "field"
+                          }
+                        }
+                      ],
+                      "kind": "struct",
+                      "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+                    }
+                  }
+                ],
+                "kind": "struct",
+                "path": "BorgAuthV2::require_permission_parameters"
+              }
+            }
+          ],
+          "kind": "struct",
+          "path": "BorgAuthV2::require_permission_abi"
+        },
+        {
+          "fields": [
+            {
+              "name": "parameters",
+              "type": {
+                "fields": [],
+                "kind": "struct",
+                "path": "BorgAuthV2::root_authority_parameters"
+              }
+            },
+            {
+              "name": "return_type",
+              "type": {
+                "fields": [
+                  {
+                    "name": "inner",
+                    "type": {
+                      "kind": "field"
+                    }
+                  }
+                ],
+                "kind": "struct",
+                "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
+              }
+            }
+          ],
+          "kind": "struct",
+          "path": "BorgAuthV2::root_authority_abi"
         },
         {
           "fields": [
@@ -6343,12 +6924,12 @@
                   }
                 ],
                 "kind": "struct",
-                "path": "BorgAuth::sync_state_parameters"
+                "path": "BorgAuthV2::sync_state_parameters"
               }
             }
           ],
           "kind": "struct",
-          "path": "BorgAuth::sync_state_abi"
+          "path": "BorgAuthV2::sync_state_abi"
         },
         {
           "fields": [
@@ -6357,7 +6938,7 @@
               "type": {
                 "fields": [
                   {
-                    "name": "user",
+                    "name": "new_class_id",
                     "type": {
                       "fields": [
                         {
@@ -6368,63 +6949,17 @@
                         }
                       ],
                       "kind": "struct",
-                      "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
-                    }
-                  },
-                  {
-                    "name": "role",
-                    "type": {
-                      "kind": "integer",
-                      "sign": "unsigned",
-                      "width": 8
+                      "path": "aztec::protocol_types::contract_class_id::ContractClassId"
                     }
                   }
                 ],
                 "kind": "struct",
-                "path": "BorgAuth::update_role_parameters"
+                "path": "BorgAuthV2::update_to_parameters"
               }
             }
           ],
           "kind": "struct",
-          "path": "BorgAuth::update_role_abi"
-        },
-        {
-          "fields": [
-            {
-              "name": "parameters",
-              "type": {
-                "fields": [
-                  {
-                    "name": "user",
-                    "type": {
-                      "fields": [
-                        {
-                          "name": "inner",
-                          "type": {
-                            "kind": "field"
-                          }
-                        }
-                      ],
-                      "kind": "struct",
-                      "path": "aztec::protocol_types::address::aztec_address::AztecAddress"
-                    }
-                  }
-                ],
-                "kind": "struct",
-                "path": "BorgAuth::user_role_parameters"
-              }
-            },
-            {
-              "name": "return_type",
-              "type": {
-                "kind": "integer",
-                "sign": "unsigned",
-                "width": 8
-              }
-            }
-          ],
-          "kind": "struct",
-          "path": "BorgAuth::user_role_abi"
+          "path": "BorgAuthV2::update_to_abi"
         }
       ]
     }
