@@ -947,14 +947,17 @@ Work or decisions that are still to do.
   `immutables_hash` is `poseidon2([auth])`. `update_to(auth, new_class_id)` checks `auth` against that hash, asks
   the auth contract for `OWNER_ROLE`, and calls `ContractInstanceRegistry.update`. The default upgrade delay stays,
   so registry txs keep the default expiration. The owner swaps owners by grant and revoke. BorgAuth role adapters
-  and the two-step ownership transfer are not ported. Still to do: `deploy.ts`, `poc.ts` and the webapp must deploy
-  BorgAuth and give the registry its immutables hash (this changes the registry address); an independent review.
+  and the two-step ownership transfer are not ported. `scripts/deploy.ts` deploys BorgAuth and the registry and
+  upgrades the registry. The deployer stays the owner on every network. Still to do: deploy on the testnet (the old
+  testnet registry has immutables hash 0, so it cannot be upgraded); `poc.ts` and the webapp still deploy or use a
+  registry without BorgAuth; an independent review.
   Each new version must keep the nullifier formulas, and each PXE must register the new artifact. Upgradeability
   weakens path 1 of the auditor proof (the code can change); path 2 is not affected.
 - TODO: test a real registry upgrade. The TXE tests (`contracts/agreement_registry/src/test/upgrade.nr`) cover the auth checks only. The TXE
   does not publish contract classes, so the protocol registry rejects each new class ("New contract class is not
-  registered"). Untested: the owner schedules an upgrade to a published class, the registry keeps its class before
-  the delay, and the new class runs after the delay. Test it on the local network.
+  registered"). The local network run of `deploy.ts` (2026-11-04) published a new class and scheduled the upgrade
+  with `update_to`. Untested: the new class runs after the delay. Test it on a local network that can move its
+  clock past the delay.
 - The MetaLeX FPC with use limits. The PoC uses the test SponsoredFPC, which mainnet does not have.
 - The data key store in production: the KMS for `ENCRYPTION_KEY`, the login check, a retention period for each kind
   of unit, and the rules for a cyberCorp or a group. The PoC has one retention period and a party-only rule.

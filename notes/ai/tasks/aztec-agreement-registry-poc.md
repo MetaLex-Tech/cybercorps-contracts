@@ -69,6 +69,60 @@
   `update_to` by the owner, and the new class runs after the default delay.
 - TXE: the 18 existing registry tests pass on a registry deployed with the auth immutables hash.
 
+## Invariants (deploy script, 2026-11-04)
+
+22. `deploy.ts` picks the deployment record by the L1 chain id of the node. A chain without a record fails before
+    any tx.
+23. The script computes each address from the recorded original artifact, the fixed salt, the deployer (the BorgAuth
+    owner) and a universal deploy. A recorded address that differs from the computed address fails before any tx.
+    A recorded artifact whose class id differs from its recorded class id fails before any tx.
+24. The deployer is the BorgAuth owner on every network (user, 2026-11-04: no handoff). A recorded owner that
+    differs from the deployer fails before any tx.
+25. The script sends a tx only when the chain needs it: BorgAuth deploy when it has no instance; registry deploy when
+    it has no instance; class publish when the current class is not registered; `update_to` when the registry class
+    is not the current class and no upgrade to the current class is scheduled.
+26. A second run on the same chain state sends no tx. Each item logs one status: deployed, unchanged, published,
+    scheduled (with the time of change), pending (with the time of change) or up to date.
+27. `--dry-run` sends no tx and logs what a real run would do.
+
+## Acceptance tests (deploy script)
+
+- Local network, fresh: the run deploys BorgAuth and the registry, and the registry is up to date. A second run
+  sends no tx and logs all items as unchanged.
+- Local network: a recorded address that differs from the computed one fails before any tx.
+- Local network: with a changed registry build, the run publishes the class and schedules the upgrade. A second run
+  sends no tx and logs the upgrade as pending.
+- Local network: `--dry-run` on a fresh network sends no tx.
+- Result 2026-11-04 (local network 6.0.0, port 8090, first test account): all five passed. BorgAuth
+  `0x0502…b939`, registry `0x25be…9b29`, recorded in `deployments.ts`. With a temporary `version()` utility in the
+  registry, the run published class `0x2b98…f9a3` and scheduled `update_to`; the next run logged "pending". After
+  the source was restored, the run scheduled the original class `0x2c61…0d73` again. Not tested: the new class
+  after the delay. Not run on the testnet (needs authorization).
+- 2026-11-04 (user): One salt for all contracts of a release, like the EVM scripts (`UPGRADE_SALT`,
+  `"CyberCorpV5-SecondaryConditionsV1.0.0"`): `DEPLOY_SALT_LABEL = 'MetaLexAztecV1.0.0'` (semver, user), salt =
+  sha256(label) reduced into the field. Local network addresses after the change: BorgAuth `0x1593…d0a9`, registry
+  `0x045b…76bd` (deploy, then a second run with no tx). Earlier local deploys with other salts are not recorded.
+- 2026-11-04 (user): The salt label comes from the env (`DEPLOY_SALT_LABEL`, required), so that one network can
+  hold more than one environment. `deployments.ts` keys each network by L1 chain id and each deployment by its
+  label (`NETWORKS[chainId].deployments[label]`). The user set the label format to `MetaLex-v1.0.0`. Local network:
+  `MetaLex-v1.0.0` deployed BorgAuth `0x2d61…8c28` and the registry `0x1043…432a`, a second run sent no tx, a run
+  without the label fails, and a dry run of `MetaLex-staging-v1.0.0` computes other addresses. Supersedes the local
+  addresses above.
+- 2026-11-04 (user): Label convention: `MetaLex-v1.0.0` for production, a semver pre-release `MetaLex-v1.0.0-dev.N`
+  for staging and development. The local record moved to `MetaLex-v1.0.0-dev.0`: BorgAuth `0x1673…b9d4`, registry
+  `0x11a5…7f95` (deploy, then a second run with no tx). Supersedes the `MetaLex-v1.0.0` local record.
+- 2026-11-04 (user): `deploy.ts` writes the deployment record into `deployments.ts` after a run that is not a dry
+  run. It regenerates the `NETWORKS` block at the end of the file, and writes nothing when the record is the same.
+  `DEPLOYMENT.md` keeps no log (user: one source of truth). Local network: a recorded label leaves the file
+  byte-identical; a dry run writes nothing; a new label `MetaLex-v1.0.0-dev.1` wrote only its record (diff = the 5
+  added lines), and the next run read it back as unchanged. The test record was then removed by hand.
+- 2026-11-04 (user): `deploy.ts` logs one line for each step with the EVM `DeploymentScript` markers (🟢 work,
+  ⚫️ skip). Two gaps fixed: (1) a shared network needs `DEPLOYER_SIGNING_KEY`; only chain 31337 may use the public
+  test account (checked with a dry run against `https://aztec-testnet.drpc.org`, no keys: the run stops before the
+  wallet); (2) the dry run reports exactly whether the registry deploy publishes the class and whether a new
+  environment needs an upgrade (checked on the local network with a temporary registry build). The scenario matrix
+  is in `aztec/DEPLOYMENT.md`.
+
 ## Acceptance tests (lifecycle redesign)
 
 - TXE: two parties give authwits, a third account finalizes, `is_finalized` goes from false to true.

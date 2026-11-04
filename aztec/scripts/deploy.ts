@@ -1,30 +1,307 @@
-// Deploys the registry. A universal deploy with a fixed salt gives the same address on every network.
-// The deployer is the settler account from the env. The SponsoredFPC pays the fee.
+// Deploys and upgrades the MetaLeX contracts on an Aztec network. A run does only the work that is still open, so a
+// second run on the same chain state sends no tx. Each step logs what it changed and what it did not change.
 //
-// Usage: node --env-file=.env.testnet deploy.ts
+// 1. Deploys BorgAuth and the registry from their original artifacts, if the network does not have them. So each
+//    network gets the same addresses. See `deployments.ts`.
+// 2. Publishes the class of the current registry build, if the network does not have it.
+// 3. Schedules the registry upgrade to the current build, if the registry runs another class and no upgrade to the
+//    current build is scheduled. The new class takes effect after the default upgrade delay.
+//
+// Usage:
+//   node --env-file=.env.testnet deploy.ts            sends the txs that are needed
+//   node --env-file=.env.testnet deploy.ts --dry-run  logs what a run would do and sends no tx
+//
+// Each step logs one line. 🟢 marks a step that does work, ⚫️ a step that skips. `LOG_LEVEL=warn` hides the info
+// logs of the wallet.
+//
+// `DEPLOY_SALT_LABEL` selects the environment: `MetaLex-v1.0.0` for production, a semver pre-release such as
+// `MetaLex-v1.0.0-dev.0` for staging and development. All contracts of the environment use the salt of this
+// label. Keep the label of an environment the same: a new label gives a new set of contracts at new
+// addresses. A registry upgrade keeps the label.
+//
+// The deployer comes from `DEPLOYER_SIGNING_KEY`, `DEPLOYER_SALT` and `DEPLOYER_ACCOUNT_TYPE`. On the local network
+// only, the deployer is the first test account when `DEPLOYER_SIGNING_KEY` is not set. Its key is public. The
+// deployer is the BorgAuth owner. The SponsoredFPC pays each fee.
 
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { getInitialTestAccountsData } from '@aztec-labs/accounts/testing';
+import { type ContractArtifact, loadContractArtifact } from '@aztec-labs/aztec.js/abi';
+import { AztecAddress } from '@aztec-labs/aztec.js/addresses';
+import { Contract, getContractClassFromArtifact } from '@aztec-labs/aztec.js/contracts';
+import { publishContractClass } from '@aztec-labs/aztec.js/deployment';
 import { Fr } from '@aztec-labs/aztec.js/fields';
-import { createAztecNodeClient, waitForNode } from '@aztec-labs/aztec.js/node';
-import { CyberAgreementRegistryContract } from './artifacts/CyberAgreementRegistry.ts';
+import { type AztecNode, createAztecNodeClient, waitForNode } from '@aztec-labs/aztec.js/node';
+import { ProtocolContractAddress } from '@aztec-labs/aztec.js/protocol';
+import { poseidon2Hash } from '@aztec-labs/foundation/crypto/poseidon';
+import {
+  DelayedPublicMutableValues,
+  DelayedPublicMutableValuesWithHash,
+} from '@aztec-labs/stdlib/delayed-public-mutable';
+import type { EmbeddedWallet } from '@aztec-labs/wallets/embedded';
+import { createFundedInitializerlessAccounts } from '@aztec-labs/wallets/testing';
+import { type Deployment, NETWORKS, ORIGINAL_ARTIFACTS } from './deployments.ts';
 import { accountOf, keysFromEnv, nodeClientOptions, sponsoredFpcIn, walletAt } from './poc.ts';
 
-const REGISTRY_SALT = Fr.fromHexString('0x4d6574614c6558'); // "MetaLeX"
+const LOCAL_NETWORK_CHAIN_ID = 31337;
+const CURRENT_REGISTRY_ARTIFACT_PATH = '../target/agreement_registry_contract-CyberAgreementRegistry.json';
+const DEPLOYMENTS_FILE = new URL('deployments.ts', import.meta.url);
+const NETWORKS_DECLARATION = 'export const NETWORKS: Record<number, Network> = ';
+
+type Fee = Awaited<ReturnType<typeof sponsoredFpcIn>>['fee'];
+type Context = { node: AztecNode; wallet: EmbeddedWallet; deployer: AztecAddress; fee: Fee; dryRun: boolean };
+
+// Log markers, the same as the EVM `DeploymentScript`. A step that does work (sends, deploys, writes, or would do so
+// in a dry run) logs RUN. A step that skips logs SKIP.
+const RUN = '🟢 ';
+const SKIP = '⚫️ ';
+
+function logRun(logLabel: string, message: string) {
+  console.log(`${RUN}${logLabel} ${message}`);
+}
+
+function logSkip(logLabel: string, message: string) {
+  console.log(`${SKIP}${logLabel} ${message}`);
+}
+
+// Like the EVM scripts, the salt is the hash of a versioned label. The hash is reduced into the field.
+function saltOf(label: string): Fr {
+  return Fr.fromBufferReduce(createHash('sha256').update(label).digest());
+}
+
+function artifactAt(path: string): ContractArtifact {
+  return loadContractArtifact(JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8')));
+}
+
+async function classIdOf(artifact: ContractArtifact): Promise<Fr> {
+  return (await getContractClassFromArtifact(artifact)).id;
+}
+
+// A recorded artifact must give its recorded class id. Otherwise each network would get other addresses.
+async function originalArtifact(name: keyof typeof ORIGINAL_ARTIFACTS): Promise<ContractArtifact> {
+  const { path, classId } = ORIGINAL_ARTIFACTS[name];
+  const artifact = artifactAt(path);
+  const actual = await classIdOf(artifact);
+  if (!actual.equals(Fr.fromHexString(classId))) {
+    throw new Error(`${path} has class id ${actual}, but deployments.ts records ${classId}`);
+  }
+  return artifact;
+}
+
+// The test account key is public, so a shared network must get its deployer from the env.
+function checkDeployerKey(chainId: number) {
+  if (!process.env.DEPLOYER_SIGNING_KEY && chainId !== LOCAL_NETWORK_CHAIN_ID) {
+    throw new Error(
+      `DEPLOYER_SIGNING_KEY is not set. Only the local network (${LOCAL_NETWORK_CHAIN_ID}) can use a test account`,
+    );
+  }
+}
+
+async function deployerOf(wallet: EmbeddedWallet) {
+  if (process.env.DEPLOYER_SIGNING_KEY) return accountOf(wallet, keysFromEnv('DEPLOYER'));
+  const [testAccount] = await getInitialTestAccountsData();
+  return (await createFundedInitializerlessAccounts(wallet, [testAccount]))[0];
+}
+
+// A recorded value must equal the value that this run computes.
+function checkRecorded(deployment: Deployment, field: 'owner' | 'auth' | 'registry', computed: AztecAddress) {
+  const recorded = deployment[field];
+  if (recorded !== undefined && !AztecAddress.fromStringUnsafe(recorded).equals(computed)) {
+    throw new Error(`deployments.ts records ${field}=${recorded}, but this run computes ${computed}`);
+  }
+}
+
+// Writes a value in the code style of `deployments.ts`.
+function tsOf(value: unknown, indent: string): string {
+  if (typeof value === 'string') return `'${value}'`;
+  const inner = `${indent}  `;
+  const keyOf = (key: string) => (/^[A-Za-z_$][\w$]*$|^\d+$/.test(key) ? key : `'${key}'`);
+  const entries = Object.entries(value as object).map(([k, v]) => `${inner}${keyOf(k)}: ${tsOf(v, inner)},\n`);
+  return entries.length === 0 ? '{}' : `{\n${entries.join('')}${indent}}`;
+}
+
+// Writes the deployment of `label` into `deployments.ts`, if its record differs. A dry run does not write.
+function recordDeployment(ctx: Context, chainId: number, label: string, deployment: Required<Deployment>) {
+  const logLabel = '[record]';
+  const key = `NETWORKS[${chainId}].deployments['${label}']`;
+  const recorded = NETWORKS[chainId].deployments[label];
+  if (recorded && Object.entries(deployment).every(([k, v]) => recorded[k as keyof Deployment] === v)) {
+    return logSkip(logLabel, `${key} unchanged, skipping`);
+  }
+  if (ctx.dryRun) return logRun(logLabel, `would write ${key}`);
+  const networks = structuredClone(NETWORKS);
+  networks[chainId].deployments[label] = deployment;
+  const source = readFileSync(DEPLOYMENTS_FILE, 'utf8');
+  const start = source.indexOf(NETWORKS_DECLARATION);
+  if (start < 0) throw new Error(`deployments.ts has no line that starts with "${NETWORKS_DECLARATION}"`);
+  writeFileSync(DEPLOYMENTS_FILE, `${source.slice(0, start)}${NETWORKS_DECLARATION}${tsOf(networks, '')};\n`);
+  logRun(logLabel, `wrote ${key} in deployments.ts`);
+}
+
+async function deployIfMissing(ctx: Context, name: string, deploy: ReturnType<typeof Contract.deploy>) {
+  const logLabel = '[deploy]';
+  const { address } = await deploy.getInstance();
+  if (await ctx.node.getContract(address)) return logSkip(logLabel, `${name} already exists, skipping: ${address}`);
+  if (ctx.dryRun) return logRun(logLabel, `would deploy new ${name}: ${address}`);
+  const { receipt } = await deploy.send({ from: ctx.deployer, fee: ctx.fee });
+  logRun(logLabel, `deployed new ${name}: ${address}, tx ${receipt.txHash}`);
+}
+
+async function latestTimestamp(node: AztecNode): Promise<bigint> {
+  const block = await node.getBlock('latest');
+  if (!block) throw new Error('the node has no block');
+  return block.header.globalVariables.timestamp;
+}
+
+// The class of the registry now, and the class of a scheduled upgrade that has not taken effect yet.
+async function registryClasses(node: AztecNode, registry: AztecAddress, originalClassId: Fr) {
+  const { delayedPublicMutableSlot } = await DelayedPublicMutableValuesWithHash.getContractUpdateSlots(registry);
+  const values = await DelayedPublicMutableValues.readFromTree(delayedPublicMutableSlot, slot =>
+    node.getPublicStorageAt('latest', ProtocolContractAddress.ContractInstanceRegistry, slot),
+  );
+  const now = await latestTimestamp(node);
+  const current = values.svc.getCurrentAt(now)[0];
+  const scheduled = values.svc.timestampOfChange > now ? values.svc.post[0] : undefined;
+  return {
+    current: current.isZero() ? originalClassId : current,
+    scheduled,
+    timestampOfChange: values.svc.timestampOfChange,
+  };
+}
+
+function timeOf(timestamp: bigint): string {
+  return new Date(Number(timestamp) * 1000).toISOString();
+}
+
+// `publishedByDeploy`: the registry deploy of this run publishes the class. This is so when the registry does not
+// exist yet and the current build is the original class. Only a dry run needs it, because it does not deploy.
+async function publishClassIfMissing(
+  ctx: Context,
+  artifact: ContractArtifact,
+  classId: Fr,
+  publishedByDeploy: boolean,
+) {
+  const logLabel = '[publish class]';
+  const name = 'CyberAgreementRegistry class';
+  if (await ctx.node.getContractClass(classId)) {
+    return logSkip(logLabel, `${name} already published, skipping: ${classId}`);
+  }
+  if (ctx.dryRun && publishedByDeploy) {
+    return logSkip(logLabel, `${name} is published by the registry deploy, skipping: ${classId}`);
+  }
+  if (ctx.dryRun) return logRun(logLabel, `would publish ${name}: ${classId}`);
+  const publish = await publishContractClass(ctx.wallet, artifact);
+  const { receipt } = await publish.send({ from: ctx.deployer, fee: ctx.fee });
+  logRun(logLabel, `published ${name}: ${classId}, tx ${receipt.txHash}`);
+}
+
+async function upgradeIfNeeded(
+  ctx: Context,
+  registry: Contract,
+  auth: AztecAddress,
+  originalClassId: Fr,
+  targetClassId: Fr,
+) {
+  const logLabel = '[upgrade]';
+  const name = 'CyberAgreementRegistry';
+  const classes = await registryClasses(ctx.node, registry.address, originalClassId);
+  if (classes.scheduled?.equals(targetClassId)) {
+    const at = timeOf(classes.timestampOfChange);
+    return logSkip(logLabel, `${name} upgrade already scheduled, takes effect at ${at}, skipping: ${targetClassId}`);
+  }
+  if (classes.current.equals(targetClassId) && classes.scheduled === undefined) {
+    return logSkip(logLabel, `${name} already runs the current build, skipping: ${targetClassId}`);
+  }
+  if (ctx.dryRun) return logRun(logLabel, `would schedule ${name} upgrade: ${classes.current} -> ${targetClassId}`);
+  const { receipt } = await registry.methods.update_to(auth, targetClassId).send({ from: ctx.deployer, fee: ctx.fee });
+  const at = timeOf((await registryClasses(ctx.node, registry.address, originalClassId)).timestampOfChange);
+  logRun(
+    logLabel,
+    `scheduled ${name} upgrade: ${classes.current} -> ${targetClassId}, takes effect at ${at}, tx ${receipt.txHash}`,
+  );
+}
 
 async function main() {
+  const dryRun = process.argv.includes('--dry-run');
   const nodeUrl = process.env.AZTEC_NODE_URL;
   if (!nodeUrl) throw new Error('AZTEC_NODE_URL is not set');
-  await waitForNode(createAztecNodeClient(nodeUrl, nodeClientOptions()));
+  const node = createAztecNodeClient(nodeUrl, nodeClientOptions());
+  await waitForNode(node);
 
+  const label = process.env.DEPLOY_SALT_LABEL;
+  if (!label) throw new Error('DEPLOY_SALT_LABEL is not set');
+  const salt = saltOf(label);
+
+  const { l1ChainId, rollupVersion } = await node.getNodeInfo();
+  const network = NETWORKS[l1ChainId];
+  if (!network) throw new Error(`deployments.ts has no network for L1 chain id ${l1ChainId}`);
+  const deployment = network.deployments[label] ?? {};
+
+  checkDeployerKey(l1ChainId);
   const wallet = await walletAt(nodeUrl);
-  const account = await accountOf(wallet, keysFromEnv('SETTLER'));
+  const deployer = (await deployerOf(wallet)).address;
   const { address: fpc, fee } = await sponsoredFpcIn(wallet);
-  console.log(`Configs: node=${nodeUrl} deployer=${account.address} fpc=${fpc} salt=${REGISTRY_SALT}`);
+  const ctx: Context = { node, wallet, deployer, fee, dryRun };
 
-  const { contract, receipt } = await CyberAgreementRegistryContract.deploy(wallet, {
-    salt: REGISTRY_SALT,
+  const authArtifact = await originalArtifact('auth');
+  const originalRegistryArtifact = await originalArtifact('registry');
+  const currentRegistryArtifact = artifactAt(CURRENT_REGISTRY_ARTIFACT_PATH);
+  const originalClassId = await classIdOf(originalRegistryArtifact);
+  const targetClassId = await classIdOf(currentRegistryArtifact);
+
+  console.log('==== deploy.ts Configs ====');
+  console.log(`[config] network: ${network.name}, L1 chain id ${l1ChainId}, rollup version ${rollupVersion}`);
+  console.log(`[config] node: ${nodeUrl}`);
+  console.log(`[config] deployer: ${deployer}`);
+  console.log(`[config] fee payer: ${fpc}`);
+  console.log(`[config] label: ${label}, salt ${salt}`);
+  console.log(`[config] record: ${network.deployments[label] ? 'found' : 'none, a new environment'}`);
+  console.log(`[config] registry class: original ${originalClassId}, current build ${targetClassId}`);
+  console.log(`[config] dry run: ${dryRun}`);
+  console.log('==== deploy.ts Steps ====');
+
+  const authDeploy = Contract.deploy(wallet, authArtifact, [deployer], 'constructor', {
+    salt,
     universalDeploy: true,
-  }).send({ from: account.address, fee });
-  console.log(`Deployed: REGISTRY_ADDRESS=${contract.address} tx=${receipt.txHash}`);
+  });
+  const auth = (await authDeploy.getInstance()).address;
+  // The registry keeps the auth address in its immutables hash. See `update_to`.
+  const registryDeploy = Contract.deploy(wallet, originalRegistryArtifact, [], undefined, {
+    salt,
+    universalDeploy: true,
+    immutablesHash: await poseidon2Hash([auth.toField()]),
+  });
+  const registryInstance = await registryDeploy.getInstance();
+
+  checkRecorded(deployment, 'owner', deployer);
+  checkRecorded(deployment, 'auth', auth);
+  checkRecorded(deployment, 'registry', registryInstance.address);
+
+  const registryExisted = (await node.getContract(registryInstance.address)) !== undefined;
+  await deployIfMissing(ctx, 'BorgAuth', authDeploy);
+  await deployIfMissing(ctx, 'CyberAgreementRegistry', registryDeploy);
+  const publishedByDeploy = !registryExisted && targetClassId.equals(originalClassId);
+  await publishClassIfMissing(ctx, currentRegistryArtifact, targetClassId, publishedByDeploy);
+
+  // The wallet needs the artifact of the class that the registry runs now to send `update_to`.
+  await wallet.registerContractClass(currentRegistryArtifact);
+  await wallet.registerContract(registryInstance, originalRegistryArtifact);
+  const registry = await Contract.at(registryInstance.address, originalRegistryArtifact, wallet);
+  // Only a dry run on a network without the registry gets here with no registry instance. The deploy of a real run
+  // gives the original class, so the dry run compares the current build with it.
+  if (await node.getContract(registryInstance.address)) {
+    await upgradeIfNeeded(ctx, registry, auth, originalClassId, targetClassId);
+  } else if (targetClassId.equals(originalClassId)) {
+    logSkip('[upgrade]', `CyberAgreementRegistry deploy runs the current build, skipping: ${targetClassId}`);
+  } else {
+    logRun('[upgrade]', `would schedule CyberAgreementRegistry upgrade: ${originalClassId} -> ${targetClassId}`);
+  }
+
+  recordDeployment(ctx, l1ChainId, label, {
+    owner: deployer.toString(),
+    auth: auth.toString(),
+    registry: registryInstance.address.toString(),
+  });
   process.exit(0);
 }
 
