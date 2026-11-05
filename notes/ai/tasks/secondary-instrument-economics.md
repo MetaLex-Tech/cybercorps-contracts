@@ -1,6 +1,6 @@
 # Preserve the purchase amount and cap in secondary sales
 
-- Status: Implementation authorized; tests in progress.
+- Status: Implementation complete; PR preparation and review monitor setup in progress.
 - Date: November 4, 2026, America/Bogota.
 - Owner: Codex chat `01a1a94a-6d4e-7643-98d1-cab96d4668d2`.
 - Repository: `MetaLex-Tech/cybercorps-contracts`.
@@ -61,6 +61,17 @@ These source responses are not deployed-runtime verification. No new external au
 
 ## Evidence and gates
 
-Before/after regression evidence, current test results, independent review and PR monitoring will be recorded here.
+Verified code: `77a1b51906b03dd5eed6daf3e52df92bc5bc5930`.
+The full local suite passed 1,544 tests. The final allocation test passed 10,000 randomized cases.
+Before-fix regressions produced eight failures and one pass.
+The build passed. IM runtime is 18,692 bytes. The linked library is 24,554 bytes, with 22 bytes below EIP-170.
+The library size has an explicit regression check.
+
+The independent Claude Opus 5.5 review found no introduced material defect after the approved guard.
+The local signed sale had 37 successful receipts and correct state reads.
+The local guard case refused a signed conversion transaction and then settled with $50,000 assigned to each side.
+See `notes/verification/secondary-instrument-economics.md` and its local test JSON for evidence and limits.
+
+PR monitoring will use the owning chat. No other chat owns this new PR.
 No target company was supplied. Target-runtime verification and deployed acceptance remain separate gates.
 No contract merge is authorized. Do not enable auto-merge for this PR.
