@@ -475,8 +475,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     }
 
     function test_ConvertibleFullSale_PreservesOriginalAmountAndCap() public {
-        for (uint256 kind; kind < 3; ++kind) {
-            ILedgerEntryToken cert = _deployConvertible(SecurityClass(kind), 100, 100_000 ether, 10_000_000 ether);
+        for (uint256 i; i < 4; ++i) {
+            ILedgerEntryToken cert = _deployConvertible(_preservingClass(i), 100, 100_000 ether, 10_000_000 ether);
             issuanceManager.secondaryTransfer(
                 _dealMetadata(address(cert), 0, 100, "Bob", HostingMode.DIRECT, address(0))
             );
@@ -489,8 +489,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     }
 
     function test_ConvertiblePartialSale_AllocatesAmountAndRetainsCap() public {
-        for (uint256 kind; kind < 3; ++kind) {
-            ILedgerEntryToken cert = _deployConvertible(SecurityClass(kind), 100, 100_000 ether, 10_000_000 ether);
+        for (uint256 i; i < 4; ++i) {
+            ILedgerEntryToken cert = _deployConvertible(_preservingClass(i), 100, 100_000 ether, 10_000_000 ether);
             issuanceManager.secondaryTransfer(
                 _dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0))
             );
@@ -555,7 +555,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     }
 
     function test_GetSecondaryBuyerAmount_NonConvertibleClassesReturnZero() public {
-        for (uint256 kind = 3; kind <= uint256(SecurityClass.SAFO); ++kind) {
+        for (uint256 kind = 3; kind < uint256(SecurityClass.SAFO); ++kind) {
             ILedgerEntryToken cert = _deployConvertible(SecurityClass(kind), 100, 1, 10_000);
             // A dust amount does not revert, because these classes give the buyer no amount.
             assertEq(issuanceManager.getSecondaryBuyerAmount(address(cert), 0, 1), 0);
@@ -612,7 +612,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     }
 
     function test_NonConvertibleClasses_KeepBlankPrimaryBasis() public {
-        for (uint256 kind = 3; kind <= uint256(SecurityClass.SAFO); ++kind) {
+        for (uint256 kind = 3; kind < uint256(SecurityClass.SAFO); ++kind) {
             ILedgerEntryToken cert = _deployConvertible(SecurityClass(kind), 100, 100_000 ether, 10_000_000 ether);
             issuanceManager.secondaryTransfer(
                 _dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0))
@@ -636,7 +636,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint256 sourceUnits = bound(uint256(units), 2, type(uint128).max);
         uint256 sourceAmount = bound(uint256(amount), sourceUnits, type(uint128).max);
         uint256 soldUnits = bound(uint256(sold), 1, sourceUnits - 1);
-        ILedgerEntryToken cert = _deployConvertible(SecurityClass(kind % 3), sourceUnits, sourceAmount, 10_000);
+        ILedgerEntryToken cert = _deployConvertible(_preservingClass(kind % 4), sourceUnits, sourceAmount, 10_000);
         issuanceManager.secondaryTransfer(
             _dealMetadata(address(cert), 0, soldUnits, "Bob", HostingMode.DIRECT, address(0))
         );
@@ -650,6 +650,13 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(retained.issuerUSDValuationAtTimeOfInvestment, 10_000);
         // The uint128 bounds make this independent multiplication safe.
         assertEq(acquired.investmentAmountUSD, sourceAmount * soldUnits / sourceUnits);
+    }
+
+    /// @dev The classes whose amount and cap follow the units in a secondary sale.
+    function _preservingClass(uint256 i) internal pure returns (SecurityClass) {
+        SecurityClass[4] memory classes =
+            [SecurityClass.SAFE, SecurityClass.SAFT, SecurityClass.SAFTE, SecurityClass.SAFO];
+        return classes[i];
     }
 
     function _deployConvertible(SecurityClass kind, uint256 units, uint256 amount, uint256 cap)

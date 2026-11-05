@@ -193,16 +193,16 @@ attached.
 
 ### Original amount and cap for convertible instruments
 
-For SAFE, SAFT and SAFTE instruments, settlement preserves the cap in
-`issuerUSDValuationAtTimeOfInvestment`. It divides `investmentAmountUSD`
+For SAFE, SAFT, SAFTE and SAFO instruments, settlement preserves the cap
+(the project valuation for SAFO) in `issuerUSDValuationAtTimeOfInvestment`. It divides `investmentAmountUSD`
 between the buyer and seller in proportion to the transferred units.
 The denominator includes the source lot's active units and its current
 vault claim. The seller retains the amount for unsold units.
 
 The buyer amount rounds down to the nearest raw USD unit. USD fields use
 18 decimals. The seller retains the remainder. If the buyer amount rounds
-to zero from a positive source amount, settlement reverts with `InvalidAmount`.
-The existing void and refund procedures remain available after that refusal.
+to zero from a positive source amount, `acceptOffer` refuses the fill with
+`InvalidAmount` before any cash moves. Settlement keeps the same check.
 
 A $100,000 SAFE with a $10 million cap can sell in full for $60,000.
 The new buyer LET retains the $100,000 purchase amount and $10 million cap.
@@ -212,7 +212,7 @@ Both lots retain the $10 million cap.
 
 Other security classes keep the existing blank primary-basis fields on
 new secondary lots. Extension data and acquisition timestamps keep their
-existing behavior. Scrip conversion into a reserved SAFE, SAFT or SAFTE lot
+existing behavior. Scrip conversion into a reserved SAFE, SAFT, SAFTE or SAFO lot
 reverts with `CertificateReserved`. This prevents that conversion from adding
 units to the source lot after offer acceptance.
 

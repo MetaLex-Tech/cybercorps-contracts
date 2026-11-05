@@ -559,11 +559,15 @@ library IssuanceManagerStorage {
         );
     }
 
+    /// @dev One bit for each class that `_preservesPrimaryEconomics` accepts.
+    uint256 internal constant PRIMARY_ECONOMICS_CLASSES = (1 << uint8(SecurityClass.SAFE))
+        | (1 << uint8(SecurityClass.SAFT)) | (1 << uint8(SecurityClass.SAFTE)) | (1 << uint8(SecurityClass.SAFO));
+
     /// @notice True when the instrument terms use the core amount and cap fields.
-    /// @dev These instruments use the core fields for contractual amounts, not the secondary purchase price.
-    /// SAFE, SAFT and SAFTE are the first three SecurityClass values.
+    /// @dev SAFE, SAFT, SAFTE and SAFO keep their purchase amount and cap or valuation in these fields.
+    /// These values are contract terms, not the secondary purchase price.
     function _preservesPrimaryEconomics(SecurityClass securityType) internal pure returns (bool) {
-        return securityType <= SecurityClass.SAFTE;
+        return (PRIMARY_ECONOMICS_CLASSES >> uint8(securityType)) & 1 == 1;
     }
 
     /// @notice Buyer part of the lot amount, in proportion to the units sold.
@@ -943,7 +947,7 @@ library IssuanceManagerStorage {
         bool sellerVoided = sellerDetails.unitsRepresented == 0 && sellerVaultUnits == 0;
         // (c) Deliver the buyer's units as a fresh lot (fresh-mint-per-lot): each acquisition mints its own
         // Ledger Entry Token carrying its own acquisitionTimestamp (per-lot holding-period clock, stamped at
-        // mint). SAFE, SAFT and SAFTE retain their allocated contractual amount and cap.
+        // mint). SAFE, SAFT, SAFTE and SAFO lots get their part of the amount and the full cap.
         // Other classes keep blank primary basis. Custody follows the selected hosting mode.
         bool buyerTokenIsMinted = true;
         address custodian = buyerHostingMode == HostingMode.ADMINISTERED ? adminMultisig : buyer;
