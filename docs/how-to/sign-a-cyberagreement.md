@@ -81,8 +81,10 @@ overloads and [signer conditions](../reference/contracts/SignerConditions.md).
 Derive the id with `boundIdsOf` before preparing the bound proof. Gated
 parties sign `SignatureWithEvidenceData` through
 `signContractWithEvidenceFor`; ordinary `SignatureData` cannot satisfy their
-conditions. Retain the original finalizer workflow for an existing
-historical agreement that names one.
+conditions. Existing agreements retain their original ids and recorded
+finalizers, but the current app refuses requests stored under the retired
+passport-finalizer flow. Create a new request for an unfinished app workflow;
+see the [historical finalizer note](../reference/contracts/ZKPassportFinalizer.md).
 
 ## 3. Collect each party's signature
 

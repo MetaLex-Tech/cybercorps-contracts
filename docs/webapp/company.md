@@ -87,7 +87,8 @@ selector, which restarts the onboarding choice.
 
 ## Company ENS identity and public documents
 
-Eligible companies can have a managed ENS name. New formation offers the
+Eligible companies can have a managed ENS name under `cybercorps.eth`.
+New formation offers the
 name with an opt-out; existing companies are not automatically backfilled.
 In **mission control**, a current company authority can choose **Claim ENS
 name** and sign the request. Registration runs in the background. A reserved

@@ -175,9 +175,11 @@ ordinary `TemplateCreated` and `ContractCreated` events; there is no separate
 bound-creation event. Signing and automatic finalization use the existing
 registry lifecycle. Reusing an already registered bound template id reverts.
 
-The current app uses creator-bound creation for new supported onchain
-cyberSign requests, including eligible formation packets. Older requests
-retain their original ids and creation strategy. See
+The current app uses creator-bound creation for qualifying onchain
+cyberSign requests with named, distinct parties, including eligible
+formation packets. New public requests with open slots still use ordinary
+standalone creation. Older requests retain their original ids and creation
+strategy. See
 [the dated source review](../documentation-status.md) for the inspected
 revisions and runtime evidence.
 

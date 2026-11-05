@@ -184,7 +184,8 @@ prices. Both are off until you turn them on.
 
 ### Group duplicate stakeholders
 
-The holder comparison can group duplicate stakeholder records into a
+**Merge holders** opens a comparison of duplicate stakeholder records.
+It can group them into a
 survivor after you review the names, wallets and records. Positions keep
 their original provenance and remain usable after grouping. This groups
 people's records; it does not combine separate holdings or change units.

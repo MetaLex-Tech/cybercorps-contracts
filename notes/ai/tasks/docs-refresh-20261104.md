@@ -1,6 +1,6 @@
 # Task: November 4 GitBook and public documentation refresh
 
-- Status: Drafted; validation, independent review and publication pending.
+- Status: PR ready; docs/import checks and independent review passed; current-head CI and publication pending.
 - Updated: November 4, 2026 (America/Bogota).
 - Owner: Codex, current documentation survey chat.
 - Scope: Public docs and this shared task record only. No contract, app,
@@ -38,7 +38,35 @@ No audit disposition was reopened, changed or declared newly resolved.
 
 ## Validation and review
 
-Pending documentation checks and independent review. Read-only RPC calls
+PR [#195](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/195)
+is ready against develop. First content checkpoint `dd103acade81f3df50067d39273ba36a7f4d5f0c`.
+Documentation checks passed: 71 Markdown pages, 665 local targets/anchors,
+54 YAML frontmatter blocks, code fences and GitBook hint pairs; zero errors.
+`git diff --check` passed. A dry run of the current production GAIBE
+importer wrote all five sections, imported 70 content pages (SUMMARY is
+navigation), and emitted no warning or skipped section. Output stayed in a
+task artifact directory; no app knowledge or configuration was changed.
+Both GitBook preview contexts passed with revision `UjPtiQsh9GhcVazUzQXG`.
+GitHub Codex review of `dd103ac` completed with no findings. Separate Claude
+CLI read-only review found three material docs corrections: current public
+open slots retain standalone creation; an unchanged creation paragraph
+contradicted that routing; the current app refuses retired-finalizer
+requests and requires a new request. All were verified against the current
+create form and email-signing loader and corrected. Other scoped API, ENS,
+network, membership, agentic and welcome-link claims passed that review.
+A separate focused follow-up review verified all corrections and the two
+UI/namespace clarifications, with no remaining material findings. Current
+head CI and final publication remain pending. Checks cover content
+`dd103ac` plus the documented corrections in this follow-up commit.
+
+The full initial review sweep read conversation comments, complete review
+bodies and inline threads; no findings or V12 activity were present.
+Heartbeat `review-public-docs-pr-195` was created, rendered and its saved
+configuration verified ACTIVE every two minutes in this chat. Its
+append-only baseline and V12/finding state live under the persistent
+`pr-monitor-state/cybercorps-contracts-195` task directory. Reuse that state.
+
+Read-only RPC calls
 returned the evidence type/domain on Base, Arbitrum and Robinhood; Ethereum
 publicnode failed. Public deployment note lists exact observed blocks and
 implementations and distinguishes latest-state reads from pinned acceptance.
@@ -47,7 +75,7 @@ this prose-only patch; none are claimed.
 
 ## Next action
 
-Validate local links and source claims, obtain independent review, open a
-ready documentation PR and establish its recurring review/fix monitor.
+Finish independent review and current-head checks; fix any material docs
+finding and repeat the affected checks. Preserve the verified monitor.
 After checks/review, publish the docs and verify the public pages contain
 the new date and substantive sections. Track GAIBE refresh separately.
