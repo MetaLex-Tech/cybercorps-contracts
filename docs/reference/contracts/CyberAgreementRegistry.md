@@ -175,10 +175,23 @@ ordinary `TemplateCreated` and `ContractCreated` events; there is no separate
 bound-creation event. Signing and automatic finalization use the existing
 registry lifecycle. Reusing an already registered bound template id reverts.
 
-The app uses this capability for eligible formation-packet requests. Older
-requests retain their original ids and creation strategy. See
+The current app uses creator-bound creation for qualifying onchain
+cyberSign requests with named, distinct parties, including eligible
+formation packets. New public requests with open slots still use ordinary
+standalone creation. Older requests retain their original ids and creation
+strategy. See
 [the dated source review](../documentation-status.md) for the inspected
 revisions and runtime evidence.
+
+### Conditioned creator-bound agreements
+
+Current source adds overloads that take `SignerCondition[][] conditions`
+and, for create-and-sign, `bytes[] creatorEvidence`. `boundIdsOf` derives
+the ids before creation. A nonempty conditions array uses a distinct bound
+agreement domain and commits the full array; an empty outer array preserves
+the older bound ids. Gated parties use `signContractWithEvidenceFor` and
+`SignatureWithEvidenceData`. See [Registry signer conditions](SignerConditions.md)
+for the exact shape, events, configuration and proof requirements.
 
 ## Views
 
@@ -260,6 +273,8 @@ quote or backslash typed into a field cannot break the document.
 and `DelegationRevoked` in the contract. The registry proxy emits all of
 them.
 
-Agreements that require passport evidence use a separate
-[ZKPassportFinalizer](ZKPassportFinalizer.md). A fully signed agreement can
-still await that finalizer; signature count alone does not prove finalization.
+Current creator-bound passport agreements use
+[registry signer conditions](SignerConditions.md) and finalize with the
+last required signature. Historical agreements can still name the separate
+[ZKPassportFinalizer](ZKPassportFinalizer.md); inspect their recorded
+finalizer rather than inferring completion from a signature count.

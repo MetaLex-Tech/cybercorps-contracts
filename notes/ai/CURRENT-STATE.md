@@ -19,6 +19,8 @@ have one. Do not assume another checkout's files are present here.
 
 ## Shared tasks
 
+- [November 4 GitBook refresh](tasks/docs-refresh-20261104.md): survey since the published October 27 baseline; docs-only updates and public publication verification in progress.
+
 - [Protocol and webapp documentation refresh](tasks/docs-protocol-webapp-20261027.md): October 27 source comparison and GitBook guide/reference updates; documentation only, review pending.
 
 - [PR #185 deployment scripts and Safe exports](tasks/pr185-deployment-scripts.md): linked registry deployment/export preparation, 2026-10-23; local tests and toy-key rehearsal passed, no live deployment.

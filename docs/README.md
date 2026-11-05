@@ -17,7 +17,9 @@ point at a register kept somewhere else.
 The protocol works for any entity type and jurisdiction. Delaware C-corp
 stock is the most complete implementation, and LLC membership interests, LP
 interests, segregated portfolio company shares and non-US equity use the same
-contracts. It runs on Ethereum, Base and Arbitrum.
+contracts. The apps support Ethereum, Base, Arbitrum and selected workflows
+on Robinhood Chain. [Network availability](webapp/README.md#network-availability)
+depends on the workflow and the targeted company’s deployed contracts.
 
 ## Core terms
 
@@ -71,6 +73,6 @@ The contracts are in
 and the apps in
 [MetaLex-Tech/metalex-webapp](https://github.com/MetaLex-Tech/metalex-webapp).
 
-Reviewed against contract and webapp source on **October 27, 2026**. See
+Reviewed against contract and webapp source on **November 4, 2026**. See
 [Documentation status and source review](reference/documentation-status.md)
 for the prior update dates, inspected revisions and deployment limits.

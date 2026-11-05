@@ -94,6 +94,17 @@ issued subtotal** and **Known amount raised**, the donut is hidden, and
 **Model a round** and **Exit waterfall** show "Analysis requires complete
 source quantities and terms." until the source is complete.
 
+### Draft positions and tokenized units
+
+Draft positions have their own section and are excluded from cap table
+totals until recorded. A draft created for review is not an issued holding.
+
+LETs issued in the Tokenization Hub also appear on the matching cap table
+card. The tokenized badge opens the linked LET. A position can contain both
+tokenized units and units still awaiting tokenization; review the quantities
+before choosing the next action. The app refuses a whole-LET link on top of
+an existing partial tokenization allocation.
+
 ## Review banners
 
 Up to four banners above the table flag records that need a decision,
@@ -160,9 +171,27 @@ attaches the wallet to their record and opens their
 [My holdings](holders.md) portal. Links expire after 14 days, and
 regenerating one revokes the previous link.
 
+For a stakeholder who already has a linked wallet, **Generate welcome
+link** opens the same portal without attaching another wallet. The recipient
+must prove control of a wallet currently linked to that stakeholder. A
+**Wallet verified** timestamp records a successful invite or welcome claim,
+not an ordinary portal sign-in, legal identity verification or document
+acceptance. Rotation revokes the pending link; revocation is also available.
+
 **Holder portal disclosures** decides whether invited holders also see
 the documents attached to their positions, and per-unit and exercise
 prices. Both are off until you turn them on.
+
+### Group duplicate stakeholders
+
+**Merge holders** opens a comparison of duplicate stakeholder records.
+It can group them into a
+survivor after you review the names, wallets and records. Positions keep
+their original provenance and remain usable after grouping. This groups
+people's records; it does not combine separate holdings or change units.
+Use the duplicate-position review separately when the positions themselves
+were entered twice. Follow the panel's current merge requirements and
+progress before treating the operation as complete.
 
 ## Record a position
 
@@ -198,6 +227,10 @@ in History. **Delete** is only for an entry that never reflected a real
 holding, and removes it for good.
 
 ## Import a cap table
+
+Drop a supported file on the cap table to open the import preview, or use
+the import control. The preview still needs review before any record is
+written. File-size and parsing limits apply.
 
 **Import → Import file** opens the import panel. It takes `.csv` and
 `.xlsx` sheets (**Import → Blank template (.csv)** and **Blank template
@@ -246,8 +279,10 @@ consumes them, and the one-time formation setup cannot be staged again.
 
 ## Tokenize a position
 
-**Tokenize →** on a row mints one LET for the whole position, on v4 and
-v5 companies. To mint for part of a position, see
+**Tokenize →** on an eligible row can mint a LET for the whole position,
+on supported v4 and v5 companies. Existing partial allocations require their
+own reconciliation; they cannot be overwritten by a whole-position link.
+To mint for part of a position, see
 [Tokenizing part of a position](#tokenizing-part-of-a-position-v5-companies).
 
 The dialog prefills the certificate form from the entry, lets you pick
@@ -286,6 +321,24 @@ printer →** and takes you through class creation in the
 [Tokenization Hub](tokenization-hub.md). If several LET contracts match
 the class and the line is linked to none, it reads **Choose cert
 printer →** and asks which one mints this class's LETs.
+
+### Review LET setup and recovery
+
+For v5 issuance, finish the class/series legal identity and approve and
+activate the governing terms before tokenization. The setup panel shows
+preparation, deployment or linking in progress and then offers the remaining
+terms step. Saved governing documents and applicable approved share terms
+can be reused. Review inherited terms, including Preferred terms, rather
+than entering a second inconsistent set.
+
+If a send has an unknown outcome, keep the hold and check its transaction
+before retrying. The recovery controls can reconcile a proven mint or an
+owner-supplied transaction. A held request can be released only when the
+required evidence establishes that it was never sent or otherwise safely
+failed. An error or a missing hash alone does not establish that.
+Replacement LET review preserves the old LET's history. The replacement
+must be a direct issuance by the company to the holder; an acquired LET
+cannot silently stand in for the original issuance.
 
 ### Tokenizing part of a position (v5 companies)
 
@@ -377,10 +430,12 @@ and the wallet approval is a free signature.
    consent: the eligible groups, an optional stated effective date, the
    consent PDF and each approval, with the recording officer as
    approver. The version becomes **Approved, not active**.
-4. **Activate.** **Activate** makes the version govern from the latest of
-   the approval time, the approval's stated effective date and the
-   proposed effective date, so a version can show **Activated, effective
-   later** before it is **Active**.
+4. **Activate.** After approval, **Activate** is the primary next action.
+   Review the effective date and the currently active version it replaces.
+   Version ordering and the class lock prevent an older activation from
+   replacing newer terms. A future effective date can show **Activated,
+   effective later** before the version is **Active**. A backdated
+   activation still identifies a superseded version as replaced.
 
 To amend, propose, approve and activate a new version, which makes the
 previous one **Superseded**. An older version cannot be activated over a

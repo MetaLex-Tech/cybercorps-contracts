@@ -157,6 +157,12 @@ cap table's tokenize actions instead (see [the cap table](captable.md)).
 
 ## Issued securities
 
+The issued-security actions include **View**, **Void** and a visible **VOID**
+status. Review the separate LET and scrip transfer permissions before changing
+them; neither permission should be read as a legal conclusion about who owns
+the security. Applicable approved share terms can prefill issuance. The form
+shows inherited terms and checks the signed terms version again before minting.
+
 Below the classes, the **Issued Securities** table lists each security
 with its active LETs, status, units represented and whether delivery is
 enabled. Expanding a security shows:

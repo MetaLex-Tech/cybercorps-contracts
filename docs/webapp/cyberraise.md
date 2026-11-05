@@ -48,10 +48,11 @@ guidance and gives no legal clearance.
 
 ### Explore advanced raises and custom documents
 
-The October 27 development source adds **Explore advanced raises and custom
-documents**. This preparation interface is not in the inspected production
-branch. It lets you explore custom preferred-stock Reg D and economic
-Membership Unit Reg S terms before choosing an issuer.
+**Explore advanced raises and custom documents** lets you explore custom
+preferred-stock Reg D and economic Membership Unit Reg S terms before
+choosing an issuer. This workflow is present in the production source
+reviewed on November 4; the selected company must pass its capability,
+document and legal-terms checks before launch.
 
 Issuer setup separates the purchase agreement, LET document and governing
 class document. Publication of a final PDF to public IPFS requires explicit
@@ -66,6 +67,20 @@ schemas and extra signing roles are refused. Existing issuer-specific
 membership templates retain their own governance requirements and original
 agreement identities. Check the issuer and active legal version before
 signing; the app rechecks them before submission and allocation.
+
+### Governance-only membership subscriptions
+
+Governance-only Membership Units and economic Units are different paths.
+The current governance subscription catalog includes the corrected v1.2
+subscription and operating-agreement amendment. Existing v1.0/v1.1 signed
+agreements retain their own template and document identities. Publishing
+v1.2 does not amend those agreements or establish company adoption.
+
+Before a new round, confirm the selected issuer, active unit-class record,
+applicable amendment and matching subscription version. The native route
+uses Membership Interest class 13 with N/A series and no extension, and
+refuses unreviewed runtimes. It is not enabled on Robinhood Chain. Paper
+publication, company approval/adoption and investor acceptance are separate.
 
 ### SAFO availability
 
@@ -416,6 +431,16 @@ not support.
 > LET contract; where the company's governing documents make the onchain
 > record its securities ledger, that LET is your ledger entry. See
 > [LETs and scrip](../explanation/lets-and-scrip.md).
+
+### Recover an interrupted investment
+
+After a reload, the app retains submitted or unresolved EOI and allocation
+attempts. Review the saved transaction and current chain result before
+starting again. A timeout, a wallet error without a hash or an incomplete
+response can leave the outcome unknown. The recovery prompt can require
+another review; it does not authorize a second investment merely because
+the first result was not displayed. Eligibility conditions and live round
+economics are rechecked before a new wallet request.
 
 ### Track your investments in the portfolio
 

@@ -7,8 +7,8 @@ description: Deployed addresses and versions per chain
 Contract addresses recorded by chain. The tables below were last edited on
 October 2, 2026 before this review. Treat implementation addresses and chain
 availability as that recorded snapshot, not a live deployment manifest.
-The October 27 check below covers the registry on Base and Arbitrum only;
-the other tables were not re-probed in this documentation pass.
+The October 27 and November 4 checks below are separate observations.
+The historical tables are not a current factory or component manifest.
 
 > **Configuration and historical deployment records:** the
 > [`script/libs/DeploymentConstants.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/script/libs/DeploymentConstants.sol)
@@ -35,6 +35,31 @@ Ethereum reads failed at two public endpoints. The app's October 23 reviewed
 runtime matrix records Ethereum creator-bound support, but this pass did not
 independently reverify that deployment. See the
 [registry reference](contracts/CyberAgreementRegistry.md#creator-bound-agreements).
+
+## Registry checks on November 4, 2026
+
+Read-only calls to the shared registry proxy returned:
+
+| Chain | Block observed before reads | EIP-1967 implementation |
+| --- | --- | --- |
+| Base | 53530299 | `0x239ef1c2f037e0ae2ed4c2c9b4196d8ffe738ea9` |
+| Arbitrum | 521366874 | `0x62df59551c9251ae900b1d888938cf5246f7d262` |
+| Robinhood Chain (4663) | 106429021 | `0xeabeda8e939d570456ae2baf8bf2dd32c3810256` |
+
+Each returned `SIGNATUREWITHEVIDENCEDATA_TYPEHASH`
+`0xc515657932ac39b81e04753c16bec4de4d8f35b17a1c949344c20fb7fe5113e9`
+and `CONDITIONED_BOUND_AGREEMENT_DOMAIN`
+`0x75b704c195690f4958effc59fe4018bdef4356788a9d8315c4245814e7363466`.
+These are consecutive latest-state calls, not a pinned-block bytecode audit
+or transaction acceptance. Ethereum's publicnode endpoint failed with a
+connection/TLS error. These reads did not check signer-condition verifier
+configuration, every factory, or a target company's components.
+
+Robinhood is now an app network for selected new-company, round, deal and
+packet-signing workflows, with USDG as the default payment token. See
+[Network availability](../webapp/README.md#network-availability) for exclusions.
+The older address tables below describe their named chains only; their
+“All” entries do not acquire Robinhood support by implication.
 
 ## Production chains (Ethereum, Base, Arbitrum)
 

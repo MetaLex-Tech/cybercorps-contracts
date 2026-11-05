@@ -123,7 +123,7 @@ offchain and mixed execution with separate evidence and completion rules;
 those modes must not be treated as a fully signed registry agreement.
 Creator-bound registration and passport gates are covered in the
 [registry](../reference/contracts/CyberAgreementRegistry.md) and
-[finalizer](../reference/contracts/ZKPassportFinalizer.md) references.
+[signer conditions](../reference/contracts/SignerConditions.md) references.
 
 ### LiquiLeX
 

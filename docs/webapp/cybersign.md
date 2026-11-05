@@ -78,6 +78,11 @@ agreements and reports the applicable status.
 
 ### Open slots
 
+New public requests use creator-bound creation when every party is named
+and distinct and the registry is reviewed for that method. A request with
+an open slot still uses ordinary standalone creation. Existing agreements
+keep their original creation method and identifier.
+
 An ordinary public agreement can leave a party address blank. An eligible
 wallet can claim that open slot and enter its own party values. Named party
 values are fixed by the request. The app refuses secret-gated open-slot
@@ -133,10 +138,19 @@ onchain email delivery.
 
 Where available, the sender can require passport evidence for selected
 named parties. The app binds the proof to the party, network and agreement.
-The [ZKPassportFinalizer](../reference/contracts/ZKPassportFinalizer.md)
-requires both signatures and the specified passport evidence before
-finalization. A passport check is not a substitute for reviewing the
-agreement or proving authority to sign for a company.
+Current creator-bound agreements use registry
+[signer conditions](../reference/contracts/SignerConditions.md). A gated
+party supplies its proof together with an evidence-bound signature. The
+last required signature finalizes the agreement automatically. The older
+[ZKPassportFinalizer](../reference/contracts/ZKPassportFinalizer.md) is a
+historical integration, removed from current contract source. A passport
+check is not a substitute for reviewing the agreement or proving authority
+to sign for a company.
+
+The current app refuses requests stored under the retired finalizer flow.
+An unfinished request needs a new signing request; it cannot be completed
+by opening its old app link. Already completed agreements remain recorded
+onchain with their original identities.
 
 ## Create and share the document
 
@@ -147,12 +161,16 @@ public PDF before publication, or choose the private-request flow.
 A mutable external URL can change its content; an immutable document
 reference gives signers a stable version to review.
 
-Review the full request before the first signature. The ordinary wallet
-path creates and signs through `createStandaloneContractAndSignFor`;
-managed requests can prepare an unsigned agreement first. Eligible formation
-packets can use creator-bound creation. Each path preserves its own request
-identity, correction rules and registration status. A draft edit must not
-silently change the document another party has signed.
+Review the full request before the first signature. The public wallet
+path uses `createBoundContractAndSignFor` for qualifying named, distinct
+parties on a compatible registry, or `createStandaloneContractAndSignFor`
+for an ordinary request such as one with open slots. Managed requests can
+prepare an unsigned agreement first; eligible formation packets also use
+creator-bound creation. Passport-gated requests batch creator-bound
+registration and evidence signing as described above. Each path preserves
+its own request identity,
+correction rules and registration status. A draft edit must not silently
+change the document another party has signed.
 
 ## Find records and download evidence
 
@@ -169,6 +187,6 @@ and does not alter the signed source PDF or registry record.
 
 For contract-level creation, delegation and voiding, see
 [Sign a cyberAgreement](../how-to/sign-a-cyberagreement.md). The
-[October 27 source review](../reference/documentation-status.md) identifies
+[dated source review](../reference/documentation-status.md) identifies
 the app revision reviewed and features whose publication or enablement needs
 separate verification.

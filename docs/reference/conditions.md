@@ -14,6 +14,15 @@ secondary settlement) on an onchain check. There are two interfaces:
   (`src/libs/conditions/BaseSecondaryTradingCondition.sol`), used on the
   secondary-trading path.
 
+## Registry signer conditions
+
+Creator-bound agreement signing has a separate condition model:
+`SignerCondition { kind, params }` with per-party evidence and an
+evidence-bound signature. It does not implement either transition interface
+listed above. See [Registry signer conditions](contracts/SignerConditions.md)
+for the ZKPassport kind and its configuration. Do not substitute a fundraising
+non-U.S. check for a signing-proof requirement.
+
 ## The `ICondition` interface
 
 ```solidity

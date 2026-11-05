@@ -40,6 +40,7 @@ company and the securities it issues appear in every app once they exist.
 | [Cap-table records, modeling and compliance](captable-tools.md) | Export §219 stockholder lists, keep 409A, Rule 701, 3921 and 83(b) records, model a round and run an exit waterfall. |
 | [Grants](grants.md) | Award options, RSUs and restricted stock that vest onchain. |
 | [boardRoom](boardroom.md) | Manage officers and directors, governance documents and board consents. |
+| [Agentic transactions](agentic-transactions.md) | Review agent-prepared actions and authorize each supported step where enabled. |
 | [cyberSign](cybersign.md) | Propose and sign agreements, and find them in your Contract Library. |
 | [cyberRAISE](cyberraise.md) | Run a raise as an issuer, or invest in one. |
 | [ACE](ace.md) | Run or join a token-community raise, and bridge tokens between Solana and Base. |
@@ -68,8 +69,9 @@ You also need:
   multisig is supported and recommended for a company's treasury, and a
   Safe can delegate its agreement signing to one wallet (see
   [Profile](profile.md)).
-* **ETH for gas** on the company's network. cyberCORPs run on Ethereum,
-  Arbitrum and Base. Formation payments use Ethereum mainnet. Choosing
+* **Gas funds** on the company's network. Supported networks and payment
+  tokens depend on the workflow; see [Network availability](#network-availability).
+  Formation payments use Ethereum mainnet. Choosing
   the onchain formation option also creates the company record there;
   offchain-only formation creates no cyberCORP.
 * **A desktop browser** for company setup and the longer flows. The apps
@@ -80,6 +82,21 @@ company's owner wallets linked, whichever wallet you are browsing with.
 Signing for the company still needs an owner wallet connected on the
 company's network, and the app tells you which wallet to switch to (see
 [Run your company](company.md)).
+
+## Network availability
+
+Ethereum, Base and Arbitrum support the established company workflows.
+Robinhood Chain (chain id **4663**) is also selectable for new cyberCORPs,
+standard rounds, deals and supported packet signing. Its default payment
+token is **USDG**, while the established chains use USDC in these flows.
+Portfolio balances keep USDG separate from crosschain USDC totals.
+
+Robinhood support does not extend to native Membership Interests or
+Membership Units, founder closing or founder shares, SAFO, passport-gated
+conditions, the separate cyberSign/LeXscroW app, or Safe batch links.
+Check the selected flow before funding a wallet. A network in the picker
+is not a promise that every instrument or signing method works there.
+Existing companies retain their component versions until upgraded.
 
 ## Signatures and transactions
 

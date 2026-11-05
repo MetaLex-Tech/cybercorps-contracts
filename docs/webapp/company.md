@@ -52,7 +52,7 @@ The setup wizard has three steps and saves your progress as you go.
 ![Step 1 of the wizard: Network & Treasury Setup](../.gitbook/assets/webapp/cybercorps-create-network.png)
 
 1. **Network**: under **Network & Treasury Setup**, choose the chain
-   (Ethereum, Arbitrum or Base) and the *payable address* that receives
+   (see [Network availability](README.md#network-availability)) and the *payable address* that receives
    payments for the company. A Safe multisig is recommended, and an
    auto-fill button can insert your connected wallet.
 2. **Legal Identity**: the **Founder identity** gives the founder or
@@ -84,6 +84,33 @@ the company exists onchain.
 To add another company later, use **Form a new company** in the
 Incorporation Hub, or **Setup your cyberCORP** in the cyberCORP
 selector, which restarts the onboarding choice.
+
+## Company ENS identity and public documents
+
+Eligible companies can have a managed ENS name under `cybercorps.eth`.
+New formation offers the
+name with an opt-out; existing companies are not automatically backfilled.
+In **mission control**, a current company authority can choose **Claim ENS
+name** and sign the request. Registration runs in the background. A reserved
+or pending name is not an active name; follow the status and next-step links.
+
+The name identifies the company and its public document home. **It is not
+a payment address.** MetaLeX operates the naming service and has operator
+write power. The company's app permissions are checked against its source
+chain; they are not an ENS smart-contract restriction on the operator.
+Continued naming requires canonical protocol eligibility. Older canonical
+versions remain eligible without a forced upgrade. A notice, a suspension
+review and reinstatement are separate states, with a contact route in the
+company panel.
+
+**Documents** provides the public-document controls. Review the public
+publication consent before submitting a disclosure: anyone can download a
+published copy, and an IPFS copy cannot be made private again by removing
+its listing. Approved final public formation filings can be processed
+automatically; documents of an unknown type need staff review. The public
+company page lists published documents and their hashes. Private packet
+signatures and invitations do not become public merely because the company
+has an ENS name.
 
 ## mission control
 

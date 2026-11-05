@@ -40,6 +40,34 @@ function setRoundPricePerShare(bytes32 roundId, uint256 price, uint8 priceDecima
 function setPrimarySecurity(bytes32 roundId, SecurityClass cls, SecuritySeries series) external; // onlyOwner
 ```
 
+## Reuse existing LET contracts
+
+Contract PR [#192](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/192)
+adds this owner-only entry point:
+
+```solidity
+function createRoundWithPrinters(Round roundDraft, address[] certPrinters)
+    external returns (bytes32 roundId);
+```
+
+It validates the round draft and escrowed officer signature through the
+same checks as `createRound`. Each LET contract must be registered with the
+round's IssuanceManager and report that same manager. Duplicate addresses
+revert `DuplicateCertPrinter`; an unregistered or mismatched LET contract
+reverts `InvalidCertPrinter`. The legal-details and extension-data lengths
+must match the address list.
+
+The stored round uses those contracts, resets `raised` to zero, and reads
+the primary security class/series from the first LET contract (SAFE/N/A for
+an empty list). Normal EOI, allocation and escrow behavior follows the
+existing lifecycle. The original `createRound` remains available.
+
+This is a current-source capability. This review did not verify the new
+selector on deployed RoundManagers, and the inspected production app does
+not call it. `DEPLOY_VERSION = "5"` alone does not establish support.
+Do not offer app-level reuse on that basis or assume an existing company's
+manager upgraded with its factory.
+
 ## Views
 
 `getRound(roundId)`, `roundExists`, `getRoundPriceInfo`,
