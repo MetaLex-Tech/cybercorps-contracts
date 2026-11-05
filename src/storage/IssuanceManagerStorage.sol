@@ -544,6 +544,38 @@ library IssuanceManagerStorage {
         return Math.mulDiv(assetsWad, num, den);
     }
 
+    /// @notice Buyer amount for a secondary sale of `units` from the lot as it is now.
+    /// @dev Acceptance and settlement both use this rule, so a fill that acceptance allows can settle.
+    function getSecondaryBuyerAmount(address certAddress, uint256 tokenId, uint256 units)
+        internal view returns (uint256)
+    {
+        ILedgerEntryToken cert = ILedgerEntryToken(certAddress);
+        if (!_preservesPrimaryEconomics(cert.securityType())) return 0;
+        CertificateDetails memory details = cert.getActiveCertificateDetails(tokenId);
+        return _secondaryBuyerAmount(
+            details.investmentAmountUSD,
+            units,
+            details.unitsRepresented + _assetsOfVaultPosition(certAddress, tokenId)
+        );
+    }
+
+    /// @notice True when the instrument terms use the core amount and cap fields.
+    /// @dev These instruments use the core fields for contractual amounts, not the secondary purchase price.
+    /// SAFE, SAFT and SAFTE are the first three SecurityClass values.
+    function _preservesPrimaryEconomics(SecurityClass securityType) internal pure returns (bool) {
+        return securityType <= SecurityClass.SAFTE;
+    }
+
+    /// @notice Buyer part of the lot amount, in proportion to the units sold.
+    /// @dev `lotUnits` includes the vault claim of the lot. The buyer amount rounds down.
+    /// A positive lot amount that gives the buyer 0 is refused.
+    function _secondaryBuyerAmount(uint256 lotAmount, uint256 units, uint256 lotUnits)
+        internal pure returns (uint256 buyerAmount)
+    {
+        buyerAmount = Math.mulDiv(lotAmount, units, lotUnits);
+        if (lotAmount != 0 && buyerAmount == 0) revert InvalidAmount();
+    }
+
     /// @dev Nominal vault shares held by a single certificate.
     function getScripPoolSharesById(
         address certAddress,
@@ -894,17 +926,13 @@ library IssuanceManagerStorage {
         uint256 sellerVaultUnits = _assetsOfVaultPosition(certPrinter, tokenId);
         uint256 buyerInvestmentAmountUSD;
         uint256 buyerValuationCap;
-        SecurityClass securityType = cert.securityType();
-        // SAFE, SAFT and SAFTE are the first three SecurityClass values.
-        if (securityType <= SecurityClass.SAFTE) {
-            // These instruments use the core fields for contractual amounts, not the secondary purchase price.
-            // Keep the amount for retained vault units with the seller. Do not copy a cap in proportion to units.
-            buyerInvestmentAmountUSD = Math.mulDiv(
+        if (_preservesPrimaryEconomics(cert.securityType())) {
+            buyerInvestmentAmountUSD = _secondaryBuyerAmount(
                 sellerDetails.investmentAmountUSD, units, sellerDetails.unitsRepresented + sellerVaultUnits
             );
-            if (sellerDetails.investmentAmountUSD != 0 && buyerInvestmentAmountUSD == 0) revert InvalidAmount();
-            // The buyer amount rounds down. The seller retains the remainder for a later transfer.
+            // The seller keeps the rest of the amount, also for the units in the vault.
             sellerDetails.investmentAmountUSD -= buyerInvestmentAmountUSD;
+            // The cap is a term, not a balance. The buyer gets the full cap.
             buyerValuationCap = sellerDetails.issuerUSDValuationAtTimeOfInvestment;
         }
         sellerDetails.unitsRepresented -= units;

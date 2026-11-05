@@ -4696,27 +4696,71 @@ contract DealManagerSecondaryTradeTest is Test {
         );
     }
 
-    function test_ConvertibleZeroRoundedAmount_FinalizationRevertsAndBuyerCanRecoverCash() public {
+    function test_ConvertibleZeroRoundedAmount_SellAcceptanceRefusesAndMovesNoCash() public {
         _useConvertiblePrinter(SecurityClass.SAFE, 1);
         uint256 buyerBefore = paymentToken.balanceOf(buyer);
         bytes32 offerId = _postSellOffer();
-        bytes32 settlementId = _acceptSellOfferPartial(offerId, 1);
-        uint256 escrowed = dm.getSecondaryEscrow(settlementId).paymentAmount;
-        uint256 sellerBefore = paymentToken.balanceOf(seller);
-        vm.prank(keeper);
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: 1,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
         vm.expectRevert(IssuanceManagerStorage.InvalidAmount.selector);
-        dm.finalizeSecondaryTradeAgreement(settlementId);
+        vm.prank(buyer);
+        dm.acceptOffer(p);
 
-        assertEq(paymentToken.balanceOf(seller), sellerBefore);
-        assertEq(paymentToken.balanceOf(address(dm)), escrowed);
-        assertEq(certPrinter.getActiveCertificateDetails(sellerTokenId).unitsRepresented, UNITS);
-        assertEq(uint8(dm.getSecondaryEscrow(settlementId).status), uint8(SecondaryEscrowStatus.ACCEPTED));
-        _voidSettlementBothParties(settlementId);
         assertEq(paymentToken.balanceOf(buyer), buyerBefore);
         assertEq(paymentToken.balanceOf(address(dm)), 0);
+        Offer memory o = dm.getOffer(offerId);
+        assertEq(uint8(o.status), uint8(OfferStatus.LIVE));
+        assertEq(o.unitsAccepted, 0);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), UNITS, "sell offer keeps its reservation");
+
+        // A fill that gives the buyer a positive amount still settles.
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        uint256 acquiredId = certPrinter.tokenOfLegalOwnerByIndex(buyer, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).investmentAmountUSD, 1);
+    }
+
+    function test_ConvertibleZeroRoundedAmount_BuyAcceptanceRefusesAndKeepsBuyerCash() public {
+        _useConvertiblePrinter(SecurityClass.SAFE, 1);
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+        bytes32 offerId = _postBuyOffer();
+        assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "buy offer holds the buyer cash");
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: 1,
+            exemptionPathway: ExemptionPathway.NONE,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, seller, sellerKey),
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
+        });
+        vm.expectRevert(IssuanceManagerStorage.InvalidAmount.selector);
         vm.prank(seller);
+        dm.acceptOffer(p);
+
+        Offer memory o = dm.getOffer(offerId);
+        assertEq(uint8(o.status), uint8(OfferStatus.LIVE));
+        assertEq(o.unitsAccepted, 0);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 0, "seller lot has no reservation");
+        // The buyer gets the full payment back when the offer is cancelled.
+        vm.prank(buyer);
         dm.cancelOffer(offerId);
-        assertEq(certPrinter.unitsReserved(sellerTokenId), 0);
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore);
+        assertEq(paymentToken.balanceOf(address(dm)), 0);
     }
 
     function test_ConvertibleScripConversion_RefusesReservedDestination() public {

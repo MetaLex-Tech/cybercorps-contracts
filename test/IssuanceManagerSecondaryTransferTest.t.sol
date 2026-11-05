@@ -542,6 +542,37 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(cert.totalSupply(), 1);
     }
 
+    function test_GetSecondaryBuyerAmount_MatchesSettlementWithVaultClaim() public {
+        ILedgerEntryToken cert = _deployConvertible(SecurityClass.SAFE, 100, 100_000 ether, 10_000_000 ether);
+        _deployScrip(address(cert));
+        vm.prank(seller);
+        issuanceManager.scripifyCert(address(cert), 0, 30, address(0));
+        // The vault claim counts in the denominator: 100,000 * 40 / (70 + 30).
+        uint256 preview = issuanceManager.getSecondaryBuyerAmount(address(cert), 0, 40);
+        assertEq(preview, 40_000 ether);
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0)));
+        assertEq(cert.getActiveCertificateDetails(1).investmentAmountUSD, preview);
+    }
+
+    function test_GetSecondaryBuyerAmount_NonConvertibleClassesReturnZero() public {
+        for (uint256 kind = 3; kind <= uint256(SecurityClass.SAFO); ++kind) {
+            ILedgerEntryToken cert = _deployConvertible(SecurityClass(kind), 100, 1, 10_000);
+            // A dust amount does not revert, because these classes give the buyer no amount.
+            assertEq(issuanceManager.getSecondaryBuyerAmount(address(cert), 0, 1), 0);
+        }
+    }
+
+    function test_GetSecondaryBuyerAmount_ZeroLotAmountReturnsZero() public {
+        ILedgerEntryToken cert = _deployConvertible(SecurityClass.SAFT, 100, 0, 0);
+        assertEq(issuanceManager.getSecondaryBuyerAmount(address(cert), 0, 1), 0);
+    }
+
+    function test_RevertIf_GetSecondaryBuyerAmount_PositiveAmountRoundsToZero() public {
+        ILedgerEntryToken cert = _deployConvertible(SecurityClass.SAFTE, 100, 1, 10_000);
+        vm.expectRevert(IssuanceManagerStorage.InvalidAmount.selector);
+        issuanceManager.getSecondaryBuyerAmount(address(cert), 0, 1);
+    }
+
     function test_ConvertiblePartialSale_UsesFullPrecisionAmount() public {
         ILedgerEntryToken cert = _deployConvertible(SecurityClass.SAFTE, type(uint256).max, type(uint256).max, 10_000);
         uint256 sold = type(uint256).max / 2;

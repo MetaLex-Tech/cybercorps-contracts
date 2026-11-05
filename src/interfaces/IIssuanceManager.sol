@@ -279,6 +279,9 @@ interface IIssuanceManager is IBorgAuthACL {
         uint256 id
     ) external view returns (uint256);
 
+    function getSecondaryBuyerAmount(address certAddress, uint256 tokenId, uint256 units)
+        external view returns (uint256);
+
     function getScripPoolSharesById(
         address certAddress,
         uint256 id

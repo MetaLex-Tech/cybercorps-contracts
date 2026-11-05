@@ -768,6 +768,14 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         return IssuanceManagerStorage.getScripPoolAmountById(certAddress, id);
     }
 
+    /// @notice Buyer amount that a secondary sale of `units` from `tokenId` records now.
+    /// @dev Reverts with InvalidAmount when settlement must refuse the sale.
+    function getSecondaryBuyerAmount(address certAddress, uint256 tokenId, uint256 units)
+        external view returns (uint256)
+    {
+        return IssuanceManagerStorage.getSecondaryBuyerAmount(certAddress, tokenId, units);
+    }
+
     /// @notice Effective rebasing shares; excludes sub-wei attribution dust held by the pool.
     function getScripPoolSharesById(
         address certAddress,
@@ -796,7 +804,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         if (
             IssuanceManagerStorage.getScripifiedCert(certAddress) != address(0)
-                && certificate.securityType() <= SecurityClass.SAFTE
+                && IssuanceManagerStorage._preservesPrimaryEconomics(certificate.securityType())
         ) {
             IssuanceManagerStorage.RecertSelection memory selection =
                 IssuanceManagerStorage._selectFirstLegalOwnedToken(certAddress, msg.sender);
