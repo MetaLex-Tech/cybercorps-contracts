@@ -1,6 +1,6 @@
 # Preserve the purchase amount and cap in secondary sales
 
-- Status: Implementation complete; PR preparation and review monitor setup in progress.
+- Status: PR open for review. The review-and-fix heartbeat is active.
 - Date: November 4, 2026, America/Bogota.
 - Owner: Codex chat `01a1a94a-6d4e-7643-98d1-cab96d4668d2`.
 - Repository: `MetaLex-Tech/cybercorps-contracts`.
@@ -72,6 +72,22 @@ The local signed sale had 37 successful receipts and correct state reads.
 The local guard case refused a signed conversion transaction and then settled with $50,000 assigned to each side.
 See `notes/verification/secondary-instrument-economics.md` and its local test JSON for evidence and limits.
 
-PR monitoring will use the owning chat. No other chat owns this new PR.
+PR: https://github.com/MetaLex-Tech/cybercorps-contracts/pull/194, ready for review, target `develop`.
+The initial sweep read inline threads, full reviews and conversation comments. No actionable finding was present.
+The automatic Codex code review and hosted checks were still in progress at that sweep.
+
+Heartbeat: `review-contracts-pr-194`, active, every two minutes, attached to the owning chat.
+The persisted automation record and its thread target were verified.
+Reuse the existing event state and heartbeat. Do not create a second monitor.
+The monitor can fix scoped findings, validate, push, reply and resolve with evidence.
+Other contract changes require an explicit owner decision.
+
+The updated IM and linked library must deploy as a pair. No public deployment is authorized.
 No target company was supplied. Target-runtime verification and deployed acceptance remain separate gates.
 No contract merge is authorized. Do not enable auto-merge for this PR.
+
+## Next action
+
+Monitor PR #194 through review and closure or merge, with a final successful sweep.
+Preserve any pending V12 follow-up. Report meaningful findings or failed checks.
+The owner retains the merge and release decision.
