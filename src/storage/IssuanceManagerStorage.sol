@@ -891,24 +891,39 @@ library IssuanceManagerStorage {
         // token is fully sold (nothing left). Decrement-first so the struct carries no stale balance at void.
         CertificateDetails memory sellerDetails = cert.getActiveCertificateDetails(tokenId);
         if (units > sellerDetails.unitsRepresented) revert AmountExceedsAvailableUnits();
+        uint256 sellerVaultUnits = _assetsOfVaultPosition(certPrinter, tokenId);
+        uint256 buyerInvestmentAmountUSD;
+        uint256 buyerValuationCap;
+        SecurityClass securityType = cert.securityType();
+        // SAFE, SAFT and SAFTE are the first three SecurityClass values.
+        if (securityType <= SecurityClass.SAFTE) {
+            // These instruments use the core fields for contractual amounts, not the secondary purchase price.
+            // Keep the amount for retained vault units with the seller. Do not copy a cap in proportion to units.
+            buyerInvestmentAmountUSD = Math.mulDiv(
+                sellerDetails.investmentAmountUSD, units, sellerDetails.unitsRepresented + sellerVaultUnits
+            );
+            if (sellerDetails.investmentAmountUSD != 0 && buyerInvestmentAmountUSD == 0) revert InvalidAmount();
+            // The buyer amount rounds down. The seller retains the remainder for a later transfer.
+            sellerDetails.investmentAmountUSD -= buyerInvestmentAmountUSD;
+            buyerValuationCap = sellerDetails.issuerUSDValuationAtTimeOfInvestment;
+        }
         sellerDetails.unitsRepresented -= units;
         cert.updateCertificateDetails(tokenId, sellerDetails);
         // A lot that keeps a vault claim is not empty: its scrip is still outstanding, and the seller redeems
         // it through this lot. The actual voiding uses the same rule as executeVoidEmptyCerts, which sweeps
         // the lot later, once the claim is gone.
-        bool sellerVoided = sellerDetails.unitsRepresented == 0
-            && _assetsOfVaultPosition(certPrinter, tokenId) == 0;
+        bool sellerVoided = sellerDetails.unitsRepresented == 0 && sellerVaultUnits == 0;
         // (c) Deliver the buyer's units as a fresh lot (fresh-mint-per-lot): each acquisition mints its own
         // Ledger Entry Token carrying its own acquisitionTimestamp (per-lot holding-period clock, stamped at
-        // mint). The lot inherits the seller's non-basis terms; cost basis stays blank (no primary-issuance
-        // basis). Custodian is the admin multisig under Administered hosting, otherwise the buyer.
+        // mint). SAFE, SAFT and SAFTE retain their allocated contractual amount and cap.
+        // Other classes keep blank primary basis. Custody follows the selected hosting mode.
         bool buyerTokenIsMinted = true;
         address custodian = buyerHostingMode == HostingMode.ADMINISTERED ? adminMultisig : buyer;
         CertificateDetails memory buyerDetails = CertificateDetails({
             signingOfficerName: sellerDetails.signingOfficerName,
             signingOfficerTitle: sellerDetails.signingOfficerTitle,
-            investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeOfInvestment: 0,
+            investmentAmountUSD: buyerInvestmentAmountUSD,
+            issuerUSDValuationAtTimeOfInvestment: buyerValuationCap,
             unitsRepresented: units,
             legalDetails: sellerDetails.legalDetails,
             extensionData: sellerDetails.extensionData

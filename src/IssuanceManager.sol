@@ -793,11 +793,19 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     }
 
     function convertScripToCert(address certAddress, uint256 amount) external {
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
+        if (
+            IssuanceManagerStorage.getScripifiedCert(certAddress) != address(0)
+                && certificate.securityType() <= SecurityClass.SAFTE
+        ) {
+            IssuanceManagerStorage.RecertSelection memory selection =
+                IssuanceManagerStorage._selectFirstLegalOwnedToken(certAddress, msg.sender);
+            if (selection.foundActive && certificate.unitsReserved(selection.activeTokenId) != 0) {
+                revert ILedgerEntryToken.CertificateReserved();
+            }
+        }
         IssuanceManagerStorage.executeConvertScripToCert(
-            certAddress,
-            amount,
-            msg.sender,
-            this.convertScripToCert.selector
+            certAddress, amount, msg.sender, this.convertScripToCert.selector
         );
     }
 
