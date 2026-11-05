@@ -19,7 +19,7 @@ have one. Do not assume another checkout's files are present here.
 
 ## Shared tasks
 
-- [November 4 GitBook refresh](tasks/docs-refresh-20261104.md): survey since the published October 27 baseline; docs-only updates and public publication verification in progress.
+- [November 4 GitBook refresh](tasks/docs-refresh-20261104.md): complete through PR #195 / `8789081`; the public November 4 survey and guides were verified. Final record is on `codex/docs-refresh-20261104-publication-evidence`.
 
 - [Protocol and webapp documentation refresh](tasks/docs-protocol-webapp-20261027.md): October 27 source comparison and GitBook guide/reference updates; documentation only, review pending.
 
