@@ -27,6 +27,12 @@ holdings. Claiming attaches that wallet to the company's existing record
 of you. The link cannot sign documents or move assets, and MetaLeX never
 asks for a seed phrase or private key.
 
+If the company already linked your wallet, it can instead send a **welcome
+link**. Sign in with a wallet currently linked to your stakeholder record.
+This proves control without attaching another wallet. A mismatched wallet
+is refused. Neither kind of claim accepts legal documents or proves your
+legal identity.
+
 Links expire after 14 days, and a company can revoke or regenerate one at
 any time, so ask for a fresh link if yours has lapsed. Claim only an
 invitation you expected.

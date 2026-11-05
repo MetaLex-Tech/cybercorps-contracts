@@ -285,3 +285,12 @@ files under a new name, a notice shows the difference, and **Update legal
 name with wallet →** opens the
 [company profile editor](company.md#edit-the-company-profile), where you
 change the onchain name with a transaction.
+
+## Correct formation details and names
+
+Review the current facts and costs after changing a formation plan. Changes
+to the answers can require a new cost review, while existing obligations
+remain recorded. Backup company names are passed to the formation provider
+with the filing request. A changed name or an interrupted request does not
+establish that the original filing or payment failed; follow the formation
+status and recovery controls before sending again.

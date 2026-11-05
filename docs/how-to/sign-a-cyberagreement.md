@@ -76,9 +76,13 @@ runtime. Confirm the implementation and supported creation methods before
 exposing a signature. An unchanged `version()` or typehash does not establish
 creator-bound support.
 
-For per-party passport gates, create through the
-[ZKPassportFinalizer](../reference/contracts/ZKPassportFinalizer.md), which
-binds the gates into the salt and waits for both signatures and proofs.
+For current per-party passport gates, use the conditioned creator-bound
+overloads and [signer conditions](../reference/contracts/SignerConditions.md).
+Derive the id with `boundIdsOf` before preparing the bound proof. Gated
+parties sign `SignatureWithEvidenceData` through
+`signContractWithEvidenceFor`; ordinary `SignatureData` cannot satisfy their
+conditions. Retain the original finalizer workflow for an existing
+historical agreement that names one.
 
 ## 3. Collect each party's signature
 

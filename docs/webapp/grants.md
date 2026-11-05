@@ -290,3 +290,12 @@ embedded in [My holdings](holders.md).
 * **Imported and no-agreement grants stay offchain.** They count fully
   on the cap table but cannot be escrowed.
 * **Treat a signing link as private.** Send it only to the recipient.
+
+## Declare a stock plan's underlying class
+
+An owner can declare an undeclared plan's class from its existing reserve
+LET when that LET resolves to exactly one stock class. This records the
+plan's underlying class; it does not mint another reserve LET or change an
+already declared class. Review the reserve and any existing awards before
+confirming. Ambiguous or incompatible reserve evidence keeps the action
+blocked.

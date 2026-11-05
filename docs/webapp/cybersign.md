@@ -78,7 +78,10 @@ agreements and reports the applicable status.
 
 ### Open slots
 
-An ordinary public agreement can leave a party address blank. An eligible
+New cyberSign onchain creation uses creator-bound agreements on reviewed
+compatible registries, with exact named parties and committed values.
+Historical agreements keep their original creation method and identifier.
+An older ordinary public agreement can leave a party address blank. An eligible
 wallet can claim that open slot and enter its own party values. Named party
 values are fixed by the request. The app refuses secret-gated open-slot
 signing because submitting that secret publicly would expose it.
@@ -133,10 +136,13 @@ onchain email delivery.
 
 Where available, the sender can require passport evidence for selected
 named parties. The app binds the proof to the party, network and agreement.
-The [ZKPassportFinalizer](../reference/contracts/ZKPassportFinalizer.md)
-requires both signatures and the specified passport evidence before
-finalization. A passport check is not a substitute for reviewing the
-agreement or proving authority to sign for a company.
+Current creator-bound agreements use registry
+[signer conditions](../reference/contracts/SignerConditions.md). A gated
+party supplies its proof together with an evidence-bound signature. The
+last required signature finalizes the agreement automatically. The older
+[ZKPassportFinalizer](../reference/contracts/ZKPassportFinalizer.md) is a
+historical integration, removed from current contract source. A passport
+check is not a substitute for reviewing the agreement or proving authority to sign for a company.
 
 ## Create and share the document
 
@@ -169,6 +175,6 @@ and does not alter the signed source PDF or registry record.
 
 For contract-level creation, delegation and voiding, see
 [Sign a cyberAgreement](../how-to/sign-a-cyberagreement.md). The
-[October 27 source review](../reference/documentation-status.md) identifies
+[dated source review](../reference/documentation-status.md) identifies
 the app revision reviewed and features whose publication or enablement needs
 separate verification.
