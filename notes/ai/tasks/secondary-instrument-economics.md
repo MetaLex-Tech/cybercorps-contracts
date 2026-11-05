@@ -86,6 +86,17 @@ The updated IM and linked library must deploy as a pair. No public deployment is
 No target company was supplied. Target-runtime verification and deployed acceptance remain separate gates.
 No contract merge is authorized. Do not enable auto-merge for this PR.
 
+## Size review requested by the owner
+
+On November 4, fresh CI-profile builds compared head `be40b585fca93ac7391fe38895ef3bbc1e74260d` with the recorded base.
+All 104 compiled production runtimes fit EIP-170. Their creation bytecode also fits EIP-3860.
+The changed components have no constructor arguments.
+IM grew by 752 bytes to 18,692. Its linked library grew by 178 bytes to 24,554.
+The library has only 22 runtime bytes left. The existing size regression passed again.
+Only these two production components changed size. No contract source changed in this review.
+Hosted build-size, unit and fork checks passed on that head.
+The detailed comparison is in the verification record. Target-company deployment remains unverified.
+
 ## Next action
 
 Monitor PR #194 through review and closure or merge, with a final successful sweep.

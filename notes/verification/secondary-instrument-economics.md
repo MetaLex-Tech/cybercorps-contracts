@@ -102,3 +102,47 @@ The version number alone does not identify this change.
 The webapp must show the current purchase amount, cap and source ratio before acceptance.
 Gpxl retains ownership of that implementation.
 Warrant groups, instrument leg history, bundles, legal amendments and historical zero corrections remain outside this PR.
+
+## Size review of the PR
+
+Review date: November 4, 2026, America/Bogota.
+Reviewed head: `be40b585fca93ac7391fe38895ef3bbc1e74260d`.
+Compared base: `caa83643b09806d5e0036e627e7cd14cd02a3b23`.
+
+Fresh base and PR builds used the CI profile and pinned Foundry 1.8.5.
+Both builds used Solc 0.8.28, via IR and 15 optimizer runs.
+The compiler metadata reports the Prague EVM target.
+The review counted artifact bytes, including metadata and library address slots.
+It did not rely only on the `forge build --sizes` table, which omits this linked library.
+
+[EIP-170](https://eips.ethereum.org/EIPS/eip-170) limits each deployed runtime to 24,576 bytes.
+[EIP-3860](https://eips.ethereum.org/EIPS/eip-3860) limits initcode to 49,152 bytes on chains that enforce it.
+
+| Component | Base runtime | PR runtime | Increase | Runtime space left | PR initcode | Initcode space left |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| IssuanceManager | 17,940 | 18,692 | 752 | 5,884 | 18,923 | 30,229 |
+| IssuanceManagerStorage library | 24,376 | 24,554 | 178 | 22 | 24,586 | 24,566 |
+
+All values are bytes. Neither changed component takes constructor arguments.
+Their creation bytecode therefore gives the full initcode length.
+Linking substitutes fixed-width addresses. It does not append the library runtime to IssuanceManager.
+Each deployed component has its own runtime limit.
+The factory creates a proxy and references the implementation separately.
+It does not embed the updated implementation into its own runtime.
+
+The review checked all 104 nonempty production runtimes from each fresh build, including libraries.
+None exceeded the runtime limit or the creation-bytecode limit.
+Only the two components above changed size.
+LedgerEntryToken remained at 24,288 runtime bytes, with 288 bytes left.
+IssuanceManagerFactory remained at 5,400 runtime bytes.
+Constructor arguments for unrelated contracts were outside this review.
+
+The existing library deployment-limit regression passed again.
+Prior local-chain evidence also measures the deployed library at 24,554 bytes.
+Hosted build-size, unit and fork checks passed on the reviewed head.
+No contract source changed during this review.
+
+The patch fits the checked limits with these exact build settings.
+The library has almost no space left. Recheck its exact artifact after any code, dependency or build-setting change.
+No target chain or company upgrade was verified by this size review.
+Related audit responses and the approved MTLX1-8 guard remain as recorded above.
