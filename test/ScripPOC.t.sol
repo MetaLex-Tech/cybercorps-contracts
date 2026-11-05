@@ -46,6 +46,7 @@ contract POCMockCertPrinter {
     uint256 internal _total;
     string internal _name;
     string internal _symbol;
+    SecurityClass public securityType;
 
     function initialize(
         string[] memory,
@@ -53,12 +54,13 @@ contract POCMockCertPrinter {
         string memory symbol_,
         string memory,
         address,
-        SecurityClass,
+        SecurityClass securityType_,
         SecuritySeries,
         address
     ) external {
         _name = name_;
         _symbol = symbol_;
+        securityType = securityType_;
     }
 
     function name() external view returns (string memory) { return _name; }
