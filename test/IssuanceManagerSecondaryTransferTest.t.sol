@@ -543,15 +543,19 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     }
 
     function test_GetSecondaryBuyerAmount_MatchesSettlementWithVaultClaim() public {
-        ILedgerEntryToken cert = _deployConvertible(SecurityClass.SAFE, 100, 100_000 ether, 10_000_000 ether);
-        _deployScrip(address(cert));
-        vm.prank(seller);
-        issuanceManager.scripifyCert(address(cert), 0, 30, address(0));
-        // The vault claim counts in the denominator: 100,000 * 40 / (70 + 30).
-        uint256 preview = issuanceManager.getSecondaryBuyerAmount(address(cert), 0, 40);
-        assertEq(preview, 40_000 ether);
-        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0)));
-        assertEq(cert.getActiveCertificateDetails(1).investmentAmountUSD, preview);
+        for (uint256 i; i < 4; ++i) {
+            ILedgerEntryToken cert = _deployConvertible(_preservingClass(i), 100, 100_000 ether, 10_000_000 ether);
+            _deployScrip(address(cert));
+            vm.prank(seller);
+            issuanceManager.scripifyCert(address(cert), 0, 30, address(0));
+            // The vault claim counts in the denominator: 100,000 * 40 / (70 + 30).
+            uint256 preview = issuanceManager.getSecondaryBuyerAmount(address(cert), 0, 40);
+            assertEq(preview, 40_000 ether);
+            issuanceManager.secondaryTransfer(
+                _dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0))
+            );
+            assertEq(cert.getActiveCertificateDetails(1).investmentAmountUSD, preview);
+        }
     }
 
     function test_GetSecondaryBuyerAmount_NonConvertibleClassesReturnZero() public {
@@ -611,6 +615,23 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(cert.unitsReserved(0), 20);
     }
 
+    // Only the classes that move the amount with the units block a conversion into a reserved lot.
+    function test_ScripConversion_ReservedDestination_RefusedOnlyForPreservingClasses() public {
+        for (uint256 kind; kind <= uint256(SecurityClass.SAFO); ++kind) {
+            ILedgerEntryToken cert = _deployConvertible(SecurityClass(kind), 100, 100_000 ether, 10_000_000 ether);
+            _deployScrip(address(cert));
+            vm.prank(seller);
+            issuanceManager.scripifyCert(address(cert), 0, 30, address(0));
+            LedgerEntryToken(address(cert)).increaseUnitsReserved(0, 20);
+            bool preserving = kind <= uint256(SecurityClass.SAFTE) || kind == uint256(SecurityClass.SAFO);
+            if (preserving) vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
+            vm.prank(seller);
+            issuanceManager.convertScripToCert(address(cert), 30);
+            assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, preserving ? 70 : 100);
+            assertEq(cert.unitsReserved(0), 20);
+        }
+    }
+
     function test_NonConvertibleClasses_KeepBlankPrimaryBasis() public {
         for (uint256 kind = 3; kind < uint256(SecurityClass.SAFO); ++kind) {
             ILedgerEntryToken cert = _deployConvertible(SecurityClass(kind), 100, 100_000 ether, 10_000_000 ether);
@@ -618,6 +639,22 @@ contract IssuanceManagerSecondaryTransferTest is Test {
                 _dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0))
             );
             assertEq(cert.getActiveCertificateDetails(0).investmentAmountUSD, 100_000 ether);
+            assertEq(cert.getActiveCertificateDetails(0).issuerUSDValuationAtTimeOfInvestment, 10_000_000 ether);
+            assertEq(cert.getActiveCertificateDetails(1).investmentAmountUSD, 0);
+            assertEq(cert.getActiveCertificateDetails(1).issuerUSDValuationAtTimeOfInvestment, 0);
+        }
+    }
+
+    function test_NonConvertibleFullSale_KeepsBlankPrimaryBasis() public {
+        for (uint256 kind = 3; kind < uint256(SecurityClass.SAFO); ++kind) {
+            ILedgerEntryToken cert = _deployConvertible(SecurityClass(kind), 100, 100_000 ether, 10_000_000 ether);
+            issuanceManager.secondaryTransfer(
+                _dealMetadata(address(cert), 0, 100, "Bob", HostingMode.DIRECT, address(0))
+            );
+            assertTrue(cert.isVoided(0));
+            assertEq(cert.getCertificateDetails(0).investmentAmountUSD, 100_000 ether);
+            assertEq(cert.getCertificateDetails(0).issuerUSDValuationAtTimeOfInvestment, 10_000_000 ether);
+            assertEq(cert.getActiveCertificateDetails(1).unitsRepresented, 100);
             assertEq(cert.getActiveCertificateDetails(1).investmentAmountUSD, 0);
             assertEq(cert.getActiveCertificateDetails(1).issuerUSDValuationAtTimeOfInvestment, 0);
         }

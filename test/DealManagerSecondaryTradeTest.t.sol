@@ -4640,7 +4640,29 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     function test_ConvertibleSellOffer_ResaleCashDoesNotReplaceOriginalAmount() public {
-        _useConvertiblePrinter(SecurityClass.SAFE, 100_000 ether);
+        _assertResaleCashKeepsOriginalAmount(SecurityClass.SAFE);
+    }
+
+    function test_SafoSellOffer_ResaleCashDoesNotReplaceOriginalAmount() public {
+        _assertResaleCashKeepsOriginalAmount(SecurityClass.SAFO);
+    }
+
+    // A class that gives the buyer no amount accepts a fill of any size.
+    function test_NonConvertibleDustFill_AcceptsAndSettles() public {
+        _useConvertiblePrinter(SecurityClass.CommonStock, 1);
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, 1);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        uint256 acquiredId = certPrinter.tokenOfLegalOwnerByIndex(buyer, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).unitsRepresented, 1);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).investmentAmountUSD, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).issuerUSDValuationAtTimeOfInvestment, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(sellerTokenId).investmentAmountUSD, 1);
+    }
+
+    function _assertResaleCashKeepsOriginalAmount(SecurityClass kind) internal {
+        _useConvertiblePrinter(kind, 100_000 ether);
         uint256 resalePrice = 60_000 ether;
         paymentToken.mint(buyer, resalePrice);
         PostOfferParams memory p = _defaultSellOfferParams();
@@ -4832,8 +4854,6 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.stopPrank();
     }
 
-    /// @dev Many small fills must not accumulate round-down errors and significantly skew the price of the
-    /// final lot.
     function test_AcceptOffer_RepeatedPartialFills_ChargeCumulativeProRata() public {
         // 11 units for 21 base units
         PostOfferParams memory p = _defaultSellOfferParams();
