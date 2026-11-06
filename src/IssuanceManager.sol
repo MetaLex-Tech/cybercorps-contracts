@@ -658,6 +658,15 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         uint256 amount,
         address target
     ) external {
+        // A SAFE, SAFT, SAFTE or SAFO lot in a trade must not get a vault claim before settlement.
+        // Because other holders could make the claim smaller, and that would change the buyer amount.
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
+        if (
+            certificate.unitsReserved(id) != 0
+                && IssuanceManagerStorage._preservesPrimaryEconomics(certificate.securityType())
+        ) {
+            revert ILedgerEntryToken.CertificateReserved();
+        }
         IssuanceManagerStorage.executeScripifyCert(
             certAddress,
             id,
@@ -769,7 +778,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     }
 
     /// @notice Buyer amount that a secondary sale of `units` from `tokenId` records now.
-    /// @dev Reverts with InvalidAmount when settlement must refuse the sale.
+    /// @dev Reverts with InvalidAmount when settlement must refuse the sale. Reverts with LotHasVaultClaim
+    /// when a SAFE, SAFT, SAFTE or SAFO lot has a vault claim.
     function getSecondaryBuyerAmount(address certAddress, uint256 tokenId, uint256 units)
         external view returns (uint256)
     {

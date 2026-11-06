@@ -4854,6 +4854,108 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.stopPrank();
     }
 
+    // A lot with a vault claim cannot sell. Other holders can make the claim smaller before settlement,
+    // and that would change the buyer amount after acceptance.
+    function test_RevertIf_ConvertibleAcceptance_SellerLotHasVaultClaim() public {
+        for (uint256 i; i < 4; ++i) {
+            SecurityClass[4] memory classes =
+                [SecurityClass.SAFE, SecurityClass.SAFT, SecurityClass.SAFTE, SecurityClass.SAFO];
+            _useConvertiblePrinter(classes[i], 100_000 ether);
+            _deployScripFor(certPrinter);
+            vm.prank(seller);
+            im.scripifyCert(address(certPrinter), sellerTokenId, 50, address(0));
+
+            PostOfferParams memory p = _defaultSellOfferParams();
+            p.units = 50;
+            p.salt = i;
+            vm.prank(seller);
+            bytes32 offerId = dm.postOffer(p);
+            AcceptOfferParams memory a = _sellAcceptParams(offerId, 50);
+            uint256 buyerBefore = paymentToken.balanceOf(buyer);
+            vm.expectRevert(IssuanceManagerStorage.LotHasVaultClaim.selector);
+            vm.prank(buyer);
+            dm.acceptOffer(a);
+
+            assertEq(paymentToken.balanceOf(buyer), buyerBefore);
+            assertEq(dm.getOffer(offerId).unitsAccepted, 0);
+        }
+    }
+
+    // A lot in a trade cannot put its free units in the vault before settlement.
+    function test_RevertIf_ConvertibleScripify_SellerLotReserved() public {
+        for (uint256 i; i < 4; ++i) {
+            SecurityClass[4] memory classes =
+                [SecurityClass.SAFE, SecurityClass.SAFT, SecurityClass.SAFTE, SecurityClass.SAFO];
+            _useConvertiblePrinter(classes[i], 100_000 ether);
+            _deployScripFor(certPrinter);
+
+            PostOfferParams memory p = _defaultSellOfferParams();
+            p.units = 50;
+            p.salt = i;
+            vm.prank(seller);
+            bytes32 offerId = dm.postOffer(p);
+            bytes32 settlementId = _acceptSellOfferPartial(offerId, 50);
+
+            vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
+            vm.prank(seller);
+            im.scripifyCert(address(certPrinter), sellerTokenId, 50, address(0));
+
+            vm.prank(keeper);
+            dm.finalizeSecondaryTradeAgreement(settlementId);
+            uint256 acquiredId = certPrinter.tokenOfLegalOwnerByIndex(buyer, certPrinter.balanceOfLegalOwner(buyer) - 1);
+            assertEq(certPrinter.getActiveCertificateDetails(acquiredId).investmentAmountUSD, 50_000 ether);
+        }
+    }
+
+    // A class that gives the buyer no amount can still sell from a lot with a vault claim.
+    function test_NonConvertibleAcceptance_AllowsSellerLotWithVaultClaim() public {
+        _useConvertiblePrinter(SecurityClass.CommonStock, 100_000 ether);
+        _deployScripFor(certPrinter);
+        vm.prank(seller);
+        im.scripifyCert(address(certPrinter), sellerTokenId, 50, address(0));
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.units = 50;
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, 50);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        assertEq(certPrinter.getActiveCertificateDetails(certPrinter.tokenOfLegalOwnerByIndex(buyer, 0)).unitsRepresented, 50);
+    }
+
+    function _deployScripFor(ILedgerEntryToken printer) internal {
+        vm.prank(owner);
+        im.deployCyberScrip(
+            address(printer),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+    }
+
+    function _sellAcceptParams(bytes32 offerId, uint256 units) internal returns (AcceptOfferParams memory) {
+        return AcceptOfferParams({
+            offerId: offerId,
+            units: units,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+    }
+
     function test_AcceptOffer_RepeatedPartialFills_ChargeCumulativeProRata() public {
         // 11 units for 21 base units
         PostOfferParams memory p = _defaultSellOfferParams();

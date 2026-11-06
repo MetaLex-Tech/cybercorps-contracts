@@ -82,6 +82,7 @@ library IssuanceManagerStorage {
     error SecurityClassAlreadyDefined();
     error NotAPrinter();
     error CertNotEmpty();
+    error LotHasVaultClaim();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
     uint256 internal constant VAULT_RAY = 1e27;
@@ -545,18 +546,18 @@ library IssuanceManagerStorage {
     }
 
     /// @notice Buyer amount for a secondary sale of `units` from the lot as it is now.
-    /// @dev Acceptance and settlement both use this rule, so a fill that acceptance allows can settle.
+    /// @dev Acceptance uses this rule, so a fill that acceptance allows can settle.
+    /// For SAFE, SAFT, SAFTE and SAFO, the lot must have no vault claim. Other holders can make a vault claim
+    /// smaller, and that would change the buyer amount after acceptance. With no claim, only the raw units
+    /// count, and the reservation keeps them fixed until settlement.
     function getSecondaryBuyerAmount(address certAddress, uint256 tokenId, uint256 units)
         internal view returns (uint256)
     {
         ILedgerEntryToken cert = ILedgerEntryToken(certAddress);
         if (!_preservesPrimaryEconomics(cert.securityType())) return 0;
+        if (_assetsOfVaultPosition(certAddress, tokenId) != 0) revert LotHasVaultClaim();
         CertificateDetails memory details = cert.getActiveCertificateDetails(tokenId);
-        return _secondaryBuyerAmount(
-            details.investmentAmountUSD,
-            units,
-            details.unitsRepresented + _assetsOfVaultPosition(certAddress, tokenId)
-        );
+        return _secondaryBuyerAmount(details.investmentAmountUSD, units, details.unitsRepresented);
     }
 
     /// @dev One bit for each class that `_preservesPrimaryEconomics` accepts.

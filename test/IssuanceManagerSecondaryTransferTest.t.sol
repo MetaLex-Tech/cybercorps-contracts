@@ -542,19 +542,27 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(cert.totalSupply(), 1);
     }
 
-    function test_GetSecondaryBuyerAmount_MatchesSettlementWithVaultClaim() public {
+    function test_GetSecondaryBuyerAmount_MatchesSettlement() public {
         for (uint256 i; i < 4; ++i) {
             ILedgerEntryToken cert = _deployConvertible(_preservingClass(i), 100, 100_000 ether, 10_000_000 ether);
-            _deployScrip(address(cert));
-            vm.prank(seller);
-            issuanceManager.scripifyCert(address(cert), 0, 30, address(0));
-            // The vault claim counts in the denominator: 100,000 * 40 / (70 + 30).
             uint256 preview = issuanceManager.getSecondaryBuyerAmount(address(cert), 0, 40);
             assertEq(preview, 40_000 ether);
             issuanceManager.secondaryTransfer(
                 _dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0))
             );
             assertEq(cert.getActiveCertificateDetails(1).investmentAmountUSD, preview);
+        }
+    }
+
+    // Other holders can make a vault claim smaller, so a lot with a claim has no fixed buyer amount.
+    function test_RevertIf_GetSecondaryBuyerAmount_LotHasVaultClaim() public {
+        for (uint256 i; i < 4; ++i) {
+            ILedgerEntryToken cert = _deployConvertible(_preservingClass(i), 100, 100_000 ether, 10_000_000 ether);
+            _deployScrip(address(cert));
+            vm.prank(seller);
+            issuanceManager.scripifyCert(address(cert), 0, 30, address(0));
+            vm.expectRevert(IssuanceManagerStorage.LotHasVaultClaim.selector);
+            issuanceManager.getSecondaryBuyerAmount(address(cert), 0, 40);
         }
     }
 
@@ -723,6 +731,32 @@ contract IssuanceManagerSecondaryTransferTest is Test {
             extensionData: abi.encode("original extension")
         });
         issuanceManager.createCertAndAssign(address(cert), seller, details);
+    }
+
+    // The amount that a lot keeps for its vault units moves with those units when they convert.
+    function test_ConvertibleScripConversion_RetainedAmountFollowsUnitsToFirstLot() public {
+        // Lot 0 is the seller's first lot. It has no amount.
+        ILedgerEntryToken cert = _deployConvertible(SecurityClass.SAFE, 10, 0, 10_000_000 ether);
+        _deployScrip(address(cert));
+        CertificateDetails memory details = cert.getActiveCertificateDetails(0);
+        details.investmentAmountUSD = 100_000 ether;
+        details.unitsRepresented = 100;
+        uint256 lotB = issuanceManager.createCertAndAssign(address(cert), seller, details);
+        vm.prank(seller);
+        issuanceManager.scripifyCert(address(cert), lotB, 30, address(0));
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), lotB, 70, "Bob", HostingMode.DIRECT, address(0)));
+        assertEq(cert.getActiveCertificateDetails(lotB).investmentAmountUSD, 30_000 ether);
+
+        vm.prank(seller);
+        issuanceManager.convertScripToCert(address(cert), 30);
+        assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 40, "units went to the first lot");
+        assertEq(issuanceManager.getScripPoolAmountById(address(cert), lotB), 0, "lot B claim used");
+
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = lotB;
+        issuanceManager.voidEmptyCerts(address(cert), ids);
+        assertTrue(cert.isVoided(lotB));
+        assertEq(cert.getActiveCertificateDetails(0).investmentAmountUSD, 30_000 ether, "amount follows units");
     }
 
     /// @dev Deploys a printer and mints the seller's Ledger Entry Token (id 0, `units` units)
