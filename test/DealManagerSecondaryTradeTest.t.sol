@@ -57,6 +57,9 @@ import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {ISecondaryTradeStorage} from "../src/interfaces/ISecondaryTradeStorage.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {EscrowStatus} from "../src/storage/LexScrowStorage.sol";
+import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol";
+import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
+import {ICondition} from "../src/interfaces/ICondition.sol";
 import {
     AcceptOfferParams,
     ExemptionPathway,
@@ -4636,8 +4639,323 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.voidSecondaryTradeAgreement(settlementId, buyer, "", 4, replay);
     }
 
-    /// @dev Many small fills must not accumulate round-down errors and significantly skew the price of the
-    /// final lot.
+    function test_ConvertibleSellOffer_ResaleCashDoesNotReplaceOriginalAmount() public {
+        _assertResaleCashKeepsOriginalAmount(SecurityClass.SAFE);
+    }
+
+    function test_SafoSellOffer_ResaleCashDoesNotReplaceOriginalAmount() public {
+        _assertResaleCashKeepsOriginalAmount(SecurityClass.SAFO);
+    }
+
+    // A class that gives the buyer no amount accepts a fill of any size.
+    function test_NonConvertibleDustFill_AcceptsAndSettles() public {
+        _useConvertiblePrinter(SecurityClass.CommonStock, 1);
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, 1);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        uint256 acquiredId = certPrinter.tokenOfLegalOwnerByIndex(buyer, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).unitsRepresented, 1);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).investmentAmountUSD, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).issuerUSDValuationAtTimeOfInvestment, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(sellerTokenId).investmentAmountUSD, 1);
+    }
+
+    function _assertResaleCashKeepsOriginalAmount(SecurityClass kind) internal {
+        _useConvertiblePrinter(kind, 100_000 ether);
+        uint256 resalePrice = 60_000 ether;
+        paymentToken.mint(buyer, resalePrice);
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.consideration = resalePrice;
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        assertEq(paymentToken.balanceOf(address(dm)), resalePrice);
+        assertEq(certPrinter.getActiveCertificateDetails(sellerTokenId).investmentAmountUSD, 100_000 ether);
+        uint256 sellerBefore = paymentToken.balanceOf(seller);
+        uint256 companyBefore = paymentToken.balanceOf(company);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        uint256 acquiredId = certPrinter.tokenOfLegalOwnerByIndex(buyer, 0);
+        CertificateDetails memory acquired = certPrinter.getActiveCertificateDetails(acquiredId);
+        assertEq(acquired.investmentAmountUSD, 100_000 ether);
+        assertEq(acquired.issuerUSDValuationAtTimeOfInvestment, 10_000_000 ether);
+        assertEq(paymentToken.balanceOf(seller), sellerBefore + resalePrice);
+        assertEq(paymentToken.balanceOf(company), companyBefore);
+        assertEq(paymentToken.balanceOf(address(dm)), 0);
+        assertEq(uint8(dm.getSecondaryEscrow(settlementId).status), uint8(SecondaryEscrowStatus.FINALIZED));
+    }
+
+    function test_ConvertibleSellOffer_PartialFillsPreserveAmountsInReverseFinalizationOrder() public {
+        _useConvertiblePrinter(SecurityClass.SAFTE, 100_000 ether);
+        bytes32 offerId = _postSellOffer();
+        bytes32 first = _acceptSellOfferPartial(offerId, 40);
+        bytes32 second = _acceptSellOfferPartial(offerId, 60);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(second);
+        assertEq(certPrinter.getActiveCertificateDetails(1).investmentAmountUSD, 60_000 ether);
+        assertEq(certPrinter.getActiveCertificateDetails(sellerTokenId).investmentAmountUSD, 40_000 ether);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(first);
+        assertEq(certPrinter.getActiveCertificateDetails(2).investmentAmountUSD, 40_000 ether);
+        assertEq(certPrinter.getActiveCertificateDetails(sellerTokenId).investmentAmountUSD, 0);
+        assertTrue(certPrinter.isVoided(sellerTokenId));
+        assertEq(paymentToken.balanceOf(address(dm)), 0);
+    }
+
+    function test_ConvertibleBuyOffer_PreservesOriginalAmount() public {
+        _useConvertiblePrinter(SecurityClass.SAFT, 100_000 ether);
+        bytes32 offerId = _postBuyOffer();
+        bytes32 settlementId = _acceptBuyOffer(offerId);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        uint256 acquiredId = certPrinter.tokenOfLegalOwnerByIndex(buyer, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).investmentAmountUSD, 100_000 ether);
+        assertEq(
+            certPrinter.getActiveCertificateDetails(acquiredId).issuerUSDValuationAtTimeOfInvestment, 10_000_000 ether
+        );
+    }
+
+    function test_ConvertibleZeroRoundedAmount_SellAcceptanceRefusesAndMovesNoCash() public {
+        _useConvertiblePrinter(SecurityClass.SAFE, 1);
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+        bytes32 offerId = _postSellOffer();
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: 1,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+        vm.expectRevert(IssuanceManagerStorage.InvalidAmount.selector);
+        vm.prank(buyer);
+        dm.acceptOffer(p);
+
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore);
+        assertEq(paymentToken.balanceOf(address(dm)), 0);
+        Offer memory o = dm.getOffer(offerId);
+        assertEq(uint8(o.status), uint8(OfferStatus.LIVE));
+        assertEq(o.unitsAccepted, 0);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), UNITS, "sell offer keeps its reservation");
+
+        // A fill that gives the buyer a positive amount still settles.
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        uint256 acquiredId = certPrinter.tokenOfLegalOwnerByIndex(buyer, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).investmentAmountUSD, 1);
+    }
+
+    function test_ConvertibleZeroRoundedAmount_BuyAcceptanceRefusesAndKeepsBuyerCash() public {
+        _useConvertiblePrinter(SecurityClass.SAFE, 1);
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+        bytes32 offerId = _postBuyOffer();
+        assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "buy offer holds the buyer cash");
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: 1,
+            exemptionPathway: ExemptionPathway.NONE,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, seller, sellerKey),
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
+        });
+        vm.expectRevert(IssuanceManagerStorage.InvalidAmount.selector);
+        vm.prank(seller);
+        dm.acceptOffer(p);
+
+        Offer memory o = dm.getOffer(offerId);
+        assertEq(uint8(o.status), uint8(OfferStatus.LIVE));
+        assertEq(o.unitsAccepted, 0);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 0, "seller lot has no reservation");
+        // The buyer gets the full payment back when the offer is cancelled.
+        vm.prank(buyer);
+        dm.cancelOffer(offerId);
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore);
+        assertEq(paymentToken.balanceOf(address(dm)), 0);
+    }
+
+    function test_ConvertibleScripConversion_RefusesReservedDestination() public {
+        _useConvertiblePrinter(SecurityClass.SAFE, 100_000 ether);
+        address donor = makeAddr("scripDonor");
+        vm.startPrank(owner);
+        CertificateDetails memory donorDetails = _sellerCertDetails(900);
+        donorDetails.investmentAmountUSD = 900_000 ether;
+        uint256 donorId = im.createCertAndAssign(address(certPrinter), donor, donorDetails);
+        im.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+        vm.stopPrank();
+        vm.prank(donor);
+        im.scripifyCert(address(certPrinter), donorId, 900, seller);
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.units = 50;
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, 50);
+        assertEq(certPrinter.getActiveCertificateDetails(sellerTokenId).unitsRepresented, 100);
+        vm.prank(seller);
+        vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
+        im.convertScripToCert(address(certPrinter), 900);
+        assertEq(certPrinter.getActiveCertificateDetails(sellerTokenId).unitsRepresented, 100);
+        vm.prank(seller);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        uint256 acquiredId = certPrinter.tokenOfLegalOwnerByIndex(buyer, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(acquiredId).investmentAmountUSD, 50_000 ether);
+        // Conversion is available again after the reservation clears.
+        vm.prank(seller);
+        im.convertScripToCert(address(certPrinter), 900);
+        assertEq(certPrinter.getActiveCertificateDetails(sellerTokenId).unitsRepresented, 950);
+    }
+
+    function _useConvertiblePrinter(SecurityClass kind, uint256 amount) internal {
+        vm.startPrank(owner);
+        // Keep payment assertions independent from the original instrument amount.
+        dmFactory.setDefaultSecondaryFeeRatio(0);
+        certPrinter = ILedgerEntryToken(
+            im.createCertPrinter(
+                new string[](0),
+                "Convertible",
+                "CONV",
+                "uri://convertible",
+                kind,
+                SecuritySeries.SeriesA,
+                address(0),
+                bytes("")
+            )
+        );
+        CertificateDetails memory details = _sellerCertDetails(UNITS);
+        details.investmentAmountUSD = amount;
+        details.issuerUSDValuationAtTimeOfInvestment = 10_000_000 ether;
+        sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, details);
+        certPrinter.setGlobalLegalTransferable(true);
+        vm.stopPrank();
+    }
+
+    // A lot with a vault claim cannot sell. Other holders can make the claim smaller before settlement,
+    // and that would change the buyer amount after acceptance.
+    function test_RevertIf_ConvertibleAcceptance_SellerLotHasVaultClaim() public {
+        for (uint256 i; i < 4; ++i) {
+            SecurityClass[4] memory classes =
+                [SecurityClass.SAFE, SecurityClass.SAFT, SecurityClass.SAFTE, SecurityClass.SAFO];
+            _useConvertiblePrinter(classes[i], 100_000 ether);
+            _deployScripFor(certPrinter);
+            vm.prank(seller);
+            im.scripifyCert(address(certPrinter), sellerTokenId, 50, address(0));
+
+            PostOfferParams memory p = _defaultSellOfferParams();
+            p.units = 50;
+            p.salt = i;
+            vm.prank(seller);
+            bytes32 offerId = dm.postOffer(p);
+            AcceptOfferParams memory a = _sellAcceptParams(offerId, 50);
+            uint256 buyerBefore = paymentToken.balanceOf(buyer);
+            vm.expectRevert(IssuanceManagerStorage.LotHasVaultClaim.selector);
+            vm.prank(buyer);
+            dm.acceptOffer(a);
+
+            assertEq(paymentToken.balanceOf(buyer), buyerBefore);
+            assertEq(dm.getOffer(offerId).unitsAccepted, 0);
+        }
+    }
+
+    // A lot in a trade cannot put its free units in the vault before settlement.
+    function test_RevertIf_ConvertibleScripify_SellerLotReserved() public {
+        for (uint256 i; i < 4; ++i) {
+            SecurityClass[4] memory classes =
+                [SecurityClass.SAFE, SecurityClass.SAFT, SecurityClass.SAFTE, SecurityClass.SAFO];
+            _useConvertiblePrinter(classes[i], 100_000 ether);
+            _deployScripFor(certPrinter);
+
+            PostOfferParams memory p = _defaultSellOfferParams();
+            p.units = 50;
+            p.salt = i;
+            vm.prank(seller);
+            bytes32 offerId = dm.postOffer(p);
+            bytes32 settlementId = _acceptSellOfferPartial(offerId, 50);
+
+            vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
+            vm.prank(seller);
+            im.scripifyCert(address(certPrinter), sellerTokenId, 50, address(0));
+
+            vm.prank(keeper);
+            dm.finalizeSecondaryTradeAgreement(settlementId);
+            uint256 acquiredId = certPrinter.tokenOfLegalOwnerByIndex(buyer, certPrinter.balanceOfLegalOwner(buyer) - 1);
+            assertEq(certPrinter.getActiveCertificateDetails(acquiredId).investmentAmountUSD, 50_000 ether);
+        }
+    }
+
+    // A class that gives the buyer no amount can still sell from a lot with a vault claim.
+    function test_NonConvertibleAcceptance_AllowsSellerLotWithVaultClaim() public {
+        _useConvertiblePrinter(SecurityClass.CommonStock, 100_000 ether);
+        _deployScripFor(certPrinter);
+        vm.prank(seller);
+        im.scripifyCert(address(certPrinter), sellerTokenId, 50, address(0));
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.units = 50;
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, 50);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        assertEq(certPrinter.getActiveCertificateDetails(certPrinter.tokenOfLegalOwnerByIndex(buyer, 0)).unitsRepresented, 50);
+    }
+
+    function _deployScripFor(ILedgerEntryToken printer) internal {
+        vm.prank(owner);
+        im.deployCyberScrip(
+            address(printer),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+    }
+
+    function _sellAcceptParams(bytes32 offerId, uint256 units) internal returns (AcceptOfferParams memory) {
+        return AcceptOfferParams({
+            offerId: offerId,
+            units: units,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+    }
+
     function test_AcceptOffer_RepeatedPartialFills_ChargeCumulativeProRata() public {
         // 11 units for 21 base units
         PostOfferParams memory p = _defaultSellOfferParams();

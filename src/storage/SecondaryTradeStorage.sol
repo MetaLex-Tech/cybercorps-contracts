@@ -447,6 +447,8 @@ library SecondaryTradeStorage {
         // The cert must not be void at acceptance. On a buy offer this is the first check of the seller's
         // cert. On a sell offer the issuer can void the cert after the offer is posted.
         if (ILedgerEntryToken(certPrinter).isVoided(tokenId)) revert ISecondaryTradeStorage.CertificateVoided();
+        // Refuse a fill that settlement cannot complete. Settlement uses the same buyer-amount rule.
+        DealManagerStorage.getIssuanceManager().getSecondaryBuyerAmount(certPrinter, tokenId, params.units);
 
         // Resolve the buyer info per side: buy offers carry it on the offer (the offeror is the buyer),
         // sells take it from the acceptance.

@@ -658,6 +658,15 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         uint256 amount,
         address target
     ) external {
+        // A SAFE, SAFT, SAFTE or SAFO lot in a trade must not get a vault claim before settlement.
+        // Because other holders could make the claim smaller, and that would change the buyer amount.
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
+        if (
+            certificate.unitsReserved(id) != 0
+                && IssuanceManagerStorage._preservesPrimaryEconomics(certificate.securityType())
+        ) {
+            revert ILedgerEntryToken.CertificateReserved();
+        }
         IssuanceManagerStorage.executeScripifyCert(
             certAddress,
             id,
@@ -768,6 +777,15 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
         return IssuanceManagerStorage.getScripPoolAmountById(certAddress, id);
     }
 
+    /// @notice Buyer amount that a secondary sale of `units` from `tokenId` records now.
+    /// @dev Reverts with InvalidAmount when settlement must refuse the sale. Reverts with LotHasVaultClaim
+    /// when a SAFE, SAFT, SAFTE or SAFO lot has a vault claim.
+    function getSecondaryBuyerAmount(address certAddress, uint256 tokenId, uint256 units)
+        external view returns (uint256)
+    {
+        return IssuanceManagerStorage.getSecondaryBuyerAmount(certAddress, tokenId, units);
+    }
+
     /// @notice Effective rebasing shares; excludes sub-wei attribution dust held by the pool.
     function getScripPoolSharesById(
         address certAddress,
@@ -793,11 +811,19 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, IIssuan
     }
 
     function convertScripToCert(address certAddress, uint256 amount) external {
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
+        if (
+            IssuanceManagerStorage.getScripifiedCert(certAddress) != address(0)
+                && IssuanceManagerStorage._preservesPrimaryEconomics(certificate.securityType())
+        ) {
+            IssuanceManagerStorage.RecertSelection memory selection =
+                IssuanceManagerStorage._selectFirstLegalOwnedToken(certAddress, msg.sender);
+            if (selection.foundActive && certificate.unitsReserved(selection.activeTokenId) != 0) {
+                revert ILedgerEntryToken.CertificateReserved();
+            }
+        }
         IssuanceManagerStorage.executeConvertScripToCert(
-            certAddress,
-            amount,
-            msg.sender,
-            this.convertScripToCert.selector
+            certAddress, amount, msg.sender, this.convertScripToCert.selector
         );
     }
 

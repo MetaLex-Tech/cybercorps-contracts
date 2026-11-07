@@ -1,0 +1,50 @@
+{
+  "chainId": 31337,
+  "codeCommit": "77a1b51906b03dd5eed6daf3e52df92bc5bc5930",
+  "addresses": {
+    "CERT": "0xac9bDb77546581367bB60Ca7Aea6965D353383c8",
+    "CASH": "0xcE90b9749cA0888DAE3E8B7A41ea637eb5Ae822E",
+    "DM": "0x27a2308C185F85D571f4C5868E3582fdAA73B9bF",
+    "BUYER": "0x0376AAc07Ad725E01357B1725B5ceC61aE10473c",
+    "SELLER": "0xe05fcC23807536bEe418f142D19fa0d21BB0cfF7",
+    "IM": "0xf490af2127588F8C9FC6Be6dc99C6a33A9F36778",
+    "REGISTRY": "0x094f392df3ea564818b54b2021577cb8b2635be5"
+  },
+  "simulationError": {
+    "code": 3,
+    "message": "execution reverted: custom error 0x2edc2c5f",
+    "data": "0x2edc2c5f"
+  },
+  "refusedTransaction": {
+    "hash": "0xb990ed731110984b0bbc502da4e54590185f56c9308e1c8477cc6755af27af65",
+    "status": "0x0"
+  },
+  "finalizationTransaction": {
+    "hash": "0x6176dd275ec3acbde8131356fe284d6b12d79278a77443bb5ebe35b6ca53154f",
+    "status": "0x1"
+  },
+  "retainedDetails": [
+    "Officer",
+    "Title",
+    "50000000000000000000000",
+    "10000000000000000000000000",
+    "50",
+    "synthetic",
+    "0x"
+  ],
+  "acquiredDetails": [
+    "Officer",
+    "Title",
+    "50000000000000000000000",
+    "10000000000000000000000000",
+    "50",
+    "synthetic",
+    "0x"
+  ],
+  "escrowCash": 0,
+  "firstSaleSuccessfulReceipts": 37,
+  "deployedLocalRuntimeBytes": {
+    "IssuanceManager": 18692,
+    "IssuanceManagerStorage": 24554
+  }
+}

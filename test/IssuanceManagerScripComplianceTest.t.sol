@@ -13,6 +13,7 @@ import {ICondition} from "../src/interfaces/ICondition.sol";
 import {TestableCyberScrip} from "./mock/TestableCyberScrip.sol";
 import {MockTransferHook} from "./mock/MockTransferHook.sol";
 import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
+import {SecurityClass} from "../src/CyberCorpConstants.sol";
 
 contract MockCertPrinterBasic {
     string private _name;
@@ -36,6 +37,8 @@ contract MockCertPrinterBasic {
 
     function mockSetReserved(uint256 id, uint256 units) external { _reserved[id] = units; }
 
+    // A class with no amount rule, so scripify allows the free units of a reserved lot.
+    function securityType() external pure returns (SecurityClass) { return SecurityClass.CommonStock; }
     function isVoided(uint256) external pure returns (bool) { return false; }
     function unitsReserved(uint256 id) external view returns (uint256) { return _reserved[id]; }
     function legalOwnerOf(uint256 id) external view returns (address) { return _owners[id]; }

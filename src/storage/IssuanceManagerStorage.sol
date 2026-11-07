@@ -82,6 +82,7 @@ library IssuanceManagerStorage {
     error SecurityClassAlreadyDefined();
     error NotAPrinter();
     error CertNotEmpty();
+    error LotHasVaultClaim();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
     uint256 internal constant VAULT_RAY = 1e27;
@@ -544,6 +545,42 @@ library IssuanceManagerStorage {
         return Math.mulDiv(assetsWad, num, den);
     }
 
+    /// @notice Buyer amount for a secondary sale of `units` from the lot as it is now.
+    /// @dev Acceptance uses this rule, so a fill that acceptance allows can settle.
+    /// For SAFE, SAFT, SAFTE and SAFO, the lot must have no vault claim. Other holders can make a vault claim
+    /// smaller, and that would change the buyer amount after acceptance. With no claim, only the raw units
+    /// count, and the reservation keeps them fixed until settlement.
+    function getSecondaryBuyerAmount(address certAddress, uint256 tokenId, uint256 units)
+        internal view returns (uint256)
+    {
+        ILedgerEntryToken cert = ILedgerEntryToken(certAddress);
+        if (!_preservesPrimaryEconomics(cert.securityType())) return 0;
+        if (_assetsOfVaultPosition(certAddress, tokenId) != 0) revert LotHasVaultClaim();
+        CertificateDetails memory details = cert.getActiveCertificateDetails(tokenId);
+        return _secondaryBuyerAmount(details.investmentAmountUSD, units, details.unitsRepresented);
+    }
+
+    /// @dev One bit for each class that `_preservesPrimaryEconomics` accepts.
+    uint256 internal constant PRIMARY_ECONOMICS_CLASSES = (1 << uint8(SecurityClass.SAFE))
+        | (1 << uint8(SecurityClass.SAFT)) | (1 << uint8(SecurityClass.SAFTE)) | (1 << uint8(SecurityClass.SAFO));
+
+    /// @notice True when the instrument terms use the core amount and cap fields.
+    /// @dev SAFE, SAFT, SAFTE and SAFO keep their purchase amount and cap or valuation in these fields.
+    /// These values are contract terms, not the secondary purchase price.
+    function _preservesPrimaryEconomics(SecurityClass securityType) internal pure returns (bool) {
+        return (PRIMARY_ECONOMICS_CLASSES >> uint8(securityType)) & 1 == 1;
+    }
+
+    /// @notice Buyer part of the lot amount, in proportion to the units sold.
+    /// @dev `lotUnits` includes the vault claim of the lot. The buyer amount rounds down.
+    /// A positive lot amount that gives the buyer 0 is refused.
+    function _secondaryBuyerAmount(uint256 lotAmount, uint256 units, uint256 lotUnits)
+        internal pure returns (uint256 buyerAmount)
+    {
+        buyerAmount = Math.mulDiv(lotAmount, units, lotUnits);
+        if (lotAmount != 0 && buyerAmount == 0) revert InvalidAmount();
+    }
+
     /// @dev Nominal vault shares held by a single certificate.
     function getScripPoolSharesById(
         address certAddress,
@@ -891,24 +928,35 @@ library IssuanceManagerStorage {
         // token is fully sold (nothing left). Decrement-first so the struct carries no stale balance at void.
         CertificateDetails memory sellerDetails = cert.getActiveCertificateDetails(tokenId);
         if (units > sellerDetails.unitsRepresented) revert AmountExceedsAvailableUnits();
+        uint256 sellerVaultUnits = _assetsOfVaultPosition(certPrinter, tokenId);
+        uint256 buyerInvestmentAmountUSD;
+        uint256 buyerValuationCap;
+        if (_preservesPrimaryEconomics(cert.securityType())) {
+            buyerInvestmentAmountUSD = _secondaryBuyerAmount(
+                sellerDetails.investmentAmountUSD, units, sellerDetails.unitsRepresented + sellerVaultUnits
+            );
+            // The seller keeps the rest of the amount, also for the units in the vault.
+            sellerDetails.investmentAmountUSD -= buyerInvestmentAmountUSD;
+            // The cap is a term, not a balance. The buyer gets the full cap.
+            buyerValuationCap = sellerDetails.issuerUSDValuationAtTimeOfInvestment;
+        }
         sellerDetails.unitsRepresented -= units;
         cert.updateCertificateDetails(tokenId, sellerDetails);
         // A lot that keeps a vault claim is not empty: its scrip is still outstanding, and the seller redeems
         // it through this lot. The actual voiding uses the same rule as executeVoidEmptyCerts, which sweeps
         // the lot later, once the claim is gone.
-        bool sellerVoided = sellerDetails.unitsRepresented == 0
-            && _assetsOfVaultPosition(certPrinter, tokenId) == 0;
+        bool sellerVoided = sellerDetails.unitsRepresented == 0 && sellerVaultUnits == 0;
         // (c) Deliver the buyer's units as a fresh lot (fresh-mint-per-lot): each acquisition mints its own
         // Ledger Entry Token carrying its own acquisitionTimestamp (per-lot holding-period clock, stamped at
-        // mint). The lot inherits the seller's non-basis terms; cost basis stays blank (no primary-issuance
-        // basis). Custodian is the admin multisig under Administered hosting, otherwise the buyer.
+        // mint). SAFE, SAFT, SAFTE and SAFO lots get their part of the amount and the full cap.
+        // Other classes keep blank primary basis. Custody follows the selected hosting mode.
         bool buyerTokenIsMinted = true;
         address custodian = buyerHostingMode == HostingMode.ADMINISTERED ? adminMultisig : buyer;
         CertificateDetails memory buyerDetails = CertificateDetails({
             signingOfficerName: sellerDetails.signingOfficerName,
             signingOfficerTitle: sellerDetails.signingOfficerTitle,
-            investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeOfInvestment: 0,
+            investmentAmountUSD: buyerInvestmentAmountUSD,
+            issuerUSDValuationAtTimeOfInvestment: buyerValuationCap,
             unitsRepresented: units,
             legalDetails: sellerDetails.legalDetails,
             extensionData: sellerDetails.extensionData

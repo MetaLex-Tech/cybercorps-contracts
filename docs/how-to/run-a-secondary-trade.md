@@ -191,6 +191,40 @@ change through `IssuanceManager.secondaryTransfer`, which reduces the
 seller's LET and mints the buyer's LET with the seller's endorsement
 attached.
 
+### Original amount and cap for convertible instruments
+
+For SAFE, SAFT, SAFTE and SAFO instruments, settlement preserves the cap
+(the project valuation for SAFO) in `issuerUSDValuationAtTimeOfInvestment`. It divides `investmentAmountUSD`
+between the buyer and seller in proportion to the transferred units.
+The denominator includes the source lot's active units and its current
+vault claim. The seller retains the amount for unsold units.
+
+The buyer amount rounds down to the nearest raw USD unit. USD fields use
+18 decimals. The seller retains the remainder. If the buyer amount rounds
+to zero from a positive source amount, `acceptOffer` refuses the fill with
+`InvalidAmount` before any cash moves. Settlement keeps the same check.
+
+A $100,000 SAFE with a $10 million cap can sell in full for $60,000.
+The new buyer LET retains the $100,000 purchase amount and $10 million cap.
+The secondary payment goes to the seller, less applicable fees.
+For a 40% transfer, the buyer amount is $40,000 and the retained amount is $60,000.
+Both lots retain the $10 million cap.
+
+Other security classes keep the existing blank primary-basis fields on
+new secondary lots. Extension data and acquisition timestamps keep their
+existing behavior. Scrip conversion into a reserved SAFE, SAFT, SAFTE or SAFO lot
+reverts with `CertificateReserved`. This prevents that conversion from adding
+units to the source lot after offer acceptance.
+
+This allocation does not establish legal permission
+for a partial assignment. It does not track warrant group limits or
+conversion, exercise and delivery history. It does not reconstruct amounts
+that earlier transfers set to zero or fix separate scrip-conversion accounting.
+
+This behavior requires the updated IssuanceManager implementation and
+linked library. An existing company's implementation must be verified
+before use. The version number alone does not identify this change.
+
 ## Cancel an offer or void a settlement
 
 * `cancelOffer(offerId)` lets the offeror cancel a live offer. It releases
