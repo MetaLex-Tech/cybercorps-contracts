@@ -89,13 +89,13 @@ const PROXY_CREATION_CODE = "0x608060405261029d8038038061001481610168565b9283398
 const CHAINS = {
   1: { name: "Ethereum", defaultCondition: "0xe71fE689bFAA4939A760EDF7e07f44372a43932A",
        expected: { EmbargoScreen: "0x524224874f2A22e720edbb223CDF487E8a782872", SanctionsScreen: "0xE277147aAc479e1730e5d6d0766F85078DEaF75f", NonUsEmbargoScreen: "0x4Cc1b51c9E317Dc915008F099dd2F1780b8bffD9" },
-       explorer: "https://etherscan.io" },
+       explorer: "https://etherscan.io", rpc: "https://ethereum-rpc.publicnode.com", currency: "ETH" },
   8453: { name: "Base", defaultCondition: "0xe71fE689bFAA4939A760EDF7e07f44372a43932A",
        expected: { EmbargoScreen: "0x524224874f2A22e720edbb223CDF487E8a782872", SanctionsScreen: "0xE277147aAc479e1730e5d6d0766F85078DEaF75f", NonUsEmbargoScreen: "0x4Cc1b51c9E317Dc915008F099dd2F1780b8bffD9" },
-       explorer: "https://basescan.org" },
+       explorer: "https://basescan.org", rpc: "https://mainnet.base.org", currency: "ETH" },
   11155111: { name: "Sepolia", defaultCondition: "0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95",
        expected: { EmbargoScreen: "0xd5dB86E9F699E5818D09d6eA2c2028d4b0a1A8cf", SanctionsScreen: "0x533e12655dC34fC7F96cD2882aFBcEb11FBA76f1", NonUsEmbargoScreen: "0xc58EA50bC312f610Ec22d1Bf9B3c7Df24d810aA8" },
-       explorer: "https://sepolia.etherscan.io" },
+       explorer: "https://sepolia.etherscan.io", rpc: "https://ethereum-sepolia-rpc.publicnode.com", currency: "SepoliaETH" },
 };
 
 // Lists must be sorted: the zkPassport helper compares them element by element.
@@ -203,8 +203,34 @@ async function connect(entry) {
 
 async function switchChain(id) {
   if (!provider) { $("wallet").innerHTML = '<span class="warn">Connect a wallet first.</span>'; return; }
-  await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: `0x${Number(id).toString(16)}` }] });
+  const chainId = `0x${Number(id).toString(16)}`;
+  try {
+    await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
+  } catch (error) {
+    if (!isUnknownChain(error)) throw error;
+    // The wallet does not know this chain yet (for example Sepolia in Ambire). Ask it to add the
+    // chain, then switch. The wallet shows the request, and the owner approves or rejects it.
+    const chain = CHAINS[id];
+    await provider.request({
+      method: "wallet_addEthereumChain",
+      params: [{
+        chainId,
+        chainName: chain.name,
+        nativeCurrency: { name: chain.currency, symbol: chain.currency, decimals: 18 },
+        rpcUrls: [chain.rpc],
+        blockExplorerUrls: [chain.explorer],
+      }],
+    });
+    await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
+  }
   await refresh();
+}
+
+// EIP-1193 code 4902 means "unrecognized chain". Some wallets nest the code or give only a message.
+function isUnknownChain(error) {
+  const codes = [error?.code, error?.data?.originalError?.code, error?.cause?.code];
+  if (codes.includes(4902)) return true;
+  return /unrecognized chain|wallet_addEthereumChain|chain.*not (added|supported|found)/i.test(String(error?.message ?? ""));
 }
 
 async function walletChainId() {
