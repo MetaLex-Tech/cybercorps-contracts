@@ -1,6 +1,6 @@
 # Task: zkPassport condition presets (deploy script)
 
-- **Status:** Ready for review. Not deployed.
+- **Status:** Deployed on Sepolia, Ethereum and Base (owner, 2026-11-07); onchain values verified. Empty-list proof not yet tested.
 - **Updated:** 2026-11-07
 - **Owner:** Claude Code (desktop session), for the owner
 - **Collaborators / boundaries:** Deployment script only. No contract source change, no upgrade. The webapp side (preset picker, allowlist, empty-list support) is a later metalex-webapp PR after metalex-webapp #2340.
@@ -23,7 +23,7 @@
 | The deployer gets no role | By construction: the proxies use the existing BorgAuth (MetaLeX Safe, role 99, on Ethereum and Base) |
 | An empty list accepts a real sanctions-only proof | Not verified. The zkPassport SDK keeps `out: []` in the query and requires a nationality-exclusion proof when `out` is set, and the helper accepts an empty committed list that equals an empty stored list. Needs one mock-passport proof on Sepolia |
 | Browser deploy page `script/browser/deploy-zkpassport-condition-presets.html` rebuilds the same transactions from the chain and refuses if an address differs from the simulation | Verified 2026-11-07 on a local Sepolia fork (Anvil) with a stand-in wallet: both deployments mined, all read-back checks passed, reload shows both deployed with the buttons disabled |
-| Deployment on Sepolia, Ethereum and Base | Not done; the owner broadcasts with their own signer (forge script or the browser page) |
+| Deployment on Sepolia, Ethereum and Base | Verified 2026-11-07: all nine proxies deployed by the owner, read back with `cast` (see below) |
 
 Simulated addresses (CREATE2 through the default deployer): Ethereum and Base, embargo screen `0x524224874f2A22e720edbb223CDF487E8a782872`, sanctions screen `0xE277147aAc479e1730e5d6d0766F85078DEaF75f`. Sepolia: `0xd5dB86E9F699E5818D09d6eA2c2028d4b0a1A8cf`, `0x533e12655dC34fC7F96cD2882aFBcEb11FBA76f1`.
 
@@ -71,3 +71,17 @@ an Ambire-like wallet that returns a non-transaction id deployed all three
 presets with every read-back match, a decoy wallet holding `window.ethereum` got
 no request, the fallback and no-wallet cases work. Not tested with the real
 Ambire extension.
+
+## Deployment verification (2026-11-07)
+
+The owner deployed all three presets on Sepolia, Ethereum and Base. Read back
+with `cast` against public RPCs, all nine proxies are at the simulated
+addresses and match their chain's default condition in implementation,
+BorgAuth, domain, verifier and maximum validity (30 days). Scopes and lists:
+`embargo-screen` CUB,IRN,PRK; `sanctions-screen` empty; `non-us-embargo-screen`
+CUB,IRN,PRK,USA. Each list ends after its last entry (the next index reverts).
+A second `initialize` call reverts with `InvalidInitialization`. The proxy
+runtime code equals this repository's `ERC1967Proxy` build; it differs from the
+default condition's proxy only in the compiler metadata hash, not in executable
+code. Still open: a mock-passport proof against the Sepolia sanctions screen to
+confirm the empty list, then the metalex-webapp preset PR.
