@@ -4,14 +4,15 @@
 - **Updated:** 2026-11-07
 - **Owner:** Claude Code (desktop session), for the owner
 - **Collaborators / boundaries:** Deployment script only. No contract source change, no upgrade. The webapp side (preset picker, allowlist, empty-list support) is a later metalex-webapp PR after metalex-webapp #2340.
-- **Objective:** Two new `NonUSNationalityCondition` proxies on each chain, as additional options next to the default condition, which does not change:
+- **Objective:** Three new `NonUSNationalityCondition` proxies on each chain, as additional options next to the default condition, which does not change:
   - **Embargo screen:** excludes `CUB`, `IRN`, `PRK` (the country-wide embargoes that OFAC FAQ 10 names); U.S. investors allowed; sanctions-list check.
   - **Sanctions screen:** excludes no nationality; sanctions-list check only.
+  - **Non-U.S. + Cuba, Iran and North Korea exclusions:** excludes `CUB`, `IRN`, `PRK`, `USA`; sanctions-list check. Added at the owner's request on 2026-11-07; this is an additional choice, not a replacement default.
 - **Out of scope:** Changes to the default condition (owner, 2026-11-07: do not fix anything, only add options); Arbitrum, Base Sepolia and Robinhood Chain (no default condition).
 - **Canonical sources:** metalex-webapp `notes/ai/tasks/zkpassport-granular-conditions-discovery.md` (deployed conditions, audit findings); `script/deploy-zkpassport-condition-presets.s.sol`.
 - **Repository / branch:** cybercorps-contracts; base `develop` 8789081, branch `claude/zkpassport-condition-presets`
 - **Verified base / code head:** script commit f03e485
-- **PR / artifact:** not yet created
+- **PR / artifact:** https://github.com/MetaLex-Tech/cybercorps-contracts/pull/196
 
 ## Acceptance and current state
 
@@ -35,3 +36,25 @@ Simulated addresses (CREATE2 through the default deployer): Ethereum and Base, e
 ## Next action and handoff
 
 Owner review of the script. Then the owner deploys on Sepolia, a mock-passport sanctions-only proof confirms the empty list, and the owner deploys on Ethereum and Base. Then the metalex-webapp preset PR.
+
+## Third preset and labels (2026-11-07)
+
+The owner authorized a second Non-U.S. option alongside the existing default.
+The script and browser page add `NonUsEmbargoScreen` (`non-us-embargo-screen`),
+with sorted codes CUB, IRN, PRK, USA. The existing two presets keep their salts,
+scopes and addresses. The page spells out the excluded countries and whether
+U.S. nationalities are allowed. These labels describe a passport nationality
+check, not a determination of U.S.-person status or full sanctions compliance.
+
+Simulation evidence: dirty tree on 15e9a1e, changing only the deployment script,
+browser page and this record. Ethereum and Base completed the three-proxy
+simulation and read-back assertions, estimated gas 1,435,873. Sepolia script
+execution with read-back assertions passed; the first full simulation attempt
+failed at the public RPC's block-hash lookup, and the full retry subsequently passed.
+New predicted address: Ethereum/Base `0x4Cc1b51c9E317Dc915008F099dd2F1780b8bffD9`;
+Sepolia `0xc58EA50bC312f610Ec22d1Bf9B3c7Df24d810aA8`. These are simulation results,
+not deployment evidence. Empty-list proof acceptance remains unverified.
+
+The owner also requested a screening-choice side wizard in the webapp. That work
+is on `codex/zkpassport-screening-guide`; it must show undeployed presets as
+unavailable and must not change the offering exemption or existing default.

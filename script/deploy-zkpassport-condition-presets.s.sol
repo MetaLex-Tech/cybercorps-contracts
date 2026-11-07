@@ -17,6 +17,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 ///         Presets (lists must be sorted alphabetically: the zkPassport helper compares them in order):
 ///         - Embargo screen: excludes CUB, IRN, PRK (OFAC FAQ 10 country-wide embargoes); U.S. investors allowed.
 ///         - Sanctions screen: excludes no nationality; only the sanctions-list check applies.
+///         - Non-U.S. plus country exclusions: excludes CUB, IRN, PRK, USA; sanctions-list check applies.
 ///
 ///         Run without --broadcast to simulate. Broadcast with your own signer, for example:
 ///         forge script script/deploy-zkpassport-condition-presets.s.sol --rpc-url base --account <name> --broadcast
@@ -34,6 +35,7 @@ contract DeployZkPassportConditionPresetsScript is Script {
     struct Deployed {
         address embargoScreen;
         address sanctionsScreen;
+        address nonUsEmbargoScreen;
     }
 
     function run() public returns (Deployed memory deployed) {
@@ -46,13 +48,19 @@ contract DeployZkPassportConditionPresetsScript is Script {
         require(condition != address(0), "No default zkPassport condition on this chain");
     }
 
-    function presets() public pure returns (Preset[2] memory list) {
+    function presets() public pure returns (Preset[3] memory list) {
         string[] memory embargo = new string[](3);
         embargo[0] = "CUB";
         embargo[1] = "IRN";
         embargo[2] = "PRK";
         list[0] = Preset({name: "EmbargoScreen", scope: "embargo-screen", excludedCountries: embargo});
         list[1] = Preset({name: "SanctionsScreen", scope: "sanctions-screen", excludedCountries: new string[](0)});
+        string[] memory nonUsEmbargo = new string[](4);
+        nonUsEmbargo[0] = "CUB";
+        nonUsEmbargo[1] = "IRN";
+        nonUsEmbargo[2] = "PRK";
+        nonUsEmbargo[3] = "USA";
+        list[2] = Preset({name: "NonUsEmbargoScreen", scope: "non-us-embargo-screen", excludedCountries: nonUsEmbargo});
     }
 
     function runWithDefault(address defaultAddress) public returns (Deployed memory deployed) {
@@ -65,8 +73,8 @@ contract DeployZkPassportConditionPresetsScript is Script {
         address verifier = address(source.verifier());
         uint256 maxValidityPeriod = source.maxValidityPeriod();
 
-        Preset[2] memory list = presets();
-        address[2] memory addresses;
+        Preset[3] memory list = presets();
+        address[3] memory addresses;
 
         vm.startBroadcast();
         for (uint256 i = 0; i < list.length; i++) {
@@ -87,7 +95,8 @@ contract DeployZkPassportConditionPresetsScript is Script {
             _check(addresses[i], implementation, auth, domain, verifier, maxValidityPeriod, list[i]);
         }
 
-        deployed = Deployed({embargoScreen: addresses[0], sanctionsScreen: addresses[1]});
+        deployed =
+            Deployed({embargoScreen: addresses[0], sanctionsScreen: addresses[1], nonUsEmbargoScreen: addresses[2]});
 
         console2.log("==== Source (default condition) ====");
         console2.log("chainId:", block.chainid);
@@ -99,6 +108,7 @@ contract DeployZkPassportConditionPresetsScript is Script {
         console2.log("==== Deployed ====");
         console2.log("Embargo screen (CUB, IRN, PRK):", deployed.embargoScreen);
         console2.log("Sanctions screen (no nationality list):", deployed.sanctionsScreen);
+        console2.log("Non-U.S. plus country exclusions (CUB, IRN, PRK, USA):", deployed.nonUsEmbargoScreen);
     }
 
     function _check(

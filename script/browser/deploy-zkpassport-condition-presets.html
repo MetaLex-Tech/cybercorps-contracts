@@ -42,7 +42,7 @@
 <body>
 <main>
   <h1>zkPassport condition presets</h1>
-  <p class="muted">Deploys two additional <code>NonUSNationalityCondition</code> proxies with your browser wallet. The default condition does not change. This page holds no key: your wallet shows each transaction before you sign it.</p>
+  <p class="muted">Deploys three additional <code>NonUSNationalityCondition</code> proxies with your browser wallet. The default condition does not change. This page holds no key: your wallet shows each transaction before you sign it.</p>
 
   <div class="card">
     <h2>1. Wallet and chain</h2>
@@ -84,22 +84,24 @@ const PROXY_CREATION_CODE = "0x608060405261029d8038038061001481610168565b9283398
 // chain and refuses to deploy if they differ.
 const CHAINS = {
   1: { name: "Ethereum", defaultCondition: "0xe71fE689bFAA4939A760EDF7e07f44372a43932A",
-       expected: { EmbargoScreen: "0x524224874f2A22e720edbb223CDF487E8a782872", SanctionsScreen: "0xE277147aAc479e1730e5d6d0766F85078DEaF75f" },
+       expected: { EmbargoScreen: "0x524224874f2A22e720edbb223CDF487E8a782872", SanctionsScreen: "0xE277147aAc479e1730e5d6d0766F85078DEaF75f", NonUsEmbargoScreen: "0x4Cc1b51c9E317Dc915008F099dd2F1780b8bffD9" },
        explorer: "https://etherscan.io" },
   8453: { name: "Base", defaultCondition: "0xe71fE689bFAA4939A760EDF7e07f44372a43932A",
-       expected: { EmbargoScreen: "0x524224874f2A22e720edbb223CDF487E8a782872", SanctionsScreen: "0xE277147aAc479e1730e5d6d0766F85078DEaF75f" },
+       expected: { EmbargoScreen: "0x524224874f2A22e720edbb223CDF487E8a782872", SanctionsScreen: "0xE277147aAc479e1730e5d6d0766F85078DEaF75f", NonUsEmbargoScreen: "0x4Cc1b51c9E317Dc915008F099dd2F1780b8bffD9" },
        explorer: "https://basescan.org" },
   11155111: { name: "Sepolia", defaultCondition: "0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95",
-       expected: { EmbargoScreen: "0xd5dB86E9F699E5818D09d6eA2c2028d4b0a1A8cf", SanctionsScreen: "0x533e12655dC34fC7F96cD2882aFBcEb11FBA76f1" },
+       expected: { EmbargoScreen: "0xd5dB86E9F699E5818D09d6eA2c2028d4b0a1A8cf", SanctionsScreen: "0x533e12655dC34fC7F96cD2882aFBcEb11FBA76f1", NonUsEmbargoScreen: "0xc58EA50bC312f610Ec22d1Bf9B3c7Df24d810aA8" },
        explorer: "https://sepolia.etherscan.io" },
 };
 
 // Lists must be sorted: the zkPassport helper compares them element by element.
 const PRESETS = [
-  { name: "EmbargoScreen", title: "Embargo screen", scope: "embargo-screen", excludedCountries: ["CUB", "IRN", "PRK"],
+  { name: "EmbargoScreen", title: "Cuba, Iran and North Korea exclusions — U.S. allowed", scope: "embargo-screen", excludedCountries: ["CUB", "IRN", "PRK"],
     summary: "Excludes Cuban, Iranian and North Korean nationals. U.S. investors allowed. Sanctions-list check." },
-  { name: "SanctionsScreen", title: "Sanctions screen", scope: "sanctions-screen", excludedCountries: [],
+  { name: "SanctionsScreen", title: "Sanctions-list screening only — all nationalities allowed", scope: "sanctions-screen", excludedCountries: [],
     summary: "Excludes no nationality. Sanctions-list check only." },
+  { name: "NonUsEmbargoScreen", title: "Non-U.S. + Cuba, Iran and North Korea exclusions", scope: "non-us-embargo-screen", excludedCountries: ["CUB", "IRN", "PRK", "USA"],
+    summary: "Excludes U.S., Cuban, Iranian and North Korean passport nationalities. Includes sanctions-list screening. Additional option; the current default keeps its existing country list." },
 ];
 
 const conditionAbi = parseAbi([
