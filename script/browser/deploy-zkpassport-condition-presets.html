@@ -66,7 +66,7 @@
 
 <script type="module">
 import {
-  concat, createPublicClient, createWalletClient, custom, encodeAbiParameters,
+  BaseError, ContractFunctionRevertedError, concat, createPublicClient, createWalletClient, custom, encodeAbiParameters,
   encodeFunctionData, getContractAddress, isAddressEqual, keccak256, parseAbi, stringToHex,
 } from "https://cdn.jsdelivr.net/npm/viem@2.21.55/+esm";
 
@@ -216,7 +216,7 @@ async function renderPreset(chain, preset) {
   const deployButton = card.querySelector(".deploy");
   deployButton.disabled = deployed || !matches;
   if (!matches) log('<span class="bad">Deployment blocked: the default condition changed since the simulation. Ask for a new simulation.</span>');
-  card.querySelector(".verify").onclick = () => verify(tx.address, preset, log);
+  card.querySelector(".verify").onclick = () => verify(tx.address, preset, log).catch((error) => verifyFailed(error, log));
   deployButton.onclick = async () => {
     deployButton.disabled = true;
     try {
@@ -227,7 +227,7 @@ async function renderPreset(chain, preset) {
       if (receipt.status !== "success") { log('<span class="bad">The transaction reverted.</span>'); deployButton.disabled = false; return; }
       card.querySelector(".status").innerHTML = '<span class="ok">Deployed</span>';
       log(`<span class="ok">Mined in block ${receipt.blockNumber}.</span>`);
-      await verify(tx.address, preset, log);
+      await verify(tx.address, preset, log).catch((error) => verifyFailed(error, log));
     } catch (error) {
       log(`<span class="bad">${esc(error.shortMessage ?? error.message)}</span>`);
       deployButton.disabled = false;
@@ -248,9 +248,18 @@ async function verify(address, preset, log) {
     ["verifier", (await read("verifier")).toLowerCase(), source.verifier.toLowerCase()],
     ["maximum validity", String(await read("maxValidityPeriod")), String(source.maxValidityPeriod)],
   ];
+  // The public array getter has no length: the list ends at the first index that reverts.
+  // Any other failure (for example a failed RPC request) stops the check, so a network
+  // error can never shorten the list and report a false match.
   const countries = [];
-  for (let i = 0; i < 64; i++) {
-    try { countries.push(await read("excludedCountries", [BigInt(i)])); } catch { break; }
+  for (let i = 0; ; i++) {
+    if (i >= 64) throw new Error("the excluded country list has more than 64 entries");
+    try {
+      countries.push(await read("excludedCountries", [BigInt(i)]));
+    } catch (error) {
+      if (isRevert(error)) break;
+      throw error;
+    }
   }
   checks.push(["excluded nationalities", countries.join(",") || "(empty)", preset.excludedCountries.join(",") || "(empty)"]);
   let allOk = true;
@@ -260,6 +269,28 @@ async function verify(address, preset, log) {
     log(`${ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>'} ${esc(label)}: <span class="mono">${esc(actual)}</span>${ok ? "" : ` (expected ${esc(wanted)})`}`);
   }
   log(allOk ? '<span class="ok">All values match.</span>' : '<span class="bad">Some values do not match. Do not use this contract.</span>');
+}
+
+// A contract revert, not a transport failure. Wallets wrap a revert in different shapes, so this
+// also accepts the out-of-bounds Panic(0x32) data or an "execution reverted" message anywhere in
+// the error chain. A failed RPC request has neither.
+function isRevert(error) {
+  if (error instanceof BaseError
+    && error.walk((cause) => cause instanceof ContractFunctionRevertedError) instanceof ContractFunctionRevertedError) {
+    return true;
+  }
+  const parts = [];
+  for (let cause = error, depth = 0; cause && depth < 10; cause = cause.cause, depth++) {
+    parts.push(cause.message, cause.details, cause.shortMessage);
+    try { parts.push(JSON.stringify(cause.data)); } catch {}
+  }
+  const text = parts.filter(Boolean).join(" ").toLowerCase();
+  return text.includes("4e487b71") || text.includes("execution reverted");
+}
+
+function verifyFailed(error, log) {
+  const reason = String(error.shortMessage ?? error.message).replace(/\.+$/, "");
+  log(`<span class="bad">Check not complete: ${esc(reason)}. Run "Check onchain values" again.</span>`);
 }
 
 $("connect").onclick = () => connect().catch((error) => { $("wallet").innerHTML = `<span class="bad">${esc(error.shortMessage ?? error.message)}</span>`; });
