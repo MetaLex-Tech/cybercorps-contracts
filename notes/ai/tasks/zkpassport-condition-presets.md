@@ -58,3 +58,16 @@ not deployment evidence. Empty-list proof acceptance remains unverified.
 The owner also requested a screening-choice side wizard in the webapp. That work
 is on `codex/zkpassport-screening-guide`; it must show undeployed presets as
 unavailable and must not change the offering exemption or existing default.
+
+## Wallet picker for Ambire (2026-11-07)
+
+The owner asked for the browser page to connect to Ambire. The page now lists
+every wallet that announces itself through EIP-6963 and sends all requests to
+the wallet the owner picks; `window.ethereum` is only a fallback when no wallet
+announces. A deployment counts as done only when contract code is at the CREATE2
+address, because a smart-account wallet can return a hash before it mines.
+Verified headless on a local Sepolia fork with stand-in wallets (15/15 checks):
+an Ambire-like wallet that returns a non-transaction id deployed all three
+presets with every read-back match, a decoy wallet holding `window.ethereum` got
+no request, the fallback and no-wallet cases work. Not tested with the real
+Ambire extension.
