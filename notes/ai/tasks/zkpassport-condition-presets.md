@@ -21,7 +21,8 @@
 | Each proxy stores its own sorted list and scope, and the list ends after the last entry | Verified: same simulations |
 | The deployer gets no role | By construction: the proxies use the existing BorgAuth (MetaLeX Safe, role 99, on Ethereum and Base) |
 | An empty list accepts a real sanctions-only proof | Not verified. The zkPassport SDK keeps `out: []` in the query and requires a nationality-exclusion proof when `out` is set, and the helper accepts an empty committed list that equals an empty stored list. Needs one mock-passport proof on Sepolia |
-| Deployment on Sepolia, Ethereum and Base | Not done; the owner broadcasts with their own signer |
+| Browser deploy page `script/browser/deploy-zkpassport-condition-presets.html` rebuilds the same transactions from the chain and refuses if an address differs from the simulation | Verified 2026-11-07 on a local Sepolia fork (Anvil) with a stand-in wallet: both deployments mined, all read-back checks passed, reload shows both deployed with the buttons disabled |
+| Deployment on Sepolia, Ethereum and Base | Not done; the owner broadcasts with their own signer (forge script or the browser page) |
 
 Simulated addresses (CREATE2 through the default deployer): Ethereum and Base, embargo screen `0x524224874f2A22e720edbb223CDF487E8a782872`, sanctions screen `0xE277147aAc479e1730e5d6d0766F85078DEaF75f`. Sepolia: `0xd5dB86E9F699E5818D09d6eA2c2028d4b0a1A8cf`, `0x533e12655dC34fC7F96cD2882aFBcEb11FBA76f1`.
 

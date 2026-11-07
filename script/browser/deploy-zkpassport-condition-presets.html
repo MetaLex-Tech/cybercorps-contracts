@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zkPassport Condition Presets</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --line: #e2e2dc;
+    --accent: #2457d6; --ok: #1d7a3e; --warn: #9a6400; --bad: #b42318; --code: #f0f0eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --card: #1d1d1b; --text: #ececea; --muted: #a3a39d; --line: #33332f;
+      --accent: #7aa2ff; --ok: #5ccf86; --warn: #f0b44c; --bad: #ff7b72; --code: #262623;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 8px; }
+  p { margin: 6px 0; }
+  .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
+  code { background: var(--code); padding: 1px 4px; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  td, th { text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; width: 32%; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  ul.log { list-style: none; padding: 0; margin: 8px 0 0; }
+  ul.log li { padding: 2px 0; }
+  details summary { cursor: pointer; color: var(--muted); }
+  pre { background: var(--code); padding: 8px; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; max-height: 160px; overflow: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>zkPassport condition presets</h1>
+  <p class="muted">Deploys two additional <code>NonUSNationalityCondition</code> proxies with your browser wallet. The default condition does not change. This page holds no key: your wallet shows each transaction before you sign it.</p>
+
+  <div class="card">
+    <h2>1. Wallet and chain</h2>
+    <div class="row">
+      <button id="connect">Connect wallet</button>
+      <button class="secondary" data-chain="11155111">Switch to Sepolia</button>
+      <button class="secondary" data-chain="8453">Switch to Base</button>
+      <button class="secondary" data-chain="1">Switch to Ethereum</button>
+    </div>
+    <p id="wallet" class="muted">Not connected.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Default condition on this chain</h2>
+    <p class="muted">The new proxies copy these values. Only the country list and the scope differ.</p>
+    <div id="source"><p class="muted">Connect a wallet on Sepolia, Base or Ethereum.</p></div>
+  </div>
+
+  <div id="presets"></div>
+</main>
+
+<script type="module">
+import {
+  concat, createPublicClient, createWalletClient, custom, encodeAbiParameters,
+  encodeFunctionData, getContractAddress, isAddressEqual, keccak256, parseAbi, stringToHex,
+} from "https://cdn.jsdelivr.net/npm/viem@2.21.55/+esm";
+
+// Foundry's CREATE2 deployer. `new X{salt: s}(...)` in a broadcast sends `s ++ initCode` to it.
+const CREATE2_DEPLOYER = "0x4e59b44847b379578588920cA78FbF26c0B4956C";
+const IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+const SALT_PREFIX = "MetaLexCyberCorp.ZkpassportConditionPreset.V1.2.0.";
+
+// OpenZeppelin ERC1967Proxy creation code, compiled by cybercorps-contracts (solc 0.8.28, via-ir, 15 runs).
+// It is the same code that script/deploy-zkpassport-condition-presets.s.sol deploys.
+const PROXY_CREATION_CODE = "0x608060405261029d8038038061001481610168565b92833981016040828203126101645781516001600160a01b03811692909190838303610164576020810151906001600160401b03821161016457019281601f8501121561016457835161006e610069826101a1565b610168565b9481865260208601936020838301011161016457815f926020809301865e86010152823b15610152577f360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc80546001600160a01b031916821790557fbc7cd75a20ee27fd9adebab32041f755214dbc6bffa90cc0225b39da2e5c2d3b5f80a282511561013a575f8091610122945190845af43d15610132573d91610113610069846101a1565b9283523d5f602085013e6101bc565b505b6040516082908161021b8239f35b6060916101bc565b50505034156101245763b398979f60e01b5f5260045ffd5b634c9c8ce360e01b5f5260045260245ffd5b5f80fd5b6040519190601f01601f191682016001600160401b0381118382101761018d57604052565b634e487b7160e01b5f52604160045260245ffd5b6001600160401b03811161018d57601f01601f191660200190565b906101e057508051156101d157805190602001fd5b63d6bda27560e01b5f5260045ffd5b81511580610211575b6101f1575090565b639996b31560e01b5f9081526001600160a01b0391909116600452602490fd5b50803b156101e956fe60806040527f360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc545f9081906001600160a01b0316368280378136915af43d5f803e156048573d5ff35b3d5ffdfea26469706673582212209d915eefdeb4d280cf9bee38f8fe2f0b42a795a156f89e0a259f264fc9c92d2364736f6c634300081c0033";
+
+// The chain's default condition, from script/libs/DeploymentConstants.sol, and the addresses
+// that the forge simulation of 2026-11-07 produced. The page recomputes the addresses from the
+// chain and refuses to deploy if they differ.
+const CHAINS = {
+  1: { name: "Ethereum", defaultCondition: "0xe71fE689bFAA4939A760EDF7e07f44372a43932A",
+       expected: { EmbargoScreen: "0x524224874f2A22e720edbb223CDF487E8a782872", SanctionsScreen: "0xE277147aAc479e1730e5d6d0766F85078DEaF75f" },
+       explorer: "https://etherscan.io" },
+  8453: { name: "Base", defaultCondition: "0xe71fE689bFAA4939A760EDF7e07f44372a43932A",
+       expected: { EmbargoScreen: "0x524224874f2A22e720edbb223CDF487E8a782872", SanctionsScreen: "0xE277147aAc479e1730e5d6d0766F85078DEaF75f" },
+       explorer: "https://basescan.org" },
+  11155111: { name: "Sepolia", defaultCondition: "0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95",
+       expected: { EmbargoScreen: "0xd5dB86E9F699E5818D09d6eA2c2028d4b0a1A8cf", SanctionsScreen: "0x533e12655dC34fC7F96cD2882aFBcEb11FBA76f1" },
+       explorer: "https://sepolia.etherscan.io" },
+};
+
+// Lists must be sorted: the zkPassport helper compares them element by element.
+const PRESETS = [
+  { name: "EmbargoScreen", title: "Embargo screen", scope: "embargo-screen", excludedCountries: ["CUB", "IRN", "PRK"],
+    summary: "Excludes Cuban, Iranian and North Korean nationals. U.S. investors allowed. Sanctions-list check." },
+  { name: "SanctionsScreen", title: "Sanctions screen", scope: "sanctions-screen", excludedCountries: [],
+    summary: "Excludes no nationality. Sanctions-list check only." },
+];
+
+const conditionAbi = parseAbi([
+  "function initialize(address _auth, string _expectedDomain, string _expectedScope, address _verifier, uint256 _maxValidityPeriod, string[] _excludedCountries)",
+  "function AUTH() view returns (address)",
+  "function expectedDomain() view returns (string)",
+  "function expectedScope() view returns (string)",
+  "function verifier() view returns (address)",
+  "function maxValidityPeriod() view returns (uint256)",
+  "function excludedCountries(uint256) view returns (string)",
+]);
+
+const $ = (id) => document.getElementById(id);
+const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const link = (chain, address) => `<a class="mono" href="${chain.explorer}/address/${address}" target="_blank" rel="noopener">${address}</a>`;
+
+let wallet, publicClient, account, chainId, source;
+
+async function connect() {
+  if (!window.ethereum) {
+    $("wallet").innerHTML = '<span class="bad">No browser wallet found. Open this page from http://localhost in a browser with your wallet extension.</span>';
+    return;
+  }
+  [account] = await window.ethereum.request({ method: "eth_requestAccounts" });
+  wallet = createWalletClient({ transport: custom(window.ethereum) });
+  publicClient = createPublicClient({ transport: custom(window.ethereum) });
+  window.ethereum.on?.("chainChanged", () => refresh());
+  window.ethereum.on?.("accountsChanged", (accounts) => { account = accounts[0]; refresh(); });
+  await refresh();
+}
+
+async function switchChain(id) {
+  if (!window.ethereum) return;
+  await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: `0x${Number(id).toString(16)}` }] });
+  await refresh();
+}
+
+async function refresh() {
+  chainId = Number(await window.ethereum.request({ method: "eth_chainId" }));
+  const chain = CHAINS[chainId];
+  $("wallet").innerHTML = `Account <span class="mono">${esc(account ?? "none")}</span> on chain ${chainId}${chain ? ` (${chain.name})` : ' <span class="bad">— not supported here</span>'}.`;
+  source = undefined;
+  $("presets").innerHTML = "";
+  if (!chain) { $("source").innerHTML = '<p class="muted">Switch to Sepolia, Base or Ethereum.</p>'; return; }
+  try {
+    source = await readSource(chain.defaultCondition);
+  } catch (error) {
+    $("source").innerHTML = `<p class="bad">Could not read the default condition: ${esc(error.shortMessage ?? error.message)}</p>`;
+    return;
+  }
+  $("source").innerHTML = `<table>
+    <tr><th>Default condition</th><td>${link(chain, chain.defaultCondition)}</td></tr>
+    <tr><th>Implementation</th><td class="mono">${source.implementation}</td></tr>
+    <tr><th>BorgAuth (controls the new proxies)</th><td class="mono">${source.auth}</td></tr>
+    <tr><th>Domain</th><td class="mono">${esc(source.domain)}</td></tr>
+    <tr><th>Verifier</th><td class="mono">${source.verifier}</td></tr>
+    <tr><th>Maximum validity</th><td>${source.maxValidityPeriod} s (${Number(source.maxValidityPeriod) / 86400} days)</td></tr>
+  </table>`;
+  const deployerCode = await publicClient.getCode({ address: CREATE2_DEPLOYER });
+  if (!deployerCode || deployerCode === "0x") {
+    $("presets").innerHTML = '<div class="card bad">The CREATE2 deployer has no code on this chain.</div>';
+    return;
+  }
+  for (const preset of PRESETS) await renderPreset(chain, preset);
+}
+
+async function readSource(defaultCondition) {
+  const slot = await publicClient.getStorageAt({ address: defaultCondition, slot: IMPLEMENTATION_SLOT });
+  const implementation = `0x${slot.slice(-40)}`;
+  const read = (functionName) => publicClient.readContract({ address: defaultCondition, abi: conditionAbi, functionName });
+  const [auth, domain, verifier, maxValidityPeriod] = await Promise.all([
+    read("AUTH"), read("expectedDomain"), read("verifier"), read("maxValidityPeriod"),
+  ]);
+  const implementationCode = await publicClient.getCode({ address: implementation });
+  if (!implementationCode || implementationCode === "0x") throw new Error("the implementation has no code");
+  return { implementation, auth, domain, verifier, maxValidityPeriod };
+}
+
+function build(preset) {
+  const salt = keccak256(stringToHex(SALT_PREFIX + preset.name));
+  const initData = encodeFunctionData({
+    abi: conditionAbi,
+    functionName: "initialize",
+    args: [source.auth, source.domain, preset.scope, source.verifier, source.maxValidityPeriod, preset.excludedCountries],
+  });
+  const initCode = concat([PROXY_CREATION_CODE, encodeAbiParameters([{ type: "address" }, { type: "bytes" }], [source.implementation, initData])]);
+  const address = getContractAddress({ opcode: "CREATE2", from: CREATE2_DEPLOYER, salt, bytecode: initCode });
+  return { salt, initCode, address, data: concat([salt, initCode]) };
+}
+
+async function renderPreset(chain, preset) {
+  const tx = build(preset);
+  const expected = chain.expected[preset.name];
+  const matches = isAddressEqual(tx.address, expected);
+  const code = await publicClient.getCode({ address: tx.address });
+  const deployed = Boolean(code && code !== "0x");
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <h2>${esc(preset.title)}</h2>
+    <p>${esc(preset.summary)}</p>
+    <table>
+      <tr><th>Excluded nationalities</th><td class="mono">${preset.excludedCountries.length ? preset.excludedCountries.join(", ") : "none (empty list)"}</td></tr>
+      <tr><th>Scope</th><td class="mono">${preset.scope}</td></tr>
+      <tr><th>Address</th><td>${link(chain, tx.address)}
+        ${matches ? '<span class="ok">matches the forge simulation</span>' : `<span class="bad">differs from the forge simulation (${expected})</span>`}</td></tr>
+      <tr><th>Status</th><td class="status">${deployed ? '<span class="ok">Deployed</span>' : "Not deployed"}</td></tr>
+    </table>
+    <details><summary>Transaction data (to ${CREATE2_DEPLOYER})</summary><pre>${tx.data}</pre></details>
+    <div class="row" style="margin-top:10px"><button class="deploy">Deploy ${esc(preset.title)}</button><button class="secondary verify">Check onchain values</button></div>
+    <ul class="log"></ul>`;
+  $("presets").append(card);
+  const log = (html) => { const li = document.createElement("li"); li.innerHTML = html; card.querySelector(".log").append(li); };
+  const deployButton = card.querySelector(".deploy");
+  deployButton.disabled = deployed || !matches;
+  if (!matches) log('<span class="bad">Deployment blocked: the default condition changed since the simulation. Ask for a new simulation.</span>');
+  card.querySelector(".verify").onclick = () => verify(tx.address, preset, log);
+  deployButton.onclick = async () => {
+    deployButton.disabled = true;
+    try {
+      log("Waiting for your wallet…");
+      const hash = await wallet.sendTransaction({ account, chain: null, to: CREATE2_DEPLOYER, data: tx.data });
+      log(`Sent <a class="mono" href="${chain.explorer}/tx/${hash}" target="_blank" rel="noopener">${hash}</a>. Waiting for the receipt…`);
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") { log('<span class="bad">The transaction reverted.</span>'); deployButton.disabled = false; return; }
+      card.querySelector(".status").innerHTML = '<span class="ok">Deployed</span>';
+      log(`<span class="ok">Mined in block ${receipt.blockNumber}.</span>`);
+      await verify(tx.address, preset, log);
+    } catch (error) {
+      log(`<span class="bad">${esc(error.shortMessage ?? error.message)}</span>`);
+      deployButton.disabled = false;
+    }
+  };
+}
+
+async function verify(address, preset, log) {
+  const code = await publicClient.getCode({ address });
+  if (!code || code === "0x") { log('<span class="warn">No contract at this address yet.</span>'); return; }
+  const read = (functionName, args) => publicClient.readContract({ address, abi: conditionAbi, functionName, args });
+  const slot = await publicClient.getStorageAt({ address, slot: IMPLEMENTATION_SLOT });
+  const checks = [
+    ["implementation", `0x${slot.slice(-40)}`.toLowerCase(), source.implementation.toLowerCase()],
+    ["BorgAuth", (await read("AUTH")).toLowerCase(), source.auth.toLowerCase()],
+    ["domain", await read("expectedDomain"), source.domain],
+    ["scope", await read("expectedScope"), preset.scope],
+    ["verifier", (await read("verifier")).toLowerCase(), source.verifier.toLowerCase()],
+    ["maximum validity", String(await read("maxValidityPeriod")), String(source.maxValidityPeriod)],
+  ];
+  const countries = [];
+  for (let i = 0; i < 64; i++) {
+    try { countries.push(await read("excludedCountries", [BigInt(i)])); } catch { break; }
+  }
+  checks.push(["excluded nationalities", countries.join(",") || "(empty)", preset.excludedCountries.join(",") || "(empty)"]);
+  let allOk = true;
+  for (const [label, actual, wanted] of checks) {
+    const ok = actual === wanted;
+    allOk &&= ok;
+    log(`${ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>'} ${esc(label)}: <span class="mono">${esc(actual)}</span>${ok ? "" : ` (expected ${esc(wanted)})`}`);
+  }
+  log(allOk ? '<span class="ok">All values match.</span>' : '<span class="bad">Some values do not match. Do not use this contract.</span>');
+}
+
+$("connect").onclick = () => connect().catch((error) => { $("wallet").innerHTML = `<span class="bad">${esc(error.shortMessage ?? error.message)}</span>`; });
+for (const button of document.querySelectorAll("[data-chain]")) {
+  button.onclick = () => switchChain(button.dataset.chain).catch((error) => { $("wallet").innerHTML = `<span class="bad">${esc(error.shortMessage ?? error.message)}</span>`; });
+}
+</script>
+</body>
+</html>
