@@ -92,6 +92,7 @@ A dev-mode request against the Sepolia sanctions screen was prepared (empty
 `out` list, non-strict sanctions, bound to Anvil account 0 for an `eth_call`
 of `submitProof`). The owner chose not to run the mock-passport scan and to
 test in production instead. The empty-list path is therefore still unverified
-end to end. Recommended guard for the metalex-webapp preset PR: keep the
-sanctions screen unavailable to founders until one real-passport proof passes
-`submitProof` on Base or Ethereum.
+end to end. Owner decision (2026-11-07): ship the sanctions
+screen open in the metalex-webapp preset PR, with no availability gate before a
+real-passport proof passes. If the empty list fails in production, founder
+overrides remain the fallback for affected investors.
