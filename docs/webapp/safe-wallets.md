@@ -8,6 +8,8 @@ Use a Safe account through the **Ambire or Rabby browser extension**. Select the
 
 A Safe account is a smart contract wallet. Its owner wallets approve for it according to its signature threshold. For example, a **3-of-5 Safe requires three owner approvals** to produce a valid Safe signature. Connecting one owner wallet alone does not authenticate the Safe.
 
+> **Verification status:** These instructions describe the supported application flow and the wallets’ documented Safe features. A complete MetaLeX Safe login using the currently installed Ambire and Rabby extensions has not yet been verified end to end. Wallet-picker availability and extension screens can vary. If an option is missing or signing stalls, contact support with the extension name, version and error.
+
 ## Choose the result you need
 
 | Your situation | Flow |
@@ -32,7 +34,7 @@ Importing the Safe adds a way to interact with the existing account; it does not
 
 Use Rabby's **Safe** account option to add the existing Safe on the intended network, then select that Safe account when connecting to MetaLeX. Account-import labels vary by extension version. Make the owner wallet you will sign with available through Rabby's supported signer connection.
 
-The account exposed to MetaLeX must be the **Safe address**, not just the EOA that owns it. A watch-only account is insufficient. Rabby maintains separate pending Safe message and transaction queues; the approval interface can differ from Ambire's. Consult [Rabby's official support](https://support.rabby.io/) for extension-specific setup. The MetaLeX permissions and threshold checks below are the same regardless of which extension supplies the signature.
+The account exposed to MetaLeX must be the **Safe address**, not just the EOA that owns it. A watch-only account is insufficient. Rabby maintains separate pending Safe message and transaction queues; the approval interface can differ from Ambire's. Consult [Rabby's official support](https://support.rabby.io/) for extension-specific setup. MetaLeX applies the same permissions and threshold checks to signatures it receives from either extension; this does not establish that every extension version completes the login flow.
 
 MetaLeX never asks for your seed phrase or private key. Keep hardware-wallet keys on the device; use its supported connection.
 

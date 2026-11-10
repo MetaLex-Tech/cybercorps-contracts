@@ -110,7 +110,8 @@ and **My formation orders**. From cyberSign and LeXcheX, **Profile** and
 authorization message with it. Selecting a connected wallet that isn't
 linked yet (**Authorize** on its Wallet Settings row) shows your profile and
 the wallets already on it, and **Link wallet** asks for the same signature.
-The signature is single-use. Ordinary wallets and contract wallets have
+The ordinary-wallet linking request expires after five minutes and its signature
+is single-use. Ordinary wallets and contract wallets have
 separate authorization checks. A Safe can be linked when its required owners
 approve a valid Safe message on the selected network. Safe application access
 lasts up to one hour from preparation of its authorization request and is
