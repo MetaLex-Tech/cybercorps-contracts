@@ -28,26 +28,28 @@ import {console2} from "forge-std/Test.sol";
 /// Its sibling is `SecondaryTradeEquityGasLimit.t.sol`. Everything except the printer is identical in
 /// both, so the difference between them is the cost of the security's own data.
 ///
-/// Each test asserts gas <= 90% of the EIP-7825 block gas limit (16,777,216).
+/// Each test checks the Glamsterdam limits in `GasBudget`: execution gas <= 90% of the EIP-7825 cap, and
+/// total gas <= 90% of the expected block gas limit (200,000,000).
 ///
-/// Measured baseline. Per-lot data: 288-byte payload, 4 legends totalling 867 bytes. The series payload
-/// is 1,632 bytes and is written once for the printer, so it never appears in a settlement.
-/// | pathway           | postOffer | acceptOffer | finalize  | finalize % of limit |
-/// |-------------------|-----------|-------------|-----------|---------------------|
-/// | Rule 144          | 1,367,369 | 1,967,579   | 2,614,164 | 15.6%               |
-/// | Section 4(a)(7)   | 1,367,369 | 1,938,429   | 2,654,014 | 15.8%               |
-/// | Section 4(a)(1/2) | 1,367,369 | 1,898,638   | 2,635,223 | 15.7%               |
-/// | Regulation S      | 1,367,369 | 1,996,747   | 2,803,817 | 16.7%               |
+/// Measured baseline, Glamsterdam gas. Per-lot data: 288-byte payload, 4 legends totalling 867 bytes. The
+/// series payload is 1,632 bytes and is written once for the printer, so it never appears in a settlement.
+/// | pathway           | postOffer | acceptOffer | finalize   | finalize execution | finalize % of limit |
+/// |-------------------|-----------|-------------|------------|--------------------|---------------------|
+/// | Rule 144          | 5,104,622 | 7,129,177   | 10,457,326 | 2,422,287          | 5.2%                |
+/// | Section 4(a)(7)   | 5,104,634 | 7,083,104   | 10,487,065 | 2,452,026          | 5.2%                |
+/// | Section 4(a)(1/2) | 5,104,622 | 7,052,215   | 10,434,164 | 2,399,125          | 5.2%                |
+/// | Regulation S      | 5,104,634 | 7,493,547   | 11,234,698 | 2,514,219          | 5.6%                |
 ///
-/// Posting pinned to Rule 144 costs 1,560,968.
+/// Posting pinned to Rule 144 costs 5,393,087.
 ///
-/// Settlement costs about one fifth of the equity case: 2.80 M against 14.82 M in the worst pathway.
+/// Settlement costs about one sixth of the equity case: 11.23 M against 65.37 M in the worst pathway.
 /// Posting and acceptance are within a few percent of each other, because neither depends much on payload
 /// size. The whole difference is at finalize, where the acquirer's lot is minted.
 ///
 /// Note when reading the tacked-anchor tests: they call the tacking setter during the test, which warms
 /// the certificate's storage slots. Their posting figures are therefore lower than the plain ones, and
 /// that difference is warm-slot accounting, not a real saving.
+/// forge-config: default.isolate = true
 contract SecondaryTradeFundInterestGasLimitTest is SecondaryTradeGasBase {
     FundInterestExtensionV3 internal fundExtension;
 

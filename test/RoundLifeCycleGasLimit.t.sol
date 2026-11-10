@@ -14,20 +14,19 @@ import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/pro
 import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
 import {RealWorldShareCert, REAL_WORLD_IPFS_URI} from "./libs/RealWorldShareCert.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
+import {GasBudget} from "./libs/GasBudget.sol";
 
 /// @notice Gas regression guard for the three most gas-intensive RoundManager operations.
-///         Parameters emulate real mainnet transactions:
-///           createRound — block 25202917 (13,003,119 gas, 77.5% of block limit)
-///           submitEOI   — block 25203564 (1,485,634 gas)
-///           allocate    — block 25215285 (13,859,243 gas, 82.6% of block limit)
-///         Each test asserts gas ≤ EIP-7825 block gas limit (16,777,216).
+///         Parameters copy real mainnet transactions:
+///           createRound — block 25202917 (13,003,119 gas before Glamsterdam)
+///           submitEOI   — block 25203564 (1,485,634 gas before Glamsterdam)
+///           allocate    — block 25215285 (13,859,243 gas before Glamsterdam)
+///         Each test checks the Glamsterdam limits in GasBudget.
 ///         The cert payload (six legends + ~13 KB ShareCertData) lives in RealWorldShareCert, shared with
 ///         the secondary-trade guard so both measure the same real-world data.
+/// forge-config: default.isolate = true
 contract RoundLifeCycleGasLimitTest is Test {
     using RoundLib for Round;
-
-    uint256 constant EIP7825_GAS_LIMIT     = 16_777_216;
-    uint256 constant GAS_LIMIT_90_PCT      = 15_099_494; // 90% of EIP-7825 block gas limit
 
     // ── Template ─────────────────────────────────────────────────────────────
     bytes32 constant TEMPLATE_ID = bytes32("metalex_cyberstock_reg_d_v1_0");
@@ -211,7 +210,7 @@ contract RoundLifeCycleGasLimitTest is Test {
 
     // ── tests ─────────────────────────────────────────────────────────────────
 
-    /// @notice Emulates createRound tx (block 25202917, 13,003,119 gas).
+    /// @notice Emulates createRound tx (block 25202917, 13,003,119 gas before Glamsterdam).
     ///         1 cert printer with 6 full legends + ShareCertData extension (13 KB).
     function test_gasLimit_createRound() public {
         (address corp,,,, address rmAddr) = CyberCorpHelper.deployCorp(
@@ -224,11 +223,10 @@ contract RoundLifeCycleGasLimitTest is Test {
         RoundManager(rmAddr).createRound(round, certData);
         uint256 gasUsed = gasStart - gasleft();
 
-        console2.log("createRound gas:", gasUsed);
-        assertLe(gasUsed, GAS_LIMIT_90_PCT, "createRound exceeds 90% of EIP-7825 block gas limit");
+        GasBudget.check("createRound gas:", gasUsed);
     }
 
-    /// @notice Emulates submitEOI tx (block 25203564, 1,485,634 gas).
+    /// @notice Emulates submitEOI tx (block 25203564, 1,485,634 gas before Glamsterdam).
     ///         Investor submits on a FounderApproved round with real-world field values.
     function test_gasLimit_submitEOI() public {
         (address corp,,,, address rmAddr) = CyberCorpHelper.deployCorp(
@@ -254,11 +252,10 @@ contract RoundLifeCycleGasLimitTest is Test {
         );
         uint256 gasUsed = gasStart - gasleft();
 
-        console2.log("submitEOI gas:", gasUsed);
-        assertLe(gasUsed, GAS_LIMIT_90_PCT, "submitEOI exceeds 90% of EIP-7825 block gas limit");
+        GasBudget.check("submitEOI gas:", gasUsed);
     }
 
-    /// @notice Emulates allocate tx (block 25215285, 13,859,243 gas).
+    /// @notice Emulates allocate tx (block 25215285, 13,859,243 gas before Glamsterdam).
     ///         Officer allocates full EOI amount; cert stores the 13 KB ShareCertData.
     function test_gasLimit_allocate() public {
         (address corp,,,, address rmAddr) = CyberCorpHelper.deployCorp(
@@ -287,7 +284,6 @@ contract RoundLifeCycleGasLimitTest is Test {
         RoundManager(rmAddr).allocate(agreementId, EOI_AMOUNT);
         uint256 gasUsed = gasStart - gasleft();
 
-        console2.log("allocate gas:", gasUsed);
-        assertLe(gasUsed, GAS_LIMIT_90_PCT, "allocate exceeds 90% of EIP-7825 block gas limit");
+        GasBudget.check("allocate gas:", gasUsed);
     }
 }

@@ -207,6 +207,7 @@ contract IssuanceManagerVaultEpochTest is VaultEpochHarness {
     /// The vault has exactly one participant in every case; only the printer's totalSupply() differs. Before
     /// the epoch reset this walked every token id and grew ~4,933 gas per certificate, crossing a 30M block
     /// at ~6,100 certificates. It must now be flat.
+    /// forge-config: default.isolate = true
     function test_VaultEmptyingConversion_CostIsFlatInTotalSupply() public {
         uint256 gasAt8 = _measureFinalConversionGas(8);
         uint256 gasAt128 = _measureFinalConversionGas(128);
@@ -223,6 +224,7 @@ contract IssuanceManagerVaultEpochTest is VaultEpochHarness {
 
     /// Emptying the vault and converting all but a dust amount now cost about the same: neither path walks
     /// the token supply, so a holder is no longer pushed into leaving dust behind to keep the call cheap.
+    /// forge-config: default.isolate = true
     function test_FullAndPartialConversion_CostAboutTheSame() public {
         (ILedgerEntryToken cert, uint256 scripBalance) = _setUpVaultWithSupply(256);
 

@@ -39,6 +39,7 @@ import {
     PostOfferParams
 } from "../../src/storage/SecondaryTradeStorage.sol";
 import {SecondaryConditionIntegrationBase} from "../conditions/secondary/SecondaryConditionIntegration.sol";
+import {GasBudget} from "./GasBudget.sol";
 import {console2} from "forge-std/Test.sol";
 
 /// @title  SecondaryTradeGasBase - shared scenario for the two secondary-trade gas baselines
@@ -62,9 +63,6 @@ import {console2} from "forge-std/Test.sol";
 /// evaluates the fund-specific layer alone. Acceptance and finalization evaluate that layer plus the
 /// elected pathway's, and finalization adds the closing set.
 abstract contract SecondaryTradeGasBase is SecondaryConditionIntegrationBase {
-    uint256 internal constant EIP7825_GAS_LIMIT = 16_777_216;
-    uint256 internal constant GAS_LIMIT_90_PCT = 15_099_494; // 90% of EIP-7825 block gas limit
-
     // ── Trade parameters, identical in both baselines ─────────────────────────
     uint256 internal constant POSITION_UNITS = 76_297;
     uint256 internal constant PRICE_PER_UNIT = 26_213_301_000; // 9-decimal payment token
@@ -548,9 +546,9 @@ abstract contract SecondaryTradeGasBase is SecondaryConditionIntegrationBase {
         gasUsed = gasStart - gasleft();
     }
 
-    function _assertUnderLimit(string memory step, uint256 gasUsed) internal pure {
-        console2.log(step, gasUsed);
-        assertLe(gasUsed, GAS_LIMIT_90_PCT, string.concat(step, " exceeds 90% of EIP-7825 block gas limit"));
+    /// @dev Call right after the measured step, so the last call is that step.
+    function _assertUnderLimit(string memory step, uint256 gasUsed) internal view {
+        GasBudget.check(step, gasUsed);
     }
 
     /// @dev Posts unpinned, elects `pathway` at acceptance, waits out the settlement delay, finalizes.

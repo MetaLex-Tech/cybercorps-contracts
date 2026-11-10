@@ -26,25 +26,24 @@ import {SecondaryTradeGasBase} from "./libs/SecondaryTradeGasBase.sol";
 /// Its sibling is `SecondaryTradeFundInterestGasLimit.t.sol`. Everything except the printer is identical
 /// in both, so the difference between them is the cost of the security's own data.
 ///
-/// Each test asserts gas <= 90% of the EIP-7825 block gas limit (16,777,216).
+/// Each test checks the Glamsterdam limits in `GasBudget`: execution gas <= 90% of the EIP-7825 cap, and
+/// total gas <= 90% of the expected block gas limit (200,000,000).
 ///
-/// Measured baseline. Per-lot data: 13,984-byte payload, 6 legends totalling 3,321 bytes.
-/// | pathway           | postOffer | acceptOffer | finalize   | finalize % of limit |
-/// |-------------------|-----------|-------------|------------|---------------------|
-/// | Rule 144          | 1,367,360 | 2,917,260   | 13,871,313 | 82.7%               |
-/// | Section 4(a)(7)   | 1,367,360 | 1,938,423   | 14,673,476 | 87.5%               |
-/// | Section 4(a)(1/2) | 1,367,360 | 1,898,632   | 14,654,685 | 87.3%               |
-/// | Regulation S      | 1,367,360 | 1,996,741   | 14,823,302 | 88.4%               |
+/// Measured baseline, Glamsterdam gas. Per-lot data: 13,984-byte payload, 6 legends totalling 3,321 bytes.
+/// | pathway           | postOffer | acceptOffer | finalize   | finalize execution | finalize % of limit |
+/// |-------------------|-----------|-------------|------------|--------------------|---------------------|
+/// | Rule 144          | 5,104,626 | 8,078,859   | 64,687,512 | 9,748,793          | 32.3%               |
+/// | Section 4(a)(7)   | 5,104,638 | 7,083,111   | 64,623,564 | 9,684,845          | 32.3%               |
+/// | Section 4(a)(1/2) | 5,104,626 | 7,052,210   | 64,570,663 | 9,631,944          | 32.3%               |
+/// | Regulation S      | 5,104,638 | 7,493,530   | 65,371,220 | 9,747,061          | 32.7%               |
 ///
-/// Posting pinned to Rule 144 costs 2,510,512, because `HoldingPeriodCondition` reads the whole payload
+/// Posting pinned to Rule 144 costs 6,342,643, because `HoldingPeriodCondition` reads the whole payload
 /// into memory before it tests the extension type. An equity printer is not a fund printer, so the
-/// condition then discards the payload. That load also warms the slots the mint later writes, which is
-/// why the Rule 144 finalize is the cheapest of the four.
+/// condition then discards the payload. That load also warms the slots the mint later writes.
 ///
-/// Finalize has roughly 276,000 gas of margin under the assertion. A new condition, or a larger payload,
-/// can exceed the limit. That risk applies to these legacy printers only.
 /// `SecondaryTradeEquityLayeredGasLimitTest` below is the same trade with the same data, split into
 /// layers, and it is the shape a new issuance must use.
+/// forge-config: default.isolate = true
 contract SecondaryTradeEquityGasLimitTest is SecondaryTradeGasBase {
     ShareExtension internal shareExtension;
 
@@ -108,16 +107,18 @@ contract SecondaryTradeEquityGasLimitTest is SecondaryTradeGasBase {
 /// Settlement copies the seller's per-cert payload into a fresh Ledger Entry Token for the buyer, so the
 /// size of that payload sets the cost of finalization.
 ///
-/// Measured. Per-lot data: 928-byte payload against 13,984 legacy, the same 6 legends of 3,321 bytes.
-/// | pathway           | postOffer | acceptOffer | finalize  | finalize % of limit | finalize vs legacy |
-/// |-------------------|-----------|-------------|-----------|---------------------|--------------------|
-/// | Rule 144          | 1,367,363 | 2,008,968   | 4,813,376 | 28.7%               | -65.3%             |
-/// | Section 4(a)(7)   | 1,367,363 | 1,938,425   | 4,891,833 | 29.2%               | -66.7%             |
-/// | Section 4(a)(1/2) | 1,367,363 | 1,898,634   | 4,873,042 | 29.0%               | -66.7%             |
-/// | Regulation S      | 1,367,363 | 1,996,742   | 5,041,638 | 30.1%               | -66.0%             |
+/// Measured, Glamsterdam gas. Per-lot data: 928-byte payload against 13,984 legacy, the same 6 legends of
+/// 3,321 bytes.
+/// | pathway           | postOffer | acceptOffer | finalize   | finalize execution | finalize % of limit | finalize vs legacy |
+/// |-------------------|-----------|-------------|------------|--------------------|---------------------|--------------------|
+/// | Rule 144          | 5,104,628 | 7,170,565   | 20,608,884 | 3,761,045          | 10.3%               | -68.1%             |
+/// | Section 4(a)(7)   | 5,104,640 | 7,083,111   | 20,637,230 | 3,789,391          | 10.3%               | -68.1%             |
+/// | Section 4(a)(1/2) | 5,104,628 | 7,052,210   | 20,584,329 | 3,736,490          | 10.3%               | -68.1%             |
+/// | Regulation S      | 5,104,640 | 7,493,531   | 21,384,865 | 3,851,586          | 10.7%               | -67.3%             |
 ///
 /// Unpinned posting does not read the payload, so postOffer is unchanged. Posting pinned to Rule 144
-/// does read it, and costs 1,602,352 against 2,510,512.
+/// does read it, and costs 5,434,481 against 6,342,643.
+/// forge-config: default.isolate = true
 contract SecondaryTradeEquityLayeredGasLimitTest is SecondaryTradeEquityGasLimitTest {
     function _extensionImplementation() internal override returns (address) {
         return address(new ShareExtensionV3());

@@ -5,6 +5,11 @@ libs = ["lib", "dependencies"]
 optimizer = true
 optimizer_runs = 15
 via_ir = true
+# Tests and script simulations charge Glamsterdam gas prices (EIP-8037, EIP-8038).
+# Contracts compile the same, because solc 0.8.28 builds for prague at most.
+evm_version = "amsterdam"
+# Gas budget for each test. Under Glamsterdam, new state costs much more gas, so setup that deploys many contracts needs more than the default.
+gas_limit = 10_000_000_000
 # Run all calls of a test function in one transaction, not one transaction for each call.
 # The deploy-script tests need this. A fork test runs a full upgrade script, which uses more gas than one block holds.
 # Other script tests check that the deployer's nonce does not change. A transaction for each call changes it.
