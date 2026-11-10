@@ -78,6 +78,25 @@ Ambire submits messages through the Safe API so approvals can be continued in Sa
 
 If Messages is empty too, verify the Safe address and network, refresh, and inspect the extension for an error. An empty transaction queue alone is expected for an offchain login message. If the message never appears, report the extension/version and error to support; creating more login attempts can leave several different nonces awaiting signatures. Do not combine approvals from different requests.
 
+## Safe says Confirmed, but MetaLeX still says Authorize
+
+**Confirmed in Safe means the message has its required owner signatures. It does not by itself mean MetaLeX has received and accepted them.**
+
+There are two distinct messages when linking a previously unlinked Safe:
+
+| Message text | What it completes |
+| --- | --- |
+| "By signing, you are proving you own this wallet and logging in" | Privy's login or wallet-link step. |
+| "Authorize this wallet for your current MetaLeX profile" | MetaLeX's profile authorization, with the selected chain and access expiry. |
+
+The extension must return the completed signature to the originating browser request. MetaLeX then submits it for verification and proceeds to the next step. The app does not independently retrieve a confirmed message from Safe's Messages tab.
+
+If the Safe still appears under **Unlinked Wallets** with status **connected**, Privy has not recorded the link in the displayed app state. If it instead appears under **Linked Wallets** as **login linked · profile unverified**, the Privy step has completed but MetaLeX authorization still needs to finish.
+
+Return to the original Ambire/Rabby signing request and check its status or error. For the **Authorize** flow, keep MetaLeX on Wallet Settings with its authorization dialog open until the extension returns the signature. Closing that dialog or leaving the page cancels the pending request. Do not repeatedly click **Authorize** while an earlier request is pending: each retry can create a new message with a different nonce, and the existing approvals do not apply to that new message.
+
+If the original request was closed, interrupted or expired, the current flow may require a fresh attempt. A confirmed message is not automatically resumed after a reload. Contact support with the extension/version, which of the two messages was approved, and any error shown before collecting another set of signatures. Never send a seed phrase, private key or session token.
+
 ## Expiry, renewal and revocation
 
 Normal Safe application authorization lasts **up to one hour from preparation of the authorization request**, on the listed chain. MetaLeX checks that the contract still accepts its signature when access is used. A Safe configuration change may invalidate it; failed verification refuses access.
