@@ -33,9 +33,11 @@ This proves control without attaching another wallet. A mismatched wallet
 is refused. Neither kind of claim accepts legal documents or proves your
 legal identity.
 
-Links expire after 14 days, and a company can revoke or regenerate one at
-any time, so ask for a fresh link if yours has lapsed. Claim only an
-invitation you expected.
+Invite and welcome links expire after the duration selected by the company
+(1–365 whole days, with a 14-day default). Use the expiry shown on the claim
+page for your link. A company can revoke or regenerate a link at any time,
+so ask for a fresh link if yours has lapsed. Claim only an invitation you
+expected.
 
 ## My holdings
 
