@@ -110,11 +110,16 @@ and **My formation orders**. From cyberSign and LeXcheX, **Profile** and
 authorization message with it. Selecting a connected wallet that isn't
 linked yet (**Authorize** on its Wallet Settings row) shows your profile and
 the wallets already on it, and **Link wallet** asks for the same signature.
-The signature is free and single-use, and it expires after a few minutes. A
-wallet already authorized for your profile isn't asked again. The wallet
-itself has to sign, so a smart-contract wallet such as a Safe can't be
-linked this way; to act for a Safe, use
-[delegation](#delegate-signing-for-a-safe).
+The ordinary-wallet linking request expires after five minutes and its signature
+is single-use. Ordinary wallets and contract wallets have
+separate authorization checks. A Safe can be linked when its required owners
+approve a valid Safe message on the selected network. Safe application access
+lasts up to one hour from preparation of its authorization request and is
+limited to that chain; reconnect it there and select **Authorize** after expiry.
+
+For the full Ambire/Rabby connection steps, where co-signers find the message,
+and how this differs from agreement delegation, see
+[Safe wallets: login and profile access](safe-wallets.md).
 
 A wallet that belongs to a different MetaLeX profile can't be linked to
 yours, and profiles are never merged. If your sign-in has picked up such a

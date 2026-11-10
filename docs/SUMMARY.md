@@ -19,6 +19,7 @@
 * [ACE](webapp/ace.md)
 * [For holders: your securities](webapp/holders.md)
 * [Your profile](webapp/profile.md)
+* [Safe wallets: login and profile access](webapp/safe-wallets.md)
 * [LeXcheX](webapp/lexchex.md)
 * [Launchpads: MetaDAO and Umia](webapp/launchpads.md)
 

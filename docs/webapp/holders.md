@@ -17,6 +17,11 @@ records:
   your LETs and your scrip, with the actions on them (transfer, scripify,
   conversion back from scrip).
 
+If your holdings are recorded under a Safe, use the **Safe address** for
+holder authentication. [Safe wallets: login and profile access](safe-wallets.md)
+explains the Ambire/Rabby connection, required owner approvals, and the case
+where your profile login wallet is not a Safe signer.
+
 ## Claim a stakeholder invitation
 
 Companies onboard stakeholders with a private link, and the app never
