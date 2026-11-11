@@ -102,7 +102,7 @@ LET:
 | --- | --- |
 | TXE tests for invariants 1-14 | Verified 2026-11-10: BorgAuthV2 35, LET 42 (lifecycle 30, possession 6, upgrade 6) |
 | Workspace `aztec test` passes (registry test helper passes the new constructor argument) | Verified 2026-11-11: 101 of 101 |
-| `let-e2e.ts` on a local network | Blocked: the local network on port 8090 has no block after 2026-11-03 02:43 UTC, so the node rejects each tx ("Invalid expiration timestamp"). Needs a new local network |
+| `let-e2e.ts` on a local network | Verified 2026-11-11: 24 of 24 checks, `LOG_LEVEL=warn AZTEC_NODE_URL=http://localhost:8090 node let-e2e.ts`, on the local network on port 8090 |
 | Webapp follows the new formulas and the frozen artifact | Not in this task: handoff to the webapp task |
 | Independent review | Not started. The Aztec PoC has no independent review |
 | Deployment | Not in scope |
@@ -123,8 +123,16 @@ LET:
   BorgAuthV2 storage change moves the class id of the registry and of the LET with no code change. `deploy.ts` would
   then schedule a registry upgrade with the same code. A small interface-only crate (as aztec-nr does for
   `ContractInstanceRegistry`) would remove this coupling. Not done: needs a decision.
-- `deploy.ts` reads the current build. On a shared network it would now schedule a BorgAuthV2 upgrade (case L) and a
-  registry upgrade. Do not run it before the independent review.
+- Decision (user, 2026-11-11): the `MetaLex-v1.0.0` environment and the v1 artifacts are deprecated and removed.
+  The next environment is `MetaLex-v1.1.0`, deployed from `res/BorgAuthV2.v1.1.0.json` and
+  `res/CyberAgreementRegistry.v1.1.0.json` (new auth, new registry, no data migration: all old data is test data).
+  On a testnet, `deploy.ts` also runs the sub-script `deploy-test-corp-auth.ts`: a company BorgAuthV2 with the
+  deployer as root and an initial officer, with the accounts in `TEST_CORP_OFFICERS` (env), recorded as
+  `testCorpAuth`. Local run of `MetaLex-v1.1.0-dev.0` passed
+  on 2026-11-11. Testnet `MetaLex-v1.1.0` deployed on 2026-11-11 at the user's request (before the independent
+  review): auth `0x2f46…17be`, registry `0x0bc3…1339`. Test corp auth redeployed with the web app officer
+  `0x1f6432…5bee24` (wallet `0x5ff4…9abf`) as a second initial member: `0x1114…bc2a` (the first, `0x22ab…5e47`, is
+  unused). See the README validation table.
 
 ## Webapp handoff (not done here)
 
@@ -134,5 +142,6 @@ BorgAuthV2 deploy per company, and a new frozen artifact `LedgerEntryToken.v1.js
 
 ## Next action and handoff
 
-Run `let-e2e.ts` on a new local network. Then the user decides on the commit, the BorgAuthV2 interface crate, and
-the webapp handoff. Later: test open item 8 (old-class BorgAuthV2 `initial_root`).
+Set the web app `REGISTRY_ADDRESS` to the `MetaLex-v1.1.0` testnet registry, use `testCorpAuth` as the auth of the
+test LET class, and run `bun run artifacts` in `webapp/`. The independent review is still open. The user decides on the commit, the
+BorgAuthV2 interface crate, and the webapp handoff. Later: test open item 8 (old-class BorgAuthV2 `initial_root`).

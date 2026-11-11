@@ -969,14 +969,16 @@ Work or decisions that are still to do.
   the initializerless Schnorr account.
 - The upgrades with `BorgAuthV2` (`contracts/borg_auth_v2/src/main.nr`). It ports part of the EVM `BorgAuthV2`
   (branch `feat/borgauth-upgrade`, not merged): the root, the two-step root transfer, `APPROVE_UPGRADE` (root
-  only), and the officer role with `ISSUE_SECURITIES` and `ADMINISTER_CERTIFICATES` for the LedgerEntryToken. The
-  testnet instance still runs the v1 class, which has the root only. To stop all upgrades of BorgAuthV2, upgrade it
+  only), and the officer role with `ISSUE_SECURITIES` and `ADMINISTER_CERTIFICATES` for the LedgerEntryToken. To
+  stop all upgrades of BorgAuthV2, upgrade it
   to a class that has no `update_to`. The registry has no initializer, and its `immutables_hash` is `poseidon2([auth])`.
   `update_to(auth, new_class_id)` checks `auth` against that hash, asks the auth contract for `APPROVE_UPGRADE`,
   and calls `ContractInstanceRegistry.update`. The default upgrade delay stays, so registry txs keep the default
-  expiration. `scripts/deploy.ts` deploys and upgrades both contracts, and `poc.ts` uses the recorded registry.
-  The deployer stays the root on every network. The testnet has the `MetaLex-v1.0.0` environment (2026-11-04),
-  and the webapp uses its registry. Still to do: an independent review.
+  expiration. `scripts/deploy.ts` deploys and upgrades both contracts, and on a testnet a test corp auth. `poc.ts`
+  uses the recorded registry. The deployer stays the root on every network. The `MetaLex-v1.0.0` testnet
+  environment (2026-11-04) is deprecated. The testnet has the `MetaLex-v1.1.0` environment (2026-11-11). The webapp
+  still points to the old registry.
+  Still to do: an independent review.
   Each new version must keep the nullifier formulas, and each PXE must register the new artifact. Upgradeability
   weakens path 1 of the auditor proof (the code can change); path 2 is not affected.
 - TODO: test a real upgrade. The TXE tests (`contracts/borg_auth_v2/src/test.nr`,

@@ -2249,7 +2249,7 @@
           "start": 3376
         }
       ],
-      "path": "/Users/detoo/Dropbox/works/MetaLex/projects/cybercorps-contracts/aztec/contracts/agreement_registry/src/agreement.nr",
+      "path": "/Users/detoo/Dropbox/works/MetaLex/projects/cc-aztec/aztec/contracts/agreement_registry/src/agreement.nr",
       "source": "use aztec::{\n    authwit::auth::compute_inner_authwit_hash,\n    protocol::{\n        address::AztecAddress,\n        hash::{poseidon2_hash_bytes, poseidon2_hash_with_separator},\n        traits::{Deserialize, Serialize, ToField},\n    },\n};\n\n// Each party adds one authwit check to the finalize tx.\npub global MAX_PARTIES: u32 = 4;\n\nglobal TERMS_COMMITMENT_DOMAIN: Field = comptime { poseidon2_hash_bytes(\"metalex.agreement.terms.v1\".as_bytes()) };\nglobal AGREEMENT_ID_DOMAIN: Field = comptime { poseidon2_hash_bytes(\"metalex.agreement.id.v1\".as_bytes()) };\nglobal CONSENT_DOMAIN: Field = comptime { poseidon2_hash_bytes(\"metalex.agreement.consent.v1\".as_bytes()) };\nglobal FINALIZED_DOMAIN: Field = comptime { poseidon2_hash_bytes(\"metalex.agreement.finalized.v1\".as_bytes()) };\nglobal PADDING_DOMAIN: Field = comptime { poseidon2_hash_bytes(\"metalex.agreement.padding.v1\".as_bytes()) };\n\n/// The onchain view of an agreement. The legal text and the field values stay offchain.\n///\n/// `terms_commitment` hides the terms. Only holders of the salt can open it, so the settler can finalize without\n/// the terms.\n#[derive(Eq, Serialize, Deserialize)]\npub struct Agreement {\n    pub terms_commitment: Field,\n    // Zero means no expiry.\n    pub expiry: u64,\n    pub party_count: u32,\n    // Slots at and after `party_count` must be zero.\n    pub parties: [AztecAddress; MAX_PARTIES],\n}\n\nimpl Agreement {\n    pub fn id(self) -> Field {\n        let mut inputs = [0; 3 + MAX_PARTIES];\n        inputs[0] = self.terms_commitment;\n        inputs[1] = self.expiry as Field;\n        inputs[2] = self.party_count as Field;\n        for i in 0..MAX_PARTIES {\n            inputs[3 + i] = self.parties[i].to_field();\n        }\n        poseidon2_hash_with_separator(inputs, AGREEMENT_ID_DOMAIN)\n    }\n\n    /// One agreement has one valid encoding, so one set of terms gives one id.\n    pub fn assert_valid(self) {\n        assert(self.terms_commitment != 0, \"terms commitment is zero\");\n        assert((self.party_count >= 1) & (self.party_count <= MAX_PARTIES), \"invalid party count\");\n        for i in 0..MAX_PARTIES {\n            if i < self.party_count {\n                assert(!self.parties[i].is_zero(), \"party is zero address\");\n                for j in 0..i {\n                    assert(self.parties[i] != self.parties[j], \"duplicate party\");\n                }\n            } else {\n                assert(self.parties[i].is_zero(), \"unused party slot is not zero\");\n            }\n        }\n    }\n}\n\n/// Binds the terms to the salt. `terms_hash` is the hash of the canonical document.\npub fn terms_commitment(terms_hash: Field, salt: Field) -> Field {\n    poseidon2_hash_with_separator([terms_hash, salt], TERMS_COMMITMENT_DOMAIN)\n}\n\n/// The message that `signer` authorizes to consent to `agreement_id`. It holds the signer, so each party signs a\n/// different message.\npub fn consent_hash(agreement_id: Field, signer: AztecAddress) -> Field {\n    compute_inner_authwit_hash([CONSENT_DOMAIN, agreement_id, signer.to_field()])\n}\n\n/// The nullifier that records that all parties signed `agreement_id`.\npub fn finalized_nullifier(agreement_id: Field) -> Field {\n    poseidon2_hash_with_separator([agreement_id], FINALIZED_DOMAIN)\n}\n\n/// Fills an unused party slot, so the tx has the same nullifier count for each party count.\npub fn padding_nullifier(agreement_id: Field, slot: u32) -> Field {\n    poseidon2_hash_with_separator([agreement_id, slot as Field], PADDING_DOMAIN)\n}\n"
     },
     "54": {
@@ -2283,7 +2283,7 @@
           "start": 4490
         }
       ],
-      "path": "/Users/detoo/Dropbox/works/MetaLex/projects/cybercorps-contracts/aztec/contracts/agreement_registry/src/main.nr",
+      "path": "/Users/detoo/Dropbox/works/MetaLex/projects/cc-aztec/aztec/contracts/agreement_registry/src/main.nr",
       "source": "pub mod agreement;\nmod test;\n\nuse aztec::macros::aztec;\n\n/// A private agreement registry. The chain keeps no agreement data. It keeps nullifiers only, and these do not show\n/// the agreement, the parties or the terms.\n///\n/// The registry has no initializer. Its immutables hash is `poseidon2([auth])`, where `auth` is the `BorgAuthV2`\n/// contract that controls upgrades.\n#[aztec]\npub contract CyberAgreementRegistry {\n    use aztec::{\n        authwit::auth::{assert_inner_hash_valid_authwit, compute_authwit_nullifier},\n        macros::functions::external,\n        oracle::{\n            get_contract_instance::get_contract_instance_immutables_hash_avm, nullifiers::check_nullifier_exists,\n        },\n        protocol::{\n            address::AztecAddress, constants::CONTRACT_INSTANCE_REGISTRY_CONTRACT_ADDRESS,\n            contract_class_id::ContractClassId, hash::poseidon2_hash, traits::ToField,\n        },\n    };\n    use borg_auth_v2_contract::BorgAuthV2;\n    use contract_instance_registry::ContractInstanceRegistry;\n    use crate::agreement::{\n        Agreement, consent_hash, finalized_nullifier, MAX_PARTIES, padding_nullifier, terms_commitment,\n    };\n\n    /// Records that all parties signed `agreement`.\n    ///\n    /// Each party signs offchain with a private authwit for `consent_hash(agreement_id, party)`. Any account can then\n    /// send this call, for example the MetaLeX settler.\n    #[external(\"private\")]\n    fn finalize(agreement: Agreement) -> Field {\n        agreement.assert_valid();\n\n        // The network drops the tx if it is not mined before the expiry.\n        if agreement.expiry != 0 {\n            self.context.set_expiration_timestamp(agreement.expiry);\n        }\n\n        let agreement_id = agreement.id();\n        // Each slot adds one nullifier, so the tx does not show the party count.\n        for i in 0..MAX_PARTIES {\n            if i < agreement.party_count {\n                let party = agreement.parties[i];\n                assert_inner_hash_valid_authwit(self.context, party, consent_hash(agreement_id, party));\n            } else {\n                self.context.push_nullifier_unsafe(padding_nullifier(agreement_id, i));\n            }\n        }\n        // A second finalize gives the same nullifier, so the tx fails.\n        self.context.push_nullifier_unsafe(finalized_nullifier(agreement_id));\n\n        agreement_id\n    }\n\n    /// Withdraws the consent of the caller to `agreement`. After this, `finalize` of `agreement` fails, because it\n    /// emits the same authwit nullifier.\n    ///\n    /// The withdraw tx must be mined before the finalize tx. If both are pending, the sequencer decides the order.\n    #[external(\"private\")]\n    fn withdraw_consent(agreement: Agreement) {\n        let signer = self.msg_sender();\n        self.context.push_nullifier_unsafe(compute_authwit_nullifier(signer, consent_hash(agreement.id(), signer)));\n    }\n\n    /// Schedules an upgrade of this registry to `new_class_id`. Only an account with `APPROVE_UPGRADE` in `auth` can\n    /// call it. The upgrade\n    /// takes effect after the default upgrade delay.\n    ///\n    /// Each new class must keep the nullifier formulas. Otherwise the finalized agreements and the withdrawn consents\n    /// stop being valid.\n    #[external(\"public\")]\n    fn update_to(auth: AztecAddress, new_class_id: ContractClassId) {\n        assert_eq(\n            poseidon2_hash([auth.to_field()]),\n            get_contract_instance_immutables_hash_avm(self.address).unwrap(),\n            \"auth does not match the immutables hash\",\n        );\n        self.view(BorgAuthV2::at(auth).require_permission(BorgAuthV2::APPROVE_UPGRADE, self.msg_sender()));\n        self.call(ContractInstanceRegistry::at(CONTRACT_INSTANCE_REGISTRY_CONTRACT_ADDRESS).update(new_class_id));\n    }\n\n    #[external(\"utility\")]\n    unconstrained fn terms_commitment_of(terms_hash: Field, salt: Field) -> Field {\n        terms_commitment(terms_hash, salt)\n    }\n\n    #[external(\"utility\")]\n    unconstrained fn agreement_id(agreement: Agreement) -> Field {\n        agreement.id()\n    }\n\n    /// The message hash that `signer` authorizes to sign `agreement`.\n    #[external(\"utility\")]\n    unconstrained fn consent_hash_of(agreement: Agreement, signer: AztecAddress) -> Field {\n        consent_hash(agreement.id(), signer)\n    }\n\n    /// Asks the node if the agreement is finalized. The node sees the queried nullifier.\n    #[external(\"utility\")]\n    unconstrained fn is_finalized(agreement: Agreement) -> bool {\n        check_nullifier_exists(finalized_nullifier(agreement.id()))\n    }\n}\n"
     },
     "61": {
@@ -10563,6 +10563,54 @@
                               "kind": "integer",
                               "sign": false,
                               "value": "0000000000000000000000000000000000000000000000000000000000000002"
+                            }
+                          }
+                        ],
+                        "kind": "struct"
+                      }
+                    },
+                    {
+                      "name": "initial_root",
+                      "value": {
+                        "fields": [
+                          {
+                            "name": "slot",
+                            "value": {
+                              "kind": "integer",
+                              "sign": false,
+                              "value": "0000000000000000000000000000000000000000000000000000000000000003"
+                            }
+                          }
+                        ],
+                        "kind": "struct"
+                      }
+                    },
+                    {
+                      "name": "roles",
+                      "value": {
+                        "fields": [
+                          {
+                            "name": "slot",
+                            "value": {
+                              "kind": "integer",
+                              "sign": false,
+                              "value": "0000000000000000000000000000000000000000000000000000000000000005"
+                            }
+                          }
+                        ],
+                        "kind": "struct"
+                      }
+                    },
+                    {
+                      "name": "initial_members",
+                      "value": {
+                        "fields": [
+                          {
+                            "name": "slot",
+                            "value": {
+                              "kind": "integer",
+                              "sign": false,
+                              "value": "0000000000000000000000000000000000000000000000000000000000000006"
                             }
                           }
                         ],

@@ -6,18 +6,27 @@ record of what each network has. The chain is the record of each upgrade, and gi
 
 The scripts are in `scripts/`:
 
-- `deploy.ts` deploys, publishes and upgrades BorgAuthV2 and the registry. A run sends only the txs that the chain needs. A second run on the
-  same chain state sends no tx. `--dry-run` sends no tx.
+- `deploy.ts` deploys, publishes and upgrades the MetaLeX BorgAuthV2. It then runs the sub-script
+  `deploy-registry.ts`, and on a testnet the sub-script `deploy-test-corp-auth.ts`. A run sends only the txs that
+  the chain needs. A second run on the same chain state sends no tx. `--dry-run` sends no tx.
+- `deploy-registry.ts` deploys, publishes and upgrades the registry. It can run alone, with the same env and flags
+  as `deploy.ts`. It writes only the `registry` field of the record.
+- `deploy-test-corp-auth.ts` deploys, publishes and upgrades a company BorgAuthV2 for web app tests. The deployer is
+  its root and an initial officer. `TEST_CORP_OFFICERS` in the env adds the web app officers as initial officers.
+  All officers can issue at once. It refuses a network that `deployments.ts` does
+  not mark as a testnet. It can run alone, with the same env and flags as `deploy.ts`.
+- `deploy-lib.ts` holds the steps that the scripts share.
 - `deployments.ts` records the contracts of each network and environment, the original artifacts and their class
   ids. `deploy.ts` writes the deployment records after a run that is not a dry run.
-- `res/*.vN.json` are the original artifacts. They are frozen copies of the compiler output. See
+- `res/*.v<version>.json` are the original artifacts. The version is the version of the label, for example
+  `v1.1.0` for `MetaLex-v1.1.0`. They are frozen copies of the compiler output. See
   [New original artifacts](#new-original-artifacts).
 
 ## Concepts
 
 - **Environment.** `DEPLOY_SALT_LABEL` selects the environment. All contracts of one environment use the salt of
-  its label. Production uses `MetaLex-v1.0.0`. Staging and development use a semver pre-release, for example
-  `MetaLex-v1.0.0-dev.0`. A new label gives a new set of contracts at new addresses.
+  its label. Production uses `MetaLex-v1.1.0`. Staging and development use a semver pre-release, for example
+  `MetaLex-v1.1.0-dev.0`. A new label gives a new set of contracts at new addresses.
 - **Same addresses on each network.** An address depends on the class that the contract was first deployed with,
   the salt, the constructor arguments and the immutables hash. So each network deploys the original artifacts in
   `res/`, and then upgrades each contract to the current build.
@@ -28,9 +37,11 @@ The scripts are in `scripts/`:
 - **Upgrade delay.** `update_to` schedules the new class. The new class takes effect after the default delay of
   1 day (`DEFAULT_UPDATE_DELAY` = 86400 s). Until then, the contract runs its old class.
 - **Upgradeable.** Both contracts can be upgraded. BorgAuthV2 ports part of the EVM `BorgAuthV2`: the root,
-  `APPROVE_UPGRADE`, and the officer role. The testnet instance runs the v1 class (root only). The current build
-  adds the officer role, so `deploy.ts` schedules a BorgAuthV2 upgrade (case L). Do not run it on a shared network
-  before the independent review. See [BorgAuthV2 upgrade](#borgauthv2-upgrade).
+  `APPROVE_UPGRADE`, and the officer role. See [BorgAuthV2 upgrade](#borgauthv2-upgrade).
+- **Test corp auth.** On a testnet, the record also has `testCorpAuth`: a company BorgAuthV2 whose root is the deployer.
+  Its initial officers are the deployer and the accounts in `TEST_CORP_OFFICERS`. The web app uses it as the auth of
+  a test LedgerEntryToken class. Its address depends on the deployer, the label and `TEST_CORP_OFFICERS`. To change
+  the officers, change `TEST_CORP_OFFICERS`, remove `testCorpAuth` from the record, and run the sub-script again.
 
 ## Before each run
 
@@ -94,9 +105,7 @@ Use this procedure when the BorgAuthV2 code changes, for example to add the role
 
 1. Make sure that the new code keeps the storage variables `root_authority`, `pending_root_authority`,
    `initial_root`, `roles` and `initial_members` in this order, and adds new variables after them. A change of order
-   makes the new class read the wrong values. An instance that upgrades from v1 has no `initial_root` and no
-   `initial_members`, so it has no officer, and each private permission check fails. After the role delay, a root transfer gives the new root `APPROVE_UPGRADE` and `set_officer`
-   gives the officer permissions.
+   makes the new class read the wrong values.
 2. Make sure that the new code keeps `require_permission(Field, AztecAddress)` and the value of `APPROVE_UPGRADE`.
    The registry calls it. Without it, the registry cannot be upgraded again.
 3. Make sure that the new code keeps `update_to`, unless you want to stop all upgrades (see below).
@@ -121,18 +130,18 @@ the BorgAuthV2 constructor or the registry immutables hash. It always gives new 
 2. Copy the artifacts to the next version number. Never change a recorded artifact:
 
    ```shell
-   cp target/borg_auth_v2_contract-BorgAuthV2.json scripts/res/BorgAuthV2.v2.json
-   cp target/agreement_registry_contract-CyberAgreementRegistry.json scripts/res/CyberAgreementRegistry.v2.json
+   cp target/borg_auth_v2_contract-BorgAuthV2.json scripts/res/BorgAuthV2.v1.2.0.json
+   cp target/agreement_registry_contract-CyberAgreementRegistry.json scripts/res/CyberAgreementRegistry.v1.2.0.json
    ```
 
 3. Get the class id of each new file. In `scripts/`, run this command once for each file:
 
    ```shell
-   node --input-type=module -e "import { readFileSync } from 'node:fs'; import { loadContractArtifact } from '@aztec-labs/aztec.js/abi'; import { getContractClassFromArtifact } from '@aztec-labs/aztec.js/contracts'; const a = loadContractArtifact(JSON.parse(readFileSync(process.argv[1], 'utf8'))); console.log((await getContractClassFromArtifact(a)).id.toString());" res/BorgAuthV2.v2.json
+   node --input-type=module -e "import { readFileSync } from 'node:fs'; import { loadContractArtifact } from '@aztec-labs/aztec.js/abi'; import { getContractClassFromArtifact } from '@aztec-labs/aztec.js/contracts'; const a = loadContractArtifact(JSON.parse(readFileSync(process.argv[1], 'utf8'))); console.log((await getContractClassFromArtifact(a)).id.toString());" res/BorgAuthV2.v1.2.0.json
    ```
 
 4. Set the new paths and class ids in `ORIGINAL_ARTIFACTS` in `deployments.ts`.
-5. Pick a new label, for example `MetaLex-v2.0.0`, and do the steps in [New environment](#new-environment) on each
+5. Use the label of the same version, for example `MetaLex-v1.2.0`, and do the steps in [New environment](#new-environment) on each
    network.
 6. Keep the old files in `res/`. They are the record of the old environments.
 
@@ -156,23 +165,24 @@ Each check fails the run before it sends a tx.
 
 ### Steps
 
-`[publish class]` and `[upgrade]` run once for each contract: first BorgAuthV2, then the registry.
+`[deploy]`, `[publish class]` and `[upgrade]` run for one contract, then for the next: first BorgAuthV2, then the
+registry, then the test corp auth on a testnet.
 
 | Step              | Chain state                                                   | Run                                                          | Dry                                |
 |-------------------|---------------------------------------------------------------|--------------------------------------------------------------|------------------------------------|
 | `[deploy]`        | The instance exists                                           | ⚫️ already exists                                            | ⚫️ already exists                  |
-| BorgAuthV2        | The instance is missing                                       | 🟢 deployed new from v1 (the tx also publishes the v1 class) | 🟢 would deploy new                |
+| BorgAuthV2        | The instance is missing                                       | 🟢 deployed new from the original class (the tx publishes it if the network does not have it) | 🟢 would deploy new |
 | `[deploy]`        | The instance exists                                           | ⚫️ already exists                                            | ⚫️ already exists                  |
-| registry          | The instance is missing                                       | 🟢 deployed new from v1 (the tx also publishes the v1 class) | 🟢 would deploy new                |
+| registry          | The instance is missing                                       | 🟢 deployed new from the original class (the tx publishes it if the network does not have it) | 🟢 would deploy new |
 | `[publish class]` | The current build is published                                | ⚫️ already published                                         | ⚫️ already published               |
-|                   | Missing, the contract is missing, the build is v1             | ⚫️ already published (by the deploy)                         | ⚫️ published by the deploy          |
+|                   | Missing, the contract is missing, the build is the original   | ⚫️ already published (by the deploy)                         | ⚫️ published by the deploy          |
 |                   | Missing in any other case                                     | 🟢 published                                                 | 🟢 would publish                   |
 | `[upgrade]`       | The contract runs the build, no upgrade is scheduled          | ⚫️ already runs the current build                            | ⚫️ already runs the current build  |
 |                   | An upgrade to the build is scheduled                          | ⚫️ already scheduled, takes effect at T                      | ⚫️ already scheduled               |
 |                   | The contract runs another class, no upgrade is scheduled      | 🟢 scheduled old -> build, takes effect at T                 | 🟢 would schedule                  |
 |                   | An upgrade to another class is scheduled                      | 🟢 scheduled again, the build replaces the pending class     | 🟢 would schedule                  |
-|                   | The contract is missing, the build is v1                      | Not reached: the deploy step deploys it                      | ⚫️ the deploy runs the build       |
-|                   | The contract is missing, the build is not v1                  | Not reached: the deploy step deploys it                      | 🟢 would schedule v1 -> build      |
+|                   | The contract is missing, the build is the original            | Not reached: the deploy step deploys it                      | ⚫️ the deploy runs the build       |
+|                   | The contract is missing, the build is not the original        | Not reached: the deploy step deploys it                      | 🟢 would schedule original -> build |
 |                   | The deployer is not the root (after a root transfer)          | Error `BorgAuthV2: permission denied`, no tx                 | 🟢 would schedule (no root check)  |
 | `[record]`        | The record is the same                                        | ⚫️ unchanged                                                 | ⚫️ unchanged                       |
 |                   | The record is missing or has missing fields                  | 🟢 wrote                                                     | 🟢 would write                     |
@@ -181,8 +191,8 @@ Each check fails the run before it sends a tx.
 
 | #  | Scenario                                                          | Run                                                                                   | Tested on the local network |
 |----|-------------------------------------------------------------------|---------------------------------------------------------------------------------------|-----------------------------|
-| A  | New environment, the build is v1                                  | 🟢 deploy x2, ⚫️ publish, ⚫️ upgrade, 🟢 record                                     | Yes                         |
-| B  | New environment, the build is not v1 (after a registry upgrade)   | 🟢 deploy x2, 🟢 publish, 🟢 schedule, 🟢 record. The registry runs v1 until T        | Dry run only                |
+| A  | New environment, the build is the original                        | 🟢 deploy x2, ⚫️ publish, ⚫️ upgrade, 🟢 record. On a testnet also 🟢 deploy test corp auth | Yes (2026-11-11, local network) |
+| B  | New environment, the build is not the original (after an upgrade) | 🟢 deploy x2, 🟢 publish, 🟢 schedule, 🟢 record. The registry runs the original class until T | Dry run only |
 | C  | Run again, no change                                              | ⚫️ on each step, no tx                                                               | Yes                         |
 | D  | The registry code changed                                         | ⚫️ deploy x2, 🟢 publish, 🟢 schedule, ⚫️ record                                     | Yes                         |
 | L  | The BorgAuthV2 code changed                                       | ⚫️ deploy x2, 🟢 publish, 🟢 schedule BorgAuthV2, ⚫️ registry, ⚫️ record              | Yes                         |
