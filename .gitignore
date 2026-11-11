@@ -33,3 +33,6 @@ __pycache__/
 
 # Generated local SAFO fork inputs (unsigned release evidence stays with operator).
 /test/res/safo-rollout-*.local.json
+
+# Public rehearsal dates retained locally across simulation/broadcast retries.
+/script/res/robinhood-cent-safe-*.local.json

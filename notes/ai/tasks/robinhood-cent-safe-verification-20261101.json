@@ -1,0 +1,60 @@
+{
+  "observedAtUtc": "2026-11-01T22:48:51.721082+00:00",
+  "chainId": 4663,
+  "forkBlock": 103742143,
+  "forkBlockHash": "0xde55d55a12c05a6311f61a36baae03f5ab8a9424fbfe1d6ad03fa457cef23691",
+  "sourceRevision": "f90978dbf333abb19a20696fd879cb8aad55bdc4",
+  "testedTree": "local rehearsal script/test additions; src unchanged",
+  "exitCode": 0,
+  "passed": [
+    "test_BudgetAndValuationPersistAndChangesRefused()",
+    "test_DefaultBudgetRoundingAndCeiling()",
+    "test_DefaultDatesPersistAcrossRetryAndExpiry()",
+    "test_DifferentSaltFileCreatesDeliberateNewWindow()",
+    "test_ExplicitDatesPreservedAndChangesRefused()",
+    "test_ExpiredConfigRefuses()",
+    "test_InsufficientSwapBudgetRefusesBeforeSpending()",
+    "test_LiveQuotedDefaultBudgetFundsSafe()",
+    "test_LoadConfigWithoutPublicSettingsAndFundSafe()",
+    "test_PlatformPayoutCollisionRefusesBeforeSwap()",
+    "test_RealSwapToOneCentSafeAndIdempotentRerun()",
+    "test_ResumeAfterSwapDoesNotSwapAgain()",
+    "test_SameSignerRefuses()",
+    "test_UnfundedInvestorRefuses()",
+    "test_UnsupportedTemplateRefusesBeforeSwap()",
+    "test_WrongChainRefuses()"
+  ],
+  "failed": [],
+  "skipped": [],
+  "liveTransactionsSubmitted": false,
+  "realKeysUsed": false,
+  "usdgMockFunding": false,
+  "metadataValidated": true,
+  "swapEthSpentWei": [
+    "4434813571845"
+  ],
+  "command": [
+    "forge",
+    "test",
+    "--match-path",
+    "test/RobinhoodCentSafeScriptTest.t.sol",
+    "--offline",
+    "--use",
+    "0.8.28",
+    "--evm-version",
+    "cancun",
+    "--threads",
+    "1",
+    "-R",
+    "@openzeppelin/contracts/=dependencies/openzeppelin-contracts/contracts/",
+    "-R",
+    "@openzeppelin/contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/",
+    "-vvv"
+  ],
+  "sha256": {
+    "script/robinhood-cent-safe.s.sol": "ea56b898115d93e1d90752d5b6f1281513465dc6d47f1f4fcdbdc8d9d2e75dba",
+    "test/RobinhoodCentSafeScriptTest.t.sol": "6b26ec525b5034f726e573cf40ea95632952d140ae4320e75d9b7439b4632b1a",
+    "script/test-robinhood-cent-safe.py": "d5bf26c6b81305c1201cdfc1d3ad7a8edc2e92dbecdf4b5d188529a382978975",
+    "out/robinhood-cent-safe/fork.log": "6877f680e53c85e9b507762fd03e7cc535c526d5b7d6d0c876494ed9f5328615"
+  }
+}

@@ -19,7 +19,11 @@ have one. Do not assume another checkout's files are present here.
 
 ## Shared tasks
 
-- [One-cent on-chain SAFE rehearsal preparation](tasks/robinhood-onchain-safe-rehearsal-20261030.md): operator-run ETH→0.01 USDG→company/SAFE round→investor LET script and PowerShell wrapper ready. 9 real-route fork checks pass with generated signers and ETH funding only; distinct officer/investor environment keys required. No live transactions or operator-key use by this task.
+- [Robinhood four-chain address parity](tasks/robinhood-address-parity-20261101.md): November 1 live snapshots confirm all 13 critical auth/proxy addresses, 16 shared extension addresses and 19 current secondary-condition addresses match on Robinhood, Base, Ethereum and Arbitrum; 68/68 sampled wiring checks pass. Implementation addresses/payment settings differ; checklist historical/Base-only exceptions documented. Read-only checker, public evidence and interactive canvas prepared; no transactions.
+
+- [Robinhood LET verification](tasks/robinhood-let-verification-20261101.md): November 1 shared LET implementation `0x487Ed0…7920` and storage library exactly match freshly recompiled checkout code, including metadata; factory reference confirmed. User explicitly approved source publication; both Etherscan submissions passed and follow-up lookup confirms exact verified source. No blockchain transactions sent.
+
+- [One-cent on-chain SAFE rehearsal preparation](tasks/robinhood-onchain-safe-rehearsal-20261030.md): November 1 simplification makes all `SAFE_*` settings optional, with saved dates/budget, live quote +5% cap and clear test metadata. Existing RPC/officer key plus distinct investor key suffice. 16 configuration/real-route fork checks pass, including default-only company/SAFE round/investor LET delivery. No live transactions or operator-key use by this task.
 
 - [Robinhood live-template acceptance](tasks/robinhood-live-template-acceptance-20261030.md): fresh block 102202000 confirms 86/86 exact deployed templates and unchanged legacy ID 1. All 3 fixture-free lifecycle checks pass: company/SAFE round, signed USDG investment, allocation/finalized investor SAFE LET, rendering and refusal/refund paths. No live submissions or deployment-key use.
 

@@ -7,7 +7,7 @@ It wraps [RobinhoodCentSafeScript](../robinhood-cent-safe.s.sol), targeting
 The principal is fixed at **10,000 USDG base units = 0.01 USDG**. The script:
 
 1. Buys only the missing USDG using native ETH and a Uniswap v4 exact-output swap.
-   An explicit maximum ETH input caps the trade; unused ETH returns to the investor.
+   A saved maximum ETH input caps the trade; unused ETH returns to the investor.
    If the investor already has at least 0.01 USDG, it skips the swap.
 2. Creates the CyberCorp owned by the configured officer through the live factory.
 3. Creates a private founder-approved SeriesSeed SAFE round capped at 0.01 USDG.
@@ -44,37 +44,31 @@ This entrypoint does not read either key:
 ```
 
 It reports ETH input in **wei** for exactly 0.01 USDG at the current pool state.
-For orientation only, the fork test spent about **0.000004463 ETH** for the swap;
-this is not a fixed price or a gas estimate. Choose `SAFE_MAX_ETH_IN_WEI` yourself
-after reviewing the fresh quote. If the quote exceeds that cap, the script refuses
-before the first trade or company creation. The actual swap also enforces the cap.
+The first DryRun loads a fresh quote and saves a maximum of that quote plus **5%**
+headroom, rounded up. The default refuses if that maximum would exceed
+**0.00001 ETH**. Gas is additional. Broadcast/retries retain the saved maximum.
 
-## Set public run parameters once
+## No extra environment setup for this test
 
-The following are example public values. Replace identities, contacts, company
-details, jurisdiction, valuation cap and template choice with your intended
-values: they are signed agreement fields and are stored on-chain.
+All `SAFE_*` variables are optional. With your existing RPC configuration and
+`PRIVATE_KEY_MAIN`, the only additional required variable is
+`PRIVATE_KEY_INVESTOR` (a different wallet). The default test configuration is:
 
-```powershell
-$env:SAFE_REHEARSAL_SALT = (cast keccak 'my-robinhood-cent-safe-run-01').Trim()
-$centRunTime = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$env:SAFE_ROUND_START = [string]($centRunTime - 3600)
-$env:SAFE_ROUND_END = [string]($centRunTime + 3600)
+- Investment: **0.01 USDG**.
+- ETH maximum: **live exact-output quote plus 5%**, bounded as described above.
+- Round window: starts one hour before the initial fork timestamp, ends 24 hours
+  after that timestamp. The dates persist across dry-run/broadcast/retries.
+- SAFE valuation cap: **$10 million**; template **32 (Reg S)**.
+- Company: **CyberCorp SAFE Rehearsal**; officer **Test Officer**; investor
+  **Test Investor**. Jurisdiction and investor type fields say **TEST ONLY**;
+  contacts use `officer@example.invalid` and `investor@example.invalid`.
+- Company payout: the officer wallet. Minimum ETH reserve: **0.0001 ETH** per
+  signer, additional to the investor's maximum swap input.
 
-# Example cap only: 0.000005 ETH. Review the fresh quote before choosing yours.
-$env:SAFE_MAX_ETH_IN_WEI = '5000000000000'
-$env:SAFE_VALUATION_CAP_USD = '10000000'  # whole-dollar SAFE cap, not payment amount
-$env:SAFE_TEMPLATE_ID = '32'
-
-$env:SAFE_COMPANY_NAME = 'My CyberCorp Rehearsal'
-$env:SAFE_COMPANY_JURISDICTION = 'Delaware'
-$env:SAFE_OFFICER_NAME = 'Your officer name'
-$env:SAFE_OFFICER_CONTACT = 'your-officer-contact'
-$env:SAFE_INVESTOR_NAME = 'Your investor name'
-$env:SAFE_INVESTOR_CONTACT = 'your-investor-contact'
-$env:SAFE_INVESTOR_TYPE = 'Individual'
-$env:SAFE_INVESTOR_JURISDICTION = 'GB'
-```
+These are deliberately test agreement details and are stored on-chain if you
+broadcast. The valuation cap is a rehearsal term, not a market valuation.
+Optional existing `SAFE_*` values still override the defaults on first use.
+You can omit the entire former public-environment setup block.
 
 Supported templates are the existing standard SAFE IDs **30 (Reg D)** and **32
 (Reg S)**. Select the intended agreement; the script does not evaluate investor
@@ -83,6 +77,15 @@ field names/order are checked before spending.
 
 Optional parameters:
 
+- `SAFE_REHEARSAL_SALT`: optional identifier for a deliberately new run, e.g.
+  `(cast keccak 'my-robinhood-cent-safe-run-02').Trim()`. Omitting it uses a stable salt derived from the
+  officer address. Keep it unchanged for retries.
+- `SAFE_ROUND_START` / `SAFE_ROUND_END`: optional Unix seconds. On the first
+  load, the default window starts one hour before the fork timestamp and ends
+  24 hours after it. The script saves the resolved dates, salt, ETH maximum and valuation cap in ignored
+  `script/res/robinhood-cent-safe-<salt>.local.json`, including during DryRun,
+  and reuses them for Broadcast and retries. Quote creates no file. Conflicting
+  date/budget/valuation overrides refuse; expired dates are never automatically renewed.
 - `SAFE_COMPANY_PAYABLE`: company payout address; defaults to the officer wallet.
   It must differ from the investor and platform fee recipient.
 - `SAFE_GAS_RESERVE_WEI`: minimum ETH balance reserve per signer; defaults to
@@ -90,10 +93,16 @@ Optional parameters:
   that reserve **plus the full maximum ETH input**. This is a balance check,
   not a guarantee of gas cost or a transaction gas limit.
 
-The start/end are absolute Unix seconds; the end is also the swap and offer
-deadline. Keep the **same salt, times, identities, payout and other parameters**
-when resuming a run. Do not regenerate this setup block between a failed partial
-broadcast and its continuation. Choose a new salt deliberately for a new rehearsal.
+- `SAFE_MAX_ETH_IN_WEI` / `SAFE_VALUATION_CAP_USD`: optional explicit budget or
+  valuation before initial configuration. Later conflicting changes refuse.
+- `SAFE_TEMPLATE_ID` and `SAFE_COMPANY_*`, `SAFE_OFFICER_*`, `SAFE_INVESTOR_*`:
+  optional replacements for the test agreement details. Keep them fixed on retries.
+
+The end is also the swap and offer deadline. Keep the **same salt, identities,
+payout and other parameters**, and retain the saved dates file when resuming a
+run or moving to another computer. The file contains only public dates/salt/budget/valuation;
+other settings use defaults or your optional environment overrides. Do not remove it
+after a partial broadcast. Choose a new salt deliberately for a new rehearsal.
 
 ## Simulate, then broadcast yourself
 
@@ -153,12 +162,16 @@ keys or invokes the key-loading `run()` entrypoint. The successful scenario chec
 the one-cent fee/payout, final agreement and investor LET, exact allowance cleanup,
 JSON/SVG, completed rerun and recovery from an already-funded USDG balance.
 
-The final selected suite passed **9 tests, 0 failed, 0 skipped**, on a Robinhood
-fork at block **102212288**. The successful swap spent **4,462,287,569,119 wei ETH**
+The latest selected suite passed **16 tests, 0 failed, 0 skipped**, on a Robinhood
+fork at block **103742143**. The successful swap spent **4,434,813,571,845 wei ETH**
 for exactly 0.01 USDG, excluding gas. It used the actual deployed pool and token;
 only test ETH was locally funded. Refusal coverage includes a maximum below the
 quote, expired configuration, wrong chain, same signer, unsupported template,
 unfunded investor, platform/payout collision and an already-funded round.
+The default-only loader also completed the full lifecycle without any public
+configuration values; its saved maximum was **4,656,554,250,438 wei ETH**.
+Additional regressions check saved dates/budget/valuation, refusal of conflicting
+overrides, quote rounding/ceiling and no automatic renewal after expiry.
 
 No live transaction has been sent by this preparation task. Independent review,
 real test-environment sign/simulate/submit acceptance and the operator's live

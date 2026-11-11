@@ -4,7 +4,8 @@
 - Date: 2026-10-30. Branch: `codex/robinhood-intermediate-20261028`.
 - Source base: `b59269beea86f7ccb14c516361140519c8da8f2c` plus existing local
   lifecycle acceptance additions. Preserve dirty operator files and prior work.
-- Status: operator script and runbook prepared; generated-signer fork checks pass.
+- Status (November 1): all `SAFE_*` settings optional; default-only generated-signer
+  fork lifecycle passes. Existing RPC/officer key plus distinct investor key suffice.
 - User request: script to convert some ETH to USDG, create a round and invest
   in a SAFE LET, which the user will run on-chain.
 - Prior evidence: [strict live-template acceptance](robinhood-live-template-acceptance-20261030.md).
@@ -36,6 +37,63 @@
    and operator release gates distinct. No live transaction is authorized here.
 
 ## Progress
+
+### November 1 implementation and validation
+
+Implemented against `f90978dbf333abb19a20696fd879cb8aad55bdc4` plus uncommitted
+changes to the rehearsal script/test/runner/runbook, `.gitignore` and shared
+records. Protocol `src/` is unchanged. Earlier explicit-public-configuration
+requirements below are superseded by the user's test-only instruction above.
+Every `SAFE_*` value now has a default; only the existing RPC/key setup and
+distinct `PRIVATE_KEY_INVESTOR` are required. Test labels/reserved contacts,
+template 32, $10m valuation, deterministic officer salt, saved 24-hour dates
+and live quote +5% default ETH cap (ceiling 0.00001 ETH) are implemented.
+The local ignored file stores only salt/dates/budget/valuation and must be
+retained for retries. Existing optional env overrides remain supported.
+
+**16 passed, 0 failed, 0 skipped** on fresh Robinhood fork **103742143**:
+5 config regressions and 11 real-route lifecycle/refusal checks. Both the actual
+default loader with public settings empty and the live-quoted budget complete
+formation, signing, USDG investment and investor SAFE LET delivery. Full existing
+fee/allowance/metadata/retry checks still pass. Quote was **4,434,813,571,845 wei**;
+saved default cap **4,656,554,250,438 wei**, gas additional. Evidence:
+[November 1 verification](robinhood-cent-safe-verification-20261101.json).
+The first unit pass caught old-Foundry `writeJson(key)` not inserting missing
+fields; full-object serialization fixes it, covered by the budget retry check.
+Unit test expectation ordering was also corrected before the final full pass.
+Solidity formatting, Python compilation and whitespace checks pass. No operator
+key was read/set/inserted, `.env` was unchanged, and `run()`/live broadcast were
+not invoked. Independent external review, actual test-environment submission,
+merge and live deployment remain separate/unperformed gates.
+
+### November 1 configuration correction: acceptance before implementation
+
+Current checkout is `f90978dbf333abb19a20696fd879cb8aad55bdc4`; current remote
+branch fetched successfully. Owner remains this Codex chat. The operator reported
+missing `SAFE_ROUND_START`. Make salt/start/end optional with a saved, public-only
+run identity per officer/salt. First use defaults to an already-open 24-hour
+window; later runs must retain the original dates, including after expiry.
+Explicit date overrides conflicting with saved dates must refuse rather than
+create a second round. Keep the explicit ETH budget, valuation and signed legal
+metadata; do not invent identities or financial terms. Do not read operator keys
+or invoke `run()` during validation. Regression checks must cover initial defaults,
+stable retry dates, deliberate distinct salts, expiry without automatic renewal,
+and refusal of changed dates. User then requested reasonable defaults at the
+current price: extend this to a live exact-output quote plus 5% rounded-up
+headroom, with an absolute default ceiling of 0.00001 ETH, and a $10 million
+rehearsal valuation cap. Persist both with the dates; retries cannot silently
+increase spending or change signed valuation terms. Explicit environment values
+remain supported for initial configuration. Test quote rounding/ceiling,
+persisted budget/valuation and conflicting overrides, plus the real pool path.
+The user then clarified this is a test and requires **no new mandatory env vars
+except the investor key**. This supersedes the earlier explicit-budget/metadata
+requirement for this rehearsal. All `SAFE_*` inputs must be optional; default
+metadata must clearly say test/rehearsal and use reserved `.invalid` contacts,
+without inventing real identities or claiming investor jurisdiction/eligibility.
+Keep the two distinct environment keys and existing RPC config. Test `loadConfig`
+itself with all public SAFE variables absent, using generated signers only.
+Existing full-lifecycle acceptance remains distinct
+from these configuration regressions and from live submission/review gates.
 
 The user specified enough ETH for **0.01 dollars**; principal is therefore fixed
 at **0.01 USDG / 10,000 base units**, with gas additional. The script buys only the

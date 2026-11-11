@@ -12,8 +12,103 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import "forge-std/Test.sol";
 
 contract CentSafeHarness is RobinhoodCentSafeScript {
+    function savedRunBudget(string memory path, uint256 maximum, uint256 valuation)
+        external
+        returns (uint256, uint256)
+    {
+        return _savedRunBudget(path, maximum, valuation);
+    }
+
+    function defaultMaxEthIn(uint256 quoted) external pure returns (uint256) {
+        return _defaultMaxEthIn(quoted);
+    }
+
+    function savedRunWindow(string memory path, bytes32 salt, uint256 start, uint256 end)
+        external
+        returns (uint256, uint256)
+    {
+        return _savedRunWindow(path, salt, start, end);
+    }
+
     function buyMissing(Config memory c, address investor, uint256 key) external {
         _buyMissing(c, investor, key);
+    }
+}
+
+/// @notice Configuration regressions use public values only, without RPC or keys.
+contract RobinhoodCentSafeConfigTest is Test {
+    CentSafeHarness script;
+    string constant PATH = "script/res/robinhood-cent-safe-config-test.local.json";
+    bytes32 constant SALT = keccak256("public-config-regression");
+
+    function setUp() public {
+        script = new CentSafeHarness();
+        if (vm.exists(PATH)) vm.removeFile(PATH);
+        vm.warp(1_800_000_000);
+    }
+
+    function test_DefaultDatesPersistAcrossRetryAndExpiry() public {
+        (uint256 start, uint256 end) = script.savedRunWindow(PATH, SALT, 0, 0);
+        assertEq(start, block.timestamp - 1 hours);
+        assertEq(end, block.timestamp + 1 days);
+        vm.warp(end + 1 days);
+        (uint256 retryStart, uint256 retryEnd) = script.savedRunWindow(PATH, SALT, 0, 0);
+        assertEq(retryStart, start);
+        assertEq(retryEnd, end);
+        assertLt(retryEnd, block.timestamp); // Never silently opens a new round.
+        vm.removeFile(PATH);
+    }
+
+    function test_ExplicitDatesPreservedAndChangesRefused() public {
+        uint256 start = block.timestamp - 60;
+        uint256 end = block.timestamp + 600;
+        script.savedRunWindow(PATH, SALT, start, end);
+        script.savedRunWindow(PATH, SALT, start, end);
+        vm.expectRevert(RobinhoodCentSafeScript.SavedRunWindowChanged.selector);
+        script.savedRunWindow(PATH, SALT, start, end + 1);
+        vm.expectRevert(RobinhoodCentSafeScript.SavedRunWindowChanged.selector);
+        script.savedRunWindow(PATH, SALT, start + 1, end);
+        vm.expectRevert(RobinhoodCentSafeScript.SavedRunWindowChanged.selector);
+        script.savedRunWindow(PATH, keccak256("different-salt"), 0, 0);
+        vm.removeFile(PATH);
+    }
+
+    function test_DifferentSaltFileCreatesDeliberateNewWindow() public {
+        string memory otherPath = "script/res/robinhood-cent-safe-config-other-test.local.json";
+        if (vm.exists(otherPath)) vm.removeFile(otherPath);
+        (, uint256 end) = script.savedRunWindow(PATH, SALT, 0, 0);
+        vm.warp(block.timestamp + 60);
+        (, uint256 otherEnd) = script.savedRunWindow(otherPath, keccak256("new-run"), 0, 0);
+        assertEq(otherEnd, end + 60);
+        vm.removeFile(PATH);
+        vm.removeFile(otherPath);
+    }
+
+    function test_DefaultBudgetRoundingAndCeiling() public {
+        assertEq(script.defaultMaxEthIn(101), 107);
+        assertEq(script.defaultMaxEthIn(4_435_612_676_307), 4_657_393_310_123);
+        vm.expectRevert(RobinhoodCentSafeScript.InvalidConfig.selector);
+        script.defaultMaxEthIn(0);
+        uint256 ceiling = script.DEFAULT_ETH_CEILING();
+        vm.expectRevert();
+        script.defaultMaxEthIn(ceiling);
+        vm.expectRevert();
+        script.defaultMaxEthIn(type(uint256).max);
+    }
+
+    function test_BudgetAndValuationPersistAndChangesRefused() public {
+        script.savedRunWindow(PATH, SALT, 0, 0);
+        (uint256 maximum, uint256 valuation) = script.savedRunBudget(PATH, 5_000_000_000_000, 0);
+        assertEq(maximum, 5_000_000_000_000);
+        assertEq(valuation, 10_000_000);
+        (uint256 retryMaximum, uint256 retryValuation) = script.savedRunBudget(PATH, 0, 0);
+        assertEq(retryMaximum, maximum);
+        assertEq(retryValuation, valuation);
+        vm.expectRevert(RobinhoodCentSafeScript.SavedRunBudgetChanged.selector);
+        script.savedRunBudget(PATH, maximum + 1, 0);
+        vm.expectRevert(RobinhoodCentSafeScript.SavedRunBudgetChanged.selector);
+        script.savedRunBudget(PATH, 0, valuation + 1);
+        vm.removeFile(PATH);
     }
 }
 
@@ -68,6 +163,65 @@ contract RobinhoodCentSafeScriptTest is Test {
             return;
         }
         _;
+    }
+
+    function test_LiveQuotedDefaultBudgetFundsSafe() public forkOnly {
+        string memory path = "script/res/robinhood-cent-safe-live-config-test.local.json";
+        if (vm.exists(path)) vm.removeFile(path);
+        (config.start, config.end) = script.savedRunWindow(path, config.salt, 0, 0);
+        (uint256 quoted,) =
+            ICentQuoter(script.QUOTER()).quoteExactOutputSingle(CentQuoteParams(script.poolKey(), true, 10_000, ""));
+        (config.maxEthIn, config.valuationCapUSD) = script.savedRunBudget(path, 0, 0);
+        assertEq(config.maxEthIn, (quoted * 105 + 99) / 100);
+        assertLe(config.maxEthIn, script.DEFAULT_ETH_CEILING());
+        assertEq(config.valuationCapUSD, 10_000_000);
+        RobinhoodCentSafeScript.Result memory r = script.execute(config, officerKey, investorKey);
+        assertEq(LedgerEntryToken(r.certificate).ownerOf(r.tokenId), investor);
+        (uint256 retryMaximum, uint256 retryValuation) = script.savedRunBudget(path, 0, 0);
+        assertEq(retryMaximum, config.maxEthIn);
+        assertEq(retryValuation, config.valuationCapUSD);
+        vm.removeFile(path);
+    }
+
+    function test_LoadConfigWithoutPublicSettingsAndFundSafe() public forkOnly {
+        // Empty public settings model an unconfigured invocation and mask any
+        // inherited operator overrides. Neither key variable is read or changed.
+        string[16] memory names = [
+            "SAFE_REHEARSAL_SALT",
+            "SAFE_ROUND_START",
+            "SAFE_ROUND_END",
+            "SAFE_MAX_ETH_IN_WEI",
+            "SAFE_GAS_RESERVE_WEI",
+            "SAFE_VALUATION_CAP_USD",
+            "SAFE_TEMPLATE_ID",
+            "SAFE_COMPANY_PAYABLE",
+            "SAFE_COMPANY_NAME",
+            "SAFE_COMPANY_JURISDICTION",
+            "SAFE_OFFICER_NAME",
+            "SAFE_OFFICER_CONTACT",
+            "SAFE_INVESTOR_NAME",
+            "SAFE_INVESTOR_CONTACT",
+            "SAFE_INVESTOR_TYPE",
+            "SAFE_INVESTOR_JURISDICTION"
+        ];
+        for (uint256 i; i < names.length; ++i) {
+            vm.setEnv(names[i], "");
+        }
+        bytes32 salt = keccak256(abi.encode("RobinhoodCentSAFE.default.v1", officer));
+        string memory path = string.concat("script/res/robinhood-cent-safe-", vm.toString(salt), ".local.json");
+        if (vm.exists(path)) vm.removeFile(path);
+        config = script.loadConfig(officer);
+        assertEq(config.salt, salt);
+        assertEq(config.templateId, bytes32(uint256(32)));
+        assertEq(config.payout, officer);
+        assertEq(config.companyName, "CyberCorp SAFE Rehearsal");
+        assertEq(config.investorJurisdiction, "TEST ONLY");
+        assertEq(config.officerContact, "officer@example.invalid");
+        RobinhoodCentSafeScript.Result memory r = script.execute(config, officerKey, investorKey);
+        assertEq(LedgerEntryToken(r.certificate).ownerOf(r.tokenId), investor);
+        RobinhoodCentSafeScript.Config memory retry = script.loadConfig(officer);
+        assertEq(keccak256(abi.encode(retry)), keccak256(abi.encode(config)));
+        vm.removeFile(path);
     }
 
     function test_RealSwapToOneCentSafeAndIdempotentRerun() public forkOnly {

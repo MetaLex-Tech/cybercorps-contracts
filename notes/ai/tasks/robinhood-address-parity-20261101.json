@@ -1,0 +1,3872 @@
+{
+  "observedAtUtc": "2026-11-02T00:26:40.148296+00:00",
+  "sourceRevision": "f90978dbf333abb19a20696fd879cb8aad55bdc4",
+  "scope": "Shared core, extensions, secondary conditions and selected historical/product checklist addresses; no client-specific or staging deployments.",
+  "inventory": [
+    {
+      "group": "Critical auth/proxy",
+      "name": "coreAuth",
+      "address": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "corporateFactory",
+      "address": "0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "singleFactory",
+      "address": "0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "issuanceFactory",
+      "address": "0xD353972D7955F421d94d0eA8c42c88c417F7155A"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "dealFactory",
+      "address": "0x3982b078f2ac306219c9540Ebc908360a960C251"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "roundFactory",
+      "address": "0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "registry",
+      "address": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "uriBuilder",
+      "address": "0x5500c095ea7dE6F8a5E15949e24B80604cc670A3"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "lexAuth",
+      "address": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "lex",
+      "address": "0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "lexMinter",
+      "address": "0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "badgeAuth",
+      "address": "0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d"
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "badge",
+      "address": "0x114664773Ba721a6AA43890d5FDE7939aF37618F"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safeExtension",
+      "address": "0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safeExtensionV3",
+      "address": "0x740003076c9F16c4a364AE07f3770FB77899299b"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "aceSafeExtension",
+      "address": "0x6aDaef2B79FD1cbA130c5807B31DE435FEa58EAC"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "aceSafeExtensionV3",
+      "address": "0x9a8ef946F18C4296e50f8DF0C97b5Cf5d1b5eCD2"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "saftExtension",
+      "address": "0x109D2A13932bE393011835B308F81ce1992E365B"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "saftExtensionV2",
+      "address": "0x37c2A0e801e569e01f0972186aF4DB01409e92c1"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "saftExtensionV3",
+      "address": "0x2Bf1b2f8f6009c5524886243CE4F2EF34e3d4957"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safteExtension",
+      "address": "0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "ethosSafteExtension",
+      "address": "0xC23fFF0B06aE5EBea862611F489b1329108ce603"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safteExtensionV2",
+      "address": "0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safteExtensionV3",
+      "address": "0xE79C2b4a35b2509b27686D025FB8Fbab2Ca49406"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "tokenWarrantExtension",
+      "address": "0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "tokenWarrantExtensionV2",
+      "address": "0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "tokenWarrantExtensionV3",
+      "address": "0x3Bdb711517eEbd6A88D9Aa30B141adC43BAB033e"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "shareExtension",
+      "address": "0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "shareExtensionV3",
+      "address": "0xa21C434379CC44bfeD6e3c1342e49951804ec30f"
+    },
+    {
+      "group": "Certificate extension",
+      "name": "fundInterestExtensionV3",
+      "address": "0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "eligibility",
+      "address": "0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "usStateOfResidence",
+      "address": "0x1d4918a83E1F971317f0DD529f088B208Ec24d8C"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "legionSoulbound",
+      "address": "0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "holderCap",
+      "address": "0xA8422D5fFE6b697152aEE19d13910302dE1E0576"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "cfius",
+      "address": "0x89Fa72549b5Fadf209377d5348C30bca4c7e0462"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "section4a7Disclosure",
+      "address": "0x42c9e2dadE9669c725D88b78cD0e545FD9e7F723"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "rule144Disclosure",
+      "address": "0x7e30Ef03A0C4C7094D464b714E2480EF30088629"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "holdingPeriod",
+      "address": "0xc5417d7DDE94310Ba334e31517deFED0aa0ED81F"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "legalOpinion",
+      "address": "0xD27317AED94BE6d310eA6B8c4e08360957ff24e3"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "regSDistributionCompliance",
+      "address": "0xe8A325Ba2dF0ba3E08A55B3E3F2bBBBc9354CebB"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "gpLpApproval",
+      "address": "0x4be9Eaff732F4BA3f1Fc6359a2F0858F70637c69"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "accreditedInvestor",
+      "address": "0xedac303CAfdedd92aB6fbECFafFC0a648d9157a1"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "qualifiedPurchaser",
+      "address": "0xE4bcf1c4EA266bbD7F3c58A3aa02c43B5cdc9875"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "qualifiedInstitutionalBuyer",
+      "address": "0x8A617187aF27a98c89548dfFd886EEab0De0936F"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "nonUsPerson",
+      "address": "0xe2AAc5187058a5c97Da7e6D3D6F9D5811124dcBb"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "spvWhitelist",
+      "address": "0x0f2952dcf0279782e6048D2800ee3BeAd9f59f33"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "syndicate",
+      "address": "0x089b4Dba2E3EB49f875c0D7F92A06276B204870f"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "killSwitch",
+      "address": "0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435"
+    },
+    {
+      "group": "Secondary condition",
+      "name": "timeSettlementPeriod",
+      "address": "0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd"
+    },
+    {
+      "group": "Legacy/checklist identity",
+      "name": "lexchexCondition",
+      "address": "0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42"
+    },
+    {
+      "group": "Legacy/checklist identity",
+      "name": "zkpassportVerifier",
+      "address": "0x1D000001000EFD9a6371f4d90bB8920D5431c0D8"
+    },
+    {
+      "group": "Legacy/checklist identity",
+      "name": "deprecatedNonUSNationalityCondition",
+      "address": "0xe71fE689bFAA4939A760EDF7e07f44372a43932A"
+    },
+    {
+      "group": "Historical checklist",
+      "name": "originalIssuanceFactory",
+      "address": "0xA32547aAdAA4975082D729c79e79dBaE4385EBCf"
+    },
+    {
+      "group": "Historical checklist",
+      "name": "originalSingleFactory",
+      "address": "0xc8e084D3f8B3b326FCc894C7afD28F4904196406"
+    },
+    {
+      "group": "Historical checklist",
+      "name": "originalDealFactory",
+      "address": "0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3"
+    },
+    {
+      "group": "Historical checklist",
+      "name": "originalLETImplementation",
+      "address": "0x016C3a68C3a82179B4e63871c7730aaA272c9638"
+    },
+    {
+      "group": "Historical checklist",
+      "name": "oldKillSwitchFromTestnetChecklist",
+      "address": "0x4c3b9Ec3B6e416A64Fde4a17Ea856e1cf2fE0344"
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "MetaDAOFactory",
+      "address": "0x734aE2b36f663D0F4233Ce4a02c13b5EB8ec959D"
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "MetaDAOAuth",
+      "address": "0x727Cb7985F2a2ecD0626A771eDb1a63c92221F00"
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "PumpCorpFactoryBaseProduction",
+      "address": "0xe73Ea052c2891cE1668742142a6634Df09c88512"
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "PumpZkpassportAuthBaseProduction",
+      "address": "0xB92E1f3A65223476ce798eCC60186dc22c4d719f"
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "PumpNonUSNationalityBaseProduction",
+      "address": "0x95f0F67FdCa00b585a28Cf7A1E275A5541a9f6b3"
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "PumpOrConditionBaseProduction",
+      "address": "0x859c0DEc1B416ce02D2873E99Ad8FDEAc53Ac025"
+    }
+  ],
+  "chains": {
+    "Ethereum": {
+      "chainId": 1,
+      "block": 26323497,
+      "blockHash": "0x9d755b191b2404562e2aac3a8a7eb5a1a35078d435b7234dec37c9eb100fa0e8",
+      "blockTimestamp": 1793579195,
+      "contracts": {
+        "coreAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "011e4dace35156ad99cdb2e83619d4ef4912c921d0e3e58026e75f88d5478711"
+        },
+        "corporateFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "singleFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "issuanceFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "dealFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "roundFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "registry": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "uriBuilder": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "lexAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "011e4dace35156ad99cdb2e83619d4ef4912c921d0e3e58026e75f88d5478711"
+        },
+        "lex": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "lexMinter": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "badgeAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "048efe9576316a71ad2ac8d5b3c712fe4f1502bfd31c7627821e7f3399bd0aa6"
+        },
+        "badge": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "safeExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "safeExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "aceSafeExtension": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "aceSafeExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "saftExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "saftExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "saftExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "safteExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "ethosSafteExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "safteExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "safteExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "tokenWarrantExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "tokenWarrantExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "tokenWarrantExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "shareExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "shareExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "fundInterestExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "eligibility": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "usStateOfResidence": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "legionSoulbound": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "holderCap": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "cfius": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "section4a7Disclosure": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "rule144Disclosure": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "holdingPeriod": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "legalOpinion": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "regSDistributionCompliance": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "gpLpApproval": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "accreditedInvestor": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "qualifiedPurchaser": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "qualifiedInstitutionalBuyer": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "nonUsPerson": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "spvWhitelist": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "syndicate": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "killSwitch": {
+          "hasCode": true,
+          "runtimeBytes": 2067,
+          "runtimeSha256": "85eaed93cab4ebf5e9934f8a56a3218c8d5c23c5276578ff87043d85317ca907"
+        },
+        "timeSettlementPeriod": {
+          "hasCode": true,
+          "runtimeBytes": 1768,
+          "runtimeSha256": "93267696299de14f4347b396dcb257b0779dbb06f64b8e448b5eb0b6bd6645ed"
+        },
+        "lexchexCondition": {
+          "hasCode": true,
+          "runtimeBytes": 2311,
+          "runtimeSha256": "9d786751f4e41b773da2d2f241c33b7ca35483d1de99a3b21577d2c2f1b91915"
+        },
+        "zkpassportVerifier": {
+          "hasCode": true,
+          "runtimeBytes": 4951,
+          "runtimeSha256": "e1ee38048e759bff0ce18266853b4bf5794090fa69ff8477cbe1852aed2dece6"
+        },
+        "deprecatedNonUSNationalityCondition": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "originalIssuanceFactory": {
+          "hasCode": true,
+          "runtimeBytes": 3267,
+          "runtimeSha256": "f7a901063ed1ee32a68274aebf2ea8b9b8c11804579c61043e143e3e7c403ec5"
+        },
+        "originalSingleFactory": {
+          "hasCode": true,
+          "runtimeBytes": 2896,
+          "runtimeSha256": "ee691bb79a58902e8effbbdd005cde75e885618f0cfb4a5ce39718aa48563447"
+        },
+        "originalDealFactory": {
+          "hasCode": true,
+          "runtimeBytes": 2895,
+          "runtimeSha256": "c1614c44d14d739166724bc28166b43f9224beb0603d931cf3935baf3c6bdcfd"
+        },
+        "originalLETImplementation": {
+          "hasCode": true,
+          "runtimeBytes": 24504,
+          "runtimeSha256": "f4b0d7f59db0adc0f51cbdb40b04c0c893949394f36b53e5bf7ba26f5493646e"
+        },
+        "oldKillSwitchFromTestnetChecklist": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "MetaDAOFactory": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "MetaDAOAuth": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpCorpFactoryBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpZkpassportAuthBaseProduction": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "7e87a3bb2f9b94b844e299f988405070e3746827d56c71cc62fb68dcb8ed87c2"
+        },
+        "PumpNonUSNationalityBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpOrConditionBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "wiring": {
+        "corporateFactory.issuanceManagerFactory": {
+          "value": "0xd353972d7955f421d94d0ea8c42c88c417f7155a",
+          "expected": "0xD353972D7955F421d94d0eA8c42c88c417F7155A",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.cyberCorpSingleFactory": {
+          "value": "0xbe0d3d13aa07501beac9b72de9e9292e66c7a5c4",
+          "expected": "0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.dealManagerFactory": {
+          "value": "0x3982b078f2ac306219c9540ebc908360a960c251",
+          "expected": "0x3982b078f2ac306219c9540Ebc908360a960C251",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.roundManagerFactory": {
+          "value": "0xc9d5d0dedd124f9351e5880469f25ab41869aeb9",
+          "expected": "0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.registryAddress": {
+          "value": "0xa9e808b8ecbb60bb19abf026b5b863215bc4c134",
+          "expected": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.uriBuilder": {
+          "value": "0x5500c095ea7de6f8a5e15949e24b80604cc670a3",
+          "expected": "0x5500c095ea7dE6F8a5E15949e24B80604cc670A3",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.lexchexAuth": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "singleFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "issuanceFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "dealFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "roundFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "registry.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "uriBuilder.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "lex.AUTH": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "lexMinter.AUTH": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "badge.AUTH": {
+          "value": "0x197333fc7a828e623fbfcf88ecdc976136f0cf1d",
+          "expected": "0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d",
+          "matchesSharedTarget": true
+        },
+        "singleFactory.referenceImplementation": {
+          "value": "0x511c9a7c13076f37659f15202781d802ecaeedbb"
+        },
+        "issuanceFactory.referenceImplementation": {
+          "value": "0xe0753ef9fa073ba97bed7335a67488512fbf44d2"
+        },
+        "dealFactory.referenceImplementation": {
+          "value": "0xc77aba9512821a839bdb74d7b43cf8dffd70eca6"
+        },
+        "roundFactory.referenceImplementation": {
+          "value": "0x4d25483f805b2eab535fbed149d22e099dff22e9"
+        },
+        "LET.referenceImplementation": {
+          "value": "0x4254de7dfb906e068d685b5e806f392438ae91ad"
+        },
+        "CyberScrip.referenceImplementation": {
+          "value": "0x40b16ace1f9a802207a9b4b0d2918a007eddf0f5"
+        },
+        "corporateFactory.stable": {
+          "value": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "uriBuilder.imageBuilder": {
+          "value": "0xab095d7a3b04d581a05ce5045750feb8723da08f"
+        },
+        "dealFactory.primaryFeeBps": {
+          "value": 30
+        },
+        "roundFactory.primaryFeeBps": {
+          "value": 30
+        },
+        "dealFactory.secondaryFeeBps": {
+          "value": 500
+        }
+      },
+      "proxyImplementations": {
+        "corporateFactory": "0xa154f78f048a3dfda0397f852956391996d2e3fe",
+        "singleFactory": "0xa23ba2f011bb12ce1b428f78fd4d6bc3057f0a9c",
+        "issuanceFactory": "0xcc9428c0f4f4c42224bfa899392abc5ef20cde2c",
+        "dealFactory": "0xeb5a6264bfa9d635d7da3fcce5daf348510d4d23",
+        "roundFactory": "0xc2278aa35699a5a79c430a10648c2dc7fd6d695c",
+        "registry": "0x3eeedccdddab393541901e90b1b43a0b511d69cf",
+        "uriBuilder": "0x678c30da359e85a970f5a9813ebd1d3ade38c219",
+        "lex": "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3",
+        "lexMinter": "0x74724dcfa62fa1b7f8337a0fba5b060b0684379d",
+        "badge": "0x62df59551c9251ae900b1d888938cf5246f7d262",
+        "safeExtension": "0xbc3de2d9c980187995c77aabf97f9de27a037b75",
+        "safeExtensionV3": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+        "aceSafeExtensionV3": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+        "saftExtension": "0x481adae8392002d0195abc251d4dc7ba6bb82334",
+        "saftExtensionV2": "0x088989cdf3524c1564b6ed9c1085cb04a721d884",
+        "saftExtensionV3": "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8",
+        "safteExtension": "0xaf1467e9722bc975a15964604a19fb8bf78874aa",
+        "ethosSafteExtension": "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84",
+        "safteExtensionV2": "0x37b202a16d898e41cdfe2613221075594f148b83",
+        "safteExtensionV3": "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40",
+        "tokenWarrantExtension": "0x487e2e68a945a4bf99da64bdf51ee5e12656e199",
+        "tokenWarrantExtensionV2": "0x30eeb1da35294e683e25c80a1dc6175828ce102b",
+        "tokenWarrantExtensionV3": "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c",
+        "shareExtension": "0xf6b79d44e46f233017d6ee95c462c3c499dc9e71",
+        "shareExtensionV3": "0x40661c3c5b25c6426bb176b253243cff3a3af077",
+        "fundInterestExtensionV3": "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c"
+      },
+      "implementationTargets": {
+        "corporateFactory": "0xa154f78f048a3dfda0397f852956391996d2e3fe",
+        "singleFactory": "0xa23ba2f011bb12ce1b428f78fd4d6bc3057f0a9c",
+        "issuanceFactory": "0xcc9428c0f4f4c42224bfa899392abc5ef20cde2c",
+        "dealFactory": "0xeb5a6264bfa9d635d7da3fcce5daf348510d4d23",
+        "roundFactory": "0xc2278aa35699a5a79c430a10648c2dc7fd6d695c",
+        "registry": "0x3eeedccdddab393541901e90b1b43a0b511d69cf",
+        "uriBuilder": "0x678c30da359e85a970f5a9813ebd1d3ade38c219",
+        "lex": "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3",
+        "lexMinter": "0x74724dcfa62fa1b7f8337a0fba5b060b0684379d",
+        "badge": "0x62df59551c9251ae900b1d888938cf5246f7d262",
+        "safeExtension": "0xbc3de2d9c980187995c77aabf97f9de27a037b75",
+        "safeExtensionV3": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+        "aceSafeExtensionV3": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+        "saftExtension": "0x481adae8392002d0195abc251d4dc7ba6bb82334",
+        "saftExtensionV2": "0x088989cdf3524c1564b6ed9c1085cb04a721d884",
+        "saftExtensionV3": "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8",
+        "safteExtension": "0xaf1467e9722bc975a15964604a19fb8bf78874aa",
+        "ethosSafteExtension": "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84",
+        "safteExtensionV2": "0x37b202a16d898e41cdfe2613221075594f148b83",
+        "safteExtensionV3": "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40",
+        "tokenWarrantExtension": "0x487e2e68a945a4bf99da64bdf51ee5e12656e199",
+        "tokenWarrantExtensionV2": "0x30eeb1da35294e683e25c80a1dc6175828ce102b",
+        "tokenWarrantExtensionV3": "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c",
+        "shareExtension": "0xf6b79d44e46f233017d6ee95c462c3c499dc9e71",
+        "shareExtensionV3": "0x40661c3c5b25c6426bb176b253243cff3a3af077",
+        "fundInterestExtensionV3": "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c",
+        "singleFactory.referenceImplementation": "0x511c9a7c13076f37659f15202781d802ecaeedbb",
+        "issuanceFactory.referenceImplementation": "0xe0753ef9fa073ba97bed7335a67488512fbf44d2",
+        "dealFactory.referenceImplementation": "0xc77aba9512821a839bdb74d7b43cf8dffd70eca6",
+        "roundFactory.referenceImplementation": "0x4d25483f805b2eab535fbed149d22e099dff22e9",
+        "LET.referenceImplementation": "0x4254de7dfb906e068d685b5e806f392438ae91ad",
+        "CyberScrip.referenceImplementation": "0x40b16ace1f9a802207a9b4b0d2918a007eddf0f5"
+      },
+      "implementationCode": {
+        "0xa154f78f048a3dfda0397f852956391996d2e3fe": {
+          "hasCode": true,
+          "runtimeBytes": 20221,
+          "runtimeSha256": "e543601e70919a17f432d2d5113f4a2cc4ae1da82b70650b5cdd0fd73be0e5be"
+        },
+        "0xa23ba2f011bb12ce1b428f78fd4d6bc3057f0a9c": {
+          "hasCode": true,
+          "runtimeBytes": 4131,
+          "runtimeSha256": "b78a8d1051753c7c0fe3af420559cf21a4a69861d7a61e4816fae6cd76cef25c"
+        },
+        "0xcc9428c0f4f4c42224bfa899392abc5ef20cde2c": {
+          "hasCode": true,
+          "runtimeBytes": 5400,
+          "runtimeSha256": "8390bcf09f2bf7e5efaf9535f609b63685c64c53d5fac5953ac9a1171fdc9544"
+        },
+        "0xeb5a6264bfa9d635d7da3fcce5daf348510d4d23": {
+          "hasCode": true,
+          "runtimeBytes": 7074,
+          "runtimeSha256": "f36cb7a242a6c1cc472b3619359d1cd2221b304632a0d19ba250a756d4242b7b"
+        },
+        "0xc2278aa35699a5a79c430a10648c2dc7fd6d695c": {
+          "hasCode": true,
+          "runtimeBytes": 6097,
+          "runtimeSha256": "06b15b0c3dfe0fb9bf283ed0958e9dc1d5d80b01de771cb0558ede3331fa78b5"
+        },
+        "0x3eeedccdddab393541901e90b1b43a0b511d69cf": {
+          "hasCode": true,
+          "runtimeBytes": 22942,
+          "runtimeSha256": "c67493cec96ae68e5efb64c5a7d5e663baea56e89aa0f5c9df335e4eec00e8e8"
+        },
+        "0x678c30da359e85a970f5a9813ebd1d3ade38c219": {
+          "hasCode": true,
+          "runtimeBytes": 21721,
+          "runtimeSha256": "27c68911d33500bae2868351ff1a0ab427d108ed56a1fc538811d5e67c418f96"
+        },
+        "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3": {
+          "hasCode": true,
+          "runtimeBytes": 18144,
+          "runtimeSha256": "1711c6b1f30b3b3ecb1d3e1cdc2255f94ae7a5598735c0758d4660f55abb3931"
+        },
+        "0x74724dcfa62fa1b7f8337a0fba5b060b0684379d": {
+          "hasCode": true,
+          "runtimeBytes": 11430,
+          "runtimeSha256": "6241142a342db408b228315e13ab924ac1e21965134b8859a03a588a7d7df65f"
+        },
+        "0x62df59551c9251ae900b1d888938cf5246f7d262": {
+          "hasCode": true,
+          "runtimeBytes": 19885,
+          "runtimeSha256": "47d995280c00c234fa0a73e08cc39445406d6e5d1936bc00b31e2291101781d7"
+        },
+        "0xbc3de2d9c980187995c77aabf97f9de27a037b75": {
+          "hasCode": true,
+          "runtimeBytes": 4467,
+          "runtimeSha256": "5fd523f604bf089e1f039deab66dd5c16cd6b6fefa40dd37472ef7f942891b3d"
+        },
+        "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e": {
+          "hasCode": true,
+          "runtimeBytes": 6985,
+          "runtimeSha256": "a46aa94b93140a626e9584fbdab362f065606058b1146b4bdfd07ec8e886563f"
+        },
+        "0x93ee4f2f833beb5267401de03d680ba1e186ea4e": {
+          "hasCode": true,
+          "runtimeBytes": 7300,
+          "runtimeSha256": "e0d58c2cffc1898c6b36b10737e1b82c48636442b0d314a2111abcbb2ea3bb23"
+        },
+        "0x481adae8392002d0195abc251d4dc7ba6bb82334": {
+          "hasCode": true,
+          "runtimeBytes": 4027,
+          "runtimeSha256": "d14f492658fe26be81b5b8304cd7318897c5e1f41091fb66ecd2b02f1e970d56"
+        },
+        "0x088989cdf3524c1564b6ed9c1085cb04a721d884": {
+          "hasCode": true,
+          "runtimeBytes": 5897,
+          "runtimeSha256": "e427680daa331064f909666d5ebc018d4500c201dd7ea598e533674a36a02d5e"
+        },
+        "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8": {
+          "hasCode": true,
+          "runtimeBytes": 8244,
+          "runtimeSha256": "991a338cd547fd6293907fb0a4c0d026d27fd0254f24aeab28c75074efaf8766"
+        },
+        "0xaf1467e9722bc975a15964604a19fb8bf78874aa": {
+          "hasCode": true,
+          "runtimeBytes": 4747,
+          "runtimeSha256": "de28aa778a4d31e656adf052dc5ec1a72ef715f2c71f2a90bda759b48b3ebd11"
+        },
+        "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84": {
+          "hasCode": true,
+          "runtimeBytes": 4560,
+          "runtimeSha256": "9471d37c989efa6d3c6c1705d1f433fdde887abed5cccad2d9a82fc3003430df"
+        },
+        "0x37b202a16d898e41cdfe2613221075594f148b83": {
+          "hasCode": true,
+          "runtimeBytes": 6637,
+          "runtimeSha256": "fd6f3a080682902a4c809bdeacf614851b61327305e571dbac03cb7bd6d45cac"
+        },
+        "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40": {
+          "hasCode": true,
+          "runtimeBytes": 8782,
+          "runtimeSha256": "7e5cb7d95df241ea2e9d9a4775fbb513b57fbf7c8f1baad5502316e30d5b56b6"
+        },
+        "0x487e2e68a945a4bf99da64bdf51ee5e12656e199": {
+          "hasCode": true,
+          "runtimeBytes": 5014,
+          "runtimeSha256": "6dfd516221928f6615f0ac9bcc790b31f3ad3372146a354280f87e059b5a817e"
+        },
+        "0x30eeb1da35294e683e25c80a1dc6175828ce102b": {
+          "hasCode": true,
+          "runtimeBytes": 6918,
+          "runtimeSha256": "ad5e774e67b6d58b48304f435931b518733cfc9d9f12ea556b5741b35c290722"
+        },
+        "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c": {
+          "hasCode": true,
+          "runtimeBytes": 9231,
+          "runtimeSha256": "fd76acd5395944bbf910ae1643fbe84f1e49d2adfcb95207c2bfad679ff25468"
+        },
+        "0xf6b79d44e46f233017d6ee95c462c3c499dc9e71": {
+          "hasCode": true,
+          "runtimeBytes": 21736,
+          "runtimeSha256": "4b5b463a040ac9d2c1a0ae0624fcaf8604b63c0bd7984b83e6c8a9ea8dac5e1a"
+        },
+        "0x40661c3c5b25c6426bb176b253243cff3a3af077": {
+          "hasCode": true,
+          "runtimeBytes": 23906,
+          "runtimeSha256": "73a5018fab816fe8aa5051d153d767c54cc23d37c0f8c7804a1d2333be9ac82c"
+        },
+        "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c": {
+          "hasCode": true,
+          "runtimeBytes": 9660,
+          "runtimeSha256": "97362e47151029df4b72ced56b01e5dd9fbfffcfbb1be3ee427c176962887576"
+        },
+        "0x511c9a7c13076f37659f15202781d802ecaeedbb": {
+          "hasCode": true,
+          "runtimeBytes": 16357,
+          "runtimeSha256": "1163e432a7d02deadc3b712941ba9e8564fbe55289dd37ceee25a5e98c6c360b",
+          "deployVersion": "5"
+        },
+        "0xe0753ef9fa073ba97bed7335a67488512fbf44d2": {
+          "hasCode": true,
+          "runtimeBytes": 17940,
+          "runtimeSha256": "6ece7a8a41bb0f2cdd70c762bb46bb496c18821aae2b69ce1b4cad48d6c995a6",
+          "deployVersion": "5"
+        },
+        "0xc77aba9512821a839bdb74d7b43cf8dffd70eca6": {
+          "hasCode": true,
+          "runtimeBytes": 22248,
+          "runtimeSha256": "1437368685ecc60e2f0e34faa2414d63867d8ebe5f18d733f6aca65fcaac69b7",
+          "deployVersion": "5"
+        },
+        "0x4d25483f805b2eab535fbed149d22e099dff22e9": {
+          "hasCode": true,
+          "runtimeBytes": 20727,
+          "runtimeSha256": "bd1007edb31a5ce35437797dbd9e2a681b808d8b5a8d4f86e366df8434a5db0a",
+          "deployVersion": "5"
+        },
+        "0x4254de7dfb906e068d685b5e806f392438ae91ad": {
+          "hasCode": true,
+          "runtimeBytes": 24288,
+          "runtimeSha256": "42b848cc71b78bae7466f33c1c81eaabf1876ffda52cdc29378a611b849444d0",
+          "deployVersion": "5"
+        },
+        "0x40b16ace1f9a802207a9b4b0d2918a007eddf0f5": {
+          "hasCode": true,
+          "runtimeBytes": 11343,
+          "runtimeSha256": "5486141980c0c298215a1629731185120fd90bb06743c5b8680d08334bda78a7",
+          "deployVersion": "5"
+        }
+      }
+    },
+    "Robinhood": {
+      "chainId": 4663,
+      "block": 103799016,
+      "blockHash": "0xd247545bf1bab43249d48931055c9a08c95acc8583edbdfcdda43d8ac3ca5ef6",
+      "blockTimestamp": 1793579201,
+      "contracts": {
+        "coreAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "011e4dace35156ad99cdb2e83619d4ef4912c921d0e3e58026e75f88d5478711"
+        },
+        "corporateFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "singleFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "issuanceFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "dealFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "roundFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "registry": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "uriBuilder": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "lexAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "011e4dace35156ad99cdb2e83619d4ef4912c921d0e3e58026e75f88d5478711"
+        },
+        "lex": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "lexMinter": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "badgeAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "048efe9576316a71ad2ac8d5b3c712fe4f1502bfd31c7627821e7f3399bd0aa6"
+        },
+        "badge": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "safeExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "safeExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "aceSafeExtension": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "aceSafeExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "saftExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "saftExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "saftExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "safteExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "ethosSafteExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "safteExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "safteExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "tokenWarrantExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "tokenWarrantExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "tokenWarrantExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "shareExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "shareExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "fundInterestExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "eligibility": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "usStateOfResidence": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "legionSoulbound": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "holderCap": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "cfius": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "section4a7Disclosure": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "rule144Disclosure": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "holdingPeriod": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "legalOpinion": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "regSDistributionCompliance": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "gpLpApproval": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "accreditedInvestor": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "qualifiedPurchaser": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "qualifiedInstitutionalBuyer": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "nonUsPerson": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "spvWhitelist": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "syndicate": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "killSwitch": {
+          "hasCode": true,
+          "runtimeBytes": 2067,
+          "runtimeSha256": "aeaadd237c25db30485cb220a26c00ef5cc32e15b2934423960a1a14f68efb16"
+        },
+        "timeSettlementPeriod": {
+          "hasCode": true,
+          "runtimeBytes": 1768,
+          "runtimeSha256": "93267696299de14f4347b396dcb257b0779dbb06f64b8e448b5eb0b6bd6645ed"
+        },
+        "lexchexCondition": {
+          "hasCode": true,
+          "runtimeBytes": 2311,
+          "runtimeSha256": "9d786751f4e41b773da2d2f241c33b7ca35483d1de99a3b21577d2c2f1b91915"
+        },
+        "zkpassportVerifier": {
+          "hasCode": true,
+          "runtimeBytes": 4951,
+          "runtimeSha256": "e1ee38048e759bff0ce18266853b4bf5794090fa69ff8477cbe1852aed2dece6"
+        },
+        "deprecatedNonUSNationalityCondition": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "originalIssuanceFactory": {
+          "hasCode": true,
+          "runtimeBytes": 3267,
+          "runtimeSha256": "f7a901063ed1ee32a68274aebf2ea8b9b8c11804579c61043e143e3e7c403ec5"
+        },
+        "originalSingleFactory": {
+          "hasCode": true,
+          "runtimeBytes": 2896,
+          "runtimeSha256": "ee691bb79a58902e8effbbdd005cde75e885618f0cfb4a5ce39718aa48563447"
+        },
+        "originalDealFactory": {
+          "hasCode": true,
+          "runtimeBytes": 2895,
+          "runtimeSha256": "c1614c44d14d739166724bc28166b43f9224beb0603d931cf3935baf3c6bdcfd"
+        },
+        "originalLETImplementation": {
+          "hasCode": true,
+          "runtimeBytes": 24504,
+          "runtimeSha256": "f4b0d7f59db0adc0f51cbdb40b04c0c893949394f36b53e5bf7ba26f5493646e"
+        },
+        "oldKillSwitchFromTestnetChecklist": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "MetaDAOFactory": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "MetaDAOAuth": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpCorpFactoryBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpZkpassportAuthBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpNonUSNationalityBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpOrConditionBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "wiring": {
+        "corporateFactory.issuanceManagerFactory": {
+          "value": "0xd353972d7955f421d94d0ea8c42c88c417f7155a",
+          "expected": "0xD353972D7955F421d94d0eA8c42c88c417F7155A",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.cyberCorpSingleFactory": {
+          "value": "0xbe0d3d13aa07501beac9b72de9e9292e66c7a5c4",
+          "expected": "0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.dealManagerFactory": {
+          "value": "0x3982b078f2ac306219c9540ebc908360a960c251",
+          "expected": "0x3982b078f2ac306219c9540Ebc908360a960C251",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.roundManagerFactory": {
+          "value": "0xc9d5d0dedd124f9351e5880469f25ab41869aeb9",
+          "expected": "0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.registryAddress": {
+          "value": "0xa9e808b8ecbb60bb19abf026b5b863215bc4c134",
+          "expected": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.uriBuilder": {
+          "value": "0x5500c095ea7de6f8a5e15949e24b80604cc670a3",
+          "expected": "0x5500c095ea7dE6F8a5E15949e24B80604cc670A3",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.lexchexAuth": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "singleFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "issuanceFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "dealFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "roundFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "registry.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "uriBuilder.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "lex.AUTH": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "lexMinter.AUTH": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "badge.AUTH": {
+          "value": "0x197333fc7a828e623fbfcf88ecdc976136f0cf1d",
+          "expected": "0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d",
+          "matchesSharedTarget": true
+        },
+        "singleFactory.referenceImplementation": {
+          "value": "0xf9c62753d4b849713f42cd7e735b33ec86b92258"
+        },
+        "issuanceFactory.referenceImplementation": {
+          "value": "0x1ad870eb28b15283c3a52db6d688526665990f38"
+        },
+        "dealFactory.referenceImplementation": {
+          "value": "0xe835b6030ffc5ba43219f7dd310dce1f4731c739"
+        },
+        "roundFactory.referenceImplementation": {
+          "value": "0xb7a923881b3c715993be8e1d7d243afd1967afd1"
+        },
+        "LET.referenceImplementation": {
+          "value": "0x487ed0d21e489d66e647fb4a55ce20daadaf7920"
+        },
+        "CyberScrip.referenceImplementation": {
+          "value": "0x7924dad9707df68ce41d44016950b6e9e6e82493"
+        },
+        "corporateFactory.stable": {
+          "value": "0x5fc5360d0400a0fd4f2af552add042d716f1d168"
+        },
+        "uriBuilder.imageBuilder": {
+          "value": "0x34a00d92735e8e02b3651bbae01a4297584e0b8d"
+        },
+        "dealFactory.primaryFeeBps": {
+          "value": 50
+        },
+        "roundFactory.primaryFeeBps": {
+          "value": 50
+        },
+        "dealFactory.secondaryFeeBps": {
+          "value": 500
+        }
+      },
+      "proxyImplementations": {
+        "corporateFactory": "0xe2868d47f70ae14689d903661e5729ca5e37a634",
+        "singleFactory": "0x839da23fbb14fea0ef89e0b524455421383b02ce",
+        "issuanceFactory": "0x73f720866cb632023018524e5b738201adfcb01c",
+        "dealFactory": "0xa0714923988e5bdd0b72ecd7375471aa3045e689",
+        "roundFactory": "0x6af59f8d0656fb1da646fbdc1fa582165c143ef8",
+        "registry": "0xeabeda8e939d570456ae2baf8bf2dd32c3810256",
+        "uriBuilder": "0x44f71d3a279fa89adfadcb9838e25ea34b8a519f",
+        "lex": "0x25077c9c742b64ee5498bf3b6630761221bfdbb1",
+        "lexMinter": "0xd6d889becbd19bfdfb43ac5df6d64b0028cb5247",
+        "badge": "0xc9ecfcad8792ff89c79dc1e3417abaf146778310",
+        "safeExtension": "0x1af1d74c53fee73f1ca29ba764b201ae0e1b4c27",
+        "safeExtensionV3": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+        "aceSafeExtensionV3": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+        "saftExtension": "0x481adae8392002d0195abc251d4dc7ba6bb82334",
+        "saftExtensionV2": "0x3157f1d053926bb0f2c10542f994f4102b359bce",
+        "saftExtensionV3": "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8",
+        "safteExtension": "0xaf1467e9722bc975a15964604a19fb8bf78874aa",
+        "ethosSafteExtension": "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84",
+        "safteExtensionV2": "0x911ef683c052f63fea9f0a3cd638262609c07e07",
+        "safteExtensionV3": "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40",
+        "tokenWarrantExtension": "0x487e2e68a945a4bf99da64bdf51ee5e12656e199",
+        "tokenWarrantExtensionV2": "0x9974c6f77c848f32a384df89c896bcdbe2519413",
+        "tokenWarrantExtensionV3": "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c",
+        "shareExtension": "0x0abd73115b541ba3c81e3134dd0ad7602b9429e8",
+        "shareExtensionV3": "0x3329182047d5e2c19a7d55b2c96d8379374c87aa",
+        "fundInterestExtensionV3": "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c"
+      },
+      "implementationTargets": {
+        "corporateFactory": "0xe2868d47f70ae14689d903661e5729ca5e37a634",
+        "singleFactory": "0x839da23fbb14fea0ef89e0b524455421383b02ce",
+        "issuanceFactory": "0x73f720866cb632023018524e5b738201adfcb01c",
+        "dealFactory": "0xa0714923988e5bdd0b72ecd7375471aa3045e689",
+        "roundFactory": "0x6af59f8d0656fb1da646fbdc1fa582165c143ef8",
+        "registry": "0xeabeda8e939d570456ae2baf8bf2dd32c3810256",
+        "uriBuilder": "0x44f71d3a279fa89adfadcb9838e25ea34b8a519f",
+        "lex": "0x25077c9c742b64ee5498bf3b6630761221bfdbb1",
+        "lexMinter": "0xd6d889becbd19bfdfb43ac5df6d64b0028cb5247",
+        "badge": "0xc9ecfcad8792ff89c79dc1e3417abaf146778310",
+        "safeExtension": "0x1af1d74c53fee73f1ca29ba764b201ae0e1b4c27",
+        "safeExtensionV3": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+        "aceSafeExtensionV3": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+        "saftExtension": "0x481adae8392002d0195abc251d4dc7ba6bb82334",
+        "saftExtensionV2": "0x3157f1d053926bb0f2c10542f994f4102b359bce",
+        "saftExtensionV3": "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8",
+        "safteExtension": "0xaf1467e9722bc975a15964604a19fb8bf78874aa",
+        "ethosSafteExtension": "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84",
+        "safteExtensionV2": "0x911ef683c052f63fea9f0a3cd638262609c07e07",
+        "safteExtensionV3": "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40",
+        "tokenWarrantExtension": "0x487e2e68a945a4bf99da64bdf51ee5e12656e199",
+        "tokenWarrantExtensionV2": "0x9974c6f77c848f32a384df89c896bcdbe2519413",
+        "tokenWarrantExtensionV3": "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c",
+        "shareExtension": "0x0abd73115b541ba3c81e3134dd0ad7602b9429e8",
+        "shareExtensionV3": "0x3329182047d5e2c19a7d55b2c96d8379374c87aa",
+        "fundInterestExtensionV3": "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c",
+        "singleFactory.referenceImplementation": "0xf9c62753d4b849713f42cd7e735b33ec86b92258",
+        "issuanceFactory.referenceImplementation": "0x1ad870eb28b15283c3a52db6d688526665990f38",
+        "dealFactory.referenceImplementation": "0xe835b6030ffc5ba43219f7dd310dce1f4731c739",
+        "roundFactory.referenceImplementation": "0xb7a923881b3c715993be8e1d7d243afd1967afd1",
+        "LET.referenceImplementation": "0x487ed0d21e489d66e647fb4a55ce20daadaf7920",
+        "CyberScrip.referenceImplementation": "0x7924dad9707df68ce41d44016950b6e9e6e82493"
+      },
+      "implementationCode": {
+        "0xe2868d47f70ae14689d903661e5729ca5e37a634": {
+          "hasCode": true,
+          "runtimeBytes": 20221,
+          "runtimeSha256": "076e1774742ab5f2f45c0b631a0bcb3b9a9097680765158f106ce4395e2482c2"
+        },
+        "0x839da23fbb14fea0ef89e0b524455421383b02ce": {
+          "hasCode": true,
+          "runtimeBytes": 4131,
+          "runtimeSha256": "325997435b8b639978623d89e24bb9a79aaa6a0668de7ecdd778472dd81fcb5f"
+        },
+        "0x73f720866cb632023018524e5b738201adfcb01c": {
+          "hasCode": true,
+          "runtimeBytes": 5400,
+          "runtimeSha256": "b1140f0c17dab531a212264044b28a9c22d25324efefef6b2201e0d6ea6849bb"
+        },
+        "0xa0714923988e5bdd0b72ecd7375471aa3045e689": {
+          "hasCode": true,
+          "runtimeBytes": 7074,
+          "runtimeSha256": "21026cd3017434d96f3ab67db572ee599f2ba685e26531a51e4c5be05690dae1"
+        },
+        "0x6af59f8d0656fb1da646fbdc1fa582165c143ef8": {
+          "hasCode": true,
+          "runtimeBytes": 6097,
+          "runtimeSha256": "116fa1671b23f1cf2de3fcbc1db61a6bafe46d801aef3d29c762251bfa6f159b"
+        },
+        "0xeabeda8e939d570456ae2baf8bf2dd32c3810256": {
+          "hasCode": true,
+          "runtimeBytes": 22942,
+          "runtimeSha256": "02c96562e88c6326f036989e0f1147bc74f90aaba56a757def29ac4968bb48d1"
+        },
+        "0x44f71d3a279fa89adfadcb9838e25ea34b8a519f": {
+          "hasCode": true,
+          "runtimeBytes": 21721,
+          "runtimeSha256": "960c113c8d42ce5635580241bb7553afa174258b333b9c278566a40a41b03c4d"
+        },
+        "0x25077c9c742b64ee5498bf3b6630761221bfdbb1": {
+          "hasCode": true,
+          "runtimeBytes": 18144,
+          "runtimeSha256": "35a87fee3eb73acf95c9dd80925c0136acdbf280ca7351e70e7aeb7a335b587a"
+        },
+        "0xd6d889becbd19bfdfb43ac5df6d64b0028cb5247": {
+          "hasCode": true,
+          "runtimeBytes": 11430,
+          "runtimeSha256": "27bab6e7ccbe83b0a9308d75bfb197e2c0cdca7dcc13adbf28ff138e6ea1c0b6"
+        },
+        "0xc9ecfcad8792ff89c79dc1e3417abaf146778310": {
+          "hasCode": true,
+          "runtimeBytes": 19885,
+          "runtimeSha256": "23485b2c2950cb89b13342f214458e7dc5ff18c3e135db71df8dde1710ccf03f"
+        },
+        "0x1af1d74c53fee73f1ca29ba764b201ae0e1b4c27": {
+          "hasCode": true,
+          "runtimeBytes": 4467,
+          "runtimeSha256": "818019191222be3393048577d6a93a8122a7449903ae68ab89b14dae292f5a98"
+        },
+        "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e": {
+          "hasCode": true,
+          "runtimeBytes": 6985,
+          "runtimeSha256": "a46aa94b93140a626e9584fbdab362f065606058b1146b4bdfd07ec8e886563f"
+        },
+        "0x93ee4f2f833beb5267401de03d680ba1e186ea4e": {
+          "hasCode": true,
+          "runtimeBytes": 7300,
+          "runtimeSha256": "e0d58c2cffc1898c6b36b10737e1b82c48636442b0d314a2111abcbb2ea3bb23"
+        },
+        "0x481adae8392002d0195abc251d4dc7ba6bb82334": {
+          "hasCode": true,
+          "runtimeBytes": 4027,
+          "runtimeSha256": "d14f492658fe26be81b5b8304cd7318897c5e1f41091fb66ecd2b02f1e970d56"
+        },
+        "0x3157f1d053926bb0f2c10542f994f4102b359bce": {
+          "hasCode": true,
+          "runtimeBytes": 5897,
+          "runtimeSha256": "6b0da6a88c0a961a4931d5baf178140f0138450e6f05808daa87d1b7212199d5"
+        },
+        "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8": {
+          "hasCode": true,
+          "runtimeBytes": 8244,
+          "runtimeSha256": "991a338cd547fd6293907fb0a4c0d026d27fd0254f24aeab28c75074efaf8766"
+        },
+        "0xaf1467e9722bc975a15964604a19fb8bf78874aa": {
+          "hasCode": true,
+          "runtimeBytes": 4747,
+          "runtimeSha256": "de28aa778a4d31e656adf052dc5ec1a72ef715f2c71f2a90bda759b48b3ebd11"
+        },
+        "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84": {
+          "hasCode": true,
+          "runtimeBytes": 4560,
+          "runtimeSha256": "9471d37c989efa6d3c6c1705d1f433fdde887abed5cccad2d9a82fc3003430df"
+        },
+        "0x911ef683c052f63fea9f0a3cd638262609c07e07": {
+          "hasCode": true,
+          "runtimeBytes": 6637,
+          "runtimeSha256": "eb90f227e48d76708f93d690b0c3665d4a89d667df2fede8435eec035383e572"
+        },
+        "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40": {
+          "hasCode": true,
+          "runtimeBytes": 8782,
+          "runtimeSha256": "7e5cb7d95df241ea2e9d9a4775fbb513b57fbf7c8f1baad5502316e30d5b56b6"
+        },
+        "0x487e2e68a945a4bf99da64bdf51ee5e12656e199": {
+          "hasCode": true,
+          "runtimeBytes": 5014,
+          "runtimeSha256": "6dfd516221928f6615f0ac9bcc790b31f3ad3372146a354280f87e059b5a817e"
+        },
+        "0x9974c6f77c848f32a384df89c896bcdbe2519413": {
+          "hasCode": true,
+          "runtimeBytes": 6918,
+          "runtimeSha256": "88c28551e336d9ba3ef61f0fdfdcf86e48e0a3c7b96274b2bd75a0442593a9f7"
+        },
+        "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c": {
+          "hasCode": true,
+          "runtimeBytes": 9231,
+          "runtimeSha256": "fd76acd5395944bbf910ae1643fbe84f1e49d2adfcb95207c2bfad679ff25468"
+        },
+        "0x0abd73115b541ba3c81e3134dd0ad7602b9429e8": {
+          "hasCode": true,
+          "runtimeBytes": 21736,
+          "runtimeSha256": "eb782747e78287e5dbeebd52e63f7dc8bd199ce71ef57648449cd2eb8c5b8eda"
+        },
+        "0x3329182047d5e2c19a7d55b2c96d8379374c87aa": {
+          "hasCode": true,
+          "runtimeBytes": 23906,
+          "runtimeSha256": "2255204dd5b2452b81b490ce47e35084c3c4ba05681e5010f6887f74b2fce523"
+        },
+        "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c": {
+          "hasCode": true,
+          "runtimeBytes": 9660,
+          "runtimeSha256": "97362e47151029df4b72ced56b01e5dd9fbfffcfbb1be3ee427c176962887576"
+        },
+        "0xf9c62753d4b849713f42cd7e735b33ec86b92258": {
+          "hasCode": true,
+          "runtimeBytes": 16357,
+          "runtimeSha256": "0f180db94ee4e320ef74fe144e75455d1bfb9bf89c510f73edbcd3a7a70a54c8",
+          "deployVersion": "5"
+        },
+        "0x1ad870eb28b15283c3a52db6d688526665990f38": {
+          "hasCode": true,
+          "runtimeBytes": 17940,
+          "runtimeSha256": "106badbc70d267aa39251940e44fd05a8cd5455d47cf60d3e879d2ebb33eb07d",
+          "deployVersion": "5"
+        },
+        "0xe835b6030ffc5ba43219f7dd310dce1f4731c739": {
+          "hasCode": true,
+          "runtimeBytes": 22248,
+          "runtimeSha256": "134621b558de28b15f218747884371caab60ebe4473fab92ef4256271a3878a3",
+          "deployVersion": "5"
+        },
+        "0xb7a923881b3c715993be8e1d7d243afd1967afd1": {
+          "hasCode": true,
+          "runtimeBytes": 20727,
+          "runtimeSha256": "7643ae30bef936e00f703bcbb91a17938e6be345f41b1090891d0b728db99a9c",
+          "deployVersion": "5"
+        },
+        "0x487ed0d21e489d66e647fb4a55ce20daadaf7920": {
+          "hasCode": true,
+          "runtimeBytes": 24288,
+          "runtimeSha256": "7e7931215e313025bf25124de1554fe9cfef3ffa11480bf596536d3b08cf6d3b",
+          "deployVersion": "5"
+        },
+        "0x7924dad9707df68ce41d44016950b6e9e6e82493": {
+          "hasCode": true,
+          "runtimeBytes": 11343,
+          "runtimeSha256": "39530fe2aa91f5f992ebfbc8cf2ffa8406703452614f4e5ecd1226c95cf9d78b",
+          "deployVersion": "5"
+        }
+      }
+    },
+    "Base": {
+      "chainId": 8453,
+      "block": 53394927,
+      "blockHash": "0x183e35d3800c1e04fb8012b677f62d1bfb24cbbfa6d744f760c512ab4c66cc54",
+      "blockTimestamp": 1793579201,
+      "contracts": {
+        "coreAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "011e4dace35156ad99cdb2e83619d4ef4912c921d0e3e58026e75f88d5478711"
+        },
+        "corporateFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "singleFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "issuanceFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "dealFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "roundFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "registry": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "uriBuilder": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "lexAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "011e4dace35156ad99cdb2e83619d4ef4912c921d0e3e58026e75f88d5478711"
+        },
+        "lex": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "lexMinter": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "badgeAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "048efe9576316a71ad2ac8d5b3c712fe4f1502bfd31c7627821e7f3399bd0aa6"
+        },
+        "badge": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "safeExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "safeExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "aceSafeExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "aceSafeExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "saftExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "saftExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "saftExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "safteExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "ethosSafteExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "safteExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "safteExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "tokenWarrantExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "tokenWarrantExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "tokenWarrantExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "shareExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "shareExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "fundInterestExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "eligibility": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "usStateOfResidence": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "legionSoulbound": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "holderCap": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "cfius": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "section4a7Disclosure": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "rule144Disclosure": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "holdingPeriod": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "legalOpinion": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "regSDistributionCompliance": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "gpLpApproval": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "accreditedInvestor": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "qualifiedPurchaser": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "qualifiedInstitutionalBuyer": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "nonUsPerson": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "spvWhitelist": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "syndicate": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "killSwitch": {
+          "hasCode": true,
+          "runtimeBytes": 2067,
+          "runtimeSha256": "85eaed93cab4ebf5e9934f8a56a3218c8d5c23c5276578ff87043d85317ca907"
+        },
+        "timeSettlementPeriod": {
+          "hasCode": true,
+          "runtimeBytes": 1768,
+          "runtimeSha256": "93267696299de14f4347b396dcb257b0779dbb06f64b8e448b5eb0b6bd6645ed"
+        },
+        "lexchexCondition": {
+          "hasCode": true,
+          "runtimeBytes": 2311,
+          "runtimeSha256": "9d786751f4e41b773da2d2f241c33b7ca35483d1de99a3b21577d2c2f1b91915"
+        },
+        "zkpassportVerifier": {
+          "hasCode": true,
+          "runtimeBytes": 4951,
+          "runtimeSha256": "e1ee38048e759bff0ce18266853b4bf5794090fa69ff8477cbe1852aed2dece6"
+        },
+        "deprecatedNonUSNationalityCondition": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "originalIssuanceFactory": {
+          "hasCode": true,
+          "runtimeBytes": 3267,
+          "runtimeSha256": "f7a901063ed1ee32a68274aebf2ea8b9b8c11804579c61043e143e3e7c403ec5"
+        },
+        "originalSingleFactory": {
+          "hasCode": true,
+          "runtimeBytes": 2896,
+          "runtimeSha256": "ee691bb79a58902e8effbbdd005cde75e885618f0cfb4a5ce39718aa48563447"
+        },
+        "originalDealFactory": {
+          "hasCode": true,
+          "runtimeBytes": 2895,
+          "runtimeSha256": "c1614c44d14d739166724bc28166b43f9224beb0603d931cf3935baf3c6bdcfd"
+        },
+        "originalLETImplementation": {
+          "hasCode": true,
+          "runtimeBytes": 24504,
+          "runtimeSha256": "f4b0d7f59db0adc0f51cbdb40b04c0c893949394f36b53e5bf7ba26f5493646e"
+        },
+        "oldKillSwitchFromTestnetChecklist": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "MetaDAOFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "MetaDAOAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "1f9bff987e9911c2579e66871df84efe6c2d5fa3bb8cb01cf3b6d68ff6911a99"
+        },
+        "PumpCorpFactoryBaseProduction": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "PumpZkpassportAuthBaseProduction": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "7e87a3bb2f9b94b844e299f988405070e3746827d56c71cc62fb68dcb8ed87c2"
+        },
+        "PumpNonUSNationalityBaseProduction": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "PumpOrConditionBaseProduction": {
+          "hasCode": true,
+          "runtimeBytes": 792,
+          "runtimeSha256": "8740ddbf491e74450ad7d4493b9134b3faa2762c48151287a48166ce893874c6"
+        }
+      },
+      "wiring": {
+        "corporateFactory.issuanceManagerFactory": {
+          "value": "0xd353972d7955f421d94d0ea8c42c88c417f7155a",
+          "expected": "0xD353972D7955F421d94d0eA8c42c88c417F7155A",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.cyberCorpSingleFactory": {
+          "value": "0xbe0d3d13aa07501beac9b72de9e9292e66c7a5c4",
+          "expected": "0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.dealManagerFactory": {
+          "value": "0x3982b078f2ac306219c9540ebc908360a960c251",
+          "expected": "0x3982b078f2ac306219c9540Ebc908360a960C251",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.roundManagerFactory": {
+          "value": "0xc9d5d0dedd124f9351e5880469f25ab41869aeb9",
+          "expected": "0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.registryAddress": {
+          "value": "0xa9e808b8ecbb60bb19abf026b5b863215bc4c134",
+          "expected": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.uriBuilder": {
+          "value": "0x5500c095ea7de6f8a5e15949e24b80604cc670a3",
+          "expected": "0x5500c095ea7dE6F8a5E15949e24B80604cc670A3",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.lexchexAuth": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "singleFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "issuanceFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "dealFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "roundFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "registry.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "uriBuilder.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "lex.AUTH": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "lexMinter.AUTH": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "badge.AUTH": {
+          "value": "0x197333fc7a828e623fbfcf88ecdc976136f0cf1d",
+          "expected": "0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d",
+          "matchesSharedTarget": true
+        },
+        "singleFactory.referenceImplementation": {
+          "value": "0x1d85c3932ee70c74b331c80cc4a6a0fd5ffee4e2"
+        },
+        "issuanceFactory.referenceImplementation": {
+          "value": "0x7425819bb2a6e04bfac7b23b8f51841c95a35693"
+        },
+        "dealFactory.referenceImplementation": {
+          "value": "0xf791e85c9d6c140891df59c56bf093e298cfc7c7"
+        },
+        "roundFactory.referenceImplementation": {
+          "value": "0x5c5d9c5afab05e85602edfd2bac89f139f84ea79"
+        },
+        "LET.referenceImplementation": {
+          "value": "0xa7fe0a48c4dc365e1a3b4b46dd37069abd4dd1af"
+        },
+        "CyberScrip.referenceImplementation": {
+          "value": "0x3c0e4897a6abfa013f40e5e6d27f852a5cc60a80"
+        },
+        "corporateFactory.stable": {
+          "value": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        },
+        "uriBuilder.imageBuilder": {
+          "value": "0x5e1250959039d88d5f907ece320aea867a7bd186"
+        },
+        "dealFactory.primaryFeeBps": {
+          "value": 30
+        },
+        "roundFactory.primaryFeeBps": {
+          "value": 30
+        },
+        "dealFactory.secondaryFeeBps": {
+          "value": 500
+        }
+      },
+      "proxyImplementations": {
+        "corporateFactory": "0x6fed738bccabad350f6f840c43c6557b7b05c92c",
+        "singleFactory": "0xd6830f694cf628b3f6bd92245688891d00af7f68",
+        "issuanceFactory": "0xcc03ac566586dc080861e203002c7b9e8fad0ef7",
+        "dealFactory": "0x1315feb60f676b567a9374c5cb95bee68f2a5211",
+        "roundFactory": "0x6c3940ed910ca0d980e5cc16116a7236dbe0172e",
+        "registry": "0x239ef1c2f037e0ae2ed4c2c9b4196d8ffe738ea9",
+        "uriBuilder": "0xd922503429a876a5614b90884c16f327b9751f56",
+        "lex": "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3",
+        "lexMinter": "0x1bab1c9afbffd3f44a858b919b0843218f4cda6a",
+        "badge": "0xa1c9ad506d3b547b8593393a03f9879e6c6916fa",
+        "safeExtension": "0xb342b71d74327f546c428314b676ff85a0614385",
+        "safeExtensionV3": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+        "aceSafeExtension": "0x65dd5ac7572d96f9740b05aa6293390729ff630b",
+        "aceSafeExtensionV3": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+        "saftExtension": "0x481adae8392002d0195abc251d4dc7ba6bb82334",
+        "saftExtensionV2": "0x6c104fe18241e6b1ab045b3ae0415d02605ce46c",
+        "saftExtensionV3": "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8",
+        "safteExtension": "0xaf1467e9722bc975a15964604a19fb8bf78874aa",
+        "ethosSafteExtension": "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84",
+        "safteExtensionV2": "0xb7ea62196609fe01bfdd71bbd1722eaaf21fd84a",
+        "safteExtensionV3": "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40",
+        "tokenWarrantExtension": "0x487e2e68a945a4bf99da64bdf51ee5e12656e199",
+        "tokenWarrantExtensionV2": "0x8af0ab45267195d78e3302faa05b1034607f22cc",
+        "tokenWarrantExtensionV3": "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c",
+        "shareExtension": "0xa9d33542c53d58875e53bb98d4c5d87027c377e6",
+        "shareExtensionV3": "0x6b2e5e9c0cd11593401364c45bc3ec4dd98b613f",
+        "fundInterestExtensionV3": "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c"
+      },
+      "implementationTargets": {
+        "corporateFactory": "0x6fed738bccabad350f6f840c43c6557b7b05c92c",
+        "singleFactory": "0xd6830f694cf628b3f6bd92245688891d00af7f68",
+        "issuanceFactory": "0xcc03ac566586dc080861e203002c7b9e8fad0ef7",
+        "dealFactory": "0x1315feb60f676b567a9374c5cb95bee68f2a5211",
+        "roundFactory": "0x6c3940ed910ca0d980e5cc16116a7236dbe0172e",
+        "registry": "0x239ef1c2f037e0ae2ed4c2c9b4196d8ffe738ea9",
+        "uriBuilder": "0xd922503429a876a5614b90884c16f327b9751f56",
+        "lex": "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3",
+        "lexMinter": "0x1bab1c9afbffd3f44a858b919b0843218f4cda6a",
+        "badge": "0xa1c9ad506d3b547b8593393a03f9879e6c6916fa",
+        "safeExtension": "0xb342b71d74327f546c428314b676ff85a0614385",
+        "safeExtensionV3": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+        "aceSafeExtension": "0x65dd5ac7572d96f9740b05aa6293390729ff630b",
+        "aceSafeExtensionV3": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+        "saftExtension": "0x481adae8392002d0195abc251d4dc7ba6bb82334",
+        "saftExtensionV2": "0x6c104fe18241e6b1ab045b3ae0415d02605ce46c",
+        "saftExtensionV3": "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8",
+        "safteExtension": "0xaf1467e9722bc975a15964604a19fb8bf78874aa",
+        "ethosSafteExtension": "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84",
+        "safteExtensionV2": "0xb7ea62196609fe01bfdd71bbd1722eaaf21fd84a",
+        "safteExtensionV3": "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40",
+        "tokenWarrantExtension": "0x487e2e68a945a4bf99da64bdf51ee5e12656e199",
+        "tokenWarrantExtensionV2": "0x8af0ab45267195d78e3302faa05b1034607f22cc",
+        "tokenWarrantExtensionV3": "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c",
+        "shareExtension": "0xa9d33542c53d58875e53bb98d4c5d87027c377e6",
+        "shareExtensionV3": "0x6b2e5e9c0cd11593401364c45bc3ec4dd98b613f",
+        "fundInterestExtensionV3": "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c",
+        "singleFactory.referenceImplementation": "0x1d85c3932ee70c74b331c80cc4a6a0fd5ffee4e2",
+        "issuanceFactory.referenceImplementation": "0x7425819bb2a6e04bfac7b23b8f51841c95a35693",
+        "dealFactory.referenceImplementation": "0xf791e85c9d6c140891df59c56bf093e298cfc7c7",
+        "roundFactory.referenceImplementation": "0x5c5d9c5afab05e85602edfd2bac89f139f84ea79",
+        "LET.referenceImplementation": "0xa7fe0a48c4dc365e1a3b4b46dd37069abd4dd1af",
+        "CyberScrip.referenceImplementation": "0x3c0e4897a6abfa013f40e5e6d27f852a5cc60a80"
+      },
+      "implementationCode": {
+        "0x6fed738bccabad350f6f840c43c6557b7b05c92c": {
+          "hasCode": true,
+          "runtimeBytes": 20221,
+          "runtimeSha256": "0b909d98c5ce0a3ef02e1ccde2d3118d39dff1508339336a25f8e23f68f4439d"
+        },
+        "0xd6830f694cf628b3f6bd92245688891d00af7f68": {
+          "hasCode": true,
+          "runtimeBytes": 4131,
+          "runtimeSha256": "b8b192689c3b8e4be2a3b400708de4692a7eafa6f410bc14cd99f7408d8e71fd"
+        },
+        "0xcc03ac566586dc080861e203002c7b9e8fad0ef7": {
+          "hasCode": true,
+          "runtimeBytes": 5400,
+          "runtimeSha256": "ca7ebe204e03146ba1ee4a45b7e70ef8992802a41d673324cf32ea5a6aeb0df4"
+        },
+        "0x1315feb60f676b567a9374c5cb95bee68f2a5211": {
+          "hasCode": true,
+          "runtimeBytes": 7074,
+          "runtimeSha256": "62574cb23d67beb2324c60881e700f044b5921073cc8e8c268be1043dae53353"
+        },
+        "0x6c3940ed910ca0d980e5cc16116a7236dbe0172e": {
+          "hasCode": true,
+          "runtimeBytes": 6097,
+          "runtimeSha256": "9cb17d8d2fcbf145db3745823d2e7a4526fdc0ed03ea57e90287f8191a848b6d"
+        },
+        "0x239ef1c2f037e0ae2ed4c2c9b4196d8ffe738ea9": {
+          "hasCode": true,
+          "runtimeBytes": 22942,
+          "runtimeSha256": "c238d06d0af7e7999ce930de4f68503334c2f7045e635b83abb5f187cfa6e83a"
+        },
+        "0xd922503429a876a5614b90884c16f327b9751f56": {
+          "hasCode": true,
+          "runtimeBytes": 21721,
+          "runtimeSha256": "77c9ca5fe6f80f5b70c2d386d5d4be04cbe8f7d15e0e667c65b1d0117da7b6e0"
+        },
+        "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3": {
+          "hasCode": true,
+          "runtimeBytes": 18144,
+          "runtimeSha256": "1711c6b1f30b3b3ecb1d3e1cdc2255f94ae7a5598735c0758d4660f55abb3931"
+        },
+        "0x1bab1c9afbffd3f44a858b919b0843218f4cda6a": {
+          "hasCode": true,
+          "runtimeBytes": 11430,
+          "runtimeSha256": "97ff7b7150ff55d66e87edd1458b8e736e3f1def57536f84f78cbb63cfb634da"
+        },
+        "0xa1c9ad506d3b547b8593393a03f9879e6c6916fa": {
+          "hasCode": true,
+          "runtimeBytes": 19885,
+          "runtimeSha256": "d89bdde0f0bef538f0cc57f81ba26aeaae07d0943fffad32dba8e54c8e5a3665"
+        },
+        "0xb342b71d74327f546c428314b676ff85a0614385": {
+          "hasCode": true,
+          "runtimeBytes": 4467,
+          "runtimeSha256": "9f3f97f618240c1cc2ff0843d0011dcba10f0cdbcfa8289e30a0d91bc680b15f"
+        },
+        "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e": {
+          "hasCode": true,
+          "runtimeBytes": 6985,
+          "runtimeSha256": "a46aa94b93140a626e9584fbdab362f065606058b1146b4bdfd07ec8e886563f"
+        },
+        "0x65dd5ac7572d96f9740b05aa6293390729ff630b": {
+          "hasCode": true,
+          "runtimeBytes": 4626,
+          "runtimeSha256": "c09dff3af02f60fa3fca16c759a0a92588c308808975bca7ca93b27fc829f5a4"
+        },
+        "0x93ee4f2f833beb5267401de03d680ba1e186ea4e": {
+          "hasCode": true,
+          "runtimeBytes": 7300,
+          "runtimeSha256": "e0d58c2cffc1898c6b36b10737e1b82c48636442b0d314a2111abcbb2ea3bb23"
+        },
+        "0x481adae8392002d0195abc251d4dc7ba6bb82334": {
+          "hasCode": true,
+          "runtimeBytes": 4027,
+          "runtimeSha256": "d14f492658fe26be81b5b8304cd7318897c5e1f41091fb66ecd2b02f1e970d56"
+        },
+        "0x6c104fe18241e6b1ab045b3ae0415d02605ce46c": {
+          "hasCode": true,
+          "runtimeBytes": 5897,
+          "runtimeSha256": "2ef2bd7617af033d1623b51ab7329c6d1137e5729028267093ee6514c2ed6897"
+        },
+        "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8": {
+          "hasCode": true,
+          "runtimeBytes": 8244,
+          "runtimeSha256": "991a338cd547fd6293907fb0a4c0d026d27fd0254f24aeab28c75074efaf8766"
+        },
+        "0xaf1467e9722bc975a15964604a19fb8bf78874aa": {
+          "hasCode": true,
+          "runtimeBytes": 4747,
+          "runtimeSha256": "de28aa778a4d31e656adf052dc5ec1a72ef715f2c71f2a90bda759b48b3ebd11"
+        },
+        "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84": {
+          "hasCode": true,
+          "runtimeBytes": 4560,
+          "runtimeSha256": "9471d37c989efa6d3c6c1705d1f433fdde887abed5cccad2d9a82fc3003430df"
+        },
+        "0xb7ea62196609fe01bfdd71bbd1722eaaf21fd84a": {
+          "hasCode": true,
+          "runtimeBytes": 6637,
+          "runtimeSha256": "9136ca3eb5242caea3786fda9325ca90de08d069181499b66fb77e80c8237287"
+        },
+        "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40": {
+          "hasCode": true,
+          "runtimeBytes": 8782,
+          "runtimeSha256": "7e5cb7d95df241ea2e9d9a4775fbb513b57fbf7c8f1baad5502316e30d5b56b6"
+        },
+        "0x487e2e68a945a4bf99da64bdf51ee5e12656e199": {
+          "hasCode": true,
+          "runtimeBytes": 5014,
+          "runtimeSha256": "6dfd516221928f6615f0ac9bcc790b31f3ad3372146a354280f87e059b5a817e"
+        },
+        "0x8af0ab45267195d78e3302faa05b1034607f22cc": {
+          "hasCode": true,
+          "runtimeBytes": 6918,
+          "runtimeSha256": "71d0f888e746fbc3ade273d3f0626e88326feb58b6420b6db4a42ed2b95f4cfb"
+        },
+        "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c": {
+          "hasCode": true,
+          "runtimeBytes": 9231,
+          "runtimeSha256": "fd76acd5395944bbf910ae1643fbe84f1e49d2adfcb95207c2bfad679ff25468"
+        },
+        "0xa9d33542c53d58875e53bb98d4c5d87027c377e6": {
+          "hasCode": true,
+          "runtimeBytes": 21736,
+          "runtimeSha256": "df2147f3138fca0ef4d65fda489e885e1602488223cafca4b71d658b99895c66"
+        },
+        "0x6b2e5e9c0cd11593401364c45bc3ec4dd98b613f": {
+          "hasCode": true,
+          "runtimeBytes": 23906,
+          "runtimeSha256": "38d44f9cac681a699e5dbbb0364646a9a677d008be7858ce06011f12bc8c7216"
+        },
+        "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c": {
+          "hasCode": true,
+          "runtimeBytes": 9660,
+          "runtimeSha256": "97362e47151029df4b72ced56b01e5dd9fbfffcfbb1be3ee427c176962887576"
+        },
+        "0x1d85c3932ee70c74b331c80cc4a6a0fd5ffee4e2": {
+          "hasCode": true,
+          "runtimeBytes": 16357,
+          "runtimeSha256": "57862abc40d826cb294162c628f330b37bb67dc64cd20bd91a0cb18d69461402",
+          "deployVersion": "5"
+        },
+        "0x7425819bb2a6e04bfac7b23b8f51841c95a35693": {
+          "hasCode": true,
+          "runtimeBytes": 17940,
+          "runtimeSha256": "5700c25de60eb7d7a75b718acb87c7b6c1441fb22d45c35622b9a514226fbeb1",
+          "deployVersion": "5"
+        },
+        "0xf791e85c9d6c140891df59c56bf093e298cfc7c7": {
+          "hasCode": true,
+          "runtimeBytes": 22248,
+          "runtimeSha256": "f017006934242d03023b964ffeecb116b2859ac8988f5a8ee739bbf9ee91c881",
+          "deployVersion": "5"
+        },
+        "0x5c5d9c5afab05e85602edfd2bac89f139f84ea79": {
+          "hasCode": true,
+          "runtimeBytes": 20727,
+          "runtimeSha256": "1bb60af828f29f7aad08d3c47f5c8c98ff6cbd5c5df1e6c5640c52942a6f9a2f",
+          "deployVersion": "5"
+        },
+        "0xa7fe0a48c4dc365e1a3b4b46dd37069abd4dd1af": {
+          "hasCode": true,
+          "runtimeBytes": 24288,
+          "runtimeSha256": "42b848cc71b78bae7466f33c1c81eaabf1876ffda52cdc29378a611b849444d0",
+          "deployVersion": "5"
+        },
+        "0x3c0e4897a6abfa013f40e5e6d27f852a5cc60a80": {
+          "hasCode": true,
+          "runtimeBytes": 11343,
+          "runtimeSha256": "5486141980c0c298215a1629731185120fd90bb06743c5b8680d08334bda78a7",
+          "deployVersion": "5"
+        }
+      }
+    },
+    "Arbitrum": {
+      "chainId": 42161,
+      "block": 520420951,
+      "blockHash": "0xe6229536b295a0314f4b253c989c69452ccd01b6d9a6a01d53466226985b21ae",
+      "blockTimestamp": 1793579279,
+      "contracts": {
+        "coreAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "011e4dace35156ad99cdb2e83619d4ef4912c921d0e3e58026e75f88d5478711"
+        },
+        "corporateFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "singleFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "issuanceFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "dealFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "roundFactory": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "registry": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "uriBuilder": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "lexAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "011e4dace35156ad99cdb2e83619d4ef4912c921d0e3e58026e75f88d5478711"
+        },
+        "lex": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "lexMinter": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "badgeAuth": {
+          "hasCode": true,
+          "runtimeBytes": 2188,
+          "runtimeSha256": "048efe9576316a71ad2ac8d5b3c712fe4f1502bfd31c7627821e7f3399bd0aa6"
+        },
+        "badge": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "safeExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "safeExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "aceSafeExtension": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "aceSafeExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "saftExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "saftExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "saftExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "safteExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "ethosSafteExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "safteExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "safteExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "tokenWarrantExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "cbe002660f66926565dd343faf7db71d55da166c658f279e8cba8b5de04bab40"
+        },
+        "tokenWarrantExtensionV2": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "tokenWarrantExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "shareExtension": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "a22a08261a258ac68f668eae5e3637540253ad2556c2f6737481883b0097fd4c"
+        },
+        "shareExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "fundInterestExtensionV3": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "eligibility": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "usStateOfResidence": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "legionSoulbound": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "holderCap": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "cfius": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "section4a7Disclosure": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "rule144Disclosure": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "holdingPeriod": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "legalOpinion": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "regSDistributionCompliance": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "gpLpApproval": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "accreditedInvestor": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "qualifiedPurchaser": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "qualifiedInstitutionalBuyer": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "nonUsPerson": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "spvWhitelist": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "syndicate": {
+          "hasCode": true,
+          "runtimeBytes": 130,
+          "runtimeSha256": "6251c9bf49a34da767235832b475bc71afb0832671eb79c83a2544391e65db00"
+        },
+        "killSwitch": {
+          "hasCode": true,
+          "runtimeBytes": 2067,
+          "runtimeSha256": "85eaed93cab4ebf5e9934f8a56a3218c8d5c23c5276578ff87043d85317ca907"
+        },
+        "timeSettlementPeriod": {
+          "hasCode": true,
+          "runtimeBytes": 1768,
+          "runtimeSha256": "93267696299de14f4347b396dcb257b0779dbb06f64b8e448b5eb0b6bd6645ed"
+        },
+        "lexchexCondition": {
+          "hasCode": true,
+          "runtimeBytes": 2311,
+          "runtimeSha256": "9d786751f4e41b773da2d2f241c33b7ca35483d1de99a3b21577d2c2f1b91915"
+        },
+        "zkpassportVerifier": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "deprecatedNonUSNationalityCondition": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "originalIssuanceFactory": {
+          "hasCode": true,
+          "runtimeBytes": 3267,
+          "runtimeSha256": "f7a901063ed1ee32a68274aebf2ea8b9b8c11804579c61043e143e3e7c403ec5"
+        },
+        "originalSingleFactory": {
+          "hasCode": true,
+          "runtimeBytes": 2896,
+          "runtimeSha256": "ee691bb79a58902e8effbbdd005cde75e885618f0cfb4a5ce39718aa48563447"
+        },
+        "originalDealFactory": {
+          "hasCode": true,
+          "runtimeBytes": 2895,
+          "runtimeSha256": "c1614c44d14d739166724bc28166b43f9224beb0603d931cf3935baf3c6bdcfd"
+        },
+        "originalLETImplementation": {
+          "hasCode": true,
+          "runtimeBytes": 24504,
+          "runtimeSha256": "f4b0d7f59db0adc0f51cbdb40b04c0c893949394f36b53e5bf7ba26f5493646e"
+        },
+        "oldKillSwitchFromTestnetChecklist": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "MetaDAOFactory": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "MetaDAOAuth": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpCorpFactoryBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpZkpassportAuthBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpNonUSNationalityBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "PumpOrConditionBaseProduction": {
+          "hasCode": false,
+          "runtimeBytes": 0,
+          "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "wiring": {
+        "corporateFactory.issuanceManagerFactory": {
+          "value": "0xd353972d7955f421d94d0ea8c42c88c417f7155a",
+          "expected": "0xD353972D7955F421d94d0eA8c42c88c417F7155A",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.cyberCorpSingleFactory": {
+          "value": "0xbe0d3d13aa07501beac9b72de9e9292e66c7a5c4",
+          "expected": "0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.dealManagerFactory": {
+          "value": "0x3982b078f2ac306219c9540ebc908360a960c251",
+          "expected": "0x3982b078f2ac306219c9540Ebc908360a960C251",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.roundManagerFactory": {
+          "value": "0xc9d5d0dedd124f9351e5880469f25ab41869aeb9",
+          "expected": "0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.registryAddress": {
+          "value": "0xa9e808b8ecbb60bb19abf026b5b863215bc4c134",
+          "expected": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.uriBuilder": {
+          "value": "0x5500c095ea7de6f8a5e15949e24b80604cc670a3",
+          "expected": "0x5500c095ea7dE6F8a5E15949e24B80604cc670A3",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.lexchexAuth": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "corporateFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "singleFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "issuanceFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "dealFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "roundFactory.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "registry.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "uriBuilder.AUTH": {
+          "value": "0x033012a1eda6e2e00d12cd37c5b63b9440ef5e01",
+          "expected": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+          "matchesSharedTarget": true
+        },
+        "lex.AUTH": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "lexMinter.AUTH": {
+          "value": "0xeadead5c4a6747d4959489742c143bcdb95a01c2",
+          "expected": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+          "matchesSharedTarget": true
+        },
+        "badge.AUTH": {
+          "value": "0x197333fc7a828e623fbfcf88ecdc976136f0cf1d",
+          "expected": "0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d",
+          "matchesSharedTarget": true
+        },
+        "singleFactory.referenceImplementation": {
+          "value": "0xe4c397ce002a53d7151dd53ddac8eba98fea559c"
+        },
+        "issuanceFactory.referenceImplementation": {
+          "value": "0xa154f78f048a3dfda0397f852956391996d2e3fe"
+        },
+        "dealFactory.referenceImplementation": {
+          "value": "0x40661c3c5b25c6426bb176b253243cff3a3af077"
+        },
+        "roundFactory.referenceImplementation": {
+          "value": "0xeb5a6264bfa9d635d7da3fcce5daf348510d4d23"
+        },
+        "LET.referenceImplementation": {
+          "value": "0x678c30da359e85a970f5a9813ebd1d3ade38c219"
+        },
+        "CyberScrip.referenceImplementation": {
+          "value": "0x37aa6934e735f3984d4885545a080233dbc9bb75"
+        },
+        "corporateFactory.stable": {
+          "value": "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
+        },
+        "uriBuilder.imageBuilder": {
+          "value": "0x7086290d3603ceb1681e5fb6139014106a8dd9d8"
+        },
+        "dealFactory.primaryFeeBps": {
+          "value": 30
+        },
+        "roundFactory.primaryFeeBps": {
+          "value": 30
+        },
+        "dealFactory.secondaryFeeBps": {
+          "value": 500
+        }
+      },
+      "proxyImplementations": {
+        "corporateFactory": "0x6160b0084a7ee71e7ba8a10568d2f82671c3e518",
+        "singleFactory": "0xc77aba9512821a839bdb74d7b43cf8dffd70eca6",
+        "issuanceFactory": "0x3eeedccdddab393541901e90b1b43a0b511d69cf",
+        "dealFactory": "0xab095d7a3b04d581a05ce5045750feb8723da08f",
+        "roundFactory": "0x4254de7dfb906e068d685b5e806f392438ae91ad",
+        "registry": "0x62df59551c9251ae900b1d888938cf5246f7d262",
+        "uriBuilder": "0x315e23a4109402d05c6e7cc8de14247c7e17ecf0",
+        "lex": "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3",
+        "lexMinter": "0xbc3de2d9c980187995c77aabf97f9de27a037b75",
+        "badge": "0x3a3736d69870189a7f2376a068b0ed9da69f61c6",
+        "safeExtension": "0x37b202a16d898e41cdfe2613221075594f148b83",
+        "safeExtensionV3": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+        "aceSafeExtensionV3": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+        "saftExtension": "0x481adae8392002d0195abc251d4dc7ba6bb82334",
+        "saftExtensionV2": "0x30eeb1da35294e683e25c80a1dc6175828ce102b",
+        "saftExtensionV3": "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8",
+        "safteExtension": "0xaf1467e9722bc975a15964604a19fb8bf78874aa",
+        "ethosSafteExtension": "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84",
+        "safteExtensionV2": "0x8e876bf1cdf031629d51f6f7269a952c126864de",
+        "safteExtensionV3": "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40",
+        "tokenWarrantExtension": "0x487e2e68a945a4bf99da64bdf51ee5e12656e199",
+        "tokenWarrantExtensionV2": "0xa274997a7e188342b1f465c3ab6e37cbccd33001",
+        "tokenWarrantExtensionV3": "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c",
+        "shareExtension": "0x20a92d8f18197872603e6eb4dbdbb0d4cfba18ad",
+        "shareExtensionV3": "0x090703278cf61533b96be0b461941a22f74699d7",
+        "fundInterestExtensionV3": "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c"
+      },
+      "implementationTargets": {
+        "corporateFactory": "0x6160b0084a7ee71e7ba8a10568d2f82671c3e518",
+        "singleFactory": "0xc77aba9512821a839bdb74d7b43cf8dffd70eca6",
+        "issuanceFactory": "0x3eeedccdddab393541901e90b1b43a0b511d69cf",
+        "dealFactory": "0xab095d7a3b04d581a05ce5045750feb8723da08f",
+        "roundFactory": "0x4254de7dfb906e068d685b5e806f392438ae91ad",
+        "registry": "0x62df59551c9251ae900b1d888938cf5246f7d262",
+        "uriBuilder": "0x315e23a4109402d05c6e7cc8de14247c7e17ecf0",
+        "lex": "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3",
+        "lexMinter": "0xbc3de2d9c980187995c77aabf97f9de27a037b75",
+        "badge": "0x3a3736d69870189a7f2376a068b0ed9da69f61c6",
+        "safeExtension": "0x37b202a16d898e41cdfe2613221075594f148b83",
+        "safeExtensionV3": "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e",
+        "aceSafeExtensionV3": "0x93ee4f2f833beb5267401de03d680ba1e186ea4e",
+        "saftExtension": "0x481adae8392002d0195abc251d4dc7ba6bb82334",
+        "saftExtensionV2": "0x30eeb1da35294e683e25c80a1dc6175828ce102b",
+        "saftExtensionV3": "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8",
+        "safteExtension": "0xaf1467e9722bc975a15964604a19fb8bf78874aa",
+        "ethosSafteExtension": "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84",
+        "safteExtensionV2": "0x8e876bf1cdf031629d51f6f7269a952c126864de",
+        "safteExtensionV3": "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40",
+        "tokenWarrantExtension": "0x487e2e68a945a4bf99da64bdf51ee5e12656e199",
+        "tokenWarrantExtensionV2": "0xa274997a7e188342b1f465c3ab6e37cbccd33001",
+        "tokenWarrantExtensionV3": "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c",
+        "shareExtension": "0x20a92d8f18197872603e6eb4dbdbb0d4cfba18ad",
+        "shareExtensionV3": "0x090703278cf61533b96be0b461941a22f74699d7",
+        "fundInterestExtensionV3": "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c",
+        "singleFactory.referenceImplementation": "0xe4c397ce002a53d7151dd53ddac8eba98fea559c",
+        "issuanceFactory.referenceImplementation": "0xa154f78f048a3dfda0397f852956391996d2e3fe",
+        "dealFactory.referenceImplementation": "0x40661c3c5b25c6426bb176b253243cff3a3af077",
+        "roundFactory.referenceImplementation": "0xeb5a6264bfa9d635d7da3fcce5daf348510d4d23",
+        "LET.referenceImplementation": "0x678c30da359e85a970f5a9813ebd1d3ade38c219",
+        "CyberScrip.referenceImplementation": "0x37aa6934e735f3984d4885545a080233dbc9bb75"
+      },
+      "implementationCode": {
+        "0x6160b0084a7ee71e7ba8a10568d2f82671c3e518": {
+          "hasCode": true,
+          "runtimeBytes": 20221,
+          "runtimeSha256": "15d6a12c73fc455c8e56b657e2d7a1210fd6ce6977502c79181c202947ce58a6"
+        },
+        "0xc77aba9512821a839bdb74d7b43cf8dffd70eca6": {
+          "hasCode": true,
+          "runtimeBytes": 4131,
+          "runtimeSha256": "d191b3fdec0614f489cd40e96defa089ff4af31ccd8788855cee16ed68626e38"
+        },
+        "0x3eeedccdddab393541901e90b1b43a0b511d69cf": {
+          "hasCode": true,
+          "runtimeBytes": 5400,
+          "runtimeSha256": "7059c8ef5ac7946a578f274dbcde5478b52edc070d3e61da3a7db00c52f0b93f"
+        },
+        "0xab095d7a3b04d581a05ce5045750feb8723da08f": {
+          "hasCode": true,
+          "runtimeBytes": 7074,
+          "runtimeSha256": "90a415048ac4553545dd6cbf3b3d5a14acd36a76ee785751d1169f3e37ae0819"
+        },
+        "0x4254de7dfb906e068d685b5e806f392438ae91ad": {
+          "hasCode": true,
+          "runtimeBytes": 6097,
+          "runtimeSha256": "1ac8bf95053bd118b0f620f0436214e54266eb8a7161466eb66fcfd1b1a0d924"
+        },
+        "0x62df59551c9251ae900b1d888938cf5246f7d262": {
+          "hasCode": true,
+          "runtimeBytes": 22942,
+          "runtimeSha256": "47055e46d39392456643fe281ce52cfa9d0b16b6ac6fd2b36cdd55e9e11aaa21"
+        },
+        "0x315e23a4109402d05c6e7cc8de14247c7e17ecf0": {
+          "hasCode": true,
+          "runtimeBytes": 21721,
+          "runtimeSha256": "a00888c94e66382e729fa4ca492c5cf89e2df4f6639beb6720a0966d436730dc"
+        },
+        "0xbe47da08c0ae22791ffb5fe529eab94d664adeb3": {
+          "hasCode": true,
+          "runtimeBytes": 18144,
+          "runtimeSha256": "1711c6b1f30b3b3ecb1d3e1cdc2255f94ae7a5598735c0758d4660f55abb3931"
+        },
+        "0xbc3de2d9c980187995c77aabf97f9de27a037b75": {
+          "hasCode": true,
+          "runtimeBytes": 11430,
+          "runtimeSha256": "8dbb601a390b068aacd2f6147c561c3d37732251f190f7234bab45f6cdd2a633"
+        },
+        "0x3a3736d69870189a7f2376a068b0ed9da69f61c6": {
+          "hasCode": true,
+          "runtimeBytes": 19885,
+          "runtimeSha256": "842480e02d3a4728b983c5ad4ce81f67f8777d2e4fe8e94e45f1ccd9c66b8405"
+        },
+        "0x37b202a16d898e41cdfe2613221075594f148b83": {
+          "hasCode": true,
+          "runtimeBytes": 4467,
+          "runtimeSha256": "18ac0484a1af890a348e9da0b6d36e86c5dcfd32918fbdfe3994ac184fecd181"
+        },
+        "0xb4cb111ac41e0c0f29c756eeaacd45ddd3bc168e": {
+          "hasCode": true,
+          "runtimeBytes": 6985,
+          "runtimeSha256": "a46aa94b93140a626e9584fbdab362f065606058b1146b4bdfd07ec8e886563f"
+        },
+        "0x93ee4f2f833beb5267401de03d680ba1e186ea4e": {
+          "hasCode": true,
+          "runtimeBytes": 7300,
+          "runtimeSha256": "e0d58c2cffc1898c6b36b10737e1b82c48636442b0d314a2111abcbb2ea3bb23"
+        },
+        "0x481adae8392002d0195abc251d4dc7ba6bb82334": {
+          "hasCode": true,
+          "runtimeBytes": 4027,
+          "runtimeSha256": "d14f492658fe26be81b5b8304cd7318897c5e1f41091fb66ecd2b02f1e970d56"
+        },
+        "0x30eeb1da35294e683e25c80a1dc6175828ce102b": {
+          "hasCode": true,
+          "runtimeBytes": 5897,
+          "runtimeSha256": "927d3e93a1f587f9f85ff502f0681aa860d1db3c2f0927b8b13961bfcb99e544"
+        },
+        "0x4b8551c1970a06bff2efcab8fdebeb589638bcd8": {
+          "hasCode": true,
+          "runtimeBytes": 8244,
+          "runtimeSha256": "991a338cd547fd6293907fb0a4c0d026d27fd0254f24aeab28c75074efaf8766"
+        },
+        "0xaf1467e9722bc975a15964604a19fb8bf78874aa": {
+          "hasCode": true,
+          "runtimeBytes": 4747,
+          "runtimeSha256": "de28aa778a4d31e656adf052dc5ec1a72ef715f2c71f2a90bda759b48b3ebd11"
+        },
+        "0xbc0b0fed2bb956c048e95b8634bab0d9143adc84": {
+          "hasCode": true,
+          "runtimeBytes": 4560,
+          "runtimeSha256": "9471d37c989efa6d3c6c1705d1f433fdde887abed5cccad2d9a82fc3003430df"
+        },
+        "0x8e876bf1cdf031629d51f6f7269a952c126864de": {
+          "hasCode": true,
+          "runtimeBytes": 6637,
+          "runtimeSha256": "a48677ed0d71c2c2fea7ed4d1883c144aee6a89e90f7cc8ff0fbe0d7f9ca9d5a"
+        },
+        "0x5a58005ea5ece5b87903dba8d6cc3b4d96c7df40": {
+          "hasCode": true,
+          "runtimeBytes": 8782,
+          "runtimeSha256": "7e5cb7d95df241ea2e9d9a4775fbb513b57fbf7c8f1baad5502316e30d5b56b6"
+        },
+        "0x487e2e68a945a4bf99da64bdf51ee5e12656e199": {
+          "hasCode": true,
+          "runtimeBytes": 5014,
+          "runtimeSha256": "6dfd516221928f6615f0ac9bcc790b31f3ad3372146a354280f87e059b5a817e"
+        },
+        "0xa274997a7e188342b1f465c3ab6e37cbccd33001": {
+          "hasCode": true,
+          "runtimeBytes": 6918,
+          "runtimeSha256": "c30aa8f40bddc1713f4f7004673a1ff13e820b993f57b603095bfbb59c3271ba"
+        },
+        "0x5f6f6120e1a4eb1e2bd60f6ae672780261d7003c": {
+          "hasCode": true,
+          "runtimeBytes": 9231,
+          "runtimeSha256": "fd76acd5395944bbf910ae1643fbe84f1e49d2adfcb95207c2bfad679ff25468"
+        },
+        "0x20a92d8f18197872603e6eb4dbdbb0d4cfba18ad": {
+          "hasCode": true,
+          "runtimeBytes": 21736,
+          "runtimeSha256": "9b6d17c289e162307fccb2b49748aa23d9982b514553ab391712426e22480926"
+        },
+        "0x090703278cf61533b96be0b461941a22f74699d7": {
+          "hasCode": true,
+          "runtimeBytes": 23906,
+          "runtimeSha256": "31123529c5e17f13a9272ede6696c6de4bce1212d12b54c267b0df81aa99cf4a"
+        },
+        "0x58c681a7ed1d4c0da39ee96f4109900fb8ee493c": {
+          "hasCode": true,
+          "runtimeBytes": 9660,
+          "runtimeSha256": "97362e47151029df4b72ced56b01e5dd9fbfffcfbb1be3ee427c176962887576"
+        },
+        "0xe4c397ce002a53d7151dd53ddac8eba98fea559c": {
+          "hasCode": true,
+          "runtimeBytes": 16357,
+          "runtimeSha256": "f76eb5ac1d66231af60047ac9c603a9d1f8aedac270e164c6684f2672d45b3bd",
+          "deployVersion": "5"
+        },
+        "0xa154f78f048a3dfda0397f852956391996d2e3fe": {
+          "hasCode": true,
+          "runtimeBytes": 17940,
+          "runtimeSha256": "b7f5a96b497f4f20726940cd7ce24e2d37c780c6c82e1234a467490fbb38855d",
+          "deployVersion": "5"
+        },
+        "0x40661c3c5b25c6426bb176b253243cff3a3af077": {
+          "hasCode": true,
+          "runtimeBytes": 22248,
+          "runtimeSha256": "e35ad1c85ba8b59e49d46e0ac4d35036cb1a4cc59ece802aba41025c2d20fac4",
+          "deployVersion": "5"
+        },
+        "0xeb5a6264bfa9d635d7da3fcce5daf348510d4d23": {
+          "hasCode": true,
+          "runtimeBytes": 20727,
+          "runtimeSha256": "cdf631423c6801a8dd4d73c5598a47607bcfcbd494d6bdc1dcce4d617d419652",
+          "deployVersion": "5"
+        },
+        "0x678c30da359e85a970f5a9813ebd1d3ade38c219": {
+          "hasCode": true,
+          "runtimeBytes": 24288,
+          "runtimeSha256": "42b848cc71b78bae7466f33c1c81eaabf1876ffda52cdc29378a611b849444d0",
+          "deployVersion": "5"
+        },
+        "0x37aa6934e735f3984d4885545a080233dbc9bb75": {
+          "hasCode": true,
+          "runtimeBytes": 11343,
+          "runtimeSha256": "5486141980c0c298215a1629731185120fd90bb06743c5b8680d08334bda78a7",
+          "deployVersion": "5"
+        }
+      }
+    }
+  },
+  "failures": {},
+  "transactionsSubmitted": false,
+  "walletKeysUsed": false,
+  "comparison": [
+    {
+      "group": "Critical auth/proxy",
+      "name": "coreAuth",
+      "address": "0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "corporateFactory",
+      "address": "0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "singleFactory",
+      "address": "0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "issuanceFactory",
+      "address": "0xD353972D7955F421d94d0eA8c42c88c417F7155A",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "dealFactory",
+      "address": "0x3982b078f2ac306219c9540Ebc908360a960C251",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "roundFactory",
+      "address": "0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "registry",
+      "address": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "uriBuilder",
+      "address": "0x5500c095ea7dE6F8a5E15949e24B80604cc670A3",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "lexAuth",
+      "address": "0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "lex",
+      "address": "0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "lexMinter",
+      "address": "0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "badgeAuth",
+      "address": "0x197333Fc7A828e623fbfcF88eCdc976136F0cf1d",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Critical auth/proxy",
+      "name": "badge",
+      "address": "0x114664773Ba721a6AA43890d5FDE7939aF37618F",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safeExtension",
+      "address": "0xB2E732d29b89ec36a8Dd23CFD32901056b6579C8",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safeExtensionV3",
+      "address": "0x740003076c9F16c4a364AE07f3770FB77899299b",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "aceSafeExtension",
+      "address": "0x6aDaef2B79FD1cbA130c5807B31DE435FEa58EAC",
+      "presentOn": [
+        "Base"
+      ],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Certificate extension",
+      "name": "aceSafeExtensionV3",
+      "address": "0x9a8ef946F18C4296e50f8DF0C97b5Cf5d1b5eCD2",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "saftExtension",
+      "address": "0x109D2A13932bE393011835B308F81ce1992E365B",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "saftExtensionV2",
+      "address": "0x37c2A0e801e569e01f0972186aF4DB01409e92c1",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "saftExtensionV3",
+      "address": "0x2Bf1b2f8f6009c5524886243CE4F2EF34e3d4957",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safteExtension",
+      "address": "0xE070eDA75695bE3ED4B9ec3719b76Dd36794787C",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "ethosSafteExtension",
+      "address": "0xC23fFF0B06aE5EBea862611F489b1329108ce603",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safteExtensionV2",
+      "address": "0x4Acdc8618BF2C3d760a357ec11A8290c79f5b41A",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "safteExtensionV3",
+      "address": "0xE79C2b4a35b2509b27686D025FB8Fbab2Ca49406",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "tokenWarrantExtension",
+      "address": "0xbad0b411C37cfF66e4C0B7764Db2d499eA757bb4",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "tokenWarrantExtensionV2",
+      "address": "0xF5A9984DfcA4D6Dd55D6151F0cd2F4Af9522BC8F",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "tokenWarrantExtensionV3",
+      "address": "0x3Bdb711517eEbd6A88D9Aa30B141adC43BAB033e",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "shareExtension",
+      "address": "0x80e8205b74e3E9882C3C57aA0b36cD465E7A4b81",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "shareExtensionV3",
+      "address": "0xa21C434379CC44bfeD6e3c1342e49951804ec30f",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Certificate extension",
+      "name": "fundInterestExtensionV3",
+      "address": "0x2322D1dcC199d7A9Ee60F331cA9D76d244F09a15",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "eligibility",
+      "address": "0x64f43CEfc89279aB6a529eb4C7432cF4b37f3E4B",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "usStateOfResidence",
+      "address": "0x1d4918a83E1F971317f0DD529f088B208Ec24d8C",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "legionSoulbound",
+      "address": "0x3b96b3a385009B4D0C523DfD6D5B4cf5365e2A04",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "holderCap",
+      "address": "0xA8422D5fFE6b697152aEE19d13910302dE1E0576",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "cfius",
+      "address": "0x89Fa72549b5Fadf209377d5348C30bca4c7e0462",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "section4a7Disclosure",
+      "address": "0x42c9e2dadE9669c725D88b78cD0e545FD9e7F723",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "rule144Disclosure",
+      "address": "0x7e30Ef03A0C4C7094D464b714E2480EF30088629",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "holdingPeriod",
+      "address": "0xc5417d7DDE94310Ba334e31517deFED0aa0ED81F",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "legalOpinion",
+      "address": "0xD27317AED94BE6d310eA6B8c4e08360957ff24e3",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "regSDistributionCompliance",
+      "address": "0xe8A325Ba2dF0ba3E08A55B3E3F2bBBBc9354CebB",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "gpLpApproval",
+      "address": "0x4be9Eaff732F4BA3f1Fc6359a2F0858F70637c69",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "accreditedInvestor",
+      "address": "0xedac303CAfdedd92aB6fbECFafFC0a648d9157a1",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "qualifiedPurchaser",
+      "address": "0xE4bcf1c4EA266bbD7F3c58A3aa02c43B5cdc9875",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "qualifiedInstitutionalBuyer",
+      "address": "0x8A617187aF27a98c89548dfFd886EEab0De0936F",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "nonUsPerson",
+      "address": "0xe2AAc5187058a5c97Da7e6D3D6F9D5811124dcBb",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "spvWhitelist",
+      "address": "0x0f2952dcf0279782e6048D2800ee3BeAd9f59f33",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "syndicate",
+      "address": "0x089b4Dba2E3EB49f875c0D7F92A06276B204870f",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Secondary condition",
+      "name": "killSwitch",
+      "address": "0x456EDAfB7283dB8FDa2A5b3ecE576d9292512435",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Secondary condition",
+      "name": "timeSettlementPeriod",
+      "address": "0x1E466EcbBC41f6777c4458F8880E62dBf1D08fAd",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Legacy/checklist identity",
+      "name": "lexchexCondition",
+      "address": "0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Legacy/checklist identity",
+      "name": "zkpassportVerifier",
+      "address": "0x1D000001000EFD9a6371f4d90bB8920D5431c0D8",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base"
+      ],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Legacy/checklist identity",
+      "name": "deprecatedNonUSNationalityCondition",
+      "address": "0xe71fE689bFAA4939A760EDF7e07f44372a43932A",
+      "presentOn": [
+        "Ethereum",
+        "Base"
+      ],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Historical checklist",
+      "name": "originalIssuanceFactory",
+      "address": "0xA32547aAdAA4975082D729c79e79dBaE4385EBCf",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Historical checklist",
+      "name": "originalSingleFactory",
+      "address": "0xc8e084D3f8B3b326FCc894C7afD28F4904196406",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Historical checklist",
+      "name": "originalDealFactory",
+      "address": "0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Historical checklist",
+      "name": "originalLETImplementation",
+      "address": "0x016C3a68C3a82179B4e63871c7730aaA272c9638",
+      "presentOn": [
+        "Ethereum",
+        "Robinhood",
+        "Base",
+        "Arbitrum"
+      ],
+      "allFourHaveCode": true,
+      "allFourRuntimeEqual": true
+    },
+    {
+      "group": "Historical checklist",
+      "name": "oldKillSwitchFromTestnetChecklist",
+      "address": "0x4c3b9Ec3B6e416A64Fde4a17Ea856e1cf2fE0344",
+      "presentOn": [],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "MetaDAOFactory",
+      "address": "0x734aE2b36f663D0F4233Ce4a02c13b5EB8ec959D",
+      "presentOn": [
+        "Base"
+      ],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "MetaDAOAuth",
+      "address": "0x727Cb7985F2a2ecD0626A771eDb1a63c92221F00",
+      "presentOn": [
+        "Base"
+      ],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "PumpCorpFactoryBaseProduction",
+      "address": "0xe73Ea052c2891cE1668742142a6634Df09c88512",
+      "presentOn": [
+        "Base"
+      ],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "PumpZkpassportAuthBaseProduction",
+      "address": "0xB92E1f3A65223476ce798eCC60186dc22c4d719f",
+      "presentOn": [
+        "Ethereum",
+        "Base"
+      ],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "PumpNonUSNationalityBaseProduction",
+      "address": "0x95f0F67FdCa00b585a28Cf7A1E275A5541a9f6b3",
+      "presentOn": [
+        "Base"
+      ],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    },
+    {
+      "group": "Additional checklist products",
+      "name": "PumpOrConditionBaseProduction",
+      "address": "0x859c0DEc1B416ce02D2873E99Ad8FDEAc53Ac025",
+      "presentOn": [
+        "Base"
+      ],
+      "allFourHaveCode": false,
+      "allFourRuntimeEqual": false
+    }
+  ],
+  "lastCheckedAtUtc": "2026-11-02T00:28:15.594037+00:00",
+  "summary": {
+    "groups": {
+      "Critical auth/proxy": {
+        "checked": 13,
+        "allFourHaveCode": 13,
+        "allFourRuntimeEqual": 13
+      },
+      "Certificate extension": {
+        "checked": 17,
+        "allFourHaveCode": 16,
+        "allFourRuntimeEqual": 16
+      },
+      "Secondary condition": {
+        "checked": 19,
+        "allFourHaveCode": 19,
+        "allFourRuntimeEqual": 18
+      },
+      "Legacy/checklist identity": {
+        "checked": 3,
+        "allFourHaveCode": 1,
+        "allFourRuntimeEqual": 1
+      },
+      "Historical checklist": {
+        "checked": 5,
+        "allFourHaveCode": 4,
+        "allFourRuntimeEqual": 4
+      },
+      "Additional checklist products": {
+        "checked": 6,
+        "allFourHaveCode": 0,
+        "allFourRuntimeEqual": 0
+      }
+    },
+    "sharedWiringChecksPassed": 68,
+    "sharedWiringChecksTotal": 68,
+    "allCriticalAuthProxyAddressesMatch": true,
+    "implementationAddressEqualityRequired": false,
+    "componentReferenceVersions": "All six queried component reference implementations return 5 on every chain; this is not bytecode equivalence."
+  },
+  "checksums": {
+    "script/libs/DeploymentConstants.sol": "58530106d11d472b61454ead21a0cb56909047b3643be50c24ace21ad393d699",
+    "script/check-robinhood-address-parity.py": "26fad9ebd0a7729d8efe8a8e611309a2778805fe09381ca5121a99332868182b"
+  },
+  "rpcNotes": {
+    "Arbitrum": "Configured and official public endpoints returned HTTP 429. Completed with batches of five through https://arbitrum-one-rpc.publicnode.com; no credential endpoints saved."
+  },
+  "limitations": [
+    "Address/code presence and sampled reference parity only, not full implementation semantic or state equality.",
+    "Individual company beacons/LET proxies, client-specific deployments and staging/testnets not checked.",
+    "Different chain block numbers are independent snapshots, not simultaneous finality guarantees.",
+    "No wallet keys, signatures, deployments, upgrades or chain transactions."
+  ]
+}

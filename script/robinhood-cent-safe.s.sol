@@ -68,6 +68,7 @@ contract RobinhoodCentSafeScript is Script {
     using RoundLib for Round;
 
     uint256 public constant INVESTMENT = 10_000; // exactly 0.01 USDG (6 decimals)
+    uint256 public constant DEFAULT_ETH_CEILING = 0.00001 ether; // swap only; gas additional
     address public constant USDG = 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168;
     address public constant ROUTER = 0x204FAca1764B154221e35c0d20aBb3c525710498;
     address public constant POOL_MANAGER = 0x8366a39CC670B4001A1121B8F6A443A643e40951;
@@ -110,24 +111,108 @@ contract RobinhoodCentSafeScript is Script {
     error SwapBudgetExceeded(uint256 quoted, uint256 maximum);
     error IncompatibleExistingState();
     error StateCheckFailed();
+    error SavedRunWindowChanged();
+    error SavedRunBudgetChanged();
 
-    function loadConfig(address officer) public view returns (Config memory c) {
-        c.salt = vm.envBytes32("SAFE_REHEARSAL_SALT");
-        c.start = vm.envUint("SAFE_ROUND_START");
-        c.end = vm.envUint("SAFE_ROUND_END");
-        c.maxEthIn = vm.envUint("SAFE_MAX_ETH_IN_WEI");
+    function loadConfig(address officer) public returns (Config memory c) {
+        c.salt = vm.envOr("SAFE_REHEARSAL_SALT", keccak256(abi.encode("RobinhoodCentSAFE.default.v1", officer)));
+        c.maxEthIn = vm.envOr("SAFE_MAX_ETH_IN_WEI", uint256(0));
         c.gasReserve = vm.envOr("SAFE_GAS_RESERVE_WEI", uint256(100_000_000_000_000));
-        c.valuationCapUSD = vm.envUint("SAFE_VALUATION_CAP_USD");
+        c.valuationCapUSD = vm.envOr("SAFE_VALUATION_CAP_USD", uint256(0));
         c.templateId = bytes32(vm.envOr("SAFE_TEMPLATE_ID", uint256(32)));
         c.payout = vm.envOr("SAFE_COMPANY_PAYABLE", officer);
-        c.companyName = vm.envString("SAFE_COMPANY_NAME");
-        c.companyJurisdiction = vm.envString("SAFE_COMPANY_JURISDICTION");
-        c.officerName = vm.envString("SAFE_OFFICER_NAME");
-        c.officerContact = vm.envString("SAFE_OFFICER_CONTACT");
-        c.investorName = vm.envString("SAFE_INVESTOR_NAME");
-        c.investorContact = vm.envString("SAFE_INVESTOR_CONTACT");
-        c.investorType = vm.envString("SAFE_INVESTOR_TYPE");
-        c.investorJurisdiction = vm.envString("SAFE_INVESTOR_JURISDICTION");
+        c.companyName = _envStringOr("SAFE_COMPANY_NAME", string("CyberCorp SAFE Rehearsal"));
+        c.companyJurisdiction = _envStringOr("SAFE_COMPANY_JURISDICTION", string("TEST ONLY"));
+        c.officerName = _envStringOr("SAFE_OFFICER_NAME", string("Test Officer"));
+        c.officerContact = _envStringOr("SAFE_OFFICER_CONTACT", string("officer@example.invalid"));
+        c.investorName = _envStringOr("SAFE_INVESTOR_NAME", string("Test Investor"));
+        c.investorContact = _envStringOr("SAFE_INVESTOR_CONTACT", string("investor@example.invalid"));
+        c.investorType = _envStringOr("SAFE_INVESTOR_TYPE", string("TEST ONLY"));
+        c.investorJurisdiction = _envStringOr("SAFE_INVESTOR_JURISDICTION", string("TEST ONLY"));
+        string memory path = string.concat("script/res/robinhood-cent-safe-", vm.toString(c.salt), ".local.json");
+        (c.start, c.end) = _savedRunWindow(
+            path, c.salt, vm.envOr("SAFE_ROUND_START", uint256(0)), vm.envOr("SAFE_ROUND_END", uint256(0))
+        );
+        (c.maxEthIn, c.valuationCapUSD) = _savedRunBudget(path, c.maxEthIn, c.valuationCapUSD);
+        console2.log("Saved public run dates (retain for retries)", path);
+        console2.log("Round start Unix seconds", c.start);
+        console2.log("Round end Unix seconds", c.end);
+        console2.log("Maximum swap ETH wei; gas additional", c.maxEthIn);
+        console2.log("SAFE valuation cap USD", c.valuationCapUSD);
+    }
+
+    function _envStringOr(string memory name, string memory fallbackValue)
+        internal
+        view
+        returns (string memory value)
+    {
+        value = vm.envOr(name, fallbackValue);
+        if (bytes(value).length == 0) value = fallbackValue;
+    }
+
+    /// @dev Persist dates even in a dry run: recomputing them changes round IDs.
+    /// No keys or identity/contact fields are written to this local file.
+    function _savedRunWindow(string memory path, bytes32 salt, uint256 start, uint256 end)
+        internal
+        returns (uint256 savedStart, uint256 savedEnd)
+    {
+        if (salt == bytes32(0)) revert InvalidConfig();
+        if (vm.exists(path)) {
+            string memory json = vm.readFile(path);
+            savedStart = vm.parseJsonUint(json, ".start");
+            savedEnd = vm.parseJsonUint(json, ".end");
+            if (
+                vm.parseJsonBytes32(json, ".salt") != salt || (start != 0 && start != savedStart)
+                    || (end != 0 && end != savedEnd)
+            ) revert SavedRunWindowChanged();
+            // Expired dates deliberately stay expired; execute() enforces expiry.
+            return (savedStart, savedEnd);
+        }
+        savedStart = start == 0 ? (block.timestamp > 1 hours ? block.timestamp - 1 hours : 0) : start;
+        savedEnd = end == 0 ? block.timestamp + 1 days : end;
+        if (savedStart >= savedEnd) revert InvalidConfig();
+        vm.serializeBytes32(path, "salt", salt);
+        vm.serializeUint(path, "start", savedStart);
+        vm.writeJson(vm.serializeUint(path, "end", savedEnd), path);
+    }
+
+    function _savedRunBudget(string memory path, uint256 maximum, uint256 valuation)
+        internal
+        returns (uint256 savedMaximum, uint256 savedValuation)
+    {
+        string memory json = vm.readFile(path);
+        if (vm.keyExistsJson(json, ".maxEthIn")) {
+            savedMaximum = vm.parseJsonUint(json, ".maxEthIn");
+            savedValuation = vm.parseJsonUint(json, ".valuationCapUSD");
+            if ((maximum != 0 && maximum != savedMaximum) || (valuation != 0 && valuation != savedValuation)) {
+                revert SavedRunBudgetChanged();
+            }
+            return (savedMaximum, savedValuation);
+        }
+        if (maximum == 0) {
+            _routeChecks();
+            (uint256 quoted,) =
+                ICentQuoter(QUOTER).quoteExactOutputSingle(CentQuoteParams(poolKey(), true, uint128(INVESTMENT), ""));
+            maximum = _defaultMaxEthIn(quoted);
+            console2.log("Fresh ETH quote wei for 0.01 USDG", quoted);
+        }
+        savedMaximum = maximum;
+        savedValuation = valuation == 0 ? 10_000_000 : valuation;
+        if (maximum > type(uint128).max || savedValuation > type(uint256).max / 1e18) revert InvalidConfig();
+        // Serialize the complete object: older Foundry writeJson(key) does not
+        // reliably insert a key that is absent from the original document.
+        vm.serializeBytes32(path, "salt", vm.parseJsonBytes32(json, ".salt"));
+        vm.serializeUint(path, "start", vm.parseJsonUint(json, ".start"));
+        vm.serializeUint(path, "end", vm.parseJsonUint(json, ".end"));
+        vm.serializeUint(path, "maxEthIn", savedMaximum);
+        vm.writeJson(vm.serializeUint(path, "valuationCapUSD", savedValuation), path);
+    }
+
+    function _defaultMaxEthIn(uint256 quoted) internal pure returns (uint256 maximum) {
+        if (quoted == 0) revert InvalidConfig();
+        if (quoted > DEFAULT_ETH_CEILING) revert SwapBudgetExceeded(quoted, DEFAULT_ETH_CEILING);
+        maximum = (quoted * 105 + 99) / 100;
+        if (maximum > DEFAULT_ETH_CEILING) revert SwapBudgetExceeded(maximum, DEFAULT_ETH_CEILING);
     }
 
     function run() external returns (Result memory) {

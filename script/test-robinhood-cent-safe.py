@@ -47,6 +47,7 @@ evidence={"observedAtUtc":datetime.datetime.now(datetime.timezone.utc).isoformat
           "usdgMockFunding":False,"metadataValidated":metadata_validated,
           "swapEthSpentWei":re.findall(r"SWAP_ETH_SPENT_WEI (\d+)",text),"command":command,
           "sha256":{p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
-Path("notes/ai/tasks/robinhood-cent-safe-verification-20261030.json").write_text(json.dumps(evidence,indent=2)+"\n")
+evidence_date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
+Path(f"notes/ai/tasks/robinhood-cent-safe-verification-{evidence_date}.json").write_text(json.dumps(evidence,indent=2)+"\n")
 display=re.sub(r"^\s*CENT_SAFE_METADATA .*$","  [one-cent SAFE JSON/SVG validated]",text,flags=re.MULTILINE)
 print(display[-14000:]);raise SystemExit(result.returncode)

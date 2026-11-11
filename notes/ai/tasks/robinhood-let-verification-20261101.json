@@ -1,0 +1,168 @@
+{
+  "observedAtUtc": "2026-11-01T22:59:24.497286+00:00",
+  "chainId": 4663,
+  "block": 103746654,
+  "blockHash": "0x37a727a4fb289413770e331e599142f737959596a7d384280559807b2334eb63",
+  "sourceRevision": "f90978dbf333abb19a20696fd879cb8aad55bdc4",
+  "protocolSourceModified": false,
+  "implementation": {
+    "address": "0x487Ed0d21e489d66e647fB4A55cE20Daadaf7920",
+    "runtimeBytes": 24288,
+    "runtimeKeccak": "0x6cb8f996906c07e0c34fc9a112daae0837ad7e4d76afcb1a937fbfabe2ea6d9f",
+    "deployVersion": "5",
+    "factoryReference": "0x487ed0d21e489d66e647fb4a55ce20daadaf7920",
+    "implementationSlot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "beaconSlot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "artifactRuntimeExactMatchIncludingMetadata": true,
+    "freshRecompiledRuntimeExactMatchIncludingMetadata": true,
+    "explorer": {
+      "verified": true,
+      "exactMatch": true,
+      "verificationResult": "Pass - Verified",
+      "sourceStatus": {
+        "ContractName": "LedgerEntryToken",
+        "CompilerVersion": "v0.8.28+commit.7893614a",
+        "OptimizationUsed": "1",
+        "Runs": "15",
+        "EVMVersion": "cancun",
+        "Library": "LedgerEntryTokenStorage:5c58f4a443d3316114e80bd69aaa8f5cb5c816f1",
+        "Proxy": "0",
+        "Implementation": "",
+        "SimilarMatch": "",
+        "ContractFileName": "src/LedgerEntryToken.sol"
+      },
+      "explorerUrl": "https://robin.etherscan.io/address/0x487Ed0d21e489d66e647fB4A55cE20Daadaf7920#code",
+      "submissionGuid": "seli2pqhhwyzhp5e2rbdsbdfca7a96wzqxepwp5txkja9frkcy"
+    },
+    "initialExplorerStatus": {
+      "verified": false,
+      "contractName": "",
+      "similarMatch": "",
+      "proxy": "0",
+      "implementation": ""
+    }
+  },
+  "library": {
+    "address": "0x5c58f4a443d3316114e80bd69aaa8f5cb5c816f1",
+    "runtimeBytes": 23124,
+    "runtimeKeccak": "0xbbcf708ebba90041bc5e1d28d53848c9729fa5e9fb717de67ae82df0d3523e74",
+    "artifactRuntimeExactMatchIncludingMetadataAfterSelfAddress": true,
+    "freshRecompiledRuntimeExactMatchIncludingMetadataAfterSelfAddress": true,
+    "nestedLinkReferences": {},
+    "explorer": {
+      "verified": true,
+      "exactMatch": true,
+      "verificationResult": "Pass - Verified",
+      "sourceStatus": {
+        "ContractName": "LedgerEntryTokenStorage",
+        "CompilerVersion": "v0.8.28+commit.7893614a",
+        "OptimizationUsed": "1",
+        "Runs": "15",
+        "EVMVersion": "cancun",
+        "Library": "",
+        "Proxy": "0",
+        "Implementation": "",
+        "SimilarMatch": "",
+        "ContractFileName": "src/storage/LedgerEntryTokenStorage.sol"
+      },
+      "explorerUrl": "https://robin.etherscan.io/address/0x5c58f4a443d3316114e80bd69aaa8f5cb5c816f1#code",
+      "submissionGuid": "jsd3bcgftpnpticc7hgxpgczzppunbhkvthfm4qubstcqwk69b"
+    },
+    "initialExplorerStatus": {
+      "verified": false,
+      "contractName": "",
+      "similarMatch": "",
+      "proxy": "0",
+      "implementation": ""
+    }
+  },
+  "compiler": {
+    "version": "0.8.28+commit.7893614a"
+  },
+  "compilerSettings": {
+    "remappings": [
+      "@openzeppelin/contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/",
+      "@openzeppelin/contracts/=dependencies/openzeppelin-contracts/contracts/",
+      "ConditionManager/=dependencies/ConditionManager/src/",
+      "erc4626-tests/=dependencies/openzeppelin-contracts/lib/erc4626-tests/",
+      "erc721a/=dependencies/erc721a-4.3.0/",
+      "forge-std/=dependencies/forge-std/src/",
+      "halmos-cheatcodes/=dependencies/openzeppelin-contracts/lib/halmos-cheatcodes/src/",
+      "openzeppelin-contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/",
+      "openzeppelin-contracts/=dependencies/openzeppelin-contracts/contracts/"
+    ],
+    "optimizer": {
+      "enabled": true,
+      "runs": 15
+    },
+    "metadata": {
+      "bytecodeHash": "ipfs"
+    },
+    "compilationTarget": {
+      "src/LedgerEntryToken.sol": "LedgerEntryToken"
+    },
+    "evmVersion": "cancun",
+    "libraries": {},
+    "viaIR": true
+  },
+  "sourceFileCount": 49,
+  "sourceHashes": {
+    "dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol": "0x13c2d19041c51b246233f96874a66c0094b8a5ff78af3b85ea27867f302dcbbb",
+    "dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol": "0xe1448f559716952220b5c696a5cc34d1f11f958bfbfcd05988543f6fd8bfff96",
+    "dependencies/openzeppelin-contracts-upgradeable/contracts/token/ERC721/ERC721Upgradeable.sol": "0xfd473ea8f70e13eaa6475c7e348885b8a32925252e3bc237e07c0e3fde0f10f5",
+    "dependencies/openzeppelin-contracts-upgradeable/contracts/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol": "0x374714bef85e753a13fdf792ca567ef734351029265f2cce8db533d7a942c740",
+    "dependencies/openzeppelin-contracts-upgradeable/contracts/utils/ContextUpgradeable.sol": "0xdbef5f0c787055227243a7318ef74c8a5a1108ca3a07f2b3a00ef67769e1e397",
+    "dependencies/openzeppelin-contracts-upgradeable/contracts/utils/introspection/ERC165Upgradeable.sol": "0xc8ed8d2056934b7675b695dec032f2920c2f5c6cf33a17ca85650940675323ab",
+    "dependencies/openzeppelin-contracts/contracts/access/Ownable.sol": "0xff6d0bb2e285473e5311d9d3caacb525ae3538a80758c10649a4d61029b017bb",
+    "dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol": "0xb25a4f11fa80c702bf5cd85adec90e6f6f507f32f4a8e6f5dbc31e8c10029486",
+    "dependencies/openzeppelin-contracts/contracts/interfaces/draft-IERC1822.sol": "0xc42facb5094f2f35f066a7155bda23545e39a3156faef3ddc00185544443ba7d",
+    "dependencies/openzeppelin-contracts/contracts/interfaces/draft-IERC6093.sol": "0x880da465c203cec76b10d72dbd87c80f387df4102274f23eea1f9c9b0918792b",
+    "dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Utils.sol": "0x8decfa54cec979c824b044b8128cd91d713f72c71fd7dfa54974624d8c949898",
+    "dependencies/openzeppelin-contracts/contracts/proxy/beacon/IBeacon.sol": "0xc59a78b07b44b2cf2e8ab4175fca91e8eca1eee2df7357b8d2a8833e5ea1f64c",
+    "dependencies/openzeppelin-contracts/contracts/proxy/beacon/UpgradeableBeacon.sol": "0x5920bac7215d12961e23b207f6e81a1d64aa4935a4469abe95b64a96a3c3007b",
+    "dependencies/openzeppelin-contracts/contracts/token/ERC721/IERC721.sol": "0x5dc63d1c6a12fe1b17793e1745877b2fcbe1964c3edfd0a482fac21ca8f18261",
+    "dependencies/openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol": "0xb5afb8e8eebc4d1c6404df2f5e1e6d2c3d24fd01e5dfc855314951ecfaae462d",
+    "dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/IERC721Enumerable.sol": "0x3d6954a93ac198a2ffa384fa58ccf18e7e235263e051a394328002eff4e073de",
+    "dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/IERC721Metadata.sol": "0x37d1aaaa5a2908a09e9dcf56a26ddf762ecf295afb5964695937344fc6802ce1",
+    "dependencies/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Utils.sol": "0x7acad127aae66bcacf27bccbdffa3be802bfc004b0adb50029842d3618bdd3fc",
+    "dependencies/openzeppelin-contracts/contracts/utils/Address.sol": "0xaaa1d17c1129b127a4a401db2fbd72960e2671474be3d08cae71ccdc42f7624c",
+    "dependencies/openzeppelin-contracts/contracts/utils/Context.sol": "0x493033a8d1b176a037b2cc6a04dad01a5c157722049bbecf632ca876224dd4b2",
+    "dependencies/openzeppelin-contracts/contracts/utils/Errors.sol": "0x6afa713bfd42cf0f7656efa91201007ac465e42049d7de1d50753a373648c123",
+    "dependencies/openzeppelin-contracts/contracts/utils/Panic.sol": "0xf7fe324703a64fc51702311dc51562d5cb1497734f074e4f483bfb6717572d7a",
+    "dependencies/openzeppelin-contracts/contracts/utils/StorageSlot.sol": "0xcf74f855663ce2ae00ed8352666b7935f6cddea2932fdf2c3ecd30a9b1cd0e97",
+    "dependencies/openzeppelin-contracts/contracts/utils/Strings.sol": "0x967996585c54704fd501d06738b0dc2463207929f6f9d8e5193770ca88035130",
+    "dependencies/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol": "0x79796192ec90263f21b464d5bc90b777a525971d3de8232be80d9c4f9fb353b8",
+    "dependencies/openzeppelin-contracts/contracts/utils/math/Math.sol": "0xc240f71206795cead02e49f999b3523414c230cec53423298d8457a7ce9d3ea4",
+    "dependencies/openzeppelin-contracts/contracts/utils/math/SafeCast.sol": "0x195533c86d0ef72bcc06456a4f66a9b941f38eb403739b00f21fd7c1abd1ae54",
+    "dependencies/openzeppelin-contracts/contracts/utils/math/SignedMath.sol": "0xb1970fac7b64e6c09611e6691791e848d5e3fe410fa5899e7df2e0afd77a99e3",
+    "src/CyberCorpConstants.sol": "0x78ee0529a0c9470d10f17456199fe86c9331b5facfc7732f3397238cd7287ab7",
+    "src/LedgerEntryToken.sol": "0x1f38f87c10b514add1c1e6755d2dba2bc63aaefc7e12870d0e8d32e20ae4e746",
+    "src/creds/storage/lexchexBadgeStorage.sol": "0x8dc81054277b3297ce3720a56baebbb5e3b40bedc47b8cc310050342050779de",
+    "src/interfaces/IAuthAdapter.sol": "0x3326db571d82fc73b0c42a70cf05e56fd9827aabb1d04f543b5847fb2ea6f408",
+    "src/interfaces/ICondition.sol": "0x4d75f9d2afe0b9b5ed18aa2ebfa7580f712b2ba736786b364563cee190af5272",
+    "src/interfaces/ICyberAgreementRegistry.sol": "0x510360d18be5e1e02bc3db1fae52e605436709f53de515bad5c1b86db79254dd",
+    "src/interfaces/ICyberCorp.sol": "0x7aaffb42989f44414816d29768c3f3129265295065e545004355cbde455781dd",
+    "src/interfaces/IERC5484.sol": "0x0f19421f1440a5db3a8733107d382b24d83ab91f639640dee77049d808b4edb7",
+    "src/interfaces/IIssuanceManager.sol": "0x2330477273e35250514e1001b482e863238164dbc79a6a4560b8f1bf4e3554da",
+    "src/interfaces/ILedgerEntryToken.sol": "0x4a2e690de4aa0d183052b640f489cfeb3b799bb5f40f7f67bbebe279107c9e3d",
+    "src/interfaces/ILexChexBadge.sol": "0xbe55cfb934095e732d8dc7ee0b3401eb07dfbe3dfb8cc399292091636b3011c0",
+    "src/interfaces/ITransferRestrictionHook.sol": "0xcad5f95412c205602681d13eb35264ee9af64c6945cfea4dd3e12f8376b10778",
+    "src/interfaces/IUriBuilder.sol": "0xcd56a503952f0d843a9f575d4e9c4e79a7ba1f233f3a3e5af6f9c7f059f3504f",
+    "src/libs/JsonLib.sol": "0xad903c7556a3a64b3677d9870b05d193c9a1924bd7fa563f7afccba4f3a82809",
+    "src/libs/auth.sol": "0xf1ea0f21815cbcb490e5d533fbaaf316e81e29fa4e06465b3f804213cfc298b1",
+    "src/libs/policies/LookThroughPolicy.sol": "0x7cebcdee58f081689a96522794804ca4d3fdd5beb16ea8319ddc6a32a22b892b",
+    "src/libs/policies/USJurisdictionPolicy.sol": "0x505b63d52445f47e7220f89e118ab66fa69c70398bd3c9f1f195099d6e8e33a9",
+    "src/storage/LedgerEntryTokenStorage.sol": "0xdd97c3d95dc27d16e51f0e14ec258bf7c20a099ebfb0a2204358b0bae39fb2d3",
+    "src/storage/extensions/FundInterestExtensionV3.sol": "0xd0fa774175ba7160e390af611e2b57098a360d1dce9d6af662a25e71546715ac",
+    "src/storage/extensions/ICertificateExtension.sol": "0xd1bf34adc1e90c060c0a13c521dfd5f9c15eecf517bdb19bb6f459d6b3b96576",
+    "src/storage/extensions/ScopedDataLayerLib.sol": "0xabd8890df19edc7563fe1ada94965bd8a352dc5d26a822623a2cc271ffd07088"
+  },
+  "standardInputSha256": "3c5cd72e6cb01c74c052f346c5611237664a0ed86e410eb5c9f5b593aa0578e6",
+  "sourcesSubmitted": true,
+  "sourceSubmissionStatus": "Both contracts Pass - Verified; exact verified source confirmed with no SimilarMatch.",
+  "transactionsSubmitted": false,
+  "walletKeysUsed": false,
+  "limits": "Factory reference and shared implementation checked. Individual company beacons/LET proxies and security audit out of scope.",
+  "publicationAuthorization": "User explicitly approved publishing the matching 49-file source package for both implementation and linked library.",
+  "sourceVerifiedAtUtc": "2026-11-02T00:02:56.902959+00:00"
+}
