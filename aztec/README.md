@@ -18,10 +18,16 @@ a party can open the agreement again without the invite.
 | `contracts/agreement_registry/src/main.nr`     | The `CyberAgreementRegistry` contract                                                                                                   |
 | `contracts/agreement_registry/src/agreement.nr` | `Agreement` struct, id, validation, consent hash, nullifiers                                                                            |
 | `contracts/agreement_registry/src/test/`       | TXE tests: finalize, withdraw, upgrade; `utils.nr` deploys BorgAuthV2 and the registry                                                  |
-| `contracts/borg_auth_v2/src/main.nr`           | The `BorgAuthV2` contract: the root, who approves each upgrade. It can be upgraded                                                      |
-| `contracts/borg_auth_v2/src/test.nr`           | TXE tests for the permission, the root transfer and the upgrade                                                                         |
+| `contracts/ledger_entry_token/src/main.nr`     | The `LedgerEntryToken` contract: one private security class. An officer of the company BorgAuthV2 authorizes mint, update details, void, unvoid and assign by authwit. The holder moves possession with `transfer` |
+| `contracts/ledger_entry_token/src/cert.nr`     | `Cert` and `Config` structs, version id, action and endorsement hashes, nullifiers, change rules                                         |
+| `contracts/ledger_entry_token/src/cert_note.nr` | `CertNote`: possession of one certificate, like an AIP-721 NFT note                                                                     |
+| `contracts/ledger_entry_token/src/test/`       | TXE tests: lifecycle, possession, upgrade; `utils.nr` deploys a company BorgAuthV2 and the token                                        |
+| `contracts/borg_auth_v2/src/main.nr`           | The `BorgAuthV2` contract: the root, who approves each upgrade, and the officer roles that private functions can check. It can be upgraded |
+| `contracts/borg_auth_v2/src/roles.nr`          | Permission values, role bits and the permission table                                                                                   |
+| `contracts/borg_auth_v2/src/test.nr`           | TXE tests for the permissions, the officer roles, the root transfer and the upgrade                                                     |
 | `scripts/poc.ts`                               | The parts that `e2e.ts` and the web app share: four wallets, the registry, and an in-memory MetaLeX vault, collector and data key store |
 | `scripts/e2e.ts`                               | Lifecycle checks on a local network                                                                                                     |
+| `scripts/let-e2e.ts`                           | Certificate lifecycle checks of one `LedgerEntryToken` class on a local network, with a company BorgAuthV2. The officer and the holders sign with their Schnorr keys only |
 | `webapp/` | The web app (TanStack Start, Postgres, Vercel) and its Playwright journey |
 | `scripts/deploy.ts`                            | Idempotent deploy and upgrade of BorgAuthV2 and the registry. A second run sends no tx                                                  |
 | `scripts/deployments.ts`                       | The recorded addresses of each network, the original artifacts and the salts                                                            |
@@ -46,7 +52,11 @@ cd scripts
 npm install
 DEPLOY_SALT_LABEL=MetaLex-v1.0.0-dev.0 AZTEC_NODE_URL=http://localhost:8090 node deploy.ts
 DEPLOY_SALT_LABEL=MetaLex-v1.0.0-dev.0 AZTEC_NODE_URL=http://localhost:8090 node e2e.ts
+AZTEC_NODE_URL=http://localhost:8090 node let-e2e.ts
 ```
+
+A local network that built no block for more than one day (`MAX_TX_LIFETIME`) rejects each tx with "Invalid
+expiration timestamp". Start a new local network.
 
 Web app: see [webapp/README.md](webapp/README.md). It runs the wallets in the browser and MetaLeX on the server
 with Postgres, and deploys to Vercel.
@@ -88,7 +98,8 @@ Status on 2026-11-02, uncommitted, branch `feat/aztec`:
 | Check                             | Command                                                                                                              | Result                                                                                                                                                                                                                                                         |
 |-----------------------------------|----------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Compile                           | `aztec compile`                                                                                                      | Pass. `finalize` has 6,617 gates, `withdraw_consent` 5,245 (`aztec profile gates target`).                                                                                                                                                                     |
-| Unit tests (TXE simulator)        | `aztec test`                                                                                                         | 39 of 39 pass on 2026-11-04 (21 for `BorgAuthV2` and the upgrades)                                                                                                                                                                                                  |
+| Unit tests (TXE simulator)        | `aztec test`                                                                                                         | 93 of 93 pass on 2026-11-10 (registry 24, `BorgAuthV2` 27, `LedgerEntryToken` 42), uncommitted                                                                                                                                                                      |
+| LET local network flow            | `AZTEC_NODE_URL=http://localhost:8090 node let-e2e.ts`                                                               | Not run for the 2026-11-10 change. The local network on port 8090 had no block after 2026-11-03, so it rejected the first tx ("Invalid expiration timestamp") |
 | Local network flow, test accounts | `node e2e.ts` on `aztec start --local-network`                                                                       | 24 of 24 checks pass, two runs                                                                                                                                                                                                                               |
 | Local network flow, env accounts  | `node --env-file=<env> e2e.ts`, keys from `aztec-wallet create-account`, registry from `deploy.ts`                   | 24 of 24 checks pass, two runs                                                                                                                                                                                                                               |
 | Web app journey, local network | `APP_URL=http://localhost:3001 bun run journey` in `webapp/`, app built with `bun run build` and run with `.env.local` | 1 of 1 passes on 2026-11-03 (33 s) |

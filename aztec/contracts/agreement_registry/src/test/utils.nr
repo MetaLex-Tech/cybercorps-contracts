@@ -5,7 +5,7 @@ use aztec::{
     protocol::{address::AztecAddress, hash::poseidon2_hash, traits::ToField},
     test::helpers::{test_environment::{CallPrivateOptions, DeployOptions, TestEnvironment}, txe_oracles},
 };
-use borg_auth_v2_contract::BorgAuthV2;
+use borg_auth_v2_contract::{BorgAuthV2, roles::{MAX_INITIAL_MEMBERS, Member}};
 
 pub(crate) global TERMS_COMMITMENT: Field = 0x1234;
 
@@ -25,7 +25,7 @@ pub(crate) unconstrained fn setup() -> (TestEnvironment, AztecAddress, AztecAddr
 pub(crate) unconstrained fn deploy_auth(env: &mut TestEnvironment, root: AztecAddress) -> AztecAddress {
     env.deploy("@borg_auth_v2_contract/BorgAuthV2").with_public_initializer(
         root,
-        BorgAuthV2::interface().constructor(root),
+        BorgAuthV2::interface().constructor(root, [Member::empty(); MAX_INITIAL_MEMBERS]),
     )
 }
 

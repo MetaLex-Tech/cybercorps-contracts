@@ -89,7 +89,7 @@ The legend explains the colors. See [PII: who can see what](#pii-who-can-see-wha
 | Component                         | Who runs it                                       | What it stores                                                            | What it can read                                                  |
 |-----------------------------------|---------------------------------------------------|---------------------------------------------------------------------------|-------------------------------------------------------------------|
 | `CyberAgreementRegistry` contract | Aztec network                                     | Nullifiers only (private state); the auth address in its `immutables_hash` | Nothing after the tx                                              |
-| `BorgAuthV2` contract             | Aztec network; MetaLeX deploys it                 | The root and the pending root (public state)                              | Public data only                                                  |
+| `BorgAuthV2` contract             | Aztec network; MetaLeX deploys it                 | The root and the pending root, and the officer roles (public state)       | Public data only                                                  |
 | User wallet and PXE               | User (browser embedded wallet or an Aztec wallet) | Account keys                                                              | What the user opens in it                                         |
 | MetaLeX webapp                    | MetaLeX (code), user (runtime)                    | The invites that the user keeps                                           | What the user opens in it                                         |
 | Template catalog                  | MetaLeX                                           | Public legal templates. The webapp copies the full text into each document | Public data only                                                  |
@@ -914,6 +914,30 @@ Notes:
   agreement id and checks the finalized nullifier onchain.
 - The collector can link parties, because one agreement lists all of them.
 
+## LedgerEntryToken
+
+`contracts/ledger_entry_token` is one private security class. The task record
+`notes/ai/tasks/aztec-ledger-entry-token.md` holds its decisions and invariants.
+
+- **One class, one company auth.** The class has no initializer. Its `immutables_hash` commits to
+  `Config { auth, security_type, security_series, blinding }`. `auth` is a BorgAuthV2 for each company; the company
+  owner is its root. `security_type` and `security_series` are the EVM enum numbers. Another contract can check them
+  privately with `class_of(config)`. `blinding` is a random secret, so a published instance does not show the type
+  and the series.
+- **Register.** Each certificate version is a nullifier, as in the registry. An officer of `auth` authorizes each
+  mint and change with a private authwit; the settler sends the tx. `assign` also needs the endorsement authwit of
+  the legal owner of record.
+- **Possession.** `mint` gives the holder a `CertNote`, like an AIP-721 NFT. The holder, or an account with its
+  authwit, moves it with `transfer`. A transfer does not change the register.
+- **Roles.** The officer roles are in `DelayedPublicMutable`, so the token checks them in private. A role change
+  takes effect after 1 day (`MAX_TX_LIFETIME`). `constructor(root, members)` names the root and up to 4 initial
+  members with their roles. All hold their roles at once. The root is not an officer unless it is also a member or
+  `set_officer` makes it one.
+- **Upgrade.** `update_to` is private. It checks `APPROVE_UPGRADE` privately and enqueues only
+  `ContractInstanceRegistry.update(new_class_id)`. Nothing limits which class the root can choose (open item).
+- **Privacy.** Mint and transfer txs have note hashes and encrypted logs, so the actions do not share one
+  fingerprint. The role map is public: it shows which Aztec accounts are officers of which auth.
+
 ## Limits
 
 What the design accepts today.
@@ -943,11 +967,11 @@ Work or decisions that are still to do.
 - Aztec Labs must confirm that a third party (the settler) checking the authwit of another account is a supported
   pattern. The Aztec account docs do not describe it. The local network and testnet runs show that it works with
   the initializerless Schnorr account.
-- The upgrades with `BorgAuthV2` (`contracts/borg_auth_v2/src/main.nr`). It ports the minimal part of the EVM
-  `BorgAuthV2` (branch `feat/borgauth-upgrade`, not merged): the root, the two-step root transfer, and one
-  permission, `APPROVE_UPGRADE`, that only the root holds. The roles and the other permissions of the EVM contract
-  come later by an upgrade of BorgAuthV2. To stop all upgrades of BorgAuthV2, upgrade it to a class that has no
-  `update_to`. The registry has no initializer, and its `immutables_hash` is `poseidon2([auth])`.
+- The upgrades with `BorgAuthV2` (`contracts/borg_auth_v2/src/main.nr`). It ports part of the EVM `BorgAuthV2`
+  (branch `feat/borgauth-upgrade`, not merged): the root, the two-step root transfer, `APPROVE_UPGRADE` (root
+  only), and the officer role with `ISSUE_SECURITIES` and `ADMINISTER_CERTIFICATES` for the LedgerEntryToken. The
+  testnet instance still runs the v1 class, which has the root only. To stop all upgrades of BorgAuthV2, upgrade it
+  to a class that has no `update_to`. The registry has no initializer, and its `immutables_hash` is `poseidon2([auth])`.
   `update_to(auth, new_class_id)` checks `auth` against that hash, asks the auth contract for `APPROVE_UPGRADE`,
   and calls `ContractInstanceRegistry.update`. The default upgrade delay stays, so registry txs keep the default
   expiration. `scripts/deploy.ts` deploys and upgrades both contracts, and `poc.ts` uses the recorded registry.

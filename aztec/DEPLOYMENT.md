@@ -27,8 +27,10 @@ The scripts are in `scripts/`:
   addresses differ. A root transfer later does not change the addresses.
 - **Upgrade delay.** `update_to` schedules the new class. The new class takes effect after the default delay of
   1 day (`DEFAULT_UPDATE_DELAY` = 86400 s). Until then, the contract runs its old class.
-- **Upgradeable.** Both contracts can be upgraded. BorgAuthV2 ports the minimal part of the EVM `BorgAuthV2`. Its
-  roles and other permissions come later by an upgrade. See [BorgAuthV2 upgrade](#borgauthv2-upgrade).
+- **Upgradeable.** Both contracts can be upgraded. BorgAuthV2 ports part of the EVM `BorgAuthV2`: the root,
+  `APPROVE_UPGRADE`, and the officer role. The testnet instance runs the v1 class (root only). The current build
+  adds the officer role, so `deploy.ts` schedules a BorgAuthV2 upgrade (case L). Do not run it on a shared network
+  before the independent review. See [BorgAuthV2 upgrade](#borgauthv2-upgrade).
 
 ## Before each run
 
@@ -90,8 +92,11 @@ time of change. It schedules the current class again.
 Use this procedure when the BorgAuthV2 code changes, for example to add the roles and permissions of the EVM
 `BorgAuthV2`. The address does not change, so the registry address does not change.
 
-1. Make sure that the new code keeps the storage variables `root_authority` and `pending_root_authority` in this
-   order, and adds new variables after them. A change of order makes the new class read the wrong values.
+1. Make sure that the new code keeps the storage variables `root_authority`, `pending_root_authority`,
+   `initial_root`, `roles` and `initial_members` in this order, and adds new variables after them. A change of order
+   makes the new class read the wrong values. An instance that upgrades from v1 has no `initial_root` and no
+   `initial_members`, so it has no officer, and each private permission check fails. After the role delay, a root transfer gives the new root `APPROVE_UPGRADE` and `set_officer`
+   gives the officer permissions.
 2. Make sure that the new code keeps `require_permission(Field, AztecAddress)` and the value of `APPROVE_UPGRADE`.
    The registry calls it. Without it, the registry cannot be upgraded again.
 3. Make sure that the new code keeps `update_to`, unless you want to stop all upgrades (see below).
