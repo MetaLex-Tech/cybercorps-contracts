@@ -113,11 +113,9 @@ contract CertificateFooterTest is Test {
         assertTrue(_contains(svg, 'y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">Extraordinarily Long Company Name Hold...</text>'));
     }
 
-    /// @notice Only the footer element and the series line changed. Everything else is byte-identical to the
-    ///         SVG the renderer produced at 10fa89f2 for the same parameters. The series line and its labels now
-    ///         use the charter order, so the test puts the new series line and labels into the old SVG before it
-    ///         compares.
-    function testEverythingButTheFooterAndSeriesLineIsUnchanged() public view {
+    /// @notice Apart from the footer, series line and SAFE amount, the SVG is byte-identical
+    ///         to 10fa89f2. Apply those intentional display changes to the historical fixtures before comparing.
+    function testEverythingButTheFooterSeriesAndSafeAmountIsUnchanged() public view {
         _assertOnlyFooterChanged(
             image.buildCertificateSVG(_delawareCorp(), 1709164800),
             _withSeriesLine(vm.readFile("test/res/let-svg-10fa89f2-delaware-corp.svg"),
@@ -126,7 +124,8 @@ contract CertificateFooterTest is Test {
         );
         _assertOnlyFooterChanged(
             image.buildCertificateSVG(_wyomingLlcVoided(), 0),
-            _withSeriesLine(vm.readFile("test/res/let-svg-10fa89f2-wyoming-llc-voided.svg"), "SAFE ACE", "ACE SAFE"),
+            _withSafeAmount(_withSeriesLine(
+                vm.readFile("test/res/let-svg-10fa89f2-wyoming-llc-voided.svg"), "SAFE ACE", "ACE SAFE")),
             "Empulser Enterprises LLC"
         );
     }
@@ -173,6 +172,13 @@ contract CertificateFooterTest is Test {
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    function _withSafeAmount(string memory baseline) private pure returns (string memory) {
+        // The SAFE fixture has 2.5 nominal units and a separate 0.25 investment snapshot.
+        string memory oldAmount = 'fill="url(#paint0_linear_62908_10150)">0.25</text>';
+        require(_contains(baseline, oldAmount), "baseline SAFE amount missing");
+        return vm.replace(baseline, oldAmount, 'fill="url(#paint0_linear_62908_10150)">2.5</text>');
+    }
 
     function _assertOnlyFooterChanged(string memory svg, string memory baseline, string memory name) private pure {
         (bytes memory prefix, bytes memory footer, bytes memory suffix) = _splitAtFooter(svg);
