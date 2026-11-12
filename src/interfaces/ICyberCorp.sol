@@ -67,6 +67,7 @@ interface ICyberCorp {
     function setDealManager(address _dealManager) external;
     function setRoundManager(address _roundManager) external;   
     function roundManager() external view returns (address);
+    function isCyberCORPOfficer(address _address) external view returns (bool);
     function addOfficer(CompanyOfficer memory _officer) external;
     function updateOfficer(uint256 _index, CompanyOfficer memory _officer) external;
     function addEscrowedOfficerSignature(bytes calldata signature) external;

@@ -92,6 +92,7 @@ contract RoundManager is
     error NotRefImplementation();
     error EndTimeReductionRestricted();
     error RoundAlreadyExists();
+    error NotCompanyOfficer(address signer);
 
     event EOIRecalled(bytes32 agreementId, address indexed investor, bytes32 indexed roundId);
     event LexChexUpdated(address indexed lexChex, address indexed oldLexChex);
@@ -227,6 +228,9 @@ contract RoundManager is
             }),
             roundDraft.escrowedSignature
         )) revert InvalidEscrowedSignature();
+
+        // The round signer must be a current officer of the company.
+        if (!ICyberCorp(corp).isCyberCORPOfficer(roundDraft.authorityOfficer)) revert NotCompanyOfficer(roundDraft.authorityOfficer);
     }
 
     function _emitRoundCreated(Round memory round) private returns (bytes32) {
