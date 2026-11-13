@@ -47,7 +47,7 @@ company and the securities it issues appear in every app once they exist.
 | [For holders](holders.md) | See what you hold, transfer it, and convert between LETs and scrip. |
 | [Profile](profile.md) | Set up your identity, link wallets and delegate signing. |
 | [LeXcheX](lexchex.md) | Get accredited. |
-| [Launchpads](launchpads.md) | Form the entity a MetaDAO or Umia launch prescribes. |
+| [Launchpads](launchpads.md) | Form the entity a MetaDAO or Umia launch prescribes, and see what the app offers it after formation. |
 
 ## Sign in and set up your account
 
