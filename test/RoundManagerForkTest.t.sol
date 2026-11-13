@@ -69,6 +69,11 @@ contract RoundManagerFCFSForkTest is Test {
 
     LeXcheXMinter constant LEXCHEX_MINTER = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
 
+    function _addOfficer(address corp, address corpOwner, address eoa) internal {
+        vm.prank(corpOwner);
+        CyberCorp(corp).addOfficer(CompanyOfficer({eoa: eoa, name: "Officer", contact: "", title: "CEO"}));
+    }
+
     function setUp() public {
         vm.createSelectFork("base_sepolia");
         // The LeXcheX minter's registry is the live deployment, whose contractId preimage predates
@@ -110,6 +115,7 @@ contract RoundManagerFCFSForkTest is Test {
         MockPaymentToken usdc = new MockPaymentToken();
         uint256 officerPrivKey = 0xAA04;
         address officerEOA = vm.addr(officerPrivKey);
+        _addOfficer(corp, me, officerEOA);
 
         bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
             rm,
@@ -209,6 +215,7 @@ contract RoundManagerFCFSForkTest is Test {
         // Prepare officer identity for the round
         uint256 officerPrivKey = 0xBEEF01;
         address officerEOA = vm.addr(officerPrivKey);
+        _addOfficer(corp, me, officerEOA);
 
         // Create a public FCFS round with maxTicket above 200k
         bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
@@ -370,6 +377,7 @@ contract RoundManagerFCFSForkTest is Test {
         // Prepare officer identity for the round
         uint256 officerPrivKey = 0xBEEF01;
         address officerEOA = vm.addr(officerPrivKey);
+        _addOfficer(corp, me, officerEOA);
 
         // Create a public FCFS round with maxTicket above 200k
         bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
@@ -592,6 +600,7 @@ contract RoundManagerFCFSForkTest is Test {
         // Allow RoundManager to transfer certs
         vm.prank(address(corpFactory));
         CyberCorp(corpPub).setDealManager(address(rmPub));
+        _addOfficer(corpPub, me, officerEOA);
 
         // Create Public FCFS Round
         bytes32 pubRoundId = CyberCorpHelper.CreateLexChexRound(
