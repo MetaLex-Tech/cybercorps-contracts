@@ -119,6 +119,16 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         return "Unknown";
     }
 
+    /// @notice True when `companyType` is exactly the memeCorp company type.
+    function isMemeCorpType(string memory companyType) public pure returns (bool) {
+        return keccak256(bytes(companyType)) == keccak256(bytes(MEMECORP_COMPANY_TYPE));
+    }
+
+    /// @dev The class name in the metadata. A memeCorp certificate shows "MemeUnit" for every class.
+    function _classLabel(SecurityClass _class, bool memeUnits) private pure returns (string memory) {
+        return memeUnits ? "MemeUnit" : securityClassToString(_class);
+    }
+
     function securityClassToUnit(SecurityClass _class) public pure returns (string memory) {
         if (_class == SecurityClass.SAFE) return "Dollars";
         if (_class == SecurityClass.SAFT) return "Dollars";
@@ -390,7 +400,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         string memory cyberCORPType,
         string memory cyberCORPJurisdiction,
         string memory cyberCORPContactDetails,
-        SecurityClass securityType,
+        string memory securityLabel,
         SecuritySeries securitySeries,
         string memory certificateUri
     ) internal pure returns (string memory) {
@@ -398,7 +408,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
             abi.encodePacked(
                 _buildAttributesPart1(owner, details, cyberCORPName, cyberCORPType),
                 _buildAttributesPart2(
-                    cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri
+                    cyberCORPJurisdiction, cyberCORPContactDetails, securityLabel, securitySeries, certificateUri
                 )
             )
         );
@@ -425,14 +435,14 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
     function _buildAttributesPart2(
         string memory cyberCORPJurisdiction,
         string memory cyberCORPContactDetails,
-        SecurityClass securityType,
+        string memory securityLabel,
         SecuritySeries securitySeries,
         string memory certificateUri
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(
             ', {"trait_type": "cyberCORPJurisdiction", "value": "', JsonLib.jsonEscape(cyberCORPJurisdiction),
             '"}, {"trait_type": "cyberCORPContactDetails", "value": "', JsonLib.jsonEscape(cyberCORPContactDetails),
-            '"}, {"trait_type": "securityType", "value": "', securityClassToString(securityType),
+            '"}, {"trait_type": "securityType", "value": "', securityLabel,
             '"}, {"trait_type": "securitySeries", "value": "', securitySeriesToString(securitySeries),
             '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/', JsonLib.jsonEscape(stripIpfsPrefix(certificateUri)),
             '"}'
@@ -691,15 +701,19 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
             svgParams.ownerName = owner.name;
             svgParams.tokenId = tokenId;
             svgParams.certificateUri = certificateUri;
+            svgParams.memeUnits = isMemeCorpType(cyberCORPType);
             string memory imageDataUri = _buildImage(svgParams, certLegend, contractAddress, owner.ownerAddress, details.investmentAmountUSD, extension);
             json = string(abi.encodePacked(
                 '{"title": "MetaLeX Tokenized Certificate",',
-                '"type": "', securityClassToString(securityType),
+                '"type": "', _classLabel(securityType, svgParams.memeUnits),
                 '", "image": "', imageDataUri, '",',
-                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
+                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, _classLabel(securityType, svgParams.memeUnits), securitySeries, certificateUri),
                 '],'
             ));
         }
+
+        // Read the company type before it is escaped below.
+        bool memeUnits = isMemeCorpType(cyberCORPType);
 
         // Escape the strings for JSON. The image builder above must get the raw text.
         // This writes to the caller's structs. Do not reuse `details` or `owner` after this point.
@@ -718,7 +732,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL, IUriBuilder {
         json = string.concat(json, ', "cyberCORPType": "', cyberCORPType, '"');
         json = string.concat(json, ', "cyberCORPJurisdiction": "', cyberCORPJurisdiction, '"');
         json = string.concat(json, ', "cyberCORPContactDetails": "', cyberCORPContactDetails, '"');
-        json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
+        json = string.concat(json, ', "securityType": "', _classLabel(securityType, memeUnits), '"');
         json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
         json = string.concat(json, ', "certificateUri": "', certificateUri, '"');
 

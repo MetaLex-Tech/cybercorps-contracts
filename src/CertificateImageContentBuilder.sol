@@ -77,6 +77,14 @@ library CertificateImageContentBuilder {
     ///      620px of the 1024px width at 14px in a wide system font, so the header's limit of 38 would let
     ///      a long upper-case name run past the edge.
     function _buildFooter(CertificateSVGParams memory params) private pure returns (string memory) {
+        // A memeCorp has no legal entity and no securities ledger, so its footer says that instead.
+        if (params.memeUnits) {
+            return string(abi.encodePacked(
+                '<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">',
+                CertificateText.xml(params.corpName, 26),
+                ' is not a legal entity. Meme units carry no rights.</text>'
+            ));
+        }
         return string(abi.encodePacked(
             '<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">This constitutes an official entry on the tokenized securities ledger of ',
             CertificateText.xml(params.corpName, 26),
@@ -139,7 +147,7 @@ library CertificateImageContentBuilder {
             '<text x="512" y="190" font-size="32" fill="#f2f2f2" text-anchor="middle">', CertificateText.xml(params.corpName, 38), '</text>',
             '<text x="152" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">Token ID</text>',
             '<text x="152" y="124" font-size="35" fill="#f2f2f2" text-anchor="middle">#', _uintToString(params.tokenId), '</text>',
-            '<text x="835" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">', _getBaseUnit(params.securityType), '</text>',
+            '<text x="835" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">', _unitLabel(params), '</text>',
             '<text x="838" y="124" font-size="', _fitFontSize(units, 240, 35), '" fill="#f2f2f2" text-anchor="middle">', units, '</text>',
             !params.statusKnown ? "" : params.isVoided
                 ? '<text x="805" y="225" font-size="11" fill="#FF2E2E" text-anchor="middle">voided</text>'
@@ -167,7 +175,7 @@ library CertificateImageContentBuilder {
     ///      The name is free text. Escape it and cut it at 50 code points so that it fits the artwork.
     ///      A security without a series (`NA`) shows the class only.
     function _securityName(CertificateSVGParams memory params) private pure returns (string memory) {
-        string memory class = _securityClassToString(params.securityType);
+        string memory class = params.memeUnits ? string("Meme Units") : _securityClassToString(params.securityType);
         string memory series = bytes(params.seriesName).length == 0
             ? _securitySeriesToString(params.securitySeries)
             : CertificateText.xml(params.seriesName, 50);
@@ -250,6 +258,11 @@ library CertificateImageContentBuilder {
         return "";
     }
 
+    /// @dev The unit tile label. A memeCorp certificate shows "Units" for every class.
+    function _unitLabel(CertificateSVGParams memory params) private pure returns (string memory) {
+        return params.memeUnits ? "Units" : _getBaseUnit(params.securityType);
+    }
+
     function _getBaseUnit(SecurityClass _class) private pure returns (string memory) {
         if (_class == SecurityClass.SAFE) return "Instruments";
         if (_class == SecurityClass.SAFT) return "Instruments";
@@ -301,7 +314,7 @@ library CertificateImageContentBuilder {
         // mulDiv handles a 512-bit product, provided the quotient fits in uint256.
         if (params.units < 1e18 && params.consideration > Math.mulDiv(type(uint256).max, params.units, 1e18)) return "";
         uint256 perUnit = Math.mulDiv(params.consideration, 1e18, params.units);
-        string memory suffix = (params.securityType == SecurityClass.CommonStock || params.securityType == SecurityClass.PreferredStock || params.securityType == SecurityClass.StockOption) ? "/sh" : "/unit";
+        string memory suffix = !params.memeUnits && (params.securityType == SecurityClass.CommonStock || params.securityType == SecurityClass.PreferredStock || params.securityType == SecurityClass.StockOption) ? "/sh" : "/unit";
         return string(abi.encodePacked(_formatPrice(perUnit), suffix));
     }
 
