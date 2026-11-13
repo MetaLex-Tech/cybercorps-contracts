@@ -58,7 +58,32 @@
         bytes32 secretHash
     ) external returns (bytes32 agreementId, uint256 tokenId);
 
+    function createRoundWithMinimum(
+        Round memory roundDraft,
+        CyberCertData[] memory certData,
+        uint256 minRaise,
+        uint256 deadline
+    ) external returns (bytes32 roundId);
+
+    function createRoundWithPrintersAndMinimum(
+        Round memory roundDraft,
+        address[] memory certPrinters,
+        uint256 minRaise,
+        uint256 deadline
+    ) external returns (bytes32 roundId);
+
+    function getRoundMinimum(bytes32 roundId)
+        external view
+        returns (uint256 minRaise, uint256 deadline, bool met, uint256 raised, uint256 committed);
+
+    function setCommitments(bytes32[] calldata agreementIds, uint256[] calldata amounts) external;
+    function markMinimumMet(bytes32 roundId, bytes32[] calldata committedIds) external;
+    function settle(bytes32[] calldata agreementIds) external;
+    function getCommittedAmount(bytes32 agreementId) external view returns (uint256);
+
     function allocate(bytes32 agreementId, uint256 allocatedAmount) external returns (uint256 tokenId);
+
+    function allocateBatch(bytes32[] calldata agreementIds, uint256[] calldata allocatedAmounts) external;
 
     function reject(bytes32 agreementId) external;
     function reject(bytes32 agreementId, bool isVoidAgreement) external;
