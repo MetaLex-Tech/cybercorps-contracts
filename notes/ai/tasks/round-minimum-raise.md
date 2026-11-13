@@ -1,6 +1,6 @@
 # Task: RoundManager minimum raise (DEPLOY_VERSION 5.1)
 
-- **Status:** Implemented (two-step close) and tested locally; not committed, no PR.
+- **Status:** Ready for review: [#202](https://github.com/MetaLex-Tech/cybercorps-contracts/pull/202)
 - **Updated:** 2026-11-13
 - **Owner:** Claude Code desktop session, for the owner
 - **Collaborators / boundaries:** RoundManager, its storage library and interface only. No
@@ -19,7 +19,8 @@
   two-step close with a fixed 2-day `SETTLE_WINDOW` and permissionless settlement.
 - **Repository / branch:** cybercorps-contracts; base `origin/develop` 32c59e3, branch
   `claude/round-minimum-raise`
-- **Verified base / code head:** uncommitted tree on 32c59e3 (changes listed below)
+- **Verified base / code head:** tests ran on code commit dbeead3 (base 32c59e3); this record update follows it
+- **PR / artifact:** https://github.com/MetaLex-Tech/cybercorps-contracts/pull/202, opened 2026-11-13, ready for review. Desktop Auto-fix could not be enabled from the opening session (repository outside its folders); the owner can switch it on in the PR bar.
 
 ## Change
 
@@ -117,6 +118,5 @@
 
 ## Next action and handoff
 
-Owner decides whether to commit and open a PR. Before merge: independent external-model
-review and the full CI suite. Audit, factory update, upgrades and the webapp support
+Review #202. Before merge: independent external-model review and the full CI suite. Audit, factory update, upgrades and the webapp support
 (commit screen, met status, settlement service) need separate authorization.
