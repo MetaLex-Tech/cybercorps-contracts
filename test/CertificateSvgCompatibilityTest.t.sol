@@ -104,23 +104,29 @@ contract CertificateSvgCompatibilityTest is Test {
         d.unitsRepresented = 25e17;
         d.investmentAmountUSD = 25e16;
         d.extensionData = hex"1234";
+        return _json(legacy, encoded, SecurityClass.CommonStock, d);
+    }
+
+    function _json(bool legacy, bool encoded, SecurityClass securityType, CertificateDetails memory d)
+        internal view returns (string memory)
+    {
         Endorsement[] memory e = new Endorsement[](1);
         e[0].endorseeName = "Holder";
         e[0].signatureHash = hex"1234";
         OwnerDetails memory owner = OwnerDetails("Holder", address(0xCAFE));
         string[] memory texts = new string[](1); texts[0] = "Board consent";
         if (legacy) {
-            if (encoded) return builder.buildCertificateUri("Example Corp", "Corp", "DE", "contact", SecurityClass.CommonStock,
+            if (encoded) return builder.buildCertificateUri("Example Corp", "Corp", "DE", "contact", securityType,
                 SecuritySeries.SeriesSeed, "ipfs://cert", texts, d, e, owner, REGISTRY, bytes32(uint256(1)), 1, TOKEN, EXTENSION);
-            return builder.buildCertificateUriNotEncoded("Example Corp", "Corp", "DE", "contact", SecurityClass.CommonStock,
+            return builder.buildCertificateUriNotEncoded("Example Corp", "Corp", "DE", "contact", securityType,
                 SecuritySeries.SeriesSeed, "ipfs://cert", texts, d, e, owner, REGISTRY, bytes32(uint256(1)), 1, TOKEN, EXTENSION);
         }
         RestrictiveLegend[] memory legends = new RestrictiveLegend[](1);
         legends[0].restrictionType = RestrictionType.Custom;
         legends[0].text = texts[0]; legends[0].active = true;
-        if (encoded) return builder.buildCertificateUri("Example Corp", "Corp", "DE", "contact", SecurityClass.CommonStock,
+        if (encoded) return builder.buildCertificateUri("Example Corp", "Corp", "DE", "contact", securityType,
             SecuritySeries.SeriesSeed, "ipfs://cert", legends, d, e, owner, REGISTRY, bytes32(uint256(1)), 1, TOKEN, EXTENSION);
-        return builder.buildCertificateUriNotEncoded("Example Corp", "Corp", "DE", "contact", SecurityClass.CommonStock,
+        return builder.buildCertificateUriNotEncoded("Example Corp", "Corp", "DE", "contact", securityType,
             SecuritySeries.SeriesSeed, "ipfs://cert", legends, d, e, owner, REGISTRY, bytes32(uint256(1)), 1, TOKEN, EXTENSION);
     }
 
@@ -375,6 +381,101 @@ contract CertificateSvgCompatibilityTest is Test {
         assertGt(bytes(image.buildCertificateSVG(p, 0)).length, 0);
         p.units = type(uint256).max;
         assertTrue(_contains(image.buildCertificateSVG(p, 0), ">1/sh</text>"));
+    }
+
+    function _assertSafePurchaseAmount(string memory svg, string memory amount) internal pure {
+        assertTrue(_contains(svg, '>Consideration</text>'), "SAFE retains the consideration label");
+        assertFalse(_contains(svg, '>Purchase Amount</text>'), "SAFE does not rename the amount label");
+        assertTrue(_contains(svg, string.concat('fill="url(#paint0_linear_62908_10150)">', amount, '</text>')),
+            "SAFE shows current nominal units");
+        assertTrue(_contains(svg, '>Instruments</text>'), "SAFE remains one instrument");
+        assertTrue(_contains(svg, 'text-anchor="middle">1</text>'), "instrument count stays one");
+        assertFalse(_contains(svg, "$"), "currency formatting remains neutral");
+    }
+
+    function testSafePurchaseAmountTracksPrimaryAndSecondaryLots() public view {
+        CertificateSVGParams memory p = _params();
+        p.securityType = SecurityClass.SAFE;
+        p.units = 100_000e18;
+        p.consideration = 100_000e18;
+        _assertSafePurchaseAmount(image.buildCertificateSVG(p, 0), "100,000");
+
+        // Seller keeps the original investment snapshot after a partial sale.
+        p.units = 90_000e18;
+        _assertSafePurchaseAmount(image.buildCertificateSVG(p, 0), "90,000");
+
+        // Buyer has nominal principal even though secondary lots have no investment snapshot.
+        p.units = 10_000e18;
+        p.consideration = 0;
+        string memory buyer = image.buildCertificateSVG(p, 0);
+        _assertSafePurchaseAmount(buyer, "10,000");
+        p.consideration = 5_000e18;
+        assertEq(image.buildCertificateSVG(p, 0), buyer, "discount does not alter SAFE principal");
+        p.consideration = 15_000e18;
+        assertEq(image.buildCertificateSVG(p, 0), buyer, "premium does not alter SAFE principal");
+    }
+
+    function testSafePurchaseAmountDoesNotRequireKnownConsideration() public view {
+        CertificateSVGParams memory p = _params();
+        p.securityType = SecurityClass.SAFE;
+        p.units = 10_000e18;
+        p.considerationKnown = false;
+        _assertSafePurchaseAmount(image.buildCertificateSVG(p, 0), "10,000");
+    }
+
+    function testSafePurchaseAmountPreservesFractionalAndZeroBalances() public view {
+        CertificateSVGParams memory p = _params();
+        p.securityType = SecurityClass.SAFE;
+        p.units = 10_000e18 + 1;
+        _assertSafePurchaseAmount(image.buildCertificateSVG(p, 0), "10,000.000000000000000001");
+        p.units = 1;
+        _assertSafePurchaseAmount(image.buildCertificateSVG(p, 0), "0.000000000000000001");
+        p.units = 0;
+        _assertSafePurchaseAmount(image.buildCertificateSVG(p, 0), "0");
+    }
+
+    function testOtherConvertiblesStillShowConsideration() public view {
+        SecurityClass[6] memory classes = [SecurityClass.SAFT, SecurityClass.SAFTE, SecurityClass.SAFO,
+            SecurityClass.ConvertibleNote, SecurityClass.TokenWarrant, SecurityClass.TokenPurchaseAgreement];
+        CertificateSVGParams memory p = _params();
+        p.units = 10_000e18;
+        p.consideration = 5_000e18;
+        for (uint256 i; i < classes.length; ++i) {
+            p.securityType = classes[i];
+            string memory svg = image.buildCertificateSVG(p, 0);
+            assertTrue(_contains(svg, '>Consideration</text>'));
+            assertTrue(_contains(svg, '>5,000</text>'));
+            assertFalse(_contains(svg, '>Purchase Amount</text>'));
+        }
+    }
+
+    function testSafePurchaseAmountAcrossAllUriEntryPoints() public {
+        for (uint256 variant; variant < 4; ++variant) {
+            bool legacy = variant < 2;
+            bool encoded = variant % 2 == 0;
+            CertificateDetails memory d;
+            d.unitsRepresented = 90_000e18;
+            d.investmentAmountUSD = 100_000e18;
+            string memory json = _json(legacy, encoded, SecurityClass.SAFE, d);
+            if (encoded) json = _decode(json, 29);
+            string memory sellerSvg = _svg(json);
+            _assertSafePurchaseAmount(sellerSvg, "90,000");
+            assertEq(vm.parseJsonString(json, ".investmentAmountUSD"), "100000.00", "historical JSON unchanged");
+            assertEq(vm.parseJsonString(json, ".unitsRepresented"), "90000.00");
+
+            d.unitsRepresented = 10_000e18;
+            d.investmentAmountUSD = 0;
+            json = _json(legacy, encoded, SecurityClass.SAFE, d);
+            if (encoded) json = _decode(json, 29);
+            string memory buyerSvg = _svg(json);
+            _assertSafePurchaseAmount(buyerSvg, "10,000");
+            assertEq(vm.parseJsonString(json, ".investmentAmountUSD"), "0.00", "blank secondary basis unchanged");
+            assertEq(vm.parseJsonString(json, ".unitsRepresented"), "10000.00");
+            if (variant == 0 && vm.envOr("SVG_PREVIEW", false)) {
+                emit log_named_string("SVG_SAFE_SELLER", sellerSvg);
+                emit log_named_string("SVG_SAFE_BUYER", buyerSvg);
+            }
+        }
     }
 
     /// @dev The values of MetaLeX Labs preferred token #0 on Ethereum mainnet.
