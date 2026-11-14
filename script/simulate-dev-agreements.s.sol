@@ -3,7 +3,7 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 
 contract SimulateDevAgreementsScript is Script {
 
@@ -18,7 +18,7 @@ contract SimulateDevAgreementsScript is Script {
 
     function run() public {
         runWithArgs(
-            CyberAgreementRegistry(0x4bd6B665118dAfdf06Bd4201f0b0b6373f3D02E4),
+            ICyberAgreementRegistry(0x4bd6B665118dAfdf06Bd4201f0b0b6373f3D02E4),
             uint256(keccak256("SimulateDevAgreementsScript.dev1")), // salt
             vm.envUint("PRIVATE_KEY_MAIN"), // proposerPrivateKey
             vm.envUint("PRIVATE_KEY_COUNTER_PARTY_SIGNED"), // counterPartySignedPrivateKey
@@ -27,7 +27,7 @@ contract SimulateDevAgreementsScript is Script {
     }
 
     function runWithArgs(
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         uint256 salt,
         uint256 proposerPrivateKey,
         uint256 counterPartySignedPrivateKey,
@@ -141,7 +141,7 @@ contract SimulateDevAgreementsScript is Script {
     }
 
     function _createTestContract(
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         uint256 salt,
         uint256 expiry,
         uint256 proposerPrivateKey
@@ -190,7 +190,7 @@ contract SimulateDevAgreementsScript is Script {
     }
 
     function _signContract(
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 agreementId,
         string[] memory partyValues,
         uint256 signerPrivateKey

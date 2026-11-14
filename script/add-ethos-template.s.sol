@@ -8,7 +8,7 @@ import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -78,7 +78,7 @@ contract BaseScript is Script {
         partyFieldsSafeT[3] = "investorType";
         partyFieldsSafeT[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(bytes("ethos_safte_test2")), "SAFTE", "ipfs://bafybeiby3ikipxaxafsqyow4jfchofw4wb2jr2x4nfximmwc6cnszca7ge", globalFieldsSafeT, partyFieldsSafeT);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(bytes("ethos_safte_test2")), "SAFTE", "ipfs://bafybeiby3ikipxaxafsqyow4jfchofw4wb2jr2x4nfximmwc6cnszca7ge", globalFieldsSafeT, partyFieldsSafeT);
 
         console.log("Template created successfully");
 

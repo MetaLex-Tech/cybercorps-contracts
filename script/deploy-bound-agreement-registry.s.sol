@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {CyberAgreementBound, CyberAgreementJson, CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {DeploymentUtils} from "./libs/DeploymentUtils.sol";
@@ -12,7 +13,7 @@ import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UU
 import {ERC1967Utils} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Utils.sol";
 
 /// @notice Deploy the creator-bound registry implementation; export the upgrade for a separate Safe execution.
-/// @dev Forge deploys/links CyberAgreementBound and CyberAgreementJson using its configured sender/wallet. Only CREATE is broadcast here.
+/// @dev The router deploys its facets in its constructor. Only CREATE is broadcast here.
 ///      Writes Safe Transaction Builder JSON directly, like deploy-parentco-factory and DeploymentScript.finish.
 contract DeployBoundAgreementRegistryScript is Script {
     error WrongChain(uint256 expected, uint256 actual);
@@ -43,7 +44,7 @@ contract DeployBoundAgreementRegistryScript is Script {
         require(proxy.code.length > 0, "Registry proxy has no code");
         address previous = implementationOf(proxy);
         require(previous.code.length > 0, "Registry is not an implementation proxy");
-        CyberAgreementRegistry registry = CyberAgreementRegistry(proxy);
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(proxy);
         address auth = address(registry.AUTH());
         require(auth.code.length > 0, "Registry AUTH has no code");
         require(authority != address(0), "Zero upgrade authority");
@@ -51,14 +52,11 @@ contract DeployBoundAgreementRegistryScript is Script {
         bytes32 domain = registry.DOMAIN_SEPARATOR();
         bytes32 signatureTypehash = registry.SIGNATUREDATA_TYPEHASH();
         bytes32 versionHash = keccak256(bytes(registry.version()));
-        address jsonLibrary = address(CyberAgreementJson);
-        require(jsonLibrary.code.length > 0, "JSON library has no code");
-        address boundLibrary = address(CyberAgreementBound);
-        require(boundLibrary.code.length > 0, "Bound library has no code");
 
         // Even an owner deployer must submit the upgrade separately through the Safe.
-        vm.broadcast(deployerPrivateKey);
-        implementation = address(new CyberAgreementRegistry());
+        vm.startBroadcast(deployerPrivateKey);
+        implementation = address(CyberAgreementRegistryDeployment.deployRouter());
+        vm.stopBroadcast();
         require(implementation.code.length <= 24_576, "Registry exceeds EIP-170 size limit");
         bytes memory data = abi.encodeCall(UUPSUpgradeable.upgradeToAndCall, (implementation, bytes("")));
 
@@ -87,7 +85,7 @@ contract DeployBoundAgreementRegistryScript is Script {
                 == keccak256("MetaLeX.CyberAgreementRegistry.ConditionedBoundAgreement.v1"),
             "Wrong release"
         );
-        // Exercise the external library through delegatecall from the upgraded proxy.
+        // Exercise the view facet through the router from the upgraded proxy.
         require(bytes(registry.getContractJson(bytes32(0))).length > 0, "JSON rendering failed");
         require(vm.revertToStateAndDelete(snapshot), "Could not restore simulation state");
         require(implementationOf(proxy) == previous, "Proxy changed outside Safe execution");
@@ -97,8 +95,6 @@ contract DeployBoundAgreementRegistryScript is Script {
         string memory safeTxJson = DeploymentUtils.formatSafeTxJson(safeTxs, block.chainid);
         string memory path = string.concat(prefix, ".json");
         vm.writeFile(path, safeTxJson);
-        console2.log("CyberAgreementJson:", jsonLibrary);
-        console2.log("CyberAgreementBound:", boundLibrary);
         console2.log("New implementation:", implementation);
         console2.log("Previous implementation (still active):", previous);
         console2.log("Registry proxy:", proxy);

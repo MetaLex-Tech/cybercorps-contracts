@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
 contract AddAceSafeTemplatesScript is Script {
@@ -62,7 +62,7 @@ contract AddAceSafeTemplatesScript is Script {
         console2.log("title: %s", title);
         console2.log("legalUri: %s", legalUri);
 
-        CyberAgreementRegistry(registry).createTemplate(
+        ICyberAgreementRegistry(registry).createTemplate(
             templateId,
             title,
             legalUri,

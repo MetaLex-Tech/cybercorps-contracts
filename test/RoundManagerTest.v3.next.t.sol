@@ -6,7 +6,7 @@ import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
 import {LegacyCyberCertData} from "./libs/LegacyCyberCorpFactory.sol";
 import {SecuritySeries, SecurityClass, CompanyOfficer} from "../src/CyberCorpConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {RoundManager} from "../src/RoundManager.sol";
@@ -130,7 +130,7 @@ contract RoundManagerV3NextForkTest is Test {
 
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
-    CyberAgreementRegistry registry = CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134);
+    ICyberAgreementRegistry registry = ICyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134);
     ERC20 stable = ERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e); // Base Sepolia USDC
 
     address deployer;

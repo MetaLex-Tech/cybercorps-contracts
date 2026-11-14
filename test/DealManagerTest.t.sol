@@ -47,7 +47,7 @@ import {ERC721} from "../dependencies/openzeppelin-contracts/contracts/token/ERC
 import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC1967} from "../dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {DealManager, LexScrowStorage} from "../src/DealManager.sol";
 import {EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
@@ -137,7 +137,7 @@ contract CyberAgreementRegistryMock {
         string memory secret
     ) external {
         if (!_isValidSignatures[signature]) {
-            revert CyberAgreementRegistry.SignatureVerificationFailed();
+            revert ICyberAgreementRegistry.SignatureVerificationFailed();
         }
         _hasSigned[signer] = true;
     }
@@ -154,7 +154,7 @@ contract CyberAgreementRegistryMock {
         bytes calldata signature
     ) public {
         if (isVoided[contractId]) {
-            revert CyberAgreementRegistry.ContractAlreadyVoided();
+            revert ICyberAgreementRegistry.ContractAlreadyVoided();
         }
         if (_isReadyToVoid[contractId]) {
             isVoided[contractId] = true;
@@ -444,7 +444,7 @@ contract DealManagerTest is Test {
 
         // Party 1 proposes the deal and sign
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector));
+        vm.expectRevert(abi.encodeWithSelector(ICyberAgreementRegistry.SignatureVerificationFailed.selector));
         (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
             defaultCertPrinters,
             address(paymentToken),
@@ -528,7 +528,7 @@ contract DealManagerTest is Test {
 
         // Party 2 sign and pay
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector));
+        vm.expectRevert(abi.encodeWithSelector(ICyberAgreementRegistry.SignatureVerificationFailed.selector));
         dm.signDealAndPay(
             alice, // signer
             agreementId,
@@ -704,7 +704,7 @@ contract DealManagerTest is Test {
 
         // Party 2 signs the deal, pays and finalizes it
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector));
+        vm.expectRevert(abi.encodeWithSelector(ICyberAgreementRegistry.SignatureVerificationFailed.selector));
         dm.signAndFinalizeDeal(
             alice, // signer
             agreementId,
@@ -778,7 +778,7 @@ contract DealManagerTest is Test {
         // The registry teardown path stays closed — cleanup must not depend on it
         vm.warp(block.timestamp + 365 days);
         vm.prank(companyOwner);
-        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        vm.expectRevert(ICyberAgreementRegistry.ContractAlreadyVoided.selector);
         dm.voidExpiredDeal(agreementId, companyOwner, GOOD_SIGNATURE);
     }
 
@@ -861,7 +861,7 @@ contract DealManagerTest is Test {
         // In such case, calling `dm.signToVoid()` would fail because Deal Manager would try to void the contract again
         registry.mockIsVoided(agreementId, true);
         vm.prank(companyOwner);
-        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        vm.expectRevert(ICyberAgreementRegistry.ContractAlreadyVoided.selector);
         dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
 
         // Should call `refundVoidedDeal()` instead so Deal Manager would re-sync and refund

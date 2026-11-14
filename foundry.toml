@@ -12,7 +12,9 @@ isolate = false
 extra_output_files = ['abi']
 fs_permissions = [
     { access = "read-write", path = "./script/res" },
-    { access = "read", path = "./test/res" }
+    { access = "read", path = "./test/res" },
+    # The registry routing test reads the facet ABIs from the build output.
+    { access = "read", path = "./out" }
 ]
 
 [rpc_endpoints]

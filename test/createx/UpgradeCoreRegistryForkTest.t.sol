@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {DeploymentConstants} from "../../script/libs/DeploymentConstants.sol";
 import {GnosisTransaction} from "../../script/libs/safe.sol";
 import {UpgradeCoreScript} from "../../script/upgrade-core.s.sol";
-import {CyberAgreementRegistry} from "../../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../../src/interfaces/ICyberAgreementRegistry.sol";
 import {ZKPassportConditionLib, ZKPassportConfig} from "../../src/libs/ZKPassportConditionLib.sol";
 import "forge-std/Test.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -45,7 +45,7 @@ contract UpgradeCoreRegistryForkTest is Test {
         assertEq(safeTxs[0].to, core.cyberAgreementRegistry);
         assertEq(bytes4(safeTxs[0].data), UUPSUpgradeable.upgradeToAndCall.selector);
         assertEq(safeTxs[1].to, core.cyberAgreementRegistry);
-        assertEq(bytes4(safeTxs[1].data), CyberAgreementRegistry.setSignerConditionConfig.selector);
+        assertEq(bytes4(safeTxs[1].data), ICyberAgreementRegistry.setSignerConditionConfig.selector);
         for (uint256 i = 0; i < safeTxs.length; i++) {
             vm.prank(core.metalexSafe);
             (bool success,) = safeTxs[i].to.call(safeTxs[i].data);
@@ -53,7 +53,7 @@ contract UpgradeCoreRegistryForkTest is Test {
         }
 
         ZKPassportConfig memory config = abi.decode(
-            CyberAgreementRegistry(core.cyberAgreementRegistry).getSignerConditionConfig(ZKPassportConditionLib.KIND),
+            ICyberAgreementRegistry(core.cyberAgreementRegistry).getSignerConditionConfig(ZKPassportConditionLib.KIND),
             (ZKPassportConfig)
         );
         assertEq(config.verifier, core.zkpassportVerifier);

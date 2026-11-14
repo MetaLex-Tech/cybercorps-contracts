@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
@@ -30,7 +30,7 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
     address internal officer = vm.addr(officerPk);
     address internal investor = vm.addr(investorPk);
 
-    CyberAgreementRegistry internal registry;
+    ICyberAgreementRegistry internal registry;
     CyberCorpFactory internal corpFactory;
     address internal cyberCorpSingleFactory;
     address internal rmFactory;

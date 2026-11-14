@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Test, Vm} from "forge-std/Test.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CreditFacilityFactoryDeployer} from "../script/CreditFacilityFactoryDeployer.sol";
@@ -37,7 +37,7 @@ contract CreditFacilityFactoryForkTest is Test {
     function _unregister(bytes32 id) internal {
         bytes32 base = keccak256(abi.encode(id, TEMPLATES_SLOT));
         vm.store(REGISTRY, base, bytes32(0)); // legalContractUri length word
-        (string memory uri,) = CyberAgreementRegistry(REGISTRY).templates(id);
+        (string memory uri,) = ICyberAgreementRegistry(REGISTRY).templates(id);
         assertEq(bytes(uri).length, 0, "unregistered");
     }
 
@@ -68,12 +68,12 @@ contract CreditFacilityFactoryForkTest is Test {
         assertEq(a.userRoles(TESTNET_OFFICER), a.OWNER_ROLE(), "officer owns");
         assertEq(a.userRoles(broadcaster), a.OWNER_ROLE(), "broadcaster owns until revoked");
         (string memory uri, string memory t, string[] memory globals, string[] memory parties) =
-            CyberAgreementRegistry(REGISTRY).getTemplateDetails(CreditFacilityTemplates.segCoId());
+            ICyberAgreementRegistry(REGISTRY).getTemplateDetails(CreditFacilityTemplates.segCoId());
         assertEq(uri, CreditFacilityTemplates.SEGCO_URI);
         assertEq(t, CreditFacilityTemplates.SEGCO_TITLE);
         assertEq(globals.length, 10);
         assertEq(parties.length, 2);
-        (uri,,,) = CyberAgreementRegistry(REGISTRY).getTemplateDetails(CreditFacilityTemplates.boardConsentId());
+        (uri,,,) = ICyberAgreementRegistry(REGISTRY).getTemplateDetails(CreditFacilityTemplates.boardConsentId());
         assertEq(uri, CreditFacilityTemplates.BOARD_CONSENT_URI);
     }
 
@@ -99,7 +99,7 @@ contract CreditFacilityFactoryForkTest is Test {
         string[] memory eight = new string[](8);
         string[] memory ten = CreditFacilityTemplates.globalFields();
         for (uint256 i = 0; i < 8; i++) eight[i] = ten[i];
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             CreditFacilityTemplates.segCoId(),
             CreditFacilityTemplates.SEGCO_TITLE,
             CreditFacilityTemplates.SEGCO_URI,
@@ -146,7 +146,7 @@ contract CreditFacilityFactoryForkTest is Test {
         string[] memory parties = new string[](2);
         parties[0] = "Name";
         parties[1] = "ContactDetails";
-        CyberAgreementRegistry(REGISTRY).createTemplate(
+        ICyberAgreementRegistry(REGISTRY).createTemplate(
             CreditFacilityTemplates.boardConsentId(),
             CreditFacilityTemplates.BOARD_CONSENT_TITLE,
             CreditFacilityTemplates.BOARD_CONSENT_URI,

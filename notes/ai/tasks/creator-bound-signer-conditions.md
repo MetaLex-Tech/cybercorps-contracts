@@ -6,7 +6,7 @@
 - **Collaborators / boundaries:** PR #185 (creator-bound registry, not deployed); `ZKPassportFinalizer` is deprecated and removed from the repo (2026-10-29)
 - **Objective:** A creator can attach conditions to each party of a creator-bound agreement. A party with conditions signs together with its evidence (for example a ZKPassport proof), and its signature covers the evidence. A relayer can settle the whole agreement in one transaction.
 - **Out of scope:** conditions on legacy (`createContract`, standalone) agreements; changes to `ZKPassportFinalizer`; deployment; webapp integration
-- **Canonical plan / sources:** this record; `src/CyberAgreementRegistry.sol`; `src/interfaces/ISignerConditions.sol`; `src/libs/SignerConditionLib.sol`; `src/libs/ZKPassportConditionLib.sol`
+- **Canonical plan / sources:** this record; `src/interfaces/ICyberAgreementRegistry.sol` (signer-condition events, errors and `SignerCondition`); `src/registry/CyberAgreementBoundFacet.sol`; `src/libs/SignerConditionLib.sol`; `src/libs/ZKPassportConditionLib.sol`
 - **Repository / branch:** cybercorps-contracts; base `develop` (0a598592), branch `feat/creator-bound-zkpassport-condition`
 - **Verified base / code head:** 4d4ef689 plus uncommitted changes: `src/CyberAgreementRegistry.sol` (conditions getters removed), `test/libs/CyberAgreementUtils.sol`, `test/CyberAgreementRegistrySignerConditionsTest.t.sol` (new), `notes/ai/CURRENT-STATE.md`, this record
 - **Worktree locator:** main checkout

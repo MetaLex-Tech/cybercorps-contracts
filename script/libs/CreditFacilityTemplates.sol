@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {CyberAgreementRegistry} from "../../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../../src/interfaces/ICyberAgreementRegistry.sol";
 
 /// @notice The credit-facility template pair and the one rule both deployment
 ///   paths (the Foundry script and the one-transaction deployer) apply when a
@@ -62,13 +62,13 @@ library CreditFacilityTemplates {
     {
         string[] memory expectedGlobal = globalFields();
         string[] memory expectedParty = partyFields();
-        (string memory existingUri,) = CyberAgreementRegistry(registry).templates(id);
+        (string memory existingUri,) = ICyberAgreementRegistry(registry).templates(id);
         if (bytes(existingUri).length == 0) {
-            CyberAgreementRegistry(registry).createTemplate(id, title, uri, expectedGlobal, expectedParty);
+            ICyberAgreementRegistry(registry).createTemplate(id, title, uri, expectedGlobal, expectedParty);
             return true;
         }
         (string memory registeredUri, string memory registeredTitle, string[] memory registeredGlobal, string[] memory registeredParty) =
-            CyberAgreementRegistry(registry).getTemplateDetails(id);
+            ICyberAgreementRegistry(registry).getTemplateDetails(id);
         bool same = keccak256(bytes(registeredUri)) == keccak256(bytes(uri))
             && keccak256(bytes(registeredTitle)) == keccak256(bytes(title))
             && keccak256(abi.encode(registeredGlobal)) == keccak256(abi.encode(expectedGlobal))

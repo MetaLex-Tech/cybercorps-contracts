@@ -25,7 +25,7 @@ import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {OrCondition} from "../src/libs/conditions/OrCondition.sol";
 import {LeXcheX} from "../src/creds/lexchex.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {RoundManagerStorage, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
@@ -232,7 +232,7 @@ contract PumpCorpFactoryForkTest is Test {
     function _lifecyclePartyValues(string memory name_, address eoa_)
     internal view returns (string[] memory pv)
     {
-        (, , , string[] memory pFields) = CyberAgreementRegistry(REGISTRY)
+        (, , , string[] memory pFields) = ICyberAgreementRegistry(REGISTRY)
             .getTemplateDetails(TEMPLATE_ID);
         pv = new string[](pFields.length);
         if (pFields.length > 0) pv[0] = name_;
@@ -244,7 +244,7 @@ contract PumpCorpFactoryForkTest is Test {
     function _lifecycleGlobalValues()
     internal view returns (string[] memory gv)
     {
-        (, , string[] memory gFields, ) = CyberAgreementRegistry(REGISTRY)
+        (, , string[] memory gFields, ) = ICyberAgreementRegistry(REGISTRY)
             .getTemplateDetails(TEMPLATE_ID);
         gv = new string[](gFields.length);
         if (gFields.length > 0) gv[0] = "Seed Round";
@@ -393,7 +393,7 @@ contract PumpCorpFactoryForkTest is Test {
         string[] memory investorPv_,
         address finalizer_
     ) internal view returns (bytes memory) {
-        CyberAgreementRegistry reg = CyberAgreementRegistry(REGISTRY);
+        ICyberAgreementRegistry reg = ICyberAgreementRegistry(REGISTRY);
         (
             string memory legalUri,
             ,
@@ -545,7 +545,7 @@ contract PumpCorpFactoryForkTest is Test {
         vm.stopPrank();
 
         assertTrue(
-            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            ICyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
             "agreement must be finalized after FCFS submitEOI"
         );
         assertEq(
@@ -682,7 +682,7 @@ contract PumpCorpFactoryForkTest is Test {
 
         // EOI is parked (escrow PAID) but agreement not yet finalized
         assertFalse(
-            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            ICyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
             "must not be finalized before allocate"
         );
 
@@ -691,7 +691,7 @@ contract PumpCorpFactoryForkTest is Test {
         RoundManager(rm).allocate(agreementId, investAmount);
 
         assertTrue(
-            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            ICyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
             "agreement must be finalized after allocate"
         );
         assertEq(
@@ -737,7 +737,7 @@ contract PumpCorpFactoryForkTest is Test {
         vm.stopPrank();
 
         assertTrue(
-            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            ICyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
             "agreement must be finalized after FCFS submitEOI"
         );
         assertEq(
@@ -2032,7 +2032,7 @@ contract PumpCorpFactoryForkTest is Test {
         vm.stopPrank();
 
         assertTrue(
-            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            ICyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
             "agreement must be finalized after FCFS submitEOI with LexChex"
         );
     }
@@ -2074,7 +2074,7 @@ contract PumpCorpFactoryForkTest is Test {
         vm.stopPrank();
 
         assertTrue(
-            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            ICyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
             "agreement must be finalized after FCFS submitEOI with zkPassport"
         );
     }
@@ -2118,7 +2118,7 @@ contract PumpCorpFactoryForkTest is Test {
         vm.stopPrank();
 
         assertTrue(
-            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            ICyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
             "agreement must be finalized after FCFS submitEOI with both credentials"
         );
     }

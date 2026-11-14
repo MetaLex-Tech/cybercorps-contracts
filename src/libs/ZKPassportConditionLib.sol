@@ -43,6 +43,7 @@ pragma solidity 0.8.28;
 
 import "../interfaces/IZKPassportVerifier.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
+import {ICyberAgreementRegistry} from "../interfaces/ICyberAgreementRegistry.sol";
 
 /// @notice `params` of a ZKPassport condition.
 /// @param uniqueIdentifier The only passport the party can use. `bytes32(0)` lets the party use any passport.
@@ -78,17 +79,6 @@ struct ZKPassportConfig {
 library ZKPassportConditionLib {
     bytes32 internal constant KIND = keccak256("MetaLeX.SignerCondition.ZKPassport.v1");
 
-    error ZKPassportNotConfigured();
-    error InvalidZKPassportConditionParams();
-    error InvalidVerifier();
-    error DevModeProof();
-    error InvalidProof();
-    error InvalidScope();
-    error InvalidBoundChainId();
-    error InvalidBoundSender();
-    error InvalidBoundContractId();
-    error UniqueIdentifierMismatch();
-    error UniqueIdentifierAlreadyUsed();
 
     struct ZKPassportConditionStorage {
         ZKPassportConfig config;
@@ -99,13 +89,13 @@ library ZKPassportConditionLib {
 
     /// @dev `params` must be exactly one `ZKPassportCondition`, so each condition has one encoding.
     function validateParams(bytes memory params) internal view {
-        if (params.length != 32) revert InvalidZKPassportConditionParams();
-        if (_storage().config.verifier == address(0)) revert ZKPassportNotConfigured();
+        if (params.length != 32) revert ICyberAgreementRegistry.InvalidZKPassportConditionParams();
+        if (_storage().config.verifier == address(0)) revert ICyberAgreementRegistry.ZKPassportNotConfigured();
     }
 
     function setConfig(bytes memory config) internal {
         ZKPassportConfig memory decoded = abi.decode(config, (ZKPassportConfig));
-        if (decoded.verifier == address(0)) revert InvalidVerifier();
+        if (decoded.verifier == address(0)) revert ICyberAgreementRegistry.InvalidVerifier();
         _storage().config = decoded;
     }
 
@@ -123,27 +113,27 @@ library ZKPassportConditionLib {
         ZKPassportConfig memory config = $.config;
         ProofVerificationParams memory proof = abi.decode(evidence, (ZKPassportEvidence)).proof;
         // A dev-mode proof can come from a mock passport. Only a dev-mode config accepts it.
-        if (proof.serviceConfig.devMode && !config.devMode) revert DevModeProof();
+        if (proof.serviceConfig.devMode && !config.devMode) revert ICyberAgreementRegistry.DevModeProof();
 
         (bool verified, bytes32 uniqueIdentifier, IZKPassportHelper helper) =
             IZKPassportVerifier(config.verifier).verify(proof);
-        if (!verified || address(helper) == address(0)) revert InvalidProof();
+        if (!verified || address(helper) == address(0)) revert ICyberAgreementRegistry.InvalidProof();
         if (!helper.verifyScopes(proof.proofVerificationData.publicInputs, config.domain, config.scope)) {
-            revert InvalidScope();
+            revert ICyberAgreementRegistry.InvalidScope();
         }
 
         BoundData memory boundData = helper.getBoundData(proof.committedInputs);
-        if (boundData.chainId != block.chainid) revert InvalidBoundChainId();
-        if (boundData.senderAddress != party) revert InvalidBoundSender();
+        if (boundData.chainId != block.chainid) revert ICyberAgreementRegistry.InvalidBoundChainId();
+        if (boundData.senderAddress != party) revert ICyberAgreementRegistry.InvalidBoundSender();
         // The passport holder approves this agreement, not only this wallet.
         if (keccak256(bytes(boundData.customData)) != keccak256(bytes(Strings.toHexString(uint256(contractId), 32)))) {
-            revert InvalidBoundContractId();
+            revert ICyberAgreementRegistry.InvalidBoundContractId();
         }
 
         bytes32 pinned = abi.decode(params, (ZKPassportCondition)).uniqueIdentifier;
-        if (pinned != bytes32(0) && pinned != uniqueIdentifier) revert UniqueIdentifierMismatch();
+        if (pinned != bytes32(0) && pinned != uniqueIdentifier) revert ICyberAgreementRegistry.UniqueIdentifierMismatch();
         address holder = $.partyOfIdentifier[contractId][uniqueIdentifier];
-        if (holder != address(0) && holder != party) revert UniqueIdentifierAlreadyUsed();
+        if (holder != address(0) && holder != party) revert ICyberAgreementRegistry.UniqueIdentifierAlreadyUsed();
         $.partyOfIdentifier[contractId][uniqueIdentifier] = party;
 
         return abi.encode(ZKPassportResult(uniqueIdentifier));

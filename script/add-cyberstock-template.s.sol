@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
 contract AddCyberstockTemplateScript is Script {
@@ -26,7 +26,7 @@ contract AddCyberstockTemplateScript is Script {
         console2.log("LEGAL_URI: %s", LEGAL_URI);
         console2.log("");
 
-        CyberAgreementRegistry(registry).createTemplate(
+        ICyberAgreementRegistry(registry).createTemplate(
             templateId,
             TEMPLATE_ID_STR,
             LEGAL_URI,
