@@ -73,7 +73,7 @@ contract RoundManager is
     using LexScrowStorage for LexScrowStorage.LexScrowData;
     using SafeERC20 for IERC20;
 
-    string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "5.1"; // For version-tracking on all deployment and future upgrades
 
     error InvalidRound();
     error RoundNotOpen();
@@ -93,9 +93,26 @@ contract RoundManager is
     error EndTimeReductionRestricted();
     error RoundAlreadyExists();
     error NotCompanyOfficer(address signer);
+    error InvalidMinimum();
+    error MinimumNotMet();
+    error EndTimeAfterMinimumDeadline();
+    error AgreementNotInRound(bytes32 agreementId);
+    error ArrayLengthMismatch();
+    error MinimumAlreadyMet();
+    error NotCommitted(bytes32 agreementId);
+    error CommitmentLocked(bytes32 agreementId);
+    error SettleWindowTooShort(bytes32 agreementId);
+    error CommitmentListInvalid();
 
     event EOIRecalled(bytes32 agreementId, address indexed investor, bytes32 indexed roundId);
     event LexChexUpdated(address indexed lexChex, address indexed oldLexChex);
+    event RoundMinimumSet(bytes32 indexed roundId, uint256 minRaise, uint256 deadline);
+    event RoundMinimumMet(bytes32 indexed roundId, uint256 committedTotal);
+    event AllocationCommitted(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 amount, uint256 committedTotal);
+    event AllocationUncommitted(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 amount, uint256 committedTotal);
+
+    /// @notice Time a committed escrow must stay open when committed and when the minimum is met
+    uint256 public constant SETTLE_WINDOW = RoundManagerStorage.SETTLE_WINDOW;
 
     /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers
     modifier onlyOwnerOrSelf() {
@@ -178,6 +195,61 @@ contract RoundManager is
     ) external onlyOwner returns (bytes32) {
         _validateRound(roundDraft, certPrinters.length);
         return _emitRoundCreated(RoundManagerStorage.createRoundWithPrinters(roundDraft, certPrinters));
+    }
+
+    /// @notice Creates a founder-approved round that keeps no allocation unless `minRaise` is reached
+    /// @dev The minimum is fixed at creation. Until it is met, the owner commits allocations
+    /// (`setCommitments`) and marks the minimum met (`markMinimumMet`) while the round is open;
+    /// then anyone settles the commitments (`settle`). Below it, `reject` and `recallEOI` refund
+    /// each payment as for any round.
+    /// @param roundDraft partially-filled round info created by RoundLib
+    /// @param certData certificate info
+    /// @param minRaise minimum total raise in the payment token, gross of fees
+    /// @param deadline latest end time the round can be extended to while the minimum is unmet
+    /// @return roundId ID of the created round
+    function createRoundWithMinimum(
+        Round memory roundDraft,
+        CyberCertData[] memory certData,
+        uint256 minRaise,
+        uint256 deadline
+    ) external onlyOwner returns (bytes32) {
+        _validateRound(roundDraft, certData.length);
+        bytes32 roundId = _emitRoundCreated(
+            RoundManagerStorage.createRound(LexScrowStorage.getCorp(), roundDraft, certData)
+        );
+        RoundManagerStorage.setMinimum(roundId, minRaise, deadline);
+        return roundId;
+    }
+
+    /// @notice Same as `createRoundWithMinimum`, issuing from existing certificate printers
+    function createRoundWithPrintersAndMinimum(
+        Round memory roundDraft,
+        address[] memory certPrinters,
+        uint256 minRaise,
+        uint256 deadline
+    ) external onlyOwner returns (bytes32) {
+        _validateRound(roundDraft, certPrinters.length);
+        bytes32 roundId = _emitRoundCreated(
+            RoundManagerStorage.createRoundWithPrinters(roundDraft, certPrinters)
+        );
+        RoundManagerStorage.setMinimum(roundId, minRaise, deadline);
+        return roundId;
+    }
+
+    /// @notice Returns a round's minimum raise state
+    /// @return minRaise minimum total raise (0 = no minimum)
+    /// @return deadline latest end time while the minimum is unmet
+    /// @return met whether the minimum has been marked met
+    /// @return raised amount raised (allocated) so far
+    /// @return committed sum of open commitments
+    function getRoundMinimum(bytes32 roundId)
+        external
+        view
+        returns (uint256 minRaise, uint256 deadline, bool met, uint256 raised, uint256 committed)
+    {
+        (minRaise, deadline, met) = RoundManagerStorage.getRoundMinimum(roundId);
+        raised = RoundManagerStorage.getRound(roundId).raised;
+        committed = RoundManagerStorage.getCommittedTotal(roundId);
     }
 
     /// @dev Checks the draft, sets its id and verifies the escrowed signature
@@ -277,6 +349,10 @@ contract RoundManager is
         Round storage round = RoundManagerStorage.getRound(roundId);
         if (round.id == bytes32(0)) revert InvalidRound();
         if (round.restrictEndTimeReduction && newEndTime < round.endTime) revert EndTimeReductionRestricted();
+        if (RoundManagerStorage.isMinimumPending(roundId)) {
+            (, uint256 deadline, ) = RoundManagerStorage.getRoundMinimum(roundId);
+            if (newEndTime > deadline) revert EndTimeAfterMinimumDeadline();
+        }
         uint256 oldEndTime = round.endTime;
         round.endTime = newEndTime;
         emit RoundEndTimeUpdated(roundId, oldEndTime, newEndTime);
@@ -386,10 +462,84 @@ contract RoundManager is
     /// @notice Allocates an amount to an EOI and finalizes the deal
     /// @param agreementId The agreement ID
     /// @param allocatedAmount The amount to allocate
+    /// @dev Refused while the round's minimum is unmet: those rounds close through `allocateBatch`.
     function allocate(
         bytes32 agreementId,
         uint256 allocatedAmount
     ) external onlyOwnerOrSelf nonReentrant returns (uint256) {
+        if (RoundManagerStorage.isMinimumPending(RoundManagerStorage.getAgreementToRound(agreementId))) {
+            revert MinimumNotMet();
+        }
+        return _allocate(agreementId, allocatedAmount);
+    }
+
+    /// @notice Allocates several EOIs of one round in a single transaction
+    /// @dev Refused while the round's minimum is unmet (use the commit and settle steps).
+    /// Any failing allocation reverts the batch.
+    /// @param agreementIds agreement IDs, all in the same round
+    /// @param allocatedAmounts amount to allocate to each agreement
+    function allocateBatch(
+        bytes32[] calldata agreementIds,
+        uint256[] calldata allocatedAmounts
+    ) external onlyOwner nonReentrant {
+        uint256 count = agreementIds.length;
+        if (count == 0 || count != allocatedAmounts.length) revert ArrayLengthMismatch();
+
+        bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementIds[0]);
+        if (RoundManagerStorage.isMinimumPending(roundId)) revert MinimumNotMet();
+
+        for (uint256 i = 0; i < count; i++) {
+            if (RoundManagerStorage.getAgreementToRound(agreementIds[i]) != roundId) {
+                revert AgreementNotInRound(agreementIds[i]);
+            }
+            _allocate(agreementIds[i], allocatedAmounts[i]);
+        }
+    }
+
+    // ===============
+    // Minimum raise: commit, then settle
+    // ===============
+
+    /// @notice Step 1: sets commitments on a round whose minimum is unmet. Moves no funds.
+    /// @dev Any number of calls while the round is open. A positive amount commits or replaces a
+    /// commitment (the escrow must stay open for at least `SETTLE_WINDOW`; an amount above the
+    /// payment is reduced to it). An amount of 0 removes the commitment.
+    function setCommitments(
+        bytes32[] calldata agreementIds,
+        uint256[] calldata amounts
+    ) external onlyOwner {
+        RoundManagerStorage.setCommitments(LexScrowStorage.lexScrowStorage(), agreementIds, amounts);
+    }
+
+    /// @notice Marks the minimum met once commitments reach it; commitments are then locked
+    /// @param roundId The round ID
+    /// @param committedIds every committed agreement of the round, in strictly ascending order
+    function markMinimumMet(bytes32 roundId, bytes32[] calldata committedIds) external onlyOwner {
+        uint256 total = RoundManagerStorage.markMinimumMet(LexScrowStorage.lexScrowStorage(), roundId, committedIds);
+        emit RoundMinimumMet(roundId, total);
+    }
+
+    /// @notice Step 2: settles committed allocations after the minimum is met
+    /// @dev Permissionless, so settlement does not depend on the company. Each agreement is
+    /// allocated at its committed amount and must settle before its escrow expiry.
+    /// @param agreementIds committed agreement IDs
+    function settle(bytes32[] calldata agreementIds) external nonReentrant {
+        for (uint256 i = 0; i < agreementIds.length; i++) {
+            _allocate(agreementIds[i], RoundManagerStorage.takeCommitment(agreementIds[i]));
+        }
+    }
+
+    /// @notice Committed amount of an agreement (0 = not committed)
+    function getCommittedAmount(bytes32 agreementId) external view returns (uint256) {
+        return RoundManagerStorage.getCommittedAmount(agreementId);
+    }
+
+    function _allocate(
+        bytes32 agreementId,
+        uint256 allocatedAmount
+    ) private returns (uint256) {
+        // A commitment settles only through `settle`, at its committed amount.
+        if (RoundManagerStorage.getCommittedAmount(agreementId) != 0) revert CommitmentLocked(agreementId);
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         EOI storage eoi = RoundManagerStorage.getAgreementToEOI(agreementId);
@@ -401,7 +551,9 @@ contract RoundManager is
         // Check: offer has not expired based on escrow expiry ( = round.allowTimedOffers ? eoi.expiry : round.endTime)
         if (escrow.expiry < block.timestamp) revert EOIExpired();
 
-        uint256 remaining = round.raiseCap - round.raised;
+        // Capacity held by open commitments is not available. When `settle` runs
+        // this, the settling commitment has already left the committed total.
+        uint256 remaining = round.raiseCap - round.raised - RoundManagerStorage.getCommittedTotal(roundId);
         uint256 candidate = escrow.buyerAssets[0].amount;
         if (allocatedAmount < candidate) { 
             candidate = allocatedAmount;
@@ -480,6 +632,9 @@ contract RoundManager is
         if (escrow.status != EscrowStatus.PAID) revert LexScrowStorage.DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
+        // Effect: clear a commitment; refused once the minimum is met
+        RoundManagerStorage.releaseCommitment(agreementId, escrow.expiry, false);
+
         // Effect: update status
         LexScrowStorage.voidEscrow(agreementId);
 
@@ -517,6 +672,9 @@ contract RoundManager is
         if (escrow.status != EscrowStatus.PAID) revert LexScrowStorage.DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
         if (block.timestamp < escrow.expiry && round.endTime > block.timestamp) revert EOINotExpired();
+
+        // Effect: clear a commitment; once the minimum is met, only after the escrow expiry
+        RoundManagerStorage.releaseCommitment(agreementId, escrow.expiry, true);
 
         // Effect: update status
         LexScrowStorage.voidEscrow(agreementId);
