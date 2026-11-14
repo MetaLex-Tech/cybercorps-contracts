@@ -39,6 +39,20 @@ abstract contract MinimumRaiseFixture is Test {
     uint256 internal constant ROUND_DURATION = 30 days;
 
     uint256 internal constant MIN_RAISE = 2 * MAX_TICKET;
+
+    /// @dev Optional per-test round and EOI settings; zero or empty keeps the defaults.
+    uint256 internal capOverride;
+    uint256 internal maxTicketOverride;
+    bool internal naturalPersonNext;
+    address[] internal conditionsNext;
+
+    function _cap() internal view returns (uint256) {
+        return capOverride == 0 ? RAISE_CAP : capOverride;
+    }
+
+    function _maxTicket() internal view returns (uint256) {
+        return maxTicketOverride == 0 ? MAX_TICKET : maxTicketOverride;
+    }
     uint256 internal constant DEADLINE_SLACK = 30 days;
 
     event RoundMinimumSet(bytes32 indexed roundId, uint256 minRaise, uint256 deadline);
@@ -105,9 +119,9 @@ abstract contract MinimumRaiseFixture is Test {
         (bytes memory escrowedSig, ) = CyberCorpHelper.computeEscrowSignature(
             roundManager,
             SecuritySeries.SeriesSeed,
-            RAISE_CAP,
+            _cap(),
             MIN_TICKET,
-            MAX_TICKET,
+            _maxTicket(),
             roundType,
             block.timestamp,
             block.timestamp + ROUND_DURATION,
@@ -126,9 +140,9 @@ abstract contract MinimumRaiseFixture is Test {
                 false,
                 false,
                 false,
-                RAISE_CAP,
+                _cap(),
                 MIN_TICKET,
-                MAX_TICKET,
+                _maxTicket(),
                 address(paymentToken),
                 PRICE_PER_UNIT,
                 valuation,
@@ -193,7 +207,7 @@ abstract contract MinimumRaiseFixture is Test {
             minAmount: minAmount,
             maxAmount: maxAmount,
             expiry: 0,
-            naturalPerson: false,
+            naturalPerson: naturalPersonNext,
             lexchexDetails: CyberCorpHelper.emptyLex()
         });
 
@@ -212,7 +226,7 @@ abstract contract MinimumRaiseFixture is Test {
 
         vm.prank(investor);
         (agreementId, ) = RoundManager(roundManager).submitEOI(
-            roundId, eoi, new string[](1), new string[](2), sig, salt, new address[](0), bytes32(0)
+            roundId, eoi, new string[](1), new string[](2), sig, salt, conditionsNext, bytes32(0)
         );
     }
 

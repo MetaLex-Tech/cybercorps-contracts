@@ -55,7 +55,12 @@
   unmet.
 - **Reads:** `getRoundMinimum` (minimum, deadline, met, raised, committed), `getCommittedAmount`,
   `SETTLE_WINDOW`. `DEPLOY_VERSION` is "5.1"; the webapp parses the major version.
-- **Size:** RoundManager runtime 24,179 bytes (limit 24,576; 397 bytes left). The first draft
+- **Review fixes (Codex P2 on #202):** ordinary allocation reserves open commitments
+  (`raiseCap - raised - committedTotal`); the commit check skips only the LeXcheX condition, and
+  only when `allocate` would mint that credential (shared `_mintsLexChex`). Tests in
+  `RoundManagerMinimumRaiseCommitmentTest` (separate contract: a larger test contract hits a
+  via-IR "Tag too large" compiler error).
+- **Size:** RoundManager runtime 24,216 bytes (limit 24,576; 360 bytes left). The first draft
   was 204 bytes over; it fits after `settle` and `allocateBatch` stopped returning token-id
   arrays, the minimum validation moved into the library, and uncommit folded into
   `setCommitments`. Little room is left for later fixes in this contract.

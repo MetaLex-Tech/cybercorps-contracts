@@ -551,7 +551,9 @@ contract RoundManager is
         // Check: offer has not expired based on escrow expiry ( = round.allowTimedOffers ? eoi.expiry : round.endTime)
         if (escrow.expiry < block.timestamp) revert EOIExpired();
 
-        uint256 remaining = round.raiseCap - round.raised;
+        // Capacity held by open commitments is not available. When `settle` runs
+        // this, the settling commitment has already left the committed total.
+        uint256 remaining = round.raiseCap - round.raised - RoundManagerStorage.getCommittedTotal(roundId);
         uint256 candidate = escrow.buyerAssets[0].amount;
         if (allocatedAmount < candidate) { 
             candidate = allocatedAmount;

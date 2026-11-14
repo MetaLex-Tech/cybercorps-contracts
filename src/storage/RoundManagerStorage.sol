@@ -555,18 +555,58 @@ library RoundManagerStorage {
         escrow.buyerAssets[0].amount = usedAmountToken;
 
         //if the round is public and the eoi submitter does not have a valid lexchex, mint it
-        if (!ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
-            // Check if payment token is whitelisted
-            if (IRoundManagerFactory(getUpgradeFactory()).isWhitelistedToken(round.paymentToken)) {
-                // mint lexchex if over 200k for individual or 1 million for corporate using 18-decimal precision
-                if (usedAmount1e18 >= 200000 * 1e18 && eoi.naturalPerson) {
-                    (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
-                }
-                if (usedAmount1e18 >= 1000000 * 1e18 && !eoi.naturalPerson) {
-                    (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
-                }
-            }
+        if (_mintsLexChex(round, eoi, escrow.counterParty, usedAmount1e18)) {
+            (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
         }
+    }
+
+    /// @dev Whether `allocate` mints a LeXcheX credential for this investor: no valid
+    /// credential, a whitelisted payment token, and at least $200k for a natural person or
+    /// $1M for an entity (18-decimal USD). Shared by `allocate` and the commitment check.
+    function _mintsLexChex(
+        Round storage round,
+        EOI storage eoi,
+        address counterParty,
+        uint256 usedAmount1e18
+    ) private view returns (bool) {
+        if (ILexChex(getLexChex()).hasValidLexCheX(counterParty)) return false;
+        if (!IRoundManagerFactory(getUpgradeFactory()).isWhitelistedToken(round.paymentToken)) return false;
+        return eoi.naturalPerson ? usedAmount1e18 >= 200000 * 1e18 : usedAmount1e18 >= 1000000 * 1e18;
+    }
+
+    /// @dev The amount `allocate` uses for `amount`, in 18-decimal USD, rounded down to whole
+    /// fractional units exactly as `allocate` does.
+    function _usedAmount1e18(Round storage round, uint256 amount) private view returns (uint256) {
+        uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
+        uint256 amount1e18 = amount;
+        if (paymentDecimals < 18) amount1e18 = amount * (10 ** (18 - paymentDecimals));
+        else if (paymentDecimals > 18) amount1e18 = amount / (10 ** (paymentDecimals - 18));
+        uint256 units = (amount1e18 * 1e18) / round.pricePerUnit;
+        return (units * round.pricePerUnit) / 1e18;
+    }
+
+    /// @dev The commitment-time condition check. Settlement runs every condition after
+    /// `allocate` mints any LeXcheX credential. A commitment that settlement would credential
+    /// cannot pass the LeXcheX condition yet, so only that condition is skipped here, and
+    /// only for such an investor; every other condition must pass now.
+    function _commitConditionsPass(
+        LexScrowStorage.LexScrowData storage ls,
+        Round storage round,
+        EOI storage eoi,
+        address counterParty,
+        bytes32 agreementId,
+        uint256 amount
+    ) private view returns (bool) {
+        address skipped = _mintsLexChex(round, eoi, counterParty, _usedAmount1e18(round, amount))
+            ? getLexChexCondition()
+            : address(0);
+        ICondition[] storage conditions = ls.conditionsByEscrow[agreementId];
+        bytes memory agreementIdBytes = abi.encodePacked(agreementId);
+        for (uint256 i = 0; i < conditions.length; i++) {
+            if (skipped != address(0) && address(conditions[i]) == skipped) continue;
+            if (!conditions[i].checkCondition(address(this), msg.sig, agreementIdBytes)) return false;
+        }
+        return true;
     }
 
     /// @notice Retrieves a specific round's data
@@ -672,7 +712,9 @@ library RoundManagerStorage {
             if (amount < minRequired) revert InvalidAllocation();
             total += amount;
             if (round.raised + total > round.raiseCap) revert InvalidAllocation();
-            if (!LexScrowStorage.conditionCheck(agreementId)) revert ILexScrowStorage.AgreementConditionsNotMet();
+            if (!_commitConditionsPass(ls, round, eoi, escrow.counterParty, agreementId, amount)) {
+                revert ILexScrowStorage.AgreementConditionsNotMet();
+            }
 
             ds.committedAmount[agreementId] = amount;
             emit AllocationCommitted(agreementId, roundId, amount, total);
