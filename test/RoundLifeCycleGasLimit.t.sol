@@ -9,6 +9,7 @@ import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {ShareExtension} from "../src/storage/extensions/ShareExtension.sol";
+import {ShareExtensionV3} from "../src/storage/extensions/ShareExtensionV3.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
@@ -60,7 +61,7 @@ contract RoundLifeCycleGasLimitTest is Test {
 
         BorgAuth shareAuth = new BorgAuth(address(this));
         shareExtension = ShareExtension(address(new ERC1967Proxy(
-            address(new ShareExtension()),
+            _extensionImplementation(),
             abi.encodeWithSelector(ShareExtension.initialize.selector, address(shareAuth))
         )));
     }
@@ -89,6 +90,19 @@ contract RoundLifeCycleGasLimitTest is Test {
         );
     }
 
+    /// @dev The legacy shape: no series payload, the whole `ShareCertData` on every cert.
+    function _extensionImplementation() internal virtual returns (address) {
+        return address(new ShareExtension());
+    }
+
+    function _seriesData() internal pure virtual returns (bytes memory) {
+        return bytes("");
+    }
+
+    function _certExtensionData() internal pure virtual returns (bytes memory) {
+        return RealWorldShareCert.encodedShareCertData();
+    }
+
     function _makeCertData() internal view returns (CyberCertData[] memory certData) {
         certData = new CyberCertData[](1);
         certData[0] = CyberCertData({
@@ -98,7 +112,7 @@ contract RoundLifeCycleGasLimitTest is Test {
             securityClass: SecurityClass.PreferredStock,
             securitySeries: SecuritySeries.SeriesSeed,
             extension: address(shareExtension),
-            seriesData: bytes(""),
+            seriesData: _seriesData(),
             defaultLegend: RealWorldShareCert.legends()
         });
     }
@@ -117,7 +131,7 @@ contract RoundLifeCycleGasLimitTest is Test {
         roundPartyValues[4] = "";
 
         bytes[] memory extData = new bytes[](1);
-        extData[0] = RealWorldShareCert.encodedShareCertData();
+        extData[0] = _certExtensionData();
 
         (bytes memory escrowedSig,) = CyberCorpHelper.computeEscrowSignature(
             rmAddr,
@@ -289,5 +303,33 @@ contract RoundLifeCycleGasLimitTest is Test {
 
         console2.log("allocate gas:", gasUsed);
         assertLe(gasUsed, GAS_LIMIT_90_PCT, "allocate exceeds 90% of EIP-7825 block gas limit");
+    }
+}
+
+/// @notice The same round, the same real payload, stored as layers instead of one blob per cert.
+///
+/// The five series-wide sections of `ShareCertData` go to the printer's `seriesData` at createRound.
+/// Only `certificateData` goes on each cert at allocate.
+///
+/// Measured. Per-cert payload: 928 bytes against 13,984 legacy, the same 6 legends.
+/// | step        | legacy     | layered    | change |
+/// |-------------|------------|------------|--------|
+/// | createRound | 13,330,449 | 13,715,479 | +2.9%  |
+/// | submitEOI   |  1,362,846 |  1,362,846 |  0     |
+/// | allocate    | 13,467,031 |  4,578,266 | -66.0% |
+///
+/// createRound writes the series payload to the printer one time, so it costs a little more.
+/// Each allocate then writes only the lean cert payload.
+contract RoundLifeCycleLayeredGasLimitTest is RoundLifeCycleGasLimitTest {
+    function _extensionImplementation() internal override returns (address) {
+        return address(new ShareExtensionV3());
+    }
+
+    function _seriesData() internal pure override returns (bytes memory) {
+        return RealWorldShareCert.encodedSeriesLayer();
+    }
+
+    function _certExtensionData() internal pure override returns (bytes memory) {
+        return RealWorldShareCert.encodedCertLayer();
     }
 }
