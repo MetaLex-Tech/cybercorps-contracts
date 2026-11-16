@@ -14,6 +14,9 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
 import {RealWorldShareCert, REAL_WORLD_IPFS_URI} from "./libs/RealWorldShareCert.sol";
+import {MainnetSeed2ShareCert} from "./libs/MainnetSeed2ShareCert.sol";
+import {ShareCertData} from "../src/storage/extensions/ShareExtension.sol";
+import {ShareCertDataLayerLib} from "../src/storage/extensions/ShareCertDataLayerLib.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
 import {GasBudget} from "./libs/GasBudget.sol";
 
@@ -102,7 +105,7 @@ contract RoundLifeCycleGasLimitTest is Test {
         return RealWorldShareCert.encodedShareCertData();
     }
 
-    function _makeCertData() internal view returns (CyberCertData[] memory certData) {
+    function _makeCertData() internal view virtual returns (CyberCertData[] memory certData) {
         certData = new CyberCertData[](1);
         certData[0] = CyberCertData({
             name: "Seed Preferred Stock - MetaLeX Labs, Inc.",
@@ -323,11 +326,51 @@ contract RoundLifeCycleLayeredGasLimitTest is RoundLifeCycleGasLimitTest {
         return address(new ShareExtensionV3());
     }
 
-    function _seriesData() internal pure override returns (bytes memory) {
+    function _seriesData() internal pure virtual override returns (bytes memory) {
         return RealWorldShareCert.encodedSeriesLayer();
     }
 
-    function _certExtensionData() internal pure override returns (bytes memory) {
+    function _certExtensionData() internal pure virtual override returns (bytes memory) {
         return RealWorldShareCert.encodedCertLayer();
+    }
+}
+
+/// @notice The same round with the live Series Seed 2 data: the printer's series layer, cert #1's layer
+///         and the printer's legends, copied from Ethereum. The fixture above is larger than this data.
+///
+/// Measured under Glamsterdam, total gas (execution gas in brackets). Series layer 9,504 bytes, cert
+/// layer 896 bytes, 6 legends of 3,329 bytes.
+/// | step        | live Series Seed 2       | layered fixture          |
+/// |-------------|--------------------------|--------------------------|
+/// | createRound | 51,337,723 (6,143,315)   | 67,057,241 (7,954,818)   |
+/// | submitEOI   |  6,085,402   (984,763)   |  6,085,402   (984,763)   |
+/// | allocate    | 21,318,089 (3,300,410)   | 21,214,866 (3,295,107)   |
+/// forge-config: default.isolate = true
+contract RoundLifeCycleMainnetSeed2GasLimitTest is RoundLifeCycleLayeredGasLimitTest {
+    function _seriesData() internal pure override returns (bytes memory) {
+        return MainnetSeed2ShareCert.encodedSeriesLayer();
+    }
+
+    function _certExtensionData() internal pure override returns (bytes memory) {
+        return MainnetSeed2ShareCert.encodedCertLayer();
+    }
+
+    function _makeCertData() internal view override returns (CyberCertData[] memory certData) {
+        certData = super._makeCertData();
+        certData[0].name = "Series Seed 2 Preferred Stock - MetaLeX Labs, Inc.";
+        certData[0].symbol = "MLI-SEED2-PREFSTCK";
+        certData[0].defaultLegend = MainnetSeed2ShareCert.legends();
+    }
+
+    /// @notice The copied bytes still decode to the live security under the current structs.
+    function test_mainnetSeed2Layers_resolveToTheLiveSecurity() public pure {
+        ShareCertData memory share = ShareCertDataLayerLib.resolve(
+            "", MainnetSeed2ShareCert.encodedSeriesLayer(), MainnetSeed2ShareCert.encodedCertLayer()
+        );
+        assertEq(share.terms.seriesName, "Series Seed 2 Preferred Stock", "series name");
+        assertEq(share.mandatoryConversionTriggers.length, 2, "conversion triggers");
+        assertEq(share.specialVotingRights.length, 3, "voting rights");
+        assertEq(share.transferRestrictions.length, 2, "transfer restrictions");
+        assertEq(share.splitHistory.length, 0, "split history");
     }
 }

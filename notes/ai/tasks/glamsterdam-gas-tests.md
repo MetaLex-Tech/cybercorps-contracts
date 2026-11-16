@@ -66,6 +66,13 @@ Ethereum until its limit goes above ~65M.
 (`ShareExtensionV3`). `allocate` is 21,214,866 (−67.4%), so it fits 32M. `createRound` is 67,057,241
 (+3.3%), so the layered format does not make round creation fit 32M, 40M or 60M.
 
+2026-11-16: the fixture matches no live cert. Read through `RPC_URL_ETHEREUM`: the live Series Seed 2
+and Series Seed printers are layered (`ShareExtensionV3`; series data 9,504 B and 9,728 B; cert layer
+896 B and 800 B). The Common Stock certs are legacy (7,904 B to 12,864 B, no legends).
+`RoundLifeCycleMainnetSeed2GasLimitTest` uses `test/libs/MainnetSeed2ShareCert.sol`, copied from printer
+`0xe48F7f3DE3F68E7C53Deaf6D092C0eC6Af459e0A` cert #1 at block 26429373. `createRound` is 51,337,723 and
+`allocate` is 21,318,089. Round creation with live data fits 60M, but not 32M or 40M.
+
 ## Next action and handoff
 
 Owner reviews and commits. Owner decides if Arbitrum, Robinhood and Base need their own budget.
