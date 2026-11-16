@@ -1,5 +1,5 @@
 ---
-description: Form the entity a MetaDAO or Umia launch prescribes, and browse the companies each launchpad has formed
+description: Form the entity a MetaDAO or Umia launch prescribes, see what the app offers it after formation, and browse the companies each launchpad has formed
 ---
 
 # Launchpads: MetaDAO and Umia
@@ -74,9 +74,26 @@ On MetaDAO, the summary data can trail the chain by a minute right after
 formation. When it does, the page says the summary is still syncing and
 asks you to refresh; the formation has already succeeded.
 
-After formation you manage the entity like any other cyberCORP: issue
-securities from the cyberCORPs app (see [Run your company](company.md)) and
-raise in [cyberRAISE](cyberraise.md).
+## After formation
+
+The cyberCORPs app treats a launchpad segregated portfolio as its own legal
+form, not as a corporation or an LLC. Its token launch, its fundraising and
+its governance happen on the launchpad. In the app, the operator can:
+
+- open **mission control**, which shows a **Segregated portfolio** panel in
+  place of the setup cards, the open tasks and recent activity;
+- keep the company's **Documents**, including the executed formation
+  agreement and board resolutions;
+- **sign a contract as the company** in cyberSign. The operator binds the
+  segregated portfolio alone, so no launchpad vote is needed to sign.
+
+The app does not show the cap table, the Tokenization Hub, boardRoom, the
+Incorporation Hub, grants or [cyberRAISE](cyberraise.md) for a segregated
+portfolio. These are corporation and LLC workflows. If you open one of these
+pages from a link, the page says that it is not available for a segregated
+portfolio and offers the panel instead. cyberRAISE also refuses to start a
+round or a deal for a segregated portfolio, from the app and from an AI
+agent.
 
 ## Browse the launchpad directory
 

@@ -2694,6 +2694,10 @@ contract RoundManagerTest is Test {
     }
 
     function draftRoundWithPrinters(uint256 certCount, uint256 pricePerUnit) internal view returns (Round memory) {
+        return draftRoundSignedBy(certCount, pricePerUnit, corpOwnerPrivKey);
+    }
+
+    function draftRoundSignedBy(uint256 certCount, uint256 pricePerUnit, uint256 signerPrivKey) internal view returns (Round memory) {
         (bytes memory escrowedSig, ) = CyberCorpHelper.computeEscrowSignature(
             roundManager,
             SecuritySeries.SeriesSeed,
@@ -2707,7 +2711,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             pricePerUnit,
             VALUATION,
-            corpOwnerPrivKey,
+            signerPrivKey,
             corp
         );
 
@@ -2729,7 +2733,7 @@ contract RoundManagerTest is Test {
                 )
                 .setAgreement(
                     CyberCorpHelper.TEMPLATE_ID,
-                    corpOwner,
+                    vm.addr(signerPrivKey),
                     "Officer",
                     "CEO",
                     new string[](certCount),
@@ -2805,12 +2809,92 @@ contract RoundManagerTest is Test {
         RoundManager(roundManager).createRoundWithPrinters(draft, certPrinters);
     }
 
+    function _oneCertData() internal pure returns (CyberCertData[] memory certData) {
+        certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
+            name: "Test Certificate",
+            symbol: "TEST",
+            uri: "https://test.uri",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            seriesData: bytes(""),
+            defaultLegend: new string[](0)
+        });
+    }
+
+    function _addOfficer(address eoa) internal {
+        vm.prank(corpOwner);
+        CyberCorp(corp).addOfficer(CompanyOfficer({eoa: eoa, name: "Officer 2", contact: "", title: "CFO"}));
+    }
+
+    function test_CreateRound_AcceptsAddedOfficerSigner() public {
+        (address officer2, uint256 officer2Key) = makeAddrAndKey("officer2");
+        _addOfficer(officer2);
+        Round memory draft = draftRoundSignedBy(1, 2 * PRICE_PER_UNIT, officer2Key);
+
+        vm.prank(corpOwner);
+        bytes32 newRoundId = RoundManager(roundManager).createRound(draft, _oneCertData());
+
+        assertEq(RoundManager(roundManager).getRound(newRoundId).authorityOfficer, officer2);
+    }
+
+    function test_CreateRoundWithPrinters_AcceptsAddedOfficerSigner() public {
+        (address officer2, uint256 officer2Key) = makeAddrAndKey("officer2");
+        _addOfficer(officer2);
+        address[] memory certPrinters = RoundManager(roundManager).getRound(roundId).certPrinter;
+        Round memory draft = draftRoundSignedBy(certPrinters.length, 2 * PRICE_PER_UNIT, officer2Key);
+
+        vm.prank(corpOwner);
+        bytes32 newRoundId = RoundManager(roundManager).createRoundWithPrinters(draft, certPrinters);
+
+        assertEq(RoundManager(roundManager).getRound(newRoundId).authorityOfficer, officer2);
+    }
+
+    function test_RevertIf_CreateRound_SignerNotOfficer() public {
+        (address stranger, uint256 strangerKey) = makeAddrAndKey("stranger");
+        Round memory draft = draftRoundSignedBy(1, 2 * PRICE_PER_UNIT, strangerKey);
+        CyberCertData[] memory certData = _oneCertData();
+
+        vm.prank(corpOwner);
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.NotCompanyOfficer.selector, stranger));
+        RoundManager(roundManager).createRound(draft, certData);
+    }
+
+    function test_RevertIf_CreateRoundWithPrinters_SignerNotOfficer() public {
+        (address stranger, uint256 strangerKey) = makeAddrAndKey("stranger");
+        address[] memory certPrinters = RoundManager(roundManager).getRound(roundId).certPrinter;
+        Round memory draft = draftRoundSignedBy(certPrinters.length, 2 * PRICE_PER_UNIT, strangerKey);
+
+        vm.prank(corpOwner);
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.NotCompanyOfficer.selector, stranger));
+        RoundManager(roundManager).createRoundWithPrinters(draft, certPrinters);
+    }
+
+    function test_RevertIf_CreateRound_SignerFormerOfficer() public {
+        (address officer2, uint256 officer2Key) = makeAddrAndKey("officer2");
+        _addOfficer(officer2);
+        vm.prank(corpOwner);
+        CyberCorp(corp).updateOfficer(1, CompanyOfficer({eoa: makeAddr("officer3"), name: "Officer 3", contact: "", title: "CFO"}));
+        Round memory draft = draftRoundSignedBy(1, 2 * PRICE_PER_UNIT, officer2Key);
+        CyberCertData[] memory certData = _oneCertData();
+
+        vm.prank(corpOwner);
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.NotCompanyOfficer.selector, officer2));
+        RoundManager(roundManager).createRound(draft, certData);
+    }
+
 }
 
 // Separate FCFS tests in their own contract to avoid the original setUp()
 contract RoundManagerFCFSTest is Test {
     using RoundLib for Round;
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
+
+    function _addOfficer(address corp, address corpOwner, address eoa) internal {
+        vm.prank(corpOwner);
+        CyberCorp(corp).addOfficer(CompanyOfficer({eoa: eoa, name: "Officer", contact: "", title: "CEO"}));
+    }
 
     function setUp() public {
     }
@@ -2889,10 +2973,12 @@ contract RoundManagerFCFSTest is Test {
         RoundManager rm = RoundManager(payable(roundManager));
         MockPaymentToken usdc = new MockPaymentToken();
 
-        // Create round via helper to minimize local stack usage
-        vm.prank(address(corpFactory));
         uint256 officerPrivKey = 0xA0A5;
         address officerEOA = vm.addr(officerPrivKey);
+        _addOfficer(corp, me, officerEOA);
+
+        // Create round via helper to minimize local stack usage
+        vm.prank(address(corpFactory));
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
@@ -2962,6 +3048,7 @@ contract RoundManagerFCFSTest is Test {
         // Provide a valid escrow signature now that RoundManager enforces it
         uint256 officerPrivKey = 0xAA01;
         address officerEOA = vm.addr(officerPrivKey);
+        _addOfficer(corp, me, officerEOA);
         (bytes memory escSig, ) = CyberCorpHelper.computeEscrowSignature(
             address(rm),
             SecuritySeries.SeriesPreSeed,
@@ -3038,6 +3125,7 @@ contract RoundManagerFCFSTest is Test {
         MockPaymentToken usdc = new MockPaymentToken();
         uint256 officerPrivKey = 0xAA04;
         address officerEOA = vm.addr(officerPrivKey);
+        _addOfficer(corp, me, officerEOA);
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
@@ -3142,6 +3230,7 @@ contract RoundManagerFCFSTest is Test {
         MockPaymentToken usdc = new MockPaymentToken();
         uint256 officerPrivKey = 0xAA02;
         address officerEOA = vm.addr(officerPrivKey);
+        _addOfficer(corp, me, officerEOA);
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
@@ -3205,6 +3294,7 @@ contract RoundManagerFCFSTest is Test {
         MockPaymentToken usdc = new MockPaymentToken();
         uint256 officerPrivKey = 0xAA03;
         address officerEOA = vm.addr(officerPrivKey);
+        _addOfficer(corp, me, officerEOA);
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
@@ -3287,6 +3377,7 @@ contract RoundManagerFCFSTest is Test {
 
         uint256 officerPrivKey = 0xA0A5;
         address officerEOA = vm.addr(officerPrivKey);
+        _addOfficer(corp, me, officerEOA);
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),

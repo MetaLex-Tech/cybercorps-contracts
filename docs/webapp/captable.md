@@ -168,8 +168,11 @@ belongs to one stakeholder at most.
 stakeholder. The app never emails it, so you send it through a channel
 you trust. The invitee connects a wallet and signs in with SIWE, which
 attaches the wallet to their record and opens their
-[My holdings](holders.md) portal. Links expire after 14 days, and
-regenerating one revokes the previous link.
+[My holdings](holders.md) portal. In the invitation panel, choose
+**Expires after (days)** from 1–365 whole days; the default is 14. This also
+applies to welcome links. Changing the field does not change existing links;
+regenerating one revokes the previous link. Invite links created through
+an agentic transaction, by GAIBE or an MCP client, use the 14-day default.
 
 For a stakeholder who already has a linked wallet, **Generate welcome
 link** opens the same portal without attaching another wallet. The recipient
