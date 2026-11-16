@@ -307,15 +307,17 @@ contract RoundLifeCycleGasLimitTest is Test {
 /// The five series-wide sections of `ShareCertData` go to the printer's `seriesData` at createRound.
 /// Only `certificateData` goes on each cert at allocate.
 ///
-/// Measured. Per-cert payload: 928 bytes against 13,984 legacy, the same 6 legends.
-/// | step        | legacy     | layered    | change |
-/// |-------------|------------|------------|--------|
-/// | createRound | 13,330,449 | 13,715,479 | +2.9%  |
-/// | submitEOI   |  1,362,846 |  1,362,846 |  0     |
-/// | allocate    | 13,467,031 |  4,578,266 | -66.0% |
+/// Measured under Glamsterdam, total gas (execution gas in brackets). Per-cert payload: 928 bytes
+/// against 13,984 legacy, the same 6 legends.
+/// | step        | legacy                   | layered                  | change |
+/// |-------------|--------------------------|--------------------------|--------|
+/// | createRound | 64,910,551 (7,767,095)   | 67,057,241 (7,954,818)   | +3.3%  |
+/// | submitEOI   |  6,085,402   (984,763)   |  6,085,402   (984,763)   |  0     |
+/// | allocate    | 65,118,611 (9,107,972)   | 21,214,866 (3,295,107)   | -67.4% |
 ///
 /// createRound writes the series payload to the printer one time, so it costs a little more.
 /// Each allocate then writes only the lean cert payload.
+/// forge-config: default.isolate = true
 contract RoundLifeCycleLayeredGasLimitTest is RoundLifeCycleGasLimitTest {
     function _extensionImplementation() internal override returns (address) {
         return address(new ShareExtensionV3());

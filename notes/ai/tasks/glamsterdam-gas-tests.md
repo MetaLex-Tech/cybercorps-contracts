@@ -1,7 +1,7 @@
 # Task: Glamsterdam gas rules in the test suite
 
 - **Status:** Ready for review
-- **Updated:** 2026-11-09
+- **Updated:** 2026-11-16
 - **Owner:** Claude Code session for detoo
 - **Collaborators / boundaries:** None known. Test and config files only; no `src/` change.
 - **Objective:** Tests run under Glamsterdam gas rules (EIP-8037, EIP-8038), and the gas guards check the
@@ -10,8 +10,9 @@
 - **Canonical plan / sources:** https://github.com/ethereum/glamsterdam-gas-invariants (README, AGENTS.md,
   INV-1 to INV-8); https://eips.ethereum.org/EIPS/eip-8037
 - **Repository / branch:** cybercorps-contracts; base `develop` at `238237a6`, branch `test/glamsterdam-gas-limits`
-- **Verified base / code head:** base `238237a6`; `a4b08951` (WIP commit) plus uncommitted changes to
-  `test/libs/GasBudget.sol` and the three guard suite headers (200M budget)
+- **Verified base / code head:** `af251895` (merge of `test/round-gas-layered`, which brings `develop` up to
+  `32c59e33`) plus an uncommitted change to `test/RoundLifeCycleGasLimit.t.sol` (isolate setting and
+  Glamsterdam numbers on the layered round guard)
 - **Worktree locator:** main checkout
 - **PR / artifact:** not yet created
 
@@ -51,7 +52,7 @@
 
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
-| Unit tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc '(ForkTest\|AdhocTest)'`; `a4b08951` + 200M changes | 1528 passed, 0 failed |
+| Unit tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc '(ForkTest\|AdhocTest)'`; `af251895` + round guard change | 1536 passed, 0 failed |
 | Fork tests | `forge test ... --mc ForkTest --nmc AdhocTest --threads 1 --cups 10`; `238237a6` + 32M changes (the budget is not in fork tests) | 217 passed, 0 failed, 1 skipped |
 | Build | `forge build ... --sizes`; same | passed |
 
@@ -60,6 +61,10 @@
 Legacy ~13 KB per-cert payload operations need ~65M: `createRound` 64.9M, `allocate` 65.1M, legacy equity
 `finalize` 64.6M to 65.4M. They fit the 180M budget, but not Arbitrum, Robinhood or Base. They also do not fit
 Ethereum until its limit goes above ~65M.
+
+2026-11-16: `RoundLifeCycleLayeredGasLimitTest` measures the round with the layered payload
+(`ShareExtensionV3`). `allocate` is 21,214,866 (−67.4%), so it fits 32M. `createRound` is 67,057,241
+(+3.3%), so the layered format does not make round creation fit 32M, 40M or 60M.
 
 ## Next action and handoff
 
