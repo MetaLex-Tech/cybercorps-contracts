@@ -180,12 +180,12 @@ library CertificateImageContentBuilder {
         string memory dateStr
     ) private pure returns (string memory) {
         string memory units = _formatUnits(params);
-        string memory consideration = _formatConsideration(params);
+        string memory amount = _formatAmount(params);
         return string(abi.encodePacked(
             '<text x="140" y="500" font-size="14" fill="#9A9A98">Units</text>',
             '<text x="150" y="540" font-size="', _fitFontSize(units, 225, 34), '" font-weight="700" fill="url(#paint0_linear_62908_10150)">', units, '</text>',
             '<text x="385" y="500" font-size="14" fill="#9A9A98">Consideration</text>',
-            '<text x="390" y="540" font-size="', _fitFontSize(consideration, 245, 34), '" font-weight="700" fill="url(#paint0_linear_62908_10150)">', consideration, '</text>',
+            '<text x="390" y="540" font-size="', _fitFontSize(amount, 245, 34), '" font-weight="700" fill="url(#paint0_linear_62908_10150)">', amount, '</text>',
             '<text x="645" y="500" font-size="14" fill="#9A9A98">Issue Date</text>',
             '<text x="660" y="540" font-size="34" font-weight="700" fill="url(#paint0_linear_62908_10150)">', dateStr, '</text>'
         ));
@@ -288,9 +288,11 @@ library CertificateImageContentBuilder {
         return _formatDecimal18(params.units);
     }
 
-    /// @notice Consideration displayed: price per share for shares/units (e.g. "0.0000001/sh"),
-    ///         total consideration for convertibles, without assuming a currency.
-    function _formatConsideration(CertificateSVGParams memory params) private pure returns (string memory) {
+    /// @notice The SAFE amount follows current unitsRepresented, independently of price paid.
+    ///         Other securities show price per share/unit or total convertible consideration,
+    ///         without assuming a payment currency.
+    function _formatAmount(CertificateSVGParams memory params) private pure returns (string memory) {
+        if (params.securityType == SecurityClass.SAFE) return _formatDecimal18(params.units);
         if (!params.considerationKnown) return "";
         if (_isConvertible(params.securityType)) {
             return _formatDecimal18(params.consideration);

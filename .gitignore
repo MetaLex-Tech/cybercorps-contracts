@@ -33,3 +33,7 @@ __pycache__/
 
 # Generated local SAFO fork inputs (unsigned release evidence stays with operator).
 /test/res/safo-rollout-*.local.json
+
+# Local SAFE LET renderer deployment/simulation evidence.
+/script/res/safe-let-image/
+/script/res/safe-let-image-rehearsal/
