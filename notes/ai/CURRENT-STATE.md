@@ -19,6 +19,10 @@ have one. Do not assume another checkout's files are present here.
 
 ## Shared tasks
 
+- [SAFE LET image upgrade scripts](tasks/safe-let-image-upgrade.md): November 11;
+  four-chain renderer deployment and Safe batch preparation, locally validated,
+  uncommitted, no live deployment.
+
 - [November 4 GitBook refresh](tasks/docs-refresh-20261104.md): survey since the published October 27 baseline; docs-only updates and public publication verification in progress.
 
 - [Protocol and webapp documentation refresh](tasks/docs-protocol-webapp-20261027.md): October 27 source comparison and GitBook guide/reference updates; documentation only, review pending.
