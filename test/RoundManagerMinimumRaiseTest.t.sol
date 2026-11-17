@@ -45,6 +45,9 @@ abstract contract MinimumRaiseFixture is Test {
     uint256 internal maxTicketOverride;
     bool internal naturalPersonNext;
     address[] internal conditionsNext;
+    /// @dev Timed offers: the round uses each EOI's own expiry (`eoiExpiryNext`).
+    bool internal timedOffersNext;
+    uint256 internal eoiExpiryNext;
 
     function _cap() internal view returns (uint256) {
         return capOverride == 0 ? RAISE_CAP : capOverride;
@@ -138,7 +141,7 @@ abstract contract MinimumRaiseFixture is Test {
                 SecuritySeries.SeriesSeed,
                 roundType,
                 false,
-                false,
+                timedOffersNext,
                 false,
                 _cap(),
                 MIN_TICKET,
@@ -206,7 +209,7 @@ abstract contract MinimumRaiseFixture is Test {
             contact: "test@example.com",
             minAmount: minAmount,
             maxAmount: maxAmount,
-            expiry: 0,
+            expiry: eoiExpiryNext,
             naturalPerson: naturalPersonNext,
             lexchexDetails: CyberCorpHelper.emptyLex()
         });
@@ -409,17 +412,6 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         RoundManager(roundManager).allocate(a0, MAX_TICKET);
     }
 
-    function test_AllocateBatch_RevertsWhileMinimumPending() public {
-        bytes32 roundId = _createMinimumRound(MIN_RAISE);
-        bytes32 a0 = _submitEOI(roundId, 0);
-        bytes32 a1 = _submitEOI(roundId, 1);
-
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MAX_TICKET);
-        vm.prank(corpOwner);
-        vm.expectRevert(RoundManager.MinimumNotMet.selector);
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-    }
-
     /// @notice I1: committing records amounts and moves no funds.
     function test_Commit_RecordsWithoutMovingFunds() public {
         bytes32 roundId = _createMinimumRound(MIN_RAISE);
@@ -497,12 +489,15 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         vm.stopPrank();
     }
 
-    /// @notice A commitment needs at least SETTLE_WINDOW before its escrow expires.
+    /// @notice A commitment needs at least SETTLE_WINDOW before its escrow expires. Only a timed
+    /// offer can expire that early: other EOIs of a minimum round run to the deadline plus the window.
     function test_Commit_RefusesInsideSettleWindow() public {
+        timedOffersNext = true;
+        eoiExpiryNext = block.timestamp + 10 days;
         bytes32 roundId = _createMinimumRound(MIN_RAISE);
         bytes32 a0 = _submitEOI(roundId, 0);
 
-        vm.warp(block.timestamp + ROUND_DURATION - 1 days);
+        vm.warp(eoiExpiryNext - 1 days);
         vm.prank(corpOwner);
         vm.expectRevert(abi.encodeWithSelector(RoundManager.SettleWindowTooShort.selector, a0));
         RoundManager(roundManager).setCommitments(_one(a0), _oneAmount(MAX_TICKET));
@@ -586,15 +581,17 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         assertTrue(met);
     }
 
-    /// @notice I2: refused when a committed escrow could no longer settle in time.
+    /// @notice I2: refused when a committed escrow (a timed offer) could no longer settle in time.
     function test_MarkMet_RefusesInsideSettleWindow() public {
+        timedOffersNext = true;
+        eoiExpiryNext = block.timestamp + 10 days;
         bytes32 roundId = _createMinimumRound(MIN_RAISE);
         bytes32 a0 = _submitEOI(roundId, 0);
         bytes32 a1 = _submitEOI(roundId, 1);
         (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MAX_TICKET);
         _commit(ids, amounts);
 
-        vm.warp(block.timestamp + ROUND_DURATION - 1 days);
+        vm.warp(eoiExpiryNext - 1 days);
         bytes32[] memory sorted = _sorted(ids);
         vm.prank(corpOwner);
         vm.expectRevert(abi.encodeWithSelector(RoundManager.SettleWindowTooShort.selector, sorted[0]));
@@ -754,6 +751,8 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         vm.expectRevert(RoundManager.RoundNotOpen.selector);
         RoundManager(roundManager).markMinimumMet(roundId, sorted);
 
+        // The escrow runs to the deadline, but the investor need not wait: the end time has passed.
+        assertGt(RoundManager(roundManager).getEscrowDetails(a0).expiry, block.timestamp);
         uint256 before0 = paymentToken.balanceOf(investors[0]);
         vm.prank(investors[0]);
         RoundManager(roundManager).recallEOI(a0);
@@ -827,7 +826,7 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
     }
 
     /*//////////////////////////////////////////////////////////////
-                    rounds without a minimum, batch inputs
+                        rounds without a minimum
     //////////////////////////////////////////////////////////////*/
 
     /// @notice I6: a round without a minimum allocates one EOI at a time as before.
@@ -848,74 +847,20 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         assertEq(committed, 0);
     }
 
-    /// @notice I6: on a round without a minimum, `allocateBatch` is a plain batch and the end
-    /// time has no deadline.
-    function test_NoMinimum_BatchIsPlainAndEndTimeFree() public {
+    /// @notice I6: on a round without a minimum, an escrow still expires at the round end and the
+    /// end time has no deadline.
+    function test_NoMinimum_ExpiryAndEndTimeUnchanged() public {
         bytes32 roundId = _createPlainRound(VALUATION);
         bytes32 a0 = _submitEOI(roundId, 0);
-        bytes32 a1 = _submitEOI(roundId, 1);
 
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MIN_TICKET);
-        vm.prank(corpOwner);
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-
-        _assertAllocated(a0);
-        _assertAllocated(a1);
+        assertEq(
+            RoundManager(roundManager).getEscrowDetails(a0).expiry,
+            RoundManager(roundManager).getRound(roundId).endTime,
+            "a plain round's escrow expires at the round end"
+        );
 
         vm.prank(corpOwner);
         RoundManager(roundManager).setRoundEndTime(roundId, block.timestamp + 365 days);
-    }
-
-    /// @notice One failing allocation reverts the whole batch (MTLX1-17 / MTLX1-21: the app must
-    /// leave out EOIs that do not simulate).
-    function test_Batch_OneFailingAllocation_RevertsAll() public {
-        bytes32 roundId = _createPlainRound(VALUATION);
-        bytes32 a0 = _submitEOI(roundId, 0);
-        bytes32 a1 = _submitEOI(roundId, 1);
-
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MIN_TICKET - 1);
-        vm.prank(corpOwner);
-        vm.expectRevert(RoundManager.InvalidAllocation.selector);
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-
-        _assertPaid(a0);
-        _assertPaid(a1);
-    }
-
-    function test_Batch_RefusesMixedRounds() public {
-        bytes32 roundA = _createPlainRound(VALUATION);
-        bytes32 roundB = _createPlainRound(VALUATION * 3);
-        bytes32 a0 = _submitEOI(roundA, 0);
-        bytes32 b1 = _submitEOI(roundB, 1);
-
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, b1, MAX_TICKET, MAX_TICKET);
-        vm.prank(corpOwner);
-        vm.expectRevert(abi.encodeWithSelector(RoundManager.AgreementNotInRound.selector, b1));
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-    }
-
-    function test_Batch_RefusesLengthMismatchAndEmpty() public {
-        bytes32[] memory ids = new bytes32[](1);
-        uint256[] memory amounts = new uint256[](2);
-
-        vm.startPrank(corpOwner);
-        vm.expectRevert(RoundManager.ArrayLengthMismatch.selector);
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-
-        vm.expectRevert(RoundManager.ArrayLengthMismatch.selector);
-        RoundManager(roundManager).allocateBatch(new bytes32[](0), new uint256[](0));
-        vm.stopPrank();
-    }
-
-    function test_Batch_OnlyOwner() public {
-        bytes32 roundId = _createPlainRound(VALUATION);
-        bytes32 a0 = _submitEOI(roundId, 0);
-        bytes32 a1 = _submitEOI(roundId, 1);
-
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MAX_TICKET);
-        vm.prank(investors[0]);
-        vm.expectRevert();
-        RoundManager(roundManager).allocateBatch(ids, amounts);
     }
 
     /*//////////////////////////////////////////////////////////////

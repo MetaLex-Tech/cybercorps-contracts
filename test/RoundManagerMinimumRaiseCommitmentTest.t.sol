@@ -9,7 +9,8 @@ import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {ILexChex} from "../src/interfaces/ILexChex.sol";
 
-/// @notice Minimum raise: commitments against ordinary allocation and LeXcheX minting.
+/// @notice Minimum raise: review findings on #202 (commitments against ordinary allocation,
+/// LeXcheX minting, escrow expiry on extended rounds, expired commitments).
 /// @dev Separate from `RoundManagerMinimumRaiseTest` because one larger test contract hits a
 /// via-IR compiler limit. All values are fictional.
 contract RoundManagerMinimumRaiseCommitmentTest is MinimumRaiseFixture {
@@ -74,6 +75,83 @@ contract RoundManagerMinimumRaiseCommitmentTest is MinimumRaiseFixture {
         vm.prank(corpOwner);
         vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         RoundManager(roundManager).setCommitments(_one(b1), _oneAmount(2 * MAX_TICKET));
+    }
+
+    /// @notice Extending the round up to the deadline keeps earlier EOIs settleable: their escrow
+    /// runs to the deadline plus SETTLE_WINDOW, not to the end time when they were submitted.
+    function test_Extension_MeetsMinimumWithEarlierCommitments() public {
+        bytes32 roundId = _createMinimumRound(MIN_RAISE);
+        uint256 originalEnd = RoundManager(roundManager).getRound(roundId).endTime;
+        (, uint256 deadline, , , ) = RoundManager(roundManager).getRoundMinimum(roundId);
+        uint256 window = RoundManager(roundManager).SETTLE_WINDOW();
+
+        bytes32 a0 = _submitEOI(roundId, 0);
+        assertEq(RoundManager(roundManager).getEscrowDetails(a0).expiry, deadline + window);
+        _commit(_one(a0), _oneAmount(MAX_TICKET));
+
+        // Below the minimum at the original end: extend to the deadline and find a second investor.
+        vm.prank(corpOwner);
+        RoundManager(roundManager).setRoundEndTime(roundId, deadline);
+        vm.warp(originalEnd + 1);
+        bytes32 a1 = _submitEOI(roundId, 1);
+        assertEq(RoundManager(roundManager).getEscrowDetails(a1).expiry, deadline + window);
+        _commit(_one(a1), _oneAmount(MAX_TICKET));
+
+        (bytes32[] memory ids, ) = _batch(a0, a1, 0, 0);
+        _markMet(roundId, ids);
+        RoundManager(roundManager).settle(ids);
+
+        _assertAllocated(a0);
+        _assertAllocated(a1);
+        assertEq(RoundManager(roundManager).getRound(roundId).raised, MIN_RAISE);
+    }
+
+    /// @notice After the minimum is met, a commitment that did not settle by its escrow expiry
+    /// can be rejected by the owner, which refunds it and frees the capacity it held.
+    function test_AfterMet_ExpiredCommitment_OwnerRejectsAndFreesCapacity() public {
+        capOverride = MIN_RAISE; // the two commitments fill the cap
+        bytes32 roundId = _createMinimumRound(MIN_RAISE);
+        bytes32 a0 = _submitEOI(roundId, 0);
+        bytes32 a1 = _submitEOI(roundId, 1);
+        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MAX_TICKET);
+        _commit(ids, amounts);
+        _markMet(roundId, ids);
+        RoundManager(roundManager).settle(_one(a1));
+
+        uint256 expiry = RoundManager(roundManager).getEscrowDetails(a0).expiry;
+        vm.warp(expiry);
+        vm.prank(corpOwner);
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.CommitmentLocked.selector, a0));
+        RoundManager(roundManager).reject(a0);
+
+        // Past the expiry the commitment can no longer settle.
+        vm.warp(expiry + 1);
+        vm.expectRevert(RoundManager.EOIExpired.selector);
+        RoundManager(roundManager).settle(_one(a0));
+
+        // A later EOI on the round, extended past the deadline after the minimum was met, expires
+        // at the new end time. While the expired commitment holds its capacity, it gets nothing.
+        uint256 newEnd = expiry + 10 days;
+        vm.prank(corpOwner);
+        RoundManager(roundManager).setRoundEndTime(roundId, newEnd);
+        bytes32 a2 = _submitEOI(roundId, 2);
+        assertEq(RoundManager(roundManager).getEscrowDetails(a2).expiry, newEnd);
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.InvalidAllocation.selector);
+        RoundManager(roundManager).allocate(a2, MAX_TICKET);
+
+        uint256 before0 = paymentToken.balanceOf(investors[0]);
+        vm.prank(corpOwner);
+        RoundManager(roundManager).reject(a0);
+        assertEq(paymentToken.balanceOf(investors[0]), before0 + MAX_TICKET, "full refund");
+        assertEq(RoundManager(roundManager).getCommittedAmount(a0), 0);
+        (, , , , uint256 committed) = RoundManager(roundManager).getRoundMinimum(roundId);
+        assertEq(committed, 0, "capacity released");
+
+        vm.prank(corpOwner);
+        RoundManager(roundManager).allocate(a2, MAX_TICKET);
+        _assertAllocated(a2);
+        assertEq(RoundManager(roundManager).getRound(roundId).raised, MIN_RAISE);
     }
 
     address internal constant LEXCHEX_MINTER = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;

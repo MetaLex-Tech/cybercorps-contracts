@@ -83,8 +83,6 @@
 
     function allocate(bytes32 agreementId, uint256 allocatedAmount) external returns (uint256 tokenId);
 
-    function allocateBatch(bytes32[] calldata agreementIds, uint256[] calldata allocatedAmounts) external;
-
     function reject(bytes32 agreementId) external;
     function reject(bytes32 agreementId, bool isVoidAgreement) external;
 

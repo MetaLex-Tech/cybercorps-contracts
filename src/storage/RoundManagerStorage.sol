@@ -320,8 +320,7 @@ library RoundManagerStorage {
         partyValuesArray[0] = round.roundPartyValues;
         partyValuesArray[1] = partyValues;
 
-        // Rounds without timed offers ignore the EOI expiry and run to the round end instead
-        uint256 expiry = round.allowTimedOffers ? eoi.expiry : round.endTime;
+        uint256 expiry = _escrowExpiry(round, roundId, eoi.expiry);
 
         agreementId = ICyberAgreementRegistry(ls.DEAL_REGISTRY)
             .createContract(
@@ -560,6 +559,20 @@ library RoundManagerStorage {
         }
     }
 
+    /// @dev Escrow and agreement expiry of a new EOI. With timed offers it is the investor's
+    /// expiry. Otherwise it is the round end, except on a round with a minimum: there it is at
+    /// least the minimum deadline plus `SETTLE_WINDOW`, so an end time extended up to the deadline
+    /// also extends the time to commit, meet and settle EOIs submitted earlier. (After the minimum
+    /// is met the end time may pass the deadline; a later EOI then expires at the end time.)
+    /// Before the minimum is met, `recallEOI` still refunds as soon as the current end time passes.
+    function _escrowExpiry(Round storage round, bytes32 roundId, uint256 eoiExpiry) private view returns (uint256) {
+        if (round.allowTimedOffers) return eoiExpiry;
+        uint256 deadline = roundManagerStorage().minRaiseDeadline[roundId];
+        if (deadline == 0) return round.endTime;
+        uint256 minimumExpiry = deadline + SETTLE_WINDOW;
+        return round.endTime > minimumExpiry ? round.endTime : minimumExpiry;
+    }
+
     /// @dev Whether `allocate` mints a LeXcheX credential for this investor: no valid
     /// credential, a whitelisted payment token, and at least $200k for a natural person or
     /// $1M for an entity (18-decimal USD). Shared by `allocate` and the commitment check.
@@ -649,7 +662,7 @@ library RoundManagerStorage {
         return (ds.minRaise[roundId], ds.minRaiseDeadline[roundId], ds.minRaiseMet[roundId]);
     }
 
-    /// @notice True while a round has a minimum that no allocation batch has met yet
+    /// @notice True while a round has a minimum that `markMinimumMet` has not marked met yet
     function isMinimumPending(bytes32 roundId) internal view returns (bool) {
         RoundManagerData storage ds = roundManagerStorage();
         return ds.minRaise[roundId] != 0 && !ds.minRaiseMet[roundId];
@@ -762,16 +775,16 @@ library RoundManagerStorage {
     }
 
     /// @notice Clears a commitment when its payment is refunded
-    /// @dev Before the minimum is met any refund clears it. After, the owner cannot reject a
-    /// committed agreement, and the investor can recall it only once it can no longer settle.
-    function releaseCommitment(bytes32 agreementId, uint256 escrowExpiry, bool byInvestor) external {
+    /// @dev Before the minimum is met any refund clears it. After, neither the owner (`reject`)
+    /// nor the investor (`recallEOI`) can refund a committed agreement until its escrow has
+    /// expired, when it can no longer settle. Either can then refund it, which frees the round
+    /// capacity the commitment held.
+    function releaseCommitment(bytes32 agreementId, uint256 escrowExpiry) external {
         RoundManagerData storage ds = roundManagerStorage();
         uint256 amount = ds.committedAmount[agreementId];
         if (amount == 0) return;
         bytes32 roundId = ds.agreementToRound[agreementId];
-        if (ds.minRaiseMet[roundId] && (!byInvestor || block.timestamp <= escrowExpiry)) {
-            revert CommitmentLocked(agreementId);
-        }
+        if (ds.minRaiseMet[roundId] && block.timestamp <= escrowExpiry) revert CommitmentLocked(agreementId);
         ds.committedAmount[agreementId] = 0;
         ds.committedTotal[roundId] -= amount;
         emit AllocationUncommitted(agreementId, roundId, amount, ds.committedTotal[roundId]);
