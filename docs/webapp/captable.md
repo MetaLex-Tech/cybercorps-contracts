@@ -33,6 +33,9 @@ Holder names that were encrypted at issuance (see
 the server while the table is assembled. A name the app cannot decrypt
 shows as a scrambled placeholder instead of ciphertext.
 
+A company owner can give a lawyer read access to this table, with holder
+names, in a counsel workspace.
+
 ## How to read the table
 
 Each row's source badge records where the record lives and whether the

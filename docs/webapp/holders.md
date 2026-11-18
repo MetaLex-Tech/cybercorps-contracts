@@ -111,7 +111,8 @@ Anyone with the URL can open the page. Whether your name shows depends
 on the choice made at issuance: encryption is optional, chosen in the
 privacy settings when you invest or by the issuer when issuing by hand.
 An encrypted name shows masked, with a prompt to sign in to decrypt, and
-decrypts only for the parties to the deal and the issuer. Sign in with
+decrypts only for the parties to the deal, the issuer, and advisers that
+the issuer gave access to in a counsel workspace. Sign in with
 the wallet that holds the LET to see your own. A name issued unencrypted
 appears in plaintext on the certificate and in its public metadata, with
 no sign-in gate. Signing officers' names are in the public metadata
