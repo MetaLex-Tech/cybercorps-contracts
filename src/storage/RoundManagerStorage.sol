@@ -765,14 +765,14 @@ library RoundManagerStorage {
     }
 
     /// @notice Clears a commitment when its payment is refunded
-    /// @dev Before the minimum is met any refund clears it. After, the owner cannot reject a
-    /// committed agreement, and the investor can recall it only once it can no longer settle.
-    function releaseCommitment(bytes32 agreementId, uint256 escrowExpiry, bool byInvestor) external {
+    /// @dev Before the minimum is met any refund clears it. After, a refund clears it only once
+    /// the escrow has expired and the commitment can no longer settle.
+    function releaseCommitment(bytes32 agreementId, uint256 escrowExpiry) external {
         RoundManagerData storage ds = roundManagerStorage();
         uint256 amount = ds.committedAmount[agreementId];
         if (amount == 0) return;
         bytes32 roundId = ds.agreementToRound[agreementId];
-        if (ds.minRaiseMet[roundId] && (!byInvestor || block.timestamp <= escrowExpiry)) {
+        if (ds.minRaiseMet[roundId] && block.timestamp <= escrowExpiry) {
             revert CommitmentLocked(agreementId);
         }
         ds.committedAmount[agreementId] = 0;

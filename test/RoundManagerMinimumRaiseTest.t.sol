@@ -296,8 +296,9 @@ abstract contract MinimumRaiseFixture is Test {
 ///   I1. On a round whose minimum is unmet, nothing is allocated and no funds move.
 ///   I2. The minimum is met only while the round is open, when every committed escrow can still
 ///       settle (open for at least SETTLE_WINDOW) and the commitments add up to the minimum.
-///   I3. After the minimum is met, commitments are locked: the owner cannot change, reject or
-///       directly allocate them, and an investor can recall only once the escrow has expired.
+///   I3. After the minimum is met, commitments are locked: the owner cannot change or directly
+///       allocate them, and the owner can reject and the investor can recall them only once the
+///       escrow has expired.
 ///       Anyone can settle them, each at its committed amount, in any number of transactions.
 ///   I4. Below the minimum, every payment stays refundable in full (`reject`, `recallEOI`).
 ///   I5. While the minimum is unmet, the end time cannot move past the deadline.
@@ -734,6 +735,28 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         vm.prank(investors[0]);
         RoundManager(roundManager).recallEOI(a0);
         assertEq(paymentToken.balanceOf(investors[0]), before0 + MAX_TICKET);
+    }
+
+    /// @notice I3: after its escrow expiry, the owner can reject a commitment that did not settle.
+    /// The investor gets a full refund and the round capacity it held becomes free.
+    function test_AfterMet_RejectAfterEscrowExpiry_RefundsAndFreesCapacity() public {
+        (bytes32 roundId, bytes32 a0, ) = _metRound();
+        uint256 expiry = RoundManager(roundManager).getEscrowDetails(a0).expiry;
+
+        vm.warp(expiry);
+        vm.prank(corpOwner);
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.CommitmentLocked.selector, a0));
+        RoundManager(roundManager).reject(a0);
+
+        vm.warp(expiry + 1);
+        uint256 before0 = paymentToken.balanceOf(investors[0]);
+        vm.prank(corpOwner);
+        RoundManager(roundManager).reject(a0);
+
+        assertEq(paymentToken.balanceOf(investors[0]), before0 + MAX_TICKET);
+        assertEq(RoundManager(roundManager).getCommittedAmount(a0), 0);
+        (, , , , uint256 committed) = RoundManager(roundManager).getRoundMinimum(roundId);
+        assertEq(committed, MAX_TICKET);
     }
 
     /// @notice I3 at scale: many commitments over several transactions, then separate settlements.

@@ -49,8 +49,8 @@
   refuses a committed agreement (`CommitmentLocked`), so commitments settle only at their
   committed amount.
 - **Refunds:** `reject` and `recallEOI` call `releaseCommitment`. Before met, a refund clears
-  the commitment. After met, the owner cannot reject a committed agreement, and the investor
-  can recall it only after its escrow expiry (when it can no longer settle).
+  the commitment. After met, the owner can reject and the investor can recall a committed
+  agreement only after its escrow expiry (when it can no longer settle).
 - **Deadline:** `setRoundEndTime` refuses an end time past the deadline while the minimum is
   unmet.
 - **Reads:** `getRoundMinimum` (minimum, deadline, met, raised, committed), `getCommittedAmount`,
@@ -59,9 +59,13 @@
   (`raiseCap - raised - committedTotal`); the commit check skips only the LeXcheX condition, and
   only when `allocate` would mint that credential (shared `_mintsLexChex`). Tests in
   `RoundManagerMinimumRaiseCommitmentTest` (separate contract: a larger test contract hits a
-  via-IR "Tag too large" compiler error).
-- **Size:** RoundManager runtime 24,036 bytes (limit 24,576; 540 bytes left) after the
-  2026-11-17 change. Before it: 24,216 bytes. The first draft
+  via-IR "Tag too large" compiler error). Third Codex P2 (on a465719): an expired commitment
+  held round capacity until the investor recalled it. Fixed 2026-11-17: the owner can `reject` a
+  commitment after its escrow expiry, with a full refund to the investor
+  (`test_AfterMet_RejectAfterEscrowExpiry_RefundsAndFreesCapacity`; fails on the old code with
+  `CommitmentLocked`).
+- **Size:** RoundManager runtime 24,010 bytes (limit 24,576; 566 bytes left) after the
+  2026-11-17 changes. Before them: 24,216 bytes. The first draft
   was 204 bytes over; it fits after `settle` and `allocateBatch` stopped returning token-id
   arrays, the minimum validation moved into the library, and uncommit folded into
   `setCommitments`. Little room is left for later fixes in this contract.
@@ -78,6 +82,7 @@
 | Met refused below the minimum, with an incomplete, unsorted or duplicate list, inside the settle window, after the end or early close, and by non-owners | Verified (unit) |
 | Settle refused before met; anyone settles after; second settle refused | Verified (unit, fork) |
 | After met: commitments locked against change, reject and direct allocate; uncommitted EOIs allocate normally | Verified (unit) |
+| After met: owner reject of a commitment refused up to its expiry; after it, full refund and the capacity is freed | Verified (unit) |
 | Committed EOI settles at its expiry; investor recall locked until after expiry, then refunds in full | Verified (unit) |
 | 40 EOIs committed in two transactions, met, settled in four transactions | Verified (unit) |
 | Unmet after end: recall refunds and clears the commitment; reject while pending refunds and clears | Verified (unit) |
@@ -123,11 +128,11 @@
 
 | Check | Evidence | Result / limitation |
 | --- | --- | --- |
-| Source build with sizes (CI form) | `forge build --sizes --skip test script` | Passes; RoundManager 24,036 bytes, RoundManagerStorage 22,140 bytes (2026-11-17) |
-| New unit tests | `forge test --match-path test/RoundManagerMinimumRaiseTest.t.sol` | 36 pass (2026-11-17: batch tests removed, setter tests added) |
+| Source build with sizes (CI form) | `forge build --sizes --skip test script` | Passes; RoundManager 24,010 bytes, RoundManagerStorage 22,108 bytes (2026-11-17) |
+| New unit tests | `forge test --match-path test/RoundManagerMinimumRaiseTest.t.sol` | 37 pass (2026-11-17: batch tests removed, setter and expired-reject tests added) |
 | Fork upgrade tests | `test/RoundManagerMinimumRaiseUpgradeFork.t.sol` (Base block 56,958,568) | 2 pass (2026-11-17, project `RPC_URL_BASE`) |
 | Existing RoundManager suites | `forge test --match-path 'test/RoundManager*.t.sol' --no-match-path test/RoundManagerForkTest.t.sol` | All pass (main 56, expiry 18, factory 16); `RoundManagerTest.v3.next` not run (needs `RPC_URL_BASE_SEPOLIA`) |
-| Full repository unit suite | `forge test --nmc '(ForkTest|AdhocTest)'` | 1,570 pass (2026-11-17); fork suites other than the upgrade test not run |
+| Full repository unit suite | `forge test --nmc '(ForkTest|AdhocTest)'` | 1,571 pass (2026-11-17); fork suites other than the upgrade test not run |
 | Independent external-model review | — | Not run (required before merge) |
 
 ## Next action and handoff

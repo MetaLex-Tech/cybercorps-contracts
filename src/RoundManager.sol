@@ -618,8 +618,8 @@ contract RoundManager is
         if (escrow.status != EscrowStatus.PAID) revert LexScrowStorage.DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
-        // Effect: clear a commitment; refused once the minimum is met
-        RoundManagerStorage.releaseCommitment(agreementId, escrow.expiry, false);
+        // Effect: clear a commitment; once the minimum is met, only after the escrow expiry
+        RoundManagerStorage.releaseCommitment(agreementId, escrow.expiry);
 
         // Effect: update status
         LexScrowStorage.voidEscrow(agreementId);
@@ -660,7 +660,7 @@ contract RoundManager is
         if (block.timestamp < escrow.expiry && round.endTime > block.timestamp) revert EOINotExpired();
 
         // Effect: clear a commitment; once the minimum is met, only after the escrow expiry
-        RoundManagerStorage.releaseCommitment(agreementId, escrow.expiry, true);
+        RoundManagerStorage.releaseCommitment(agreementId, escrow.expiry);
 
         // Effect: update status
         LexScrowStorage.voidEscrow(agreementId);
