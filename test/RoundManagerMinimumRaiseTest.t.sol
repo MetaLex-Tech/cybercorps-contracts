@@ -302,6 +302,7 @@ abstract contract MinimumRaiseFixture is Test {
 ///   I4. Below the minimum, every payment stays refundable in full (`reject`, `recallEOI`).
 ///   I5. While the minimum is unmet, the end time cannot move past the deadline.
 ///   I6. A round created without a minimum behaves exactly as before.
+///   I7. The owner sets a round's minimum one time only, at creation or later.
 contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
     using RoundLib for Round;
 
@@ -396,6 +397,63 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         assertFalse(met);
     }
 
+    /// @notice I7: the owner can add a minimum to an existing round; the round then closes only
+    /// through commit and settle.
+    function test_SetRoundMinimum_OnExistingRound() public {
+        bytes32 roundId = _createPlainRound(VALUATION);
+        bytes32 a0 = _submitEOI(roundId, 0);
+        uint256 deadline = block.timestamp + ROUND_DURATION + DEADLINE_SLACK;
+
+        vm.expectEmit(true, false, false, true, roundManager);
+        emit RoundMinimumSet(roundId, MIN_RAISE, deadline);
+        vm.prank(corpOwner);
+        RoundManager(roundManager).setRoundMinimum(roundId, MIN_RAISE, deadline);
+
+        (uint256 minRaise, uint256 storedDeadline, bool met, , ) = RoundManager(roundManager).getRoundMinimum(roundId);
+        assertEq(minRaise, MIN_RAISE);
+        assertEq(storedDeadline, deadline);
+        assertFalse(met);
+
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.MinimumNotMet.selector);
+        RoundManager(roundManager).allocate(a0, MAX_TICKET);
+    }
+
+    /// @notice I7: a minimum is set one time only, also when the round was created with it.
+    function test_SetRoundMinimum_RefusesSecondCall() public {
+        bytes32 plainRound = _createPlainRound(VALUATION);
+        uint256 deadline = block.timestamp + ROUND_DURATION;
+        vm.prank(corpOwner);
+        RoundManager(roundManager).setRoundMinimum(plainRound, MIN_RAISE, deadline);
+
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.MinimumAlreadySet.selector);
+        RoundManager(roundManager).setRoundMinimum(plainRound, MIN_RAISE + 1, deadline);
+
+        (Round memory draft, CyberCertData[] memory certData) = _draft(RoundType.FounderApproved, VALUATION * 2);
+        vm.prank(corpOwner);
+        bytes32 minimumRound = RoundManager(roundManager).createRoundWithMinimum(draft, certData, MIN_RAISE, deadline);
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.MinimumAlreadySet.selector);
+        RoundManager(roundManager).setRoundMinimum(minimumRound, MIN_RAISE + 1, deadline);
+    }
+
+    function test_SetRoundMinimum_RefusesUnknownRound() public {
+        uint256 deadline = block.timestamp + ROUND_DURATION;
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.InvalidRound.selector);
+        RoundManager(roundManager).setRoundMinimum(keccak256("unknown"), MIN_RAISE, deadline);
+    }
+
+    function test_SetRoundMinimum_OnlyOwner() public {
+        bytes32 roundId = _createPlainRound(VALUATION);
+        uint256 deadline = block.timestamp + ROUND_DURATION;
+
+        vm.prank(investors[0]);
+        vm.expectRevert();
+        RoundManager(roundManager).setRoundMinimum(roundId, MIN_RAISE, deadline);
+    }
+
     /*//////////////////////////////////////////////////////////////
                          before the minimum is met
     //////////////////////////////////////////////////////////////*/
@@ -409,18 +467,6 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         RoundManager(roundManager).allocate(a0, MAX_TICKET);
     }
 
-    function test_AllocateBatch_RevertsWhileMinimumPending() public {
-        bytes32 roundId = _createMinimumRound(MIN_RAISE);
-        bytes32 a0 = _submitEOI(roundId, 0);
-        bytes32 a1 = _submitEOI(roundId, 1);
-
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MAX_TICKET);
-        vm.prank(corpOwner);
-        vm.expectRevert(RoundManager.MinimumNotMet.selector);
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-    }
-
-    /// @notice I1: committing records amounts and moves no funds.
     function test_Commit_RecordsWithoutMovingFunds() public {
         bytes32 roundId = _createMinimumRound(MIN_RAISE);
         bytes32 a0 = _submitEOI(roundId, 0);
@@ -827,7 +873,7 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
     }
 
     /*//////////////////////////////////////////////////////////////
-                    rounds without a minimum, batch inputs
+                    rounds without a minimum
     //////////////////////////////////////////////////////////////*/
 
     /// @notice I6: a round without a minimum allocates one EOI at a time as before.
@@ -848,74 +894,13 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         assertEq(committed, 0);
     }
 
-    /// @notice I6: on a round without a minimum, `allocateBatch` is a plain batch and the end
-    /// time has no deadline.
-    function test_NoMinimum_BatchIsPlainAndEndTimeFree() public {
+    /// @notice I6: on a round without a minimum, the end time has no deadline.
+    function test_NoMinimum_EndTimeFree() public {
         bytes32 roundId = _createPlainRound(VALUATION);
-        bytes32 a0 = _submitEOI(roundId, 0);
-        bytes32 a1 = _submitEOI(roundId, 1);
-
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MIN_TICKET);
-        vm.prank(corpOwner);
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-
-        _assertAllocated(a0);
-        _assertAllocated(a1);
 
         vm.prank(corpOwner);
         RoundManager(roundManager).setRoundEndTime(roundId, block.timestamp + 365 days);
-    }
-
-    /// @notice One failing allocation reverts the whole batch (MTLX1-17 / MTLX1-21: the app must
-    /// leave out EOIs that do not simulate).
-    function test_Batch_OneFailingAllocation_RevertsAll() public {
-        bytes32 roundId = _createPlainRound(VALUATION);
-        bytes32 a0 = _submitEOI(roundId, 0);
-        bytes32 a1 = _submitEOI(roundId, 1);
-
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MIN_TICKET - 1);
-        vm.prank(corpOwner);
-        vm.expectRevert(RoundManager.InvalidAllocation.selector);
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-
-        _assertPaid(a0);
-        _assertPaid(a1);
-    }
-
-    function test_Batch_RefusesMixedRounds() public {
-        bytes32 roundA = _createPlainRound(VALUATION);
-        bytes32 roundB = _createPlainRound(VALUATION * 3);
-        bytes32 a0 = _submitEOI(roundA, 0);
-        bytes32 b1 = _submitEOI(roundB, 1);
-
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, b1, MAX_TICKET, MAX_TICKET);
-        vm.prank(corpOwner);
-        vm.expectRevert(abi.encodeWithSelector(RoundManager.AgreementNotInRound.selector, b1));
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-    }
-
-    function test_Batch_RefusesLengthMismatchAndEmpty() public {
-        bytes32[] memory ids = new bytes32[](1);
-        uint256[] memory amounts = new uint256[](2);
-
-        vm.startPrank(corpOwner);
-        vm.expectRevert(RoundManager.ArrayLengthMismatch.selector);
-        RoundManager(roundManager).allocateBatch(ids, amounts);
-
-        vm.expectRevert(RoundManager.ArrayLengthMismatch.selector);
-        RoundManager(roundManager).allocateBatch(new bytes32[](0), new uint256[](0));
-        vm.stopPrank();
-    }
-
-    function test_Batch_OnlyOwner() public {
-        bytes32 roundId = _createPlainRound(VALUATION);
-        bytes32 a0 = _submitEOI(roundId, 0);
-        bytes32 a1 = _submitEOI(roundId, 1);
-
-        (bytes32[] memory ids, uint256[] memory amounts) = _batch(a0, a1, MAX_TICKET, MAX_TICKET);
-        vm.prank(investors[0]);
-        vm.expectRevert();
-        RoundManager(roundManager).allocateBatch(ids, amounts);
+        assertEq(RoundManager(roundManager).getRound(roundId).endTime, block.timestamp + 365 days);
     }
 
     /*//////////////////////////////////////////////////////////////

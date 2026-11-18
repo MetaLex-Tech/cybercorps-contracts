@@ -99,6 +99,7 @@ contract RoundManager is
     error AgreementNotInRound(bytes32 agreementId);
     error ArrayLengthMismatch();
     error MinimumAlreadyMet();
+    error MinimumAlreadySet();
     error NotCommitted(bytes32 agreementId);
     error CommitmentLocked(bytes32 agreementId);
     error SettleWindowTooShort(bytes32 agreementId);
@@ -234,6 +235,14 @@ contract RoundManager is
         );
         RoundManagerStorage.setMinimum(roundId, minRaise, deadline);
         return roundId;
+    }
+
+    /// @notice Sets the minimum raise of an existing founder-approved round, one time only
+    /// @param roundId The round ID
+    /// @param minRaise minimum total raise in the payment token, gross of fees
+    /// @param deadline latest end time the round can be extended to while the minimum is unmet
+    function setRoundMinimum(bytes32 roundId, uint256 minRaise, uint256 deadline) external onlyOwner {
+        RoundManagerStorage.setMinimum(roundId, minRaise, deadline);
     }
 
     /// @notice Returns a round's minimum raise state
@@ -462,7 +471,7 @@ contract RoundManager is
     /// @notice Allocates an amount to an EOI and finalizes the deal
     /// @param agreementId The agreement ID
     /// @param allocatedAmount The amount to allocate
-    /// @dev Refused while the round's minimum is unmet: those rounds close through `allocateBatch`.
+    /// @dev Refused while the round's minimum is unmet: those rounds close through `settle`.
     function allocate(
         bytes32 agreementId,
         uint256 allocatedAmount
@@ -471,29 +480,6 @@ contract RoundManager is
             revert MinimumNotMet();
         }
         return _allocate(agreementId, allocatedAmount);
-    }
-
-    /// @notice Allocates several EOIs of one round in a single transaction
-    /// @dev Refused while the round's minimum is unmet (use the commit and settle steps).
-    /// Any failing allocation reverts the batch.
-    /// @param agreementIds agreement IDs, all in the same round
-    /// @param allocatedAmounts amount to allocate to each agreement
-    function allocateBatch(
-        bytes32[] calldata agreementIds,
-        uint256[] calldata allocatedAmounts
-    ) external onlyOwner nonReentrant {
-        uint256 count = agreementIds.length;
-        if (count == 0 || count != allocatedAmounts.length) revert ArrayLengthMismatch();
-
-        bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementIds[0]);
-        if (RoundManagerStorage.isMinimumPending(roundId)) revert MinimumNotMet();
-
-        for (uint256 i = 0; i < count; i++) {
-            if (RoundManagerStorage.getAgreementToRound(agreementIds[i]) != roundId) {
-                revert AgreementNotInRound(agreementIds[i]);
-            }
-            _allocate(agreementIds[i], allocatedAmounts[i]);
-        }
     }
 
     // ===============

@@ -120,6 +120,7 @@ library RoundManagerStorage {
     error InvalidMinimum();
     error MinimumNotMet();
     error MinimumAlreadyMet();
+    error MinimumAlreadySet();
     error ArrayLengthMismatch();
     error AgreementNotInRound(bytes32 agreementId);
     error NotCommitted(bytes32 agreementId);
@@ -630,11 +631,13 @@ library RoundManagerStorage {
         return roundManagerStorage().agreementToRound[agreementId];
     }
 
-    /// @notice Validates and stores a newly created round's minimum raise and extension deadline
+    /// @notice Validates and stores a round's minimum raise and extension deadline, one time only
     /// @dev FCFS rounds allocate inside `submitEOI`, so they cannot hold payments until a minimum.
     function setMinimum(bytes32 roundId, uint256 minRaise, uint256 deadline) external {
         RoundManagerData storage ds = roundManagerStorage();
         Round storage round = ds.rounds[roundId];
+        if (round.id == bytes32(0)) revert InvalidRound();
+        if (ds.minRaise[roundId] != 0) revert MinimumAlreadySet();
         if (round.roundType != RoundType.FounderApproved) revert InvalidMinimum();
         if (minRaise == 0 || minRaise > round.raiseCap) revert InvalidMinimum();
         if (deadline < round.endTime) revert InvalidMinimum();
@@ -649,7 +652,7 @@ library RoundManagerStorage {
         return (ds.minRaise[roundId], ds.minRaiseDeadline[roundId], ds.minRaiseMet[roundId]);
     }
 
-    /// @notice True while a round has a minimum that no allocation batch has met yet
+    /// @notice True while a round has a minimum that is not met yet
     function isMinimumPending(bytes32 roundId) internal view returns (bool) {
         RoundManagerData storage ds = roundManagerStorage();
         return ds.minRaise[roundId] != 0 && !ds.minRaiseMet[roundId];

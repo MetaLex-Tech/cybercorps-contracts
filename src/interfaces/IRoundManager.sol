@@ -72,6 +72,8 @@
         uint256 deadline
     ) external returns (bytes32 roundId);
 
+    function setRoundMinimum(bytes32 roundId, uint256 minRaise, uint256 deadline) external;
+
     function getRoundMinimum(bytes32 roundId)
         external view
         returns (uint256 minRaise, uint256 deadline, bool met, uint256 raised, uint256 committed);
@@ -82,8 +84,6 @@
     function getCommittedAmount(bytes32 agreementId) external view returns (uint256);
 
     function allocate(bytes32 agreementId, uint256 allocatedAmount) external returns (uint256 tokenId);
-
-    function allocateBatch(bytes32[] calldata agreementIds, uint256[] calldata allocatedAmounts) external;
 
     function reject(bytes32 agreementId) external;
     function reject(bytes32 agreementId, bool isVoidAgreement) external;
