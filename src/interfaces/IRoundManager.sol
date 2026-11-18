@@ -72,6 +72,8 @@
         uint256 deadline
     ) external returns (bytes32 roundId);
 
+    function setRoundMinimum(bytes32 roundId, uint256 minRaise, uint256 deadline) external;
+
     function getRoundMinimum(bytes32 roundId)
         external view
         returns (uint256 minRaise, uint256 deadline, bool met, uint256 raised, uint256 committed);

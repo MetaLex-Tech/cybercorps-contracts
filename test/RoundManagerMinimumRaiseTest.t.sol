@@ -299,12 +299,14 @@ abstract contract MinimumRaiseFixture is Test {
 ///   I1. On a round whose minimum is unmet, nothing is allocated and no funds move.
 ///   I2. The minimum is met only while the round is open, when every committed escrow can still
 ///       settle (open for at least SETTLE_WINDOW) and the commitments add up to the minimum.
-///   I3. After the minimum is met, commitments are locked: the owner cannot change, reject or
-///       directly allocate them, and an investor can recall only once the escrow has expired.
+///   I3. After the minimum is met, commitments are locked: the owner cannot change or directly
+///       allocate them, and the owner can reject and the investor can recall them only once the
+///       escrow has expired.
 ///       Anyone can settle them, each at its committed amount, in any number of transactions.
 ///   I4. Below the minimum, every payment stays refundable in full (`reject`, `recallEOI`).
 ///   I5. While the minimum is unmet, the end time cannot move past the deadline.
 ///   I6. A round created without a minimum behaves exactly as before.
+///   I7. The owner sets a round's minimum one time only, at creation or later.
 contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
     using RoundLib for Round;
 
@@ -399,6 +401,63 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         assertFalse(met);
     }
 
+    /// @notice I7: the owner can add a minimum to an existing round; the round then closes only
+    /// through commit and settle.
+    function test_SetRoundMinimum_OnExistingRound() public {
+        bytes32 roundId = _createPlainRound(VALUATION);
+        bytes32 a0 = _submitEOI(roundId, 0);
+        uint256 deadline = block.timestamp + ROUND_DURATION + DEADLINE_SLACK;
+
+        vm.expectEmit(true, false, false, true, roundManager);
+        emit RoundMinimumSet(roundId, MIN_RAISE, deadline);
+        vm.prank(corpOwner);
+        RoundManager(roundManager).setRoundMinimum(roundId, MIN_RAISE, deadline);
+
+        (uint256 minRaise, uint256 storedDeadline, bool met, , ) = RoundManager(roundManager).getRoundMinimum(roundId);
+        assertEq(minRaise, MIN_RAISE);
+        assertEq(storedDeadline, deadline);
+        assertFalse(met);
+
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.MinimumNotMet.selector);
+        RoundManager(roundManager).allocate(a0, MAX_TICKET);
+    }
+
+    /// @notice I7: a minimum is set one time only, also when the round was created with it.
+    function test_SetRoundMinimum_RefusesSecondCall() public {
+        bytes32 plainRound = _createPlainRound(VALUATION);
+        uint256 deadline = block.timestamp + ROUND_DURATION;
+        vm.prank(corpOwner);
+        RoundManager(roundManager).setRoundMinimum(plainRound, MIN_RAISE, deadline);
+
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.MinimumAlreadySet.selector);
+        RoundManager(roundManager).setRoundMinimum(plainRound, MIN_RAISE + 1, deadline);
+
+        (Round memory draft, CyberCertData[] memory certData) = _draft(RoundType.FounderApproved, VALUATION * 2);
+        vm.prank(corpOwner);
+        bytes32 minimumRound = RoundManager(roundManager).createRoundWithMinimum(draft, certData, MIN_RAISE, deadline);
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.MinimumAlreadySet.selector);
+        RoundManager(roundManager).setRoundMinimum(minimumRound, MIN_RAISE + 1, deadline);
+    }
+
+    function test_SetRoundMinimum_RefusesUnknownRound() public {
+        uint256 deadline = block.timestamp + ROUND_DURATION;
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.InvalidRound.selector);
+        RoundManager(roundManager).setRoundMinimum(keccak256("unknown"), MIN_RAISE, deadline);
+    }
+
+    function test_SetRoundMinimum_OnlyOwner() public {
+        bytes32 roundId = _createPlainRound(VALUATION);
+        uint256 deadline = block.timestamp + ROUND_DURATION;
+
+        vm.prank(investors[0]);
+        vm.expectRevert();
+        RoundManager(roundManager).setRoundMinimum(roundId, MIN_RAISE, deadline);
+    }
+
     /*//////////////////////////////////////////////////////////////
                          before the minimum is met
     //////////////////////////////////////////////////////////////*/
@@ -412,7 +471,6 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         RoundManager(roundManager).allocate(a0, MAX_TICKET);
     }
 
-    /// @notice I1: committing records amounts and moves no funds.
     function test_Commit_RecordsWithoutMovingFunds() public {
         bytes32 roundId = _createMinimumRound(MIN_RAISE);
         bytes32 a0 = _submitEOI(roundId, 0);
@@ -687,6 +745,28 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         assertEq(paymentToken.balanceOf(investors[0]), before0 + MAX_TICKET);
     }
 
+    /// @notice I3: after its escrow expiry, the owner can reject a commitment that did not settle.
+    /// The investor gets a full refund and the round capacity it held becomes free.
+    function test_AfterMet_RejectAfterEscrowExpiry_RefundsAndFreesCapacity() public {
+        (bytes32 roundId, bytes32 a0, ) = _metRound();
+        uint256 expiry = RoundManager(roundManager).getEscrowDetails(a0).expiry;
+
+        vm.warp(expiry);
+        vm.prank(corpOwner);
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.CommitmentLocked.selector, a0));
+        RoundManager(roundManager).reject(a0);
+
+        vm.warp(expiry + 1);
+        uint256 before0 = paymentToken.balanceOf(investors[0]);
+        vm.prank(corpOwner);
+        RoundManager(roundManager).reject(a0);
+
+        assertEq(paymentToken.balanceOf(investors[0]), before0 + MAX_TICKET);
+        assertEq(RoundManager(roundManager).getCommittedAmount(a0), 0);
+        (, , , , uint256 committed) = RoundManager(roundManager).getRoundMinimum(roundId);
+        assertEq(committed, MAX_TICKET);
+    }
+
     /// @notice I3 at scale: many commitments over several transactions, then separate settlements.
     function test_ManyCommitments_SettleAcrossTransactions() public {
         uint256 count = 40;
@@ -826,7 +906,7 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
     }
 
     /*//////////////////////////////////////////////////////////////
-                        rounds without a minimum
+                    rounds without a minimum
     //////////////////////////////////////////////////////////////*/
 
     /// @notice I6: a round without a minimum allocates one EOI at a time as before.
@@ -861,6 +941,7 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
 
         vm.prank(corpOwner);
         RoundManager(roundManager).setRoundEndTime(roundId, block.timestamp + 365 days);
+        assertEq(RoundManager(roundManager).getRound(roundId).endTime, block.timestamp + 365 days);
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -99,6 +99,7 @@ contract RoundManager is
     error AgreementNotInRound(bytes32 agreementId);
     error ArrayLengthMismatch();
     error MinimumAlreadyMet();
+    error MinimumAlreadySet();
     error NotCommitted(bytes32 agreementId);
     error CommitmentLocked(bytes32 agreementId);
     error SettleWindowTooShort(bytes32 agreementId);
@@ -235,6 +236,14 @@ contract RoundManager is
         );
         RoundManagerStorage.setMinimum(roundId, minRaise, deadline);
         return roundId;
+    }
+
+    /// @notice Sets the minimum raise of an existing founder-approved round, one time only
+    /// @param roundId The round ID
+    /// @param minRaise minimum total raise in the payment token, gross of fees
+    /// @param deadline latest end time the round can be extended to while the minimum is unmet
+    function setRoundMinimum(bytes32 roundId, uint256 minRaise, uint256 deadline) external onlyOwner {
+        RoundManagerStorage.setMinimum(roundId, minRaise, deadline);
     }
 
     /// @notice Returns a round's minimum raise state

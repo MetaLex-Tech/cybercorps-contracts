@@ -120,6 +120,7 @@ library RoundManagerStorage {
     error InvalidMinimum();
     error MinimumNotMet();
     error MinimumAlreadyMet();
+    error MinimumAlreadySet();
     error ArrayLengthMismatch();
     error AgreementNotInRound(bytes32 agreementId);
     error NotCommitted(bytes32 agreementId);
@@ -643,11 +644,13 @@ library RoundManagerStorage {
         return roundManagerStorage().agreementToRound[agreementId];
     }
 
-    /// @notice Validates and stores a newly created round's minimum raise and extension deadline
+    /// @notice Validates and stores a round's minimum raise and extension deadline, one time only
     /// @dev FCFS rounds allocate inside `submitEOI`, so they cannot hold payments until a minimum.
     function setMinimum(bytes32 roundId, uint256 minRaise, uint256 deadline) external {
         RoundManagerData storage ds = roundManagerStorage();
         Round storage round = ds.rounds[roundId];
+        if (round.id == bytes32(0)) revert InvalidRound();
+        if (ds.minRaise[roundId] != 0) revert MinimumAlreadySet();
         if (round.roundType != RoundType.FounderApproved) revert InvalidMinimum();
         if (minRaise == 0 || minRaise > round.raiseCap) revert InvalidMinimum();
         if (deadline < round.endTime) revert InvalidMinimum();
@@ -784,7 +787,9 @@ library RoundManagerStorage {
         uint256 amount = ds.committedAmount[agreementId];
         if (amount == 0) return;
         bytes32 roundId = ds.agreementToRound[agreementId];
-        if (ds.minRaiseMet[roundId] && block.timestamp <= escrowExpiry) revert CommitmentLocked(agreementId);
+        if (ds.minRaiseMet[roundId] && block.timestamp <= escrowExpiry) {
+            revert CommitmentLocked(agreementId);
+        }
         ds.committedAmount[agreementId] = 0;
         ds.committedTotal[roundId] -= amount;
         emit AllocationUncommitted(agreementId, roundId, amount, ds.committedTotal[roundId]);
