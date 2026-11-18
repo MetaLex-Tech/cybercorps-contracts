@@ -10,7 +10,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
@@ -84,7 +84,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
         console2.log("CertificateUriBuilder:", deployment.uriBuilder);
         console2.log("");
 
-        CyberAgreementRegistry registry = CyberAgreementRegistry(
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(
             deployment.cyberAgreementRegistry
         );
 
@@ -340,7 +340,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
             investorPartyValues,
             _computeEOISignature(
                 vm,
-                CyberAgreementRegistry(registry),
+                ICyberAgreementRegistry(registry),
                 roundTemplateId,
                 eoiSaltUint,
                 roundGlobalValues,
@@ -488,7 +488,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
 
     function _computeEOISignature(
         Vm vm,
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 templateId,
         uint256 salt,
         string[] memory globalValues,

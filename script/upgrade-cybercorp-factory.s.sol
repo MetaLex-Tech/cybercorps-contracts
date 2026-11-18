@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
@@ -85,7 +85,7 @@ contract UpgradeCyberCorpFactoryScript is Script {
 
     function _computeEOISignature(
         Vm vm,
-        CyberAgreementRegistry registry,
+        ICyberAgreementRegistry registry,
         bytes32 templateId,
         uint256 salt,
         string[] memory globalValues,

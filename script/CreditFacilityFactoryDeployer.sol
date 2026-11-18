@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";

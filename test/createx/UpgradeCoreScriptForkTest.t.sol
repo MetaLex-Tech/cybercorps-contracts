@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {DeploymentConstants} from "../../script/libs/DeploymentConstants.sol";
 import {GnosisTransaction} from "../../script/libs/safe.sol";
 import {UpgradeCoreScript} from "../../script/upgrade-core.s.sol";
-import {CyberAgreementRegistry} from "../../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../../src/interfaces/ICyberAgreementRegistry.sol";
 import {ZKPassportConditionLib, ZKPassportConfig} from "../../src/libs/ZKPassportConditionLib.sol";
 import "forge-std/Test.sol";
 
@@ -35,7 +35,7 @@ contract UpgradeCoreScriptForkTest is Test {
 
         // The batch sets the production ZKPassport config on the registry.
         ZKPassportConfig memory config = abi.decode(
-            CyberAgreementRegistry(DeploymentConstants.coreV2(block.chainid).cyberAgreementRegistry)
+            ICyberAgreementRegistry(DeploymentConstants.coreV2(block.chainid).cyberAgreementRegistry)
                 .getSignerConditionConfig(ZKPassportConditionLib.KIND),
             (ZKPassportConfig)
         );

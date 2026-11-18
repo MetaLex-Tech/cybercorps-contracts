@@ -4,7 +4,8 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
+import {CyberAgreementRegistryDeployment} from "./libs/CyberAgreementRegistryDeployment.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
@@ -268,13 +269,13 @@ contract UpgradePublicRoundsScript is Script {
 
         // 8) upgrade CyberAgreementRegistry
         address newRegistryImpl = address(
-            new CyberAgreementRegistry{salt: salt}()
+            CyberAgreementRegistryDeployment.deployRouter(salt)
         );
         console.log(
             "New CyberAgreementRegistry implementation:",
             newRegistryImpl
         );
-        CyberAgreementRegistry(registry).upgradeToAndCall(newRegistryImpl, "");
+        ICyberAgreementRegistry(registry).upgradeToAndCall(newRegistryImpl, "");
         console.log(
             "CyberAgreementRegistry upgraded (proxy via upgradeToAndCall):",
             registry
@@ -308,8 +309,8 @@ contract UpgradePublicRoundsScript is Script {
         partyFields[3] = "investorType";
         partyFields[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(50)), "cySPA + Reg D SAFE", "IPFS://bafybeics3btqftkfnzchtisazgvlvtq3xok6rrdvhjyhdvr7lhoa6snjxe", globalFieldsSafe, partyFields);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(51)), "cySPA + REG S SAFE", "IPFS://bafybeidwqou5x4amvsidepwbuqpwarowv3vce473jpqcgejvbf4g2xxdee", globalFieldsSafe, partyFields);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(50)), "cySPA + Reg D SAFE", "IPFS://bafybeics3btqftkfnzchtisazgvlvtq3xok6rrdvhjyhdvr7lhoa6snjxe", globalFieldsSafe, partyFields);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(51)), "cySPA + REG S SAFE", "IPFS://bafybeidwqou5x4amvsidepwbuqpwarowv3vce473jpqcgejvbf4g2xxdee", globalFieldsSafe, partyFields);
 
         string[] memory globalFieldsSafeTokenWarrant = new string[](17);
         globalFieldsSafeTokenWarrant[0] = "purchaseAmount";
@@ -331,8 +332,8 @@ contract UpgradePublicRoundsScript is Script {
         globalFieldsSafeTokenWarrant[16] = "tokenPremiumMultiplier";
 
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(52)), "cySPA + REG D SAFE + REG D TOKEN WARRANT", "IPFS://bafybeiapw7thrkzymtnhilmr5sjl7sm55yc42d2zxl66u6tdutfvm55t2y", globalFieldsSafeTokenWarrant, partyFields);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(53)), "cySPA + REG S SAFE + REG S TOKEN WARRANT", "IPFS://bafybeianosjn74ldjexzmwcji6nl3l24ikwazd64uei625nszysqfwla2i", globalFieldsSafeTokenWarrant, partyFields);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(52)), "cySPA + REG D SAFE + REG D TOKEN WARRANT", "IPFS://bafybeiapw7thrkzymtnhilmr5sjl7sm55yc42d2zxl66u6tdutfvm55t2y", globalFieldsSafeTokenWarrant, partyFields);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(53)), "cySPA + REG S SAFE + REG S TOKEN WARRANT", "IPFS://bafybeianosjn74ldjexzmwcji6nl3l24ikwazd64uei625nszysqfwla2i", globalFieldsSafeTokenWarrant, partyFields);
 
         string[] memory globalFieldsSafte = new string[](15);
         globalFieldsSafte[0] = "purchaseAmount";
@@ -351,8 +352,8 @@ contract UpgradePublicRoundsScript is Script {
         globalFieldsSafte[13] = "minCompanyReserve";
         globalFieldsSafte[14] = "tokenPremiumMultiplier";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(54)), "cySPA + REG D SAFTE ", "IPFS://bafybeidb2ebvu7uxt6m2ukrdnytzpwrb4ihcncbx2v4qohe5xao3xr3m7e", globalFieldsSafte, partyFields);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(55)), "cySPA + REG S SAFTE ", "IPFS://bafybeideutuq3r3v66rdcvzar5heefyark24urc3ix44tvvjpo2ntvkc7i", globalFieldsSafte, partyFields);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(54)), "cySPA + REG D SAFTE ", "IPFS://bafybeidb2ebvu7uxt6m2ukrdnytzpwrb4ihcncbx2v4qohe5xao3xr3m7e", globalFieldsSafte, partyFields);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(55)), "cySPA + REG S SAFTE ", "IPFS://bafybeideutuq3r3v66rdcvzar5heefyark24urc3ix44tvvjpo2ntvkc7i", globalFieldsSafte, partyFields);
 
         string[] memory globalFieldsSaft = new string[](10);
         globalFieldsSaft[0] = "purchaseAmount";
@@ -366,8 +367,8 @@ contract UpgradePublicRoundsScript is Script {
         globalFieldsSaft[8] = "unlockingCliffPercentage";
         globalFieldsSaft[9] = "unlockingIntervalType";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(56)), "cySPA + REG D SAFT", "IPFS://bafybeidfbgwv35cu22ouwdpmho35gicfnkno2em7ngjn4mbhbiogvvaf7i", globalFieldsSaft, partyFields);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(57)), "cySPA + REG S SAFT", "IPFS://bafybeibjm2mss4ctfsyajehtwnmje3aa2agif5n47i575pxdejrk7dee5m", globalFieldsSaft, partyFields);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(56)), "cySPA + REG D SAFT", "IPFS://bafybeidfbgwv35cu22ouwdpmho35gicfnkno2em7ngjn4mbhbiogvvaf7i", globalFieldsSaft, partyFields);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(uint256(57)), "cySPA + REG S SAFT", "IPFS://bafybeibjm2mss4ctfsyajehtwnmje3aa2agif5n47i575pxdejrk7dee5m", globalFieldsSaft, partyFields);
         
         vm.stopBroadcast();
 

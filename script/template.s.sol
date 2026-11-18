@@ -9,7 +9,7 @@ import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -27,7 +27,7 @@ contract BaseScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
 
-        address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
+        address registry = address(ICyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
 
         string[] memory globalFieldsSafeT = new string[](17);
         globalFieldsSafeT[0] = "purchaseAmount";
@@ -70,7 +70,7 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(bytes("ABV_safe_t")), "ABV_safe_t_testnet", "ipfs://bafybeia6l2w5kwr52w6khvhqkgg4n6poua5yjlwjmeqgb77iffh4xxpvdu", globalFieldsSafeT, partyFieldsSafeT);
+        ICyberAgreementRegistry(registry).createTemplate(bytes32(bytes("ABV_safe_t")), "ABV_safe_t_testnet", "ipfs://bafybeia6l2w5kwr52w6khvhqkgg4n6poua5yjlwjmeqgb77iffh4xxpvdu", globalFieldsSafeT, partyFieldsSafeT);
      //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(31)), "MetaLeX cyberTokenWarrant a16z jx-neutral-style-issuer Reg D raise", "ipfs://bafybeibojsh6f4wxj3gvwjbv7uvvurony7jumyqqi5i6rqsv7wcywdsi44", globalFieldsSafeT, partyFieldsSafeT);
      //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(32)), "MetaLeX cyberSAFE jx-neutral-style Reg S raise", "ipfs://bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a", globalFieldsSafe, partyFieldsSafe);
      //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(34)), "MetaLeX cyberTokenWarrant a16z-jx-neutral-style-issuer Reg S raise", "ipfs://bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle", globalFieldsSafeT, partyFieldsSafeT);

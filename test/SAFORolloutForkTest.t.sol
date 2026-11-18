@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.28;
 
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {DealManager} from "../src/DealManager.sol";
@@ -30,7 +30,7 @@ contract SAFORolloutForkTest is SAFOIntegrationTest {
         }
         plan = vm.readFile(path);
         assertEq(block.chainid, vm.parseJsonUint(plan, ".chainId"));
-        registry = CyberAgreementRegistry(vm.parseJsonAddress(plan, ".targets.registry"));
+        registry = ICyberAgreementRegistry(vm.parseJsonAddress(plan, ".targets.registry"));
         companyFactory = CyberCorpFactory(vm.parseJsonAddress(plan, ".targets.factory"));
         extension = SAFOExtension(vm.parseJsonAddress(plan, ".addresses.SAFOExtensionProxy"));
         assertEq(address(extension.AUTH()), vm.parseJsonAddress(plan, ".before.auth"));
