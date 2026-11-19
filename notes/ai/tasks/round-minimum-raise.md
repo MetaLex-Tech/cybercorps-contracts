@@ -169,6 +169,8 @@
 | Fork upgrade tests | `RoundManagerMinimumRaiseUpgradeForkTest` (Base block 56,958,568), local `RPC_URL_BASE` on the merge | 2 pass |
 | Existing RoundManager suites | `RoundManagerTest`, `RoundManagerFCFSTest`, `CyberCorpFactoryPublicRoundTest`, `RoundManagerEOIExpiryTest`, `RoundManagerFactoryTest` on the merge | 48 + 1 + 7 + 18 + 16 pass; `RoundManagerFCFSForkTest` and `RoundManagerV3NextForkTest` not run locally (need `RPC_URL_BASE_SEPOLIA`; CI runs them) |
 | Full repository unit suite | `forge test --nmc '(ForkTest|AdhocTest)'` on the merge | 1,573 pass (88 suites); fork suites other than the upgrade test not run |
+| Release script | `UpgradeRoundManagerV51ScriptForkTest` (Base block 56,958,568), 2026-11-18 | 8 pass |
+| Release script dry runs (no broadcast) | `forge script script/upgrade-round-manager-5-1.s.sol:UpgradeRoundManagerV51Script` against live Base, Robinhood, Ethereum, Arbitrum, 2026-11-18 | Each: reference v5, the Safe owns the core AUTH, the deployer has no role, 1 Safe call (`setRefImplementation`), about 16.2M gas (Arbitrum 15.8M). 0 company batches: every company in `known-cyber-corps.json` runs release 3 (one Ethereum RoundManager runs 4). Simulated batches kept out of `script/res` |
 | Independent external-model review | — | Not run (required before merge) |
 
 ## Next action and handoff
@@ -180,6 +182,9 @@ before it keep the end-time expiry. The webapp record `notes/ai/tasks/round-inve
 still expects `allocateBatch` in 5.1; it needs updating to the owner's ABI decision (Safe batch
 of `allocate`). Reply on the Codex P2 thread (`RoundManager.sol:556`) once pushed, if 65fec4e
 has not already. Before merge: independent external-model
-review and the full CI suite. Audit, factory update, upgrades and the webapp support (commit
+review and the full CI suite. Release tooling: `script/upgrade-round-manager-5-1.s.sol` and
+`script/README-round-manager-5-1.md` (uncommitted, 2026-11-18). It writes the MetaLeX Safe batch
+(factory reference) and company batches (`corpBatch` for v5 companies, which are not in the
+known list); no broadcast was made. Audit, factory update, upgrades and the webapp support (commit
 screen, met status, settlement service; founders should know an extension keeps earlier EOIs
 open until `deadline + SETTLE_WINDOW`) need separate authorization.
