@@ -387,7 +387,8 @@ You provide:
 * **your investor details**: name, contact, investor type and, for anyone
   other than an individual, jurisdiction of formation. They prefill from
   your [profile](profile.md) and can be encrypted; the first time you
-  submit, a **privacy settings** dialog asks what to encrypt;
+  submit, a **privacy settings** dialog asks what to encrypt. The company,
+  and advisers that it authorizes, can read an encrypted name;
 * **the investment amount**: a fixed amount or, in a founder-approval round
   that allows a range, a minimum and maximum, within the round's ticket
   limits and your wallet balance;
