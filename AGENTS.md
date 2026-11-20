@@ -22,6 +22,13 @@ sign -> simulate -> submit coverage with explicit success/refusal cases.
 These instructions grant no authority to merge, deploy, sign real transactions,
 send private code to another service or start external audits.
 
+## Signatures and attestations
+
+Before you design, change or review a signature, a signed message, a role write,
+an allowlist or a commitment, apply the
+[attestation binding rule](specs/analysis/attestation%20binding%20rule.md). It is
+a draft for owner review: use it as a guideline, not as an accepted decision.
+
 ## Past audits and audit responses
 
 Before evaluating an issue, review or audit finding, or proposed fix, and before
