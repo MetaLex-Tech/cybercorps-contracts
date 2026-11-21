@@ -157,7 +157,15 @@ struct CertificateSVGParams {
     bool statusKnown;
     /// @dev The series name from the extension. The image shows the series enum when it is "".
     string seriesName;
+    /// @dev True when the issuer's company type is exactly MEMECORP_COMPANY_TYPE. The image then shows
+    ///      neutral "Meme Units" labels instead of the security class labels.
+    bool memeUnits;
 }
+
+/// @dev The exact company type of a memeCorp: an onchain record with no legal entity behind it.
+///      Certificates of a company with this type show neutral labels, because its units carry no rights.
+///      The match is exact. A different spelling, case or spacing is an ordinary company type.
+string constant MEMECORP_COMPANY_TYPE = "memeCorp (no legal entity)";
 
 
 
