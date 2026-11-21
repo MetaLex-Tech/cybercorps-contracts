@@ -1,5 +1,5 @@
 ---
-description: Choose public, private, email, offchain or mixed signing and track the evidence each flow produces
+description: Send a document for signature by wallet or email, choose how the signatures are recorded, and track the evidence each request produces
 ---
 
 # cyberSign
@@ -16,22 +16,84 @@ serve different parts of that process. Company documents also open cyberSign
 from the cyberCORPs app and [boardRoom](boardroom.md). See
 [Formation packets](formation-packets.md) for the coordinated founder workflow.
 
-## Choose the signing flow
+## Send a document for signature
 
-After authentication, the creation page offers the modes enabled for your
-account and network:
+Open **Create** in cyberSign, or choose **New agreement** in the
+**Contract Library** or the inbox. If the page asks you to sign in or to
+connect a wallet linked to your profile, use the button it shows or the
+account button at the top right.
 
-| Choice | What it does |
-| --- | --- |
-| **Public document / email signing** | Creates an ordinary public registry agreement, with wallet or supported email signing. |
-| **Signing request · private or public PDF** | Creates a managed request with an explicitly selected document privacy mode and assigned parties. |
-| **Offchain signing · no blockchain** | Collects authenticated email acceptance or wallet message signatures without publishing an agreement onchain. This form also offers mixed execution where enabled. |
+The page **Send a document for signature** is one column with these
+sections, in this order:
 
-A company-scoped request uses the company workflow and its owner checks.
-Choosing a company as record owner does not make it a signing party or prove
-a signer's authority to represent it. Network availability, sponsorship and
-email delivery are checked separately. An option that is absent or refused
-is not enabled merely because another cyberSign mode supports it.
+1. **Document.** Choose the exact PDF to sign (up to 2 MiB), or write or
+   import a document and review its final PDF. Enter the **Document title**.
+2. **Signers.** **I am also signing this document** makes your wallet the
+   first signer. Each signer has one field for an email or wallet address
+   and a **Signing capacity**. The app reads the kind of signer from the
+   value: an address with `@` is an email signer, and `0x` followed by 40
+   hexadecimal characters is a wallet signer. ENS names are not accepted.
+   **More** on a signer holds only the options that apply to that signer,
+   such as a passport requirement, a name, an approval role or onchain
+   recording. **Add a signer** adds a row, up to eight signers.
+3. **How people sign.** Choose one answer:
+   - **Wallets, recorded onchain** is preselected. Each signature is
+     recorded in the agreement registry on the network shown under the
+     answer, for example "Network: Base", with **Change** to choose
+     another network.
+   - **Email or wallet, no blockchain.** MetaLeX keeps the signatures,
+     their evidence and a signing certificate. An email signer needs no
+     wallet, gas or network.
+
+   **What this means** states the consequences of the selected answer,
+   including what is public onchain.
+4. **Sign by.** One deadline. A request recorded onchain allows up to 30
+   days less five minutes, and at least one day when the request collects
+   email signatures or passport proofs. A request with no blockchain allows one hour to 30
+   days.
+5. **Options**, closed by default. Its summary line names what is in
+   effect, for example "From my account · Private PDF". Inside are
+   **Send as** and the options of the selected answer. For an onchain
+   record: a private PDF or a public PDF on IPFS (with an optional password), open
+   slots for a public PDF, and company sponsorship. With no blockchain:
+   onchain recording by some signers (mixed execution) and approval
+   routing.
+
+Choose **Review**. The review shows the exact PDF and its SHA-256
+fingerprint, the title, the signers, the answer to **How people sign**,
+the network, the cost, the deadline, the options and the consents that
+the answer requires. For a request with no blockchain it also has
+**Email the invitations when I send this request**. Choose
+**Send for signature** to create the request. The answer cannot change
+on the review: choose **Back to editing** to change it or any other
+input. A change after the review discards the review.
+
+### Send as a company
+
+**Create a signing request in cyberSign** in a company workspace opens
+the page with that company as the sender, on the company's network, for
+both answers. **Email or wallet, no blockchain** can be chosen where
+cyberSign offers company requests with no blockchain on that network;
+elsewhere it is shown disabled, with the reason under it. **Send as**
+also offers your own account and another company you own, entered by its
+contract address.
+
+Your connected wallet must hold the company's current owner role on that
+network, or creation is refused. Choosing a company as the sender does
+not make it a signing party or prove a signer's authority to represent
+it. Network availability, sponsorship and email delivery are checked
+separately. An option that is absent or refused is not enabled because
+the other answer supports it.
+
+### Other ways to create a request
+
+- **Correct and send a new version** on an open request with no
+  blockchain opens the same form on the request page, with the request's
+  parties and policy. Every party signs the new version again.
+- **Prepare in cyberSign** in a company's formation packets opens packet
+  preparation. See [Formation packets](formation-packets.md).
+- [boardRoom](boardroom.md) governance documents use their own form with
+  named governance signers.
 
 ## Review a request before signing
 
@@ -152,14 +214,12 @@ An unfinished request needs a new signing request; it cannot be completed
 by opening its old app link. Already completed agreements remain recorded
 onchain with their original identities.
 
-## Create and share the document
+## How a request is created onchain
 
-For an ordinary public agreement, choose the network, title, PDF, deadline,
-parties and any global or party fields. Uploaded public PDFs go to IPFS.
-Review the publication acknowledgment before upload. Encrypt a sensitive
-public PDF before publication, or choose the private-request flow.
-A mutable external URL can change its content; an immutable document
-reference gives signers a stable version to review.
+A public PDF, chosen under **Options**, goes to IPFS after you accept the
+publication acknowledgment on the review. Protect a sensitive public PDF
+with a password, or keep the PDF private. The form takes an uploaded or
+composed PDF, not a link, so signers review a fixed version.
 
 Review the full request before the first signature. The public wallet
 path uses `createBoundContractAndSignFor` for qualifying named, distinct
