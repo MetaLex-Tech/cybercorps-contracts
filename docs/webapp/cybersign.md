@@ -112,8 +112,8 @@ confirms it. Stakeholder invitations in the cap table are a separate flow.
 ## Fully offchain and mixed execution
 
 A fully offchain request fixes the document and execution policy before
-signatures. Parties use **Email (one-time code)** or an external-wallet
-message signature. Email parties do not need a wallet or gas. The request
+signatures. Parties use **Verified email** (a one-time code or, for a
+Gmail address, a Google sign-in) or an external-wallet message signature. Email parties do not need a wallet or gas. The request
 records evidence and offers a completion certificate and evidence bundle.
 A wallet message signature in this mode remains offchain.
 
