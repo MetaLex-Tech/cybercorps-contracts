@@ -12,7 +12,8 @@ import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title  HolderCapCondition - ICA §3(c)(1) / §3(c)(1)(C) / §3(c)(7) holder limits at transfer time
 /// @author MetaLeX Labs, Inc.
-/// @notice Shared singleton, configured per SPV. Counts holders at acceptance/finalization — not offer time — to avoid
+/// @notice Shared singleton, configured per SPV, with an optional override per LET contract (class) of that SPV.
+/// Counts holders at acceptance/finalization — not offer time — to avoid
 /// stale-count races. Look-through applies to both sides on one basis: each existing holder already
 /// contributes its credentialed beneficial-owner count in the printer's tally, and the acquirer's
 /// credentialed count is added on top instead of counting it as one holder.
@@ -57,6 +58,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
     }
 
     error InvalidSpv();
+    error InvalidPrinter();
 
     event ConfigUpdated(
         address indexed spv,
@@ -66,13 +68,32 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         bool blockUsInvestors
     );
 
+    /// @notice A per-printer (per-class) policy for one LET contract of an SPV. It replaces the SPV policy for
+    /// sales of that printer only.
+    event PrinterConfigUpdated(
+        address indexed spv,
+        address indexed printer,
+        IcaException icaException,
+        uint256 cap,
+        bool usResidentOnlyCount,
+        bool blockUsInvestors
+    );
+
+    /// @notice The per-printer policy is removed; sales of that printer use the SPV policy again.
+    event PrinterConfigRemoved(address indexed spv, address indexed printer);
+
+    /// @dev Upgrade notes: the shared proxy keeps this struct at the fixed STORAGE_POSITION (ERC-7201-style
+    /// namespace, not linear slots). Members may only be appended; never move, rename or retype one.
+    ///   slot P + 0: configs          (deployed layout)
+    ///   slot P + 1: printerConfigs   (appended for per-class caps)
     struct HolderCapStorage {
         mapping(address => SpvConfig) configs;
+        /// @dev spv => LET contract (printer) => policy. Keyed by the SPV first, so only that SPV's admin can
+        /// write a policy that the SPV's own sales read.
+        mapping(address => mapping(address => SpvConfig)) printerConfigs;
     }
 
     bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.holder-cap.storage.v1");
-
-    // Upgrade notes: reduced gap to account for the contract's variables (50 - 1 = 49)
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -104,6 +125,39 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         emit ConfigUpdated(spv, _icaException, _cap, _usResidentOnlyCount, _blockUsInvestors);
     }
 
+    /// @notice Sets a holder-limit policy for one LET contract (class) of an SPV; only the SPV's own BorgAuth
+    /// admin. Sales of that printer use this policy instead of the SPV policy from `setConfig`.
+    function setPrinterConfig(
+        address spv,
+        address printer,
+        IcaException _icaException,
+        uint256 _cap,
+        bool _usResidentOnlyCount,
+        bool _blockUsInvestors
+    ) external {
+        if (spv == address(0)) revert InvalidSpv();
+        if (printer == address(0)) revert InvalidPrinter();
+        _requireAuthAdmin(spv);
+        _holderCapStorage().printerConfigs[spv][printer] = SpvConfig({
+            icaException: _icaException,
+            cap: _cap,
+            usResidentOnlyCount: _usResidentOnlyCount,
+            blockUsInvestors: _blockUsInvestors,
+            configured: true
+        });
+        emit PrinterConfigUpdated(spv, printer, _icaException, _cap, _usResidentOnlyCount, _blockUsInvestors);
+    }
+
+    /// @notice Removes the per-printer policy, so sales of that printer use the SPV policy again; only the SPV's
+    /// own BorgAuth admin. Removing a policy that is not set changes nothing but still emits the event.
+    function removePrinterConfig(address spv, address printer) external {
+        if (spv == address(0)) revert InvalidSpv();
+        if (printer == address(0)) revert InvalidPrinter();
+        _requireAuthAdmin(spv);
+        delete _holderCapStorage().printerConfigs[spv][printer];
+        emit PrinterConfigRemoved(spv, printer);
+    }
+
     function checkCondition(
         IDealManager dealManager,
         bytes4,
@@ -111,7 +165,11 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         bytes32 agreementId
     ) external view override returns (bool) {
         Offer memory offer = dealManager.getOffer(offerId);
-        SpvConfig storage config = _holderCapStorage().configs[offer.spvAddress];
+        // The class's own policy if one is set, else the SPV policy. `offer.spvAddress` is the DealManager's
+        // own corp, so a policy written under another SPV's key is never read here.
+        HolderCapStorage storage $ = _holderCapStorage();
+        SpvConfig storage config = $.printerConfigs[offer.spvAddress][offer.certPrinter];
+        if (!config.configured) config = $.configs[offer.spvAddress];
 
         // Attached but never configured. §3(c)(1) still caps the SPV, and a zero cap is a real §3(c)(7)
         // setting rather than an absence, so nothing passes until the GP states which applies.
@@ -160,6 +218,12 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
     /// @notice An SPV's holder-limit configuration
     function configs(address spv) public view returns (SpvConfig memory) {
         return _holderCapStorage().configs[spv];
+    }
+
+    /// @notice The per-printer (per-class) policy of an SPV; `configured == false` means the printer uses the SPV
+    /// policy from `configs(spv)`
+    function printerConfigs(address spv, address printer) public view returns (SpvConfig memory) {
+        return _holderCapStorage().printerConfigs[spv][printer];
     }
 
     function _holderCapStorage() private pure returns (HolderCapStorage storage $) {
