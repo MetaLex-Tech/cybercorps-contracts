@@ -45,6 +45,7 @@ import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 import "./storage/LedgerEntryTokenStorage.sol";
+import {LedgerEntryTokenHolderLimits} from "./storage/LedgerEntryTokenHolderLimits.sol";
 import "./interfaces/ILedgerEntryToken.sol";
 import "./interfaces/IUriBuilder.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
@@ -704,6 +705,30 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable, ILedger
     /// re-read off the badge. Batch over [0, totalSupply()).
     function backfillLookThroughTally(uint256 startIndex, uint256 count) external {
         LedgerEntryTokenStorage.backfillLookThroughTally(startIndex, count);
+    }
+
+    /// @notice The section 12(g) counts and settings (holders who are not accredited, plan securities): calls
+    /// `data` on the linked LedgerEntryTokenHolderLimits library by delegatecall and returns its answer. Encode
+    /// `data` against ILedgerEntryTokenHolderLimits. Every function there is a view, a setter that checks the
+    /// caller itself, or a sync that only moves its totals to the correct value. A revert bubbles unchanged.
+    /// @dev Forwards to that one library only. Its address is fixed at link time.
+    function holderLimits(bytes calldata data) external returns (bytes memory) {
+        address lib = address(LedgerEntryTokenHolderLimits);
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            calldatacopy(ptr, data.offset, data.length)
+            let ok := delegatecall(gas(), lib, ptr, data.length, 0, 0)
+            let size := returndatasize()
+            if iszero(ok) {
+                returndatacopy(ptr, 0, size)
+                revert(ptr, size)
+            }
+            // ABI-encode the answer as `bytes`: offset, length, data
+            mstore(ptr, 0x20)
+            mstore(add(ptr, 0x20), size)
+            returndatacopy(add(ptr, 0x40), 0, size)
+            return(ptr, add(size, 0x40))
+        }
     }
 
 }
