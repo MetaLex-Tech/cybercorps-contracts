@@ -116,6 +116,16 @@ library LedgerEntryTokenHolderLimits {
         return _isPlanOnly(s.holderAcct[owner].liveLots, s.holderLimitAcct[owner].planLots);
     }
 
+    /// @notice The look-through weight that a plan-only holder is left out of the counts with; 0 for an
+    /// address that is not a plan-only holder. A holder keeps this weight when its registry gives no
+    /// beneficial-owner count (a void or a lapse), so a holder that stops being plan-only enters the counts
+    /// with it. A plan-only holder always has a weight of 1 or more.
+    function planOnlyHolderWeight(address owner) external view returns (uint256) {
+        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
+        LedgerEntryTokenStorage.HolderAcct storage a = s.holderAcct[owner];
+        return _isPlanOnly(a.liveLots, s.holderLimitAcct[owner].planLots) ? a.weight : 0;
+    }
+
     /// @notice The plan-security label of a lot: set, and set for the current legal owner.
     function isPlanSecurity(uint256 tokenId) external view returns (bool) {
         LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();

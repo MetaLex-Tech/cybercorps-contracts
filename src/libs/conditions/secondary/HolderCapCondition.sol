@@ -286,9 +286,15 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
     /// `_validate` rejects an asserted count of zero, so a zero read means no look-through credential — a
     /// single holder.
     function _addition(ILexChexBadge badge, address buyer) private view returns (uint256) {
+        return _addition(badge, buyer, 1);
+    }
+
+    /// @dev As above for a buyer that the printer already books at `bookedWeight`: with no credentialed count
+    /// the printer keeps that weight (a withdrawn or lapsed count is unknown, not lower), so the check adds it.
+    function _addition(ILexChexBadge badge, address buyer, uint256 bookedWeight) private view returns (uint256) {
         uint32 boCount;
         if (address(badge) != address(0)) (boCount,) = badge.getEffectiveBeneficialOwnerCount(buyer);
-        return boCount > 0 ? boCount : 1;
+        return boCount > 0 ? boCount : bookedWeight;
     }
 
     /// @dev The steps after the no-U.S. floor when section 12(g) limits apply to the sale. Every printer read
@@ -311,16 +317,18 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
 
         // A buyer who already holds is a larger position, not a new holder. With the plan exclusion on, a
         // plan-only holder is left out of the count today, so buying a lot that has no label adds them.
+        // A plan-only holder enters the counts at the weight the printer already books for it, unless its
+        // registry gives a fresh count. A buyer who holds nothing is booked as 1 by the printer.
         bool newHolder = !printer.isLegalHolder(buyer);
+        uint256 bookedWeight = 1;
         if (!newHolder && limits.excludePlanOnly) {
-            uint256 planOnly;
-            (ok, planOnly) = _read(printer, abi.encodeCall(ILedgerEntryTokenHolderLimits.isPlanOnlyHolder, (buyer)));
+            (ok, bookedWeight) = _read(printer, abi.encodeCall(ILedgerEntryTokenHolderLimits.planOnlyHolderWeight, (buyer)));
             if (!ok) return false;
-            newHolder = planOnly != 0;
+            newHolder = bookedWeight != 0;
         }
         if (!newHolder) return true;
 
-        uint256 addition = _addition(badge, buyer);
+        uint256 addition = _addition(badge, buyer, bookedWeight);
 
         // The total cap, as in checkCondition, on the count with plan-only holders left out when that is on
         if (config.cap != 0 && !(config.usResidentOnlyCount && !buyerIsUS)) {

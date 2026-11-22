@@ -24,6 +24,7 @@ interface ILedgerEntryTokenHolderLimits {
     function holderLimitTotals() external view returns (uint256 accredited, uint256 planOnly, uint256 planOnlyAccredited);
     function isAccredited(address account) external view returns (bool);
     function isPlanOnlyHolder(address owner) external view returns (bool);
+    function planOnlyHolderWeight(address owner) external view returns (uint256);
     function isPlanSecurity(uint256 tokenId) external view returns (bool);
     function notAccreditedMark(address account) external view returns (bool);
     function holderLimitAccount(address owner)

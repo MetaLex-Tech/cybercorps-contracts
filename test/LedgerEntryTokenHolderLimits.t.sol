@@ -253,6 +253,11 @@ contract LedgerEntryTokenHolderLimitsTest is Test {
             assertEq(r.planOnlyWeight, planOnly ? w : 0, "plan-only contribution");
             assertEq(r.planOnlyAccreditedWeight, (planOnly && r.accredited) ? w : 0, "plan-only accredited contribution");
             assertEq(_planOnly(h), planOnly, "isPlanOnlyHolder read");
+            assertEq(
+                _uint(abi.encodeCall(ILedgerEntryTokenHolderLimits.planOnlyHolderWeight, (h))),
+                planOnly ? w : 0,
+                "planOnlyHolderWeight read"
+            );
             lt += w;
             acc += r.accreditedWeight;
             plan += r.planOnlyWeight;
@@ -811,7 +816,7 @@ contract LedgerEntryTokenHolderLimitsTest is Test {
             ? holders[(seed >> 16) % holders.length]
             : address(uint160(uint256(keccak256(abi.encode(seed, "addr")))));
         uint256 anyId = (seed >> 24) % 3 == 0 ? (seed >> 32) % 8 : uint256(keccak256(abi.encode(seed, "id")));
-        uint256 kind = (seed >> 40) % 14;
+        uint256 kind = (seed >> 40) % 15;
         bytes memory data;
         bool expectAdminRevert;
         if (kind == 0) data = abi.encodeCall(ILedgerEntryTokenHolderLimits.syncHolder, (anyAddr));
@@ -831,6 +836,7 @@ contract LedgerEntryTokenHolderLimitsTest is Test {
         else if (kind == 10) data = abi.encodeCall(ILedgerEntryTokenHolderLimits.isPlanSecurity, (anyId));
         else if (kind == 11) data = abi.encodeCall(ILedgerEntryTokenHolderLimits.notAccreditedMark, (anyAddr));
         else if (kind == 12) data = abi.encodeCall(ILedgerEntryTokenHolderLimits.holderLimitAccount, (anyAddr));
+        else if (kind == 13) data = abi.encodeCall(ILedgerEntryTokenHolderLimits.planOnlyHolderWeight, (anyAddr));
         else data = abi.encodePacked(bytes4(uint32(seed >> 48)), keccak256(abi.encode(seed))); // garbage
 
         Before memory b = _baseReads();

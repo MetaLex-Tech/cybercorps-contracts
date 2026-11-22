@@ -79,6 +79,7 @@ import {SecondaryConditionIntegrationBase, SpvFixture} from "./SecondaryConditio
 // | L2 | incumbent with one labelled and one unlabelled lot                  | counted once                    |
 // | L3 | plan-only buyer, exclusion on                                       | uses a place                    |
 // | L4 | usResidentOnlyCount with the exclusion                              | refused by setters; fail        |
+// | L5 | plan-only entity buyer, BO count voided / lapsed / replaced         | booked weight; new count        |
 //
 // Operational staleness: a re-credential that changes an existing holder's BO count does not reach the
 // printer's cached tally until a keeper resync (15).
@@ -876,6 +877,80 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         assertFalse(_checkOffer(holderCap, offerId, settlementId), "exclusion on: 2 + 1 > 2, the buyer uses a place");
         _limits(0, false);
         assertTrue(_checkOffer(holderCap, offerId, settlementId), "exclusion off: still a larger position");
+    }
+
+    function _countExcludingPlan() internal returns (uint256) {
+        return abi.decode(_hl(abi.encodeCall(ILedgerEntryTokenHolderLimits.lookThroughHolderCountExcludingPlan, ())), (uint256));
+    }
+
+    // L5 — a plan-only entity whose beneficial-owner count was withdrawn keeps its booked weight in the printer
+    // (H2). When it buys a lot with no label it enters the counts at that weight, so the check adds that weight.
+    function test_PlanExclusion_PlanOnlyBuyerWithVoidedBoCount_UsesBookedWeight() public {
+        uint256 boCred = _credential(buyer, "US", 90);
+        uint256 lot = _makeHolder(buyer); // seller(1) + buyer(90)
+        _label(lot);
+        assertEq(printer.lookThroughHolderCount(), 91);
+        assertEq(_countExcludingPlan(), 1, "the plan-only buyer is left out");
+
+        badge.void(boCred, "attestation withdrawn");
+        (uint32 afterVoid,) = badge.getEffectiveBeneficialOwnerCount(buyer);
+        assertEq(uint256(afterVoid), 0, "badge reports the fact unestablished");
+
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 2, false, false);
+        _limits(0, true);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "total: seller(1) + booked 90 > 2");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 90, false, false);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "total: 1 + 90 > 90");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 91, false, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "total: 1 + 90 <= 91");
+
+        // The same weight for the limit on holders who are not accredited
+        _limits(90, true);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "non-accredited: 1 + 90 > 90");
+        _limits(91, true);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "non-accredited: 1 + 90 <= 91");
+
+        // The weight that the check added is the weight that the printer keeps on the purchase
+        _makeHolder(buyer);
+        assertEq(_countExcludingPlan(), 91, "the buyer entered the count at its booked weight");
+    }
+
+    // L5 — the same for a count that lapsed: expiry needs no admin action
+    function test_PlanExclusion_PlanOnlyBuyerWithLapsedBoCount_UsesBookedWeight() public {
+        Credential memory c;
+        c.investorType = InvestorType.ENTITY;
+        c.investorJurisdiction = "US";
+        c.beneficialOwnerCount = 90;
+        c.expiryDate = uint64(block.timestamp + 1 days);
+        _mintCred(buyer, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_BO_COUNT, c);
+        uint256 lot = _makeHolder(buyer);
+        _label(lot);
+        vm.warp(block.timestamp + 2 days);
+
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 90, false, false);
+        _limits(0, true);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "total: seller(1) + booked 90 > 90");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 91, false, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "total: 1 + 90 <= 91");
+    }
+
+    // L5 — a fresh count replaces the booked weight, as it does in the printer
+    function test_PlanExclusion_PlanOnlyBuyerWithNewBoCount_UsesNewCount() public {
+        _credential(buyer, "US", 90);
+        uint256 lot = _makeHolder(buyer);
+        _label(lot);
+        _credential(buyer, "US", 3); // not resynced: the printer still books 90
+
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 3, false, false);
+        _limits(0, true);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "total: seller(1) + new count 3 > 3");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 4, false, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "total: 1 + 3 <= 4");
+        _makeHolder(buyer);
+        assertEq(_countExcludingPlan(), 4, "the purchase resynced the buyer to the new count");
     }
 
     // L4 — no printer total matches a U.S.-only count with the exclusion
