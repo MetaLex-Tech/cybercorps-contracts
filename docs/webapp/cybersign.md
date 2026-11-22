@@ -62,8 +62,10 @@ sections, in this order:
 Choose **Review**. The review shows the exact PDF and its SHA-256
 fingerprint, the title, the signers, the answer to **How people sign**,
 the network, the cost, the deadline, the options and the consents that
-the answer requires. For a request with no blockchain it also has
-**Email the invitations when I send this request**. Choose
+the answer requires. A request with no blockchain that has at least one
+email signer also has **Email the invitations when I send this request**,
+where cyberSign can send email. A request whose signers all use wallets
+does not show it. Choose
 **Send for signature** to create the request. The answer cannot change
 on the review: choose **Back to editing** to change it or any other
 input. A change after the review discards the review.
@@ -89,7 +91,9 @@ the other answer supports it.
 
 - **Correct and send a new version** on an open request with no
   blockchain opens the same form on the request page, with the request's
-  parties and policy. Every party signs the new version again.
+  parties and policy. Every signer signs the new version again. With
+  approval routing, each approver approves it again, and a party that
+  only gets a copy does not sign.
 - **Prepare in cyberSign** in a company's formation packets opens packet
   preparation. See [Formation packets](formation-packets.md).
 - [boardRoom](boardroom.md) governance documents use their own form with
