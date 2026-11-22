@@ -129,7 +129,7 @@ library LedgerEntryTokenStorage {
         uint32 planOnlyAccreditedWeight;  // added to planOnlyAccreditedLookThroughHolderCount
     }
 
-    /// @dev Per-token plan record of LedgerEntryTokenHolderLimits. One slot each.
+    /// @dev Per-token plan record of LedgerEntryTokenHolderLimits. Two slots (two addresses do not pack).
     struct PlanLot {
         address labelOwner;    // legal owner for whom the plan label was set; 0 = no label. In force only while
                                // this address is the legal owner.
