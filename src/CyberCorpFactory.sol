@@ -82,6 +82,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error DeploymentFailed();
     error RoundManagerAlreadyExists();
     error InvalidMetadataSignature();
+    error CannotRenounceProtectedAuth(address auth);
 
     /// @dev EIP-712 domain name for the deployment metadata signature. A signature made for
     /// another factory does not verify here.
@@ -219,6 +220,45 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         CompanyOfficer memory _officer
     )
         public
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress
+        )
+    {
+        (
+            cyberCorpAddress,
+            authAddress,
+            issuanceManagerAddress,
+            dealManagerAddress,
+            roundManagerAddress
+        ) = _deployCyberCorp(
+            salt,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            _officer
+        );
+
+        BorgAuth(authAddress).zeroOwner();
+    }
+
+    function _deployCyberCorp(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer
+    )
+        internal
         returns (
             address cyberCorpAddress,
             address authAddress,
@@ -366,7 +406,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployCyberCorp(
+        ) = _deployCyberCorp(
             corpSalt,
             companyName,
             companyType,
@@ -413,6 +453,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             secretHash,
             expiry
         );
+
+        BorgAuth(authAddress).zeroOwner();
     }
 
     function deployCyberCorpAndCreateRound(
@@ -492,7 +534,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployCyberCorp(
+        ) = _deployCyberCorp(
             corpSalt,
             companyName,
             companyType,
@@ -542,6 +584,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
                 certData
             );
         }
+
+        BorgAuth(authAddress).zeroOwner();
     }
 
     function _deployAndInitializeRoundManager(bytes32 salt, address cyberCorpAddress) internal returns (address) {
@@ -636,6 +680,26 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address old = lexchexAuth;
         lexchexAuth = _lexchexAuth;
         emit LexchexAuthUpdated(lexchexAuth, old);
+    }
+
+    /// @notice Renounce this factory's own OWNER_ROLE on previously deployed company BorgAuth contracts.
+    /// @dev Idempotent: skips contracts where this factory no longer holds OWNER_ROLE.
+    ///      Refuses address(0), this factory's own AUTH contract, and lexchexAuth.
+    function renounceAuthOwnership(address[] calldata auths) external onlyOwner {
+        for (uint256 i = 0; i < auths.length; i++) {
+            address authAddress = auths[i];
+            if (
+                authAddress == address(0) ||
+                authAddress == address(AUTH) ||
+                (lexchexAuth != address(0) && authAddress == lexchexAuth)
+            ) {
+                revert CannotRenounceProtectedAuth(authAddress);
+            }
+            BorgAuth targetAuth = BorgAuth(authAddress);
+            if (targetAuth.userRoles(address(this)) >= targetAuth.OWNER_ROLE()) {
+                targetAuth.zeroOwner();
+            }
+        }
     }
 
     function _authorizeUpgrade(

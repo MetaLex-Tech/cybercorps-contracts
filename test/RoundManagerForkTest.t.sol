@@ -109,7 +109,6 @@ contract RoundManagerFCFSForkTest is Test {
         RoundManager rm = RoundManager(rmAddr);
 
         // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
@@ -207,7 +206,6 @@ contract RoundManagerFCFSForkTest is Test {
         RoundManager rm = RoundManager(rmAddr);
 
         // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
@@ -369,7 +367,6 @@ contract RoundManagerFCFSForkTest is Test {
         RoundManager rm = RoundManager(rmAddr);
 
         // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
@@ -598,7 +595,6 @@ contract RoundManagerFCFSForkTest is Test {
         RoundManager rmPub = RoundManager(rmAddrPub);
 
         // Allow RoundManager to transfer certs
-        vm.prank(address(corpFactory));
         CyberCorp(corpPub).setDealManager(address(rmPub));
         _addOfficer(corpPub, me, officerEOA);
 

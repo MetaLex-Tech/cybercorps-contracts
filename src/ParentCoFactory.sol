@@ -79,6 +79,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     
     error InvalidSalt();
     error RoundManagerAlreadyExists();
+    error CannotRenounceProtectedAuth(address auth);
 
     address public registryAddress;
     address public issuanceManagerFactory;
@@ -281,6 +282,45 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             address roundManagerAddress
         )
     {
+        (
+            cyberCorpAddress,
+            authAddress,
+            issuanceManagerAddress,
+            dealManagerAddress,
+            roundManagerAddress
+        ) = _deployCorp(
+            salt,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            _officer
+        );
+
+        BorgAuth(authAddress).zeroOwner();
+    }
+
+    function _deployCorp(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer
+    )
+        internal
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress
+        )
+    {
         if (salt == bytes32(0)) revert InvalidSalt();
 
         // Deploy BorgAuth with CREATE2 with new param address owner
@@ -390,7 +430,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             issuance,
             dealMgr,
             roundMgr
-        ) = deployCorp(
+        ) = _deployCorp(
             salt,
             companyName,
             companyType,
@@ -405,6 +445,8 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         for (uint256 i = 1; i < parentCoOfficers.length; i++) {
             ICyberCorp(corp).addOfficer(parentCoOfficers[i]);
         }
+
+        BorgAuth(auth).zeroOwner();
 
         parentCorp = corp;
         parentAuth = auth;
@@ -565,6 +607,22 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         bytes calldata
     ) external pure override returns (bytes4) {
         return this.onERC721Received.selector;
+    }
+
+    /// @notice Renounce this factory's own OWNER_ROLE on previously deployed company BorgAuth contracts.
+    /// @dev Idempotent: skips contracts where this factory no longer holds OWNER_ROLE.
+    ///      Refuses address(0) and this factory's own AUTH contract.
+    function renounceAuthOwnership(address[] calldata auths) external onlyOwner {
+        for (uint256 i = 0; i < auths.length; i++) {
+            address authAddress = auths[i];
+            if (authAddress == address(0) || authAddress == address(AUTH)) {
+                revert CannotRenounceProtectedAuth(authAddress);
+            }
+            BorgAuth targetAuth = BorgAuth(authAddress);
+            if (targetAuth.userRoles(address(this)) >= targetAuth.OWNER_ROLE()) {
+                targetAuth.zeroOwner();
+            }
+        }
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}

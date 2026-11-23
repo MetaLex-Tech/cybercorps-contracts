@@ -3869,9 +3869,9 @@ contract CyberCorpForkTest is Test {
         CyberCorp cyberCorp = CyberCorp(cyberCorpAddr);
         BorgAuth corpAuth = BorgAuth(authAddr);
 
-        // Must be a factory-deployed corp: AUTH owner is CyberCorpFactory, and factory grants CyberCorp role 200
+        // Must be a factory-deployed corp: factory drops its own role via zeroOwner() and grants CyberCorp role 200
         assertEq(address(cyberCorp.AUTH()), authAddr);
-        assertEq(corpAuth.userRoles(address(cyberCorpFactory)), corpAuth.OWNER_ROLE());
+        assertEq(corpAuth.userRoles(address(cyberCorpFactory)), 0);
         assertEq(corpAuth.userRoles(address(cyberCorp)), 200);
         assertGe(corpAuth.userRoles(address(cyberCorp)), corpAuth.OWNER_ROLE());
 
