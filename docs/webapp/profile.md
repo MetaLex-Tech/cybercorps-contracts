@@ -154,17 +154,17 @@ with the wallet's type and status, for example *active · profile linked*:
 * *another profile* marks a wallet that belongs to a different profile.
 
 A linked wallet can be unlinked only when at least one other linked wallet
-remains on the account. An *embedded* wallet created by MetaLeX as part of
-your profile can't be unlinked. Unlinking takes effect at once: the wallet
-stops giving this account access to company workspaces, private documents
-and Safe-owner permissions. If it was the active wallet, another connected
-linked wallet becomes active. Linking it again needs a fresh authorization
-signature.
+remains on the account. An *embedded* wallet is created for your sign-in by
+Privy, a wallet provider. It can't be unlinked. Unlinking takes effect at
+once: the wallet stops giving this account access to company workspaces,
+private documents and Safe-owner permissions. If it was the active wallet,
+another connected linked wallet becomes active. Linking it again needs a
+fresh authorization signature.
 
 When the active wallet is your embedded wallet, Wallet Settings also shows
 **Embedded wallet confirmation prompts**, where you choose whether
-transactions and signatures skip the confirmation popup. The wallet still
-signs in your browser with your key; only the popup is hidden.
+transactions and signatures skip the confirmation popup. Your embedded
+wallet still signs each action that you start; only the popup is hidden.
 
 ## Get notifications on Telegram
 
