@@ -56,8 +56,8 @@ record, and links the wallet you signed in with. There is no separate
 registration. Your profile belongs to the account, so it follows you across
 every wallet you link; you add, switch and unlink wallets in **Wallet
 Settings** (see [Profile](profile.md)). If you sign in without a wallet of
-your own, the account gets an embedded wallet that MetaLeX creates as part
-of your profile.
+your own, the account gets an embedded wallet, which Privy, a wallet
+provider, creates and manages for your sign-in.
 
 Signing in is a free Sign-In With Ethereum message and costs no gas.
 Screens that show private data, such as a company workspace or your
