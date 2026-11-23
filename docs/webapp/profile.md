@@ -161,10 +161,8 @@ private documents and Safe-owner permissions. If it was the active wallet,
 another connected linked wallet becomes active. Linking it again needs a
 fresh authorization signature.
 
-When the active wallet is your embedded wallet, Wallet Settings also shows
-**Embedded wallet confirmation prompts**, where you choose whether
-transactions and signatures skip the confirmation popup. Your embedded
-wallet still signs each action that you start; only the popup is hidden.
+Your embedded wallet does not show a confirmation popup. The button you click
+in MetaLeX, which names the action and any amount, is your confirmation.
 
 ### Export your embedded wallet's key
 
