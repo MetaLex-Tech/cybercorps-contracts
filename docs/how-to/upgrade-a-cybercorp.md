@@ -13,7 +13,7 @@ company's owner opts in. See [Upgrade model](../reference/upgrade-model.md).
 
 New companies are created on v5. An existing company stays on the version
 it was deployed with until its owner runs this upgrade. In the cyberCORPs
-app, an available upgrade appears as the first task in mission control and
+app, an available upgrade appears as a task in mission control and
 links to the app's **Upgrade** page; [Run your
 company](../webapp/company.md) covers the app side.
 

@@ -282,9 +282,9 @@ replacement names**.
 
 The public company record never changes automatically. Once the state
 files under a new name, a notice shows the difference, and **Update legal
-name with wallet →** opens the
-[company profile editor](company.md#edit-the-company-profile), where you
-change the onchain name with a transaction.
+name with wallet →** opens the **Company profile** section of
+[Company settings](company.md#company-settings), where you change the
+onchain name with a transaction.
 
 ## Correct formation details and names
 
