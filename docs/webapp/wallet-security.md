@@ -30,9 +30,9 @@ We recommend the following actions, either independently or in combination:
    hardware wallet or a Safe. You can keep both wallets and, since many
    users prefer the convenience of embedded wallets, you may be best served
    by doing so: you can use the embedded wallet as your daily driver while
-   keeping the non-embedded wallet as a secure backup, so that you can still
-   act for your company directly onchain even if you lose access to the
-   embedded wallet or Privy's service is interrupted.
+   keeping the non-embedded wallet as a secure backup, so that you keep
+   control of your company even if you lose access to the embedded wallet or
+   Privy's service is interrupted.
 
 2. Consider adding two-factor authentication for wallet actions in the
    application (like document-signing and transactions). This limits the
