@@ -1,5 +1,5 @@
 ---
-description: "Bring an existing company onchain and run it in the cyberCORPs app: mission control, the Incorporation Hub, Documents, the public company page and v5 upgrades"
+description: "Bring an existing company onchain and run it in the cyberCORPs app: mission control, Company settings, the Incorporation Hub, Documents, the public company page and v5 upgrades"
 ---
 
 # Run your company
@@ -18,6 +18,10 @@ areas:
 * **cyberRaise** opens your raises in [cyberRAISE](cyberraise.md).
 * **Tokenization Hub** configures, issues and manages the company's LETs and scrip.
 * **cyberSign** opens MetaLeX's signing app, where you sign and countersign the company's agreements.
+
+The sidebar also has **cyberTrade**, where you explore secondary
+opportunities, publish a listing or sell a position, and, as its last
+item, [**Company settings**](#company-settings).
 
 Hovering a sidebar item shows a short description of the area. The
 larger areas have their own guides: [the boardRoom](boardroom.md),
@@ -90,9 +94,13 @@ selector, which restarts the onboarding choice.
 Eligible companies can have a managed ENS name under `cybercorps.eth`.
 New formation offers the
 name with an opt-out; existing companies are not automatically backfilled.
-In **mission control**, a current company authority can choose **Claim ENS
-name** and sign the request. Registration runs in the background. A reserved
-or pending name is not an active name; follow the status and next-step links.
+In [Company settings](#company-settings), section **ENS name**, a current
+company authority can choose **Claim ENS name** and sign the request.
+Mission control shows an active name on one line below the company name,
+with **Copy** and **Public company record**. If the company has no name,
+that line has the link **Claim an ENS name**, which opens the **ENS name**
+section. Registration runs in the background. A reserved or pending name
+is not an active name; follow the status and next-step links.
 
 The name identifies the company and its public document home. **It is not
 a payment address.** MetaLeX operates the naming service and has operator
@@ -101,7 +109,7 @@ chain; they are not an ENS smart-contract restriction on the operator.
 Continued naming requires canonical protocol eligibility. Older canonical
 versions remain eligible without a forced upgrade. A notice, a suspension
 review and reinstatement are separate states, with a contact route in the
-company panel.
+**ENS name** section of Company settings.
 
 **Documents** provides the public-document controls. Review the public
 publication consent before submitting a disclosure: anyone can download a
@@ -114,19 +122,43 @@ has an ENS name.
 
 ## mission control
 
-**mission control** shows the live company record: a compact identity
-strip at the top and, below it, an **Operations** dashboard built from the
-same data as the cap table. A badge counts the open tasks and jumps to
-the **Tasks and reminders** card, which collects what needs action:
+**mission control** shows the live company record. The company name is
+at the top, with a **Company settings** button beside it. Below the name,
+one line shows the company's ENS name with **Copy** and **Public company
+record**, or the link **Claim an ENS name** (see
+[Company ENS identity and public documents](#company-ens-identity-and-public-documents)).
+The company profile, the full ENS controls, related companies and the
+officer settings are in [Company settings](#company-settings).
+
+If a new round or deal of the company waits for a wallet or a Safe, an
+officer wallet sees it under **Pending rounds and deals**. Then comes the
+operations dashboard, built from the same data as the cap table:
+
+1. **Tiles.** The first tile, **Open tasks**, counts the open tasks and
+   opens the **Tasks and reminders** card. The tiles **Fully diluted**,
+   **Stakeholders** and **Capital recorded** show whole numbers and open
+   the cap table. Hold the pointer on **Fully diluted** or **Capital
+   recorded** to see the exact value.
+2. **Tasks and reminders** collects what needs action. Each task has a
+   label. Tasks with the label **Act now** come first, then **Review**,
+   then **Next**.
+3. **Recent activity** shows the five latest rows. **Show N more** shows
+   the rest.
+4. A **Fundraising** row shows the latest round and the total raised
+   through cyberRaise, for a company that has a round.
+5. **Equity plan utilization**, **Top stakeholders by fully diluted
+   ownership** and **Project token** follow.
+
+The tasks include:
 
 * **Contract upgrades.** When any of the company's contracts differs
-  from the reference implementation its factory publishes, the first
-  task reads **Contract upgrade available** (or **N contract upgrades
+  from the reference implementation its factory publishes, a task reads
+  **Contract upgrade available** (or **N contract upgrades
   available**), names the contracts and opens the Upgrade page. This is
   how an existing company's owners learn that a newer protocol release,
   such as v5, is available to them. If the company runs v5 and older
   contracts side by side, the task reads **Finish the v5 upgrade** and
-  shows as a blocking task, because deals, rounds and issuance are
+  has the label **Act now**, because deals, rounds and issuance are
   paused until the upgrade is complete. If the app cannot run the
   upgrade for the company, the task reads **Contract upgrade needs
   MetaLeX** and gives the reason. See
@@ -145,19 +177,25 @@ the **Tasks and reminders** card, which collects what needs action:
 * **Cap table and compliance.** Failed cap table checks, draft
   securities waiting, valuation (FMV) and 83(b) reminders, project-token
   setup, and stakeholders not yet onboarded.
+* **Company settings.** **Claim an ENS name** and **ENS eligibility
+  notice** open the **ENS name** section. **Confirm a company relation**
+  appears when an owner of another company recorded a relation with this
+  company, and opens **Related companies**. For an officer wallet of a
+  company that is enrolled in issuance privacy, **Set up the records
+  password** and **Company records delivery needs attention** open
+  **Company records**.
 
-If a live check cannot be read, the list starts with **Some live checks
-are unavailable**. Reload before relying on the dashboard, because the
-app never treats unreadable data as clear.
+If a live check cannot be read, the list shows **Some live checks are
+unavailable** before the other **Review** tasks. Reload before relying on
+the dashboard, because the app never treats unreadable data as clear.
 
-A brand-new company, with no stakeholders or positions, first gets a
-grid of setup cards: **Start or manage a cyberRaise** (which opens
-[cyberRAISE](cyberraise.md)), **Open Tokenization Hub**, **Manage your
-capTable** and **Enter the boardRoom**. On smaller screens, where the
-sidebar is hidden, the grid adds cards for the Incorporation Hub, grants
-and cyberSign and doubles as the app's navigation. Once the company has
-a record, those destinations live in the sidebar and mission control
-leads with the record itself.
+A brand-new company, with no stakeholders or positions, also gets a
+grid of setup cards below the company name: **Start or manage a
+cyberRaise** (which opens [cyberRAISE](cyberraise.md)), **Open
+Tokenization Hub**, **Manage your capTable**, **Enter the boardRoom** and
+**Prepare company Documents**. On smaller screens, where the sidebar is
+hidden, the grid adds cards for the Incorporation Hub, grants and
+cyberSign, and the **Menu** button lists the same pages as the sidebar.
 
 ## Search the app
 
@@ -225,18 +263,106 @@ uses the shared document composer for available templates; a prepared draft
 still needs the relevant approval and signing steps. The workspace also
 links to filing documents and private formation records.
 
-## Edit the company profile
+## Company settings
 
-The **edit profile** link in mission control's identity strip opens the
-**admin** area. Its top half is the **public profile** (description,
-image and links), saved without a transaction. Below it, **onchain
-details** lets an owner update the cyberCORP name, jurisdiction, payable
-address and officer roster. The jurisdiction editor checks the selected
-company's current onchain value and supports reviewed legacy/v4/v5 paths.
-Each of those changes is an onchain transaction
-sent from an owner wallet. Removing an officer whose wallet holds the
-company's grants authority shows a warning you must acknowledge first.
-The [grants guide](grants.md) explains the grants authority.
+**Company settings** holds what a company sets up one time or changes
+rarely. Open it with the **Company settings** button beside the company
+name in mission control, or with **Company settings**, the last item in
+the sidebar. **On this page**, at the top, links to each section. The
+sections, in this order:
+
+* **Company profile.** The top half is the public profile (description,
+  image, and website, whitepaper and document links), saved with
+  **Update Profile** and without a transaction. Below it, an owner can
+  update the onchain details: the cyberCORP name, jurisdiction, payable
+  address and officer roster. The jurisdiction editor checks the selected
+  company's current onchain value and supports reviewed legacy/v4/v5
+  paths. Each of those changes is an onchain transaction sent from an
+  owner wallet. Removing an officer whose wallet holds the company's
+  grants authority shows a warning you must acknowledge first. The
+  [grants guide](grants.md) explains the grants authority.
+* **ENS name.** The company's ENS name: the claim, its status and any
+  eligibility notice. See
+  [Company ENS identity and public documents](#company-ens-identity-and-public-documents).
+  The page has no such section where the naming service is off for the
+  company.
+* **Related companies.** Relations between this company and other
+  companies, such as a parent. An owner can record a relation, confirm
+  or decline a relation that an owner of another company recorded, and
+  choose whether a relation shows on the public company page.
+* **Company records**, for an officer wallet of a company that is
+  enrolled in issuance privacy:
+  * **Company records password** sets the password for the locked
+    snapshots of the cap table that the app sends to the company's
+    officers. A locked snapshot opens offline. Save the password in a
+    separate place. A reset applies to future snapshots only, so keep the
+    old password for earlier copies.
+  * **Records email delivery** shows the delivery status of the records
+    emails. **Email a locked snapshot to all officers each month** turns
+    the monthly email on or off, and **Email locked snapshot to all
+    officers** sends one now.
+  * **Company storage** connects a company folder in Google Drive,
+    OneDrive, SharePoint, Dropbox or Box. The folder receives the
+    readable snapshot, so each person with access to the folder can read
+    it. Check the folder permissions before you connect it.
+* **Investor details onchain**, for an officer wallet of a company that
+  is enrolled in issuance privacy. See
+  [Investor details onchain](#investor-details-onchain).
+
+For a company that is enrolled in issuance privacy, a person who is not
+an officer sees one line instead of the last two sections. The line says
+that the settings exist and that only an officer wallet of the company
+can use them.
+
+### Investor details onchain
+
+This form sets what a new round or deal of the company records onchain
+for each investor. It has five rows, and each row has the choices
+**Public** and **Commitment**:
+
+* **Name**: the name of each investor and holder. The same choice
+  applies to the name on a LET and to the seller and the buyer of a
+  secondary sale.
+* **Contact details**: the contact for notices, and the mailing address
+  in a sale.
+* **Investor type**: in a round, the transaction shows in each case if
+  the investor is a natural person.
+* **Jurisdiction**: when the investor type is a commitment, the
+  jurisdiction is a commitment too.
+* **Representative of an entity**: the name and the capacity of the
+  person who signs for an entity in a sale.
+
+By default, the name, the contact details and the representative are
+commitments, and the investor type and the jurisdiction are public. No
+single switch publishes every detail. A commitment is a hash in place of
+the text. A person with the opening (the value and its salt) can check it
+against the recorded commitment.
+
+The list **Always public** names what no setting changes: the wallet
+address, the payment amount and payment token, the units, price and
+valuation, the class, series, LET terms and legends, the name and title
+of the signing officer, and the agreement template. The completed
+agreement with an investor's details is not published; its parties can
+download it in the app. MetaLeX stores the original values and salts.
+Commitments do not protect against a breach of MetaLeX.
+
+A publicly advertised round relies on LeXcheX. With a commitment for the
+investor type or the jurisdiction, an investor cannot sign it, because a
+LeXcheX certificate shows both values. With a commitment for the name or
+the contact details, the investor needs a LeXcheX certificate that keeps
+the name and the contact private.
+
+**Save issuance settings** saves a new revision. A round or deal keeps
+the revision that applied when the app handed it to the wallet,
+including while a Safe proposal waits. To use a newer revision, cancel
+the pending creation and submit a new one after the cancellation
+confirms. Rounds and deals created before a change keep their settings.
+
+Before an investor signs a round, a deal or a named ticket of an
+enrolled company, the app shows the dialog **Your details onchain**. It
+says which of the investor's details the signed row records as readable
+text and which as commitments. The investor can go back before the
+wallet opens.
 
 ## Public company pages
 
@@ -319,7 +445,7 @@ A new company is created on the current protocol release, v5. An
 existing company keeps the contract version it was deployed with until
 its owners upgrade it, and the app adapts to whichever version the
 company runs. When an upgrade is available, mission control lists it as
-its first task, which opens the **Upgrade** page. The scripify form also
+a task, which opens the **Upgrade** page. The scripify form also
 sends you there when the Issuance Manager is out of date. You upgrade
 only when you choose to.
 

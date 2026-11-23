@@ -116,7 +116,10 @@ the issuer gave access to in a counsel workspace. Sign in with
 the wallet that holds the LET to see your own. A name issued unencrypted
 appears in plaintext on the certificate and in its public metadata, with
 no sign-in gate. Signing officers' names are in the public metadata
-regardless of that choice.
+regardless of that choice. For a company that is enrolled in issuance privacy,
+the company's setting for the name applies: the LET records the readable
+name or a commitment in its place (see
+[Investor details onchain](company.md#investor-details-onchain)).
 
 ## Act on what you hold
 

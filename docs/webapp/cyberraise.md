@@ -396,6 +396,12 @@ You provide:
   your own optional **exploding offer** expiry (24, 48 or 72 hours, or a
   custom date).
 
+If the company is enrolled in issuance privacy, its officers choose which
+of these details the round records onchain as readable text and which as
+commitments (see [Investor details onchain](company.md#investor-details-onchain)).
+Before you sign, the dialog **Your details onchain** shows this for your
+details. You can go back before the wallet opens.
+
 If the round requires accreditation, you confirm an existing LeXcheX
 credential or mint one here. A Regulation S round asks for zkPassport
 verification instead.
