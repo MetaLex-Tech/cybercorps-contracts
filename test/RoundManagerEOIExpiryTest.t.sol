@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {CyberCorpHelper, MockPaymentToken} from "./RoundManagerTest.t.sol";
 import {SecuritySeries, SecurityClass} from "../src/CyberCorpConstants.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
@@ -56,7 +56,7 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 /// | Z     | `EOIExpired` | —            | —               | —               | FlagOn_ZeroExpiry_SubmitReverts             |
 contract RoundManagerEOIExpiryTest is Test {
     MockPaymentToken private paymentToken;
-    CyberAgreementRegistry private registry;
+    ICyberAgreementRegistry private registry;
     CyberCorpFactory private corpFactory;
 
     address private corp;

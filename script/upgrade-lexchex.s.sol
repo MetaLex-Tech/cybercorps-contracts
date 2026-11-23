@@ -9,7 +9,7 @@ import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -33,7 +33,7 @@ contract BaseScript is Script {
   LexchexMinter:  0x2e46c601062f01f0eD098E0b252211b5d54C496a*/
 
 
-        address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
+        address registry = address(ICyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
       address deployedLexChexAddr = 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62;
       address deployedLexChexMinterAddr = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
       LeXcheX deployedLexChex = LeXcheX(deployedLexChexAddr);

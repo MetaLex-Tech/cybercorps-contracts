@@ -7,7 +7,7 @@ import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 import {Errors} from "openzeppelin-contracts/utils/Errors.sol";
 import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -55,7 +55,7 @@ contract FactoryRoundAuthReplayPOCTest is Test {
     address internal attacker = vm.addr(attackerPk);
     address internal honestPayable = makeAddr("companyTreasury");
 
-    CyberAgreementRegistry internal registry;
+    ICyberAgreementRegistry internal registry;
     CyberCorpFactory internal corpFactory;
     PumpCorpFactory internal pumpFactory;
     address internal cyberCorpSingleFactory;

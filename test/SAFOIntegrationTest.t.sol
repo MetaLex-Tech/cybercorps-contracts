@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.28;
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
 import {CompanyOfficer, CyberCertData, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -25,7 +25,7 @@ contract SAFOIntegrationTest is Test {
     using RoundLib for Round;
     uint256 constant OFFICER_KEY = 0xCAD;
     uint256 constant INVESTOR_KEY = 0xA11CE;
-    CyberAgreementRegistry registry;
+    ICyberAgreementRegistry registry;
     CyberCorpFactory companyFactory;
     RoundManager manager;
     DealManager dealManager;
