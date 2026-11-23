@@ -166,6 +166,20 @@ When the active wallet is your embedded wallet, Wallet Settings also shows
 transactions and signatures skip the confirmation popup. Your embedded
 wallet still signs each action that you start; only the popup is hidden.
 
+### Export your embedded wallet's key
+
+When your account has an embedded wallet, Wallet Settings shows **Export
+wallet key**. **Export key** opens Privy's own screen, which shows the
+wallet's private key; the MetaLeX page does not receive it. With the key
+you can use the wallet in another wallet app, outside MetaLeX and Privy.
+You must be signed in to export.
+
+Before you export, please be aware: anyone with this key can sign and
+transact as you. Export it on a device you trust, and keep the copy
+offline. Do not send it by email or chat. A copy that you hold does not
+remove the key from Privy's systems. MetaLeX will never ask you for this
+key.
+
 ## Get notifications on Telegram
 
 MetaLeX sends notifications over **Telegram**. In the profile's Socials
