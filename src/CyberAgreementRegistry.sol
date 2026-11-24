@@ -607,6 +607,10 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
+        // When the agreement has a finalizer, only the finalizer can submit a party's signature.
+        // The party signs through the finalizer's flow, not on the registry.
+        if (agreementData.finalizer != msg.sender && agreementData.finalizer != address(0))
+            revert NotFinalizer();
         if (agreementData.signedAt[signer] != 0) revert AlreadySigned();
         if (isVoided(contractId)) revert ContractAlreadyVoided();
         if (agreementData.finalized) revert ContractAlreadyFinalized();
@@ -659,12 +663,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
             revert SignatureVerificationFailed();
         }
 
-        if(
-            address(0) != agreementData.finalizer && // if finalizer is undefined, as long as the signature is valid we still allow it
-            msg.sender != agreementData.finalizer &&
-            msg.sender != signer
-        )
-            revert NotFinalizer();
     
         if (partyValues.length != template.partyFields.length)
             revert MismatchedFieldsLength();

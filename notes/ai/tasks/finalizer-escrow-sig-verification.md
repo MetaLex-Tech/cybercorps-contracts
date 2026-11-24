@@ -1,7 +1,7 @@
 # Task: Registry checks the party's signature on escrow signing
 
 - **Status:** Active (implemented and unit-tested locally; not committed, not reviewed)
-- **Updated:** 2026-11-23
+- **Updated:** 2026-11-24
 - **Owner:** Claude Code session, for the owner
 - **Collaborators / boundaries:** Registry, RoundManager, DealManager secondary trade,
   ParentCoFactory and MetaDAOFactory. No deployment, upgrade, webapp change or audit was started.
@@ -9,7 +9,8 @@
   in the calling finalizer's own EIP-712 domain. A finalizer that the agreement creator chose can
   no longer record a party who never signed for it (the escrow signature forgery).
 - **Out of scope:** New prefixed escrow types and the agreement-body hash for rounds (MTLX1-24
-  stays Acknowledged). Finalizer-only mutation, the notary design, derived expiry.
+  stays Acknowledged). The notary design, derived expiry. Finalizer-only signing was added on
+  2026-11-24 (owner request); other finalizer-only mutation stays out of scope.
 - **Canonical plan / sources:** Discussion summary artifact "Registry as notary"; option B in the
   "Escrow Signature Binding" report; [attestation binding rule](../../../specs/analysis/attestation%20binding%20rule.md).
   Owner choices on 2026-11-23: reuse today's officer types; secondary trade gets a new offeror type.
@@ -31,6 +32,13 @@
 - **ParentCoFactory:** passes the officer's existing `EscrowAuthorization(name, contact)` signature.
 - **MetaDAOFactory:** today it stores `metaDAOSignatureHash` and verifies nothing. It now uses the
   ParentCo type in its own `"MetaDAOFactory"` domain and adds `escrowAuthorizationHash`.
+- **Registry, finalizer-only signing (2026-11-24):** when an agreement has a finalizer,
+  `signContractFor` (and so `signContract`) accepts only `msg.sender == finalizer`. The signer can no
+  longer submit directly. Commit 24386429 (Oct 2025, audit item 3.3) added the signer exception for
+  "open deal" agreements. Evidence that no use case still needs it: every contract caller is the
+  finalizer; every webapp direct registry sign uses finalizer `address(0)`; a trace of all 1,564
+  mainnet `AgreementSigned` events (Base, Ethereum, Arbitrum, Robinhood; 1,459 with a finalizer)
+  found the finalizer as caller in every case. Testnets were not scanned.
 - **Secondary trade:** new `OfferorAgreement` type in the DealManager domain (offeror, economics,
   template, salt, global and offeror party values). `postOffer` reverts
   `InvalidOfferorAgreementSignature` unless `offerorAgreementSig` is the offeror's signature over
@@ -43,6 +51,15 @@
 - RoundManager FCFS and allocation flows record the officer, including after an end time change: verified.
 - ParentCo flows record the officer with today's signature: verified (existing ParentCo tests).
 - Secondary post rejects a wrong or stale offeror signature; accept records the offeror: verified.
+- Signer or third party submit on a finalizer agreement reverts `NotFinalizer`; the finalizer submit
+  records the party: verified (`test_RevertIf_signContractForFinalizerAgreementNotFromFinalizer`,
+  fails on HEAD). `testPOC_Allocate_CanMarkOfficerSignedWithNonAgreementSignature` now submits as the
+  RoundManager to keep `SignatureVerificationFailed`, plus an officer-direct `NotFinalizer` check. The
+  two zero-expiry void tests now use no finalizer and one unsigned party (owner choice).
+  Fork tests (owner choice): `testCreateContract` has the finalizer submit the open-slot fill;
+  `testDelegateSigningDeal` passes the delegate signature only to `signAndFinalizeDeal`, as the webapp
+  does; `testDelegateSigningWithExpiry` submits through `signAndFinalizeDeal` and still expects
+  `SignatureVerificationFailed`.
 - MetaDAOFactory: not tested. Its test file was emptied in beccbb7c.
 - Fork tests: pass. Owner chose to upgrade the caller in each test that ran a deployed caller (2026-11-23).
 
@@ -58,6 +75,10 @@
   with the end time from `RoundCreated`. The call checks the officer's signature, so only the signed
   value is accepted. Scan live rounds for `RoundEndTimeUpdated` to find them.
 - Scan pre-upgrade agreements whose finalizer no known factory deployed (forged records stay).
+
+- After the registry upgrade, `DealManagerStorage.signAndFinalizeDeal`'s "already signed in registry"
+  branch is reachable only when a DealManager path signed that party first, and no test covers it
+  now. Not changed; a trace of every DealManager path is the next step before any deletion.
 
 ## Webapp follow-up after merge
 
@@ -96,6 +117,14 @@ Related findings (Hexens report in `audits/`):
 | Unit tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --nmc '(ForkTest\|AdhocTest)'`; base 13418fb5 + working tree | 1597 passed, 0 failed |
 | Sizes | `forge build ... --sizes` | Registry 23,266 B; RoundManager 24,451 B (125 B margin); DealManager 22,248 B |
 | Fork tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --nmc AdhocTest --threads 1 --cups 10`; same tree | 228 passed, 0 failed, 1 skipped. The three tests that ran deployed callers now upgrade them first (FCFS: RoundManager ref implementation; v5 upgrade: registry starts on the Base implementation, then registry and RoundManager upgrade; ParentCo: a ParentCo officer upgrades the live Umia factory, whose live officer signature passes) |
+
+Finalizer-only signing, 2026-11-24, on 0dcf8dd8 plus the uncommitted registry and test changes:
+
+| Check | Evidence and exact revision | Result / remaining limitation |
+| --- | --- | --- |
+| Unit tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --nmc '(ForkTest\|AdhocTest)'` | 1598 passed, 0 failed |
+| Fork tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --nmc AdhocTest --threads 1 --cups 10` | 228 passed, 0 failed, 1 skipped. A first run had one DNS failure in `MulticallFormationFeeForkTest` setUp; the rerun passed |
+| Sizes | `forge build ... --sizes` | Registry 23,240 B (26 B smaller than 0dcf8dd8). The `onlyFinalizerIfSet` modifier form was 26,204 B and was not used |
 
 ## Next action and handoff
 

@@ -959,9 +959,8 @@ contract CyberCorpForkTest is Test {
             newPartyPk
         );
 
-        vm.stopPrank();
-        vm.startPrank(newPartyAddr);
-        registrya.signContract(id, partyValuesB, signature, true, "");
+        // testAddress is the finalizer, so it submits the new party's signature
+        registrya.signContractFor(newPartyAddr, id, partyValuesB, signature, true, "");
         contractURI = registrya.getContractJson(id);
         console.log(contractURI);
         vm.stopPrank();
@@ -5447,18 +5446,7 @@ contract CyberCorpForkTest is Test {
             _paymentAmount
         );
 
-        // The delegate signs the deal FOR the principal using signContractFor
-        // This is different from signAndFinalizeDeal - it's signing on behalf of another party
-        registry.signContractFor(
-            principalAddr, // The principal (signer)
-            contractId, // The contract ID (same as the deal ID)
-            partyValues[1], // The principal's party values
-            delegateSignature, // Delegate's signature
-            false, // Not filling unallocated
-            "" // No secret
-        );
-
-        // Now finalize the deal by making the payment
+        // The DealManager submits the delegate's signature for the principal and takes the payment
         dealManager.signAndFinalizeDeal(
             principalAddr, // Principal address (who the deal is for)
             contractId,
@@ -5611,15 +5599,16 @@ contract CyberCorpForkTest is Test {
             delegatePk
         );
 
-        // Try to sign with expired delegation - should fail
+        // The DealManager submits the signature. The registry rejects it because the delegation expired.
         vm.startPrank(delegateAddr);
-        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector); // Should revert due to expired delegation
-        registry.signContractFor(
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        IDealManager(dealManagerAddr).signAndFinalizeDeal(
             principalAddr,
             contractId,
             partyValues[1],
             delegateSignature,
             false,
+            "Principal via Delegate",
             ""
         );
         vm.stopPrank();
