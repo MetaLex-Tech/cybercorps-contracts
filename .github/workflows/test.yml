@@ -11,11 +11,17 @@ on:
 env:
   FOUNDRY_PROFILE: ci
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   size:
     name: Build sizes
     runs-on: ubuntu-latest
     environment: test
+    outputs:
+      cache_key: ${{ steps.key.outputs.cache_key }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,12 +36,44 @@ jobs:
 
       - name: Show Forge version
         run: forge --version
+
+      - name: Compute build cache key
+        id: key
+        run: |
+          hash="$(git ls-files -s -- foundry.toml remappings.txt .gitmodules src test script lib dependencies | sha256sum | cut -d' ' -f1)"
+          echo "cache_key=forge-build-v1-solc0.8.28-${hash}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore build cache
+        id: build-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            cache
+            out
+          key: ${{ steps.key.outputs.cache_key }}
+          restore-keys: forge-build-v1-solc0.8.28-
+
+      - name: Compile contracts and tests
+        run: forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15
+
+      # Save cache before `--sizes --skip test script` so the cache keeps all
+      # test and script entries for the downstream unit and fork jobs.
+      - name: Save build cache
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            cache
+            out
+          key: ${{ steps.key.outputs.cache_key }}
 
       - name: Build
         run: forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes --skip test script
 
   unit:
     name: Unit tests
+    needs: size
     runs-on: ubuntu-latest
     environment: test
     steps:
@@ -52,12 +90,22 @@ jobs:
 
       - name: Show Forge version
         run: forge --version
+
+      - name: Restore build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            cache
+            out
+          key: ${{ needs.size.outputs.cache_key }}
+          restore-keys: forge-build-v1-solc0.8.28-
 
       - name: Unit tests
         run: forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc '(ForkTest|AdhocTest)'
 
   fork:
     name: Fork tests
+    needs: size
     runs-on: ubuntu-latest
     environment: test
     steps:
@@ -74,6 +122,15 @@ jobs:
 
       - name: Show Forge version
         run: forge --version
+
+      - name: Restore build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            cache
+            out
+          key: ${{ needs.size.outputs.cache_key }}
+          restore-keys: forge-build-v1-solc0.8.28-
 
       - name: Fork tests
         env:
