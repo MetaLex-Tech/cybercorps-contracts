@@ -49,6 +49,7 @@ import "./libs/JsonLib.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import {ISignerConditions, SignerCondition} from "./interfaces/ISignerConditions.sol";
 import {SignerConditionLib} from "./libs/SignerConditionLib.sol";
+import {EIP712Lib} from "./libs/EIP712Lib.sol";
 
 contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     ICyberAgreementRegistry, ISignerConditions
@@ -686,17 +687,30 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         }
     }
 
-    /// @notice Sign a contract with escrow signatures. It relies on the finalizer to enforce proper access control.
-    /// As a result, the finalizer is required to be a predefined smart contract.
+    /// @notice The finalizer signs for a party with a signature that the party gave to the finalizer.
+    /// The party must have signed in the finalizer's own EIP-712 domain. This proves that the party
+    /// accepts this finalizer. The finalizer checks that the signed terms match the agreement.
     /// @dev See `test_RevertIf_signContractWithEscrowUndefinedFinalizer` for how it prevent exploits
     function signContractWithEscrow(
         address escrowSigner,
         bytes32 contractId,
         string[] memory partyValues,
-        bytes calldata signature,
+        EscrowAttestation calldata attestation,
         bool fillUnallocated, // to fill a 0 address or not
         string memory secret
     ) onlyDefinedFinalizer(contractId) external {
+        // The caller is the finalizer, so the domain names the finalizer that the party accepted.
+        if (
+            !EIP712Lib.verifySignature(
+                attestation.domainName,
+                attestation.domainVersion,
+                msg.sender,
+                escrowSigner,
+                attestation.structHash,
+                attestation.signature
+            )
+        ) revert SignatureVerificationFailed();
+
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();

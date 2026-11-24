@@ -97,6 +97,11 @@ library SecondaryTradeStorage {
         "AcceptOfferAuth(AcceptOfferParams params,address forAddr,uint256 nonce)"
         "AcceptOfferParams(bytes32 offerId,uint256 units,uint8 exemptionPathway,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)"
     );
+    // The offeror signs this to accept the settlement agreements of the offer and this DealManager as their
+    // finalizer. The registry checks it each time that it records the offeror on a settlement agreement.
+    bytes32 constant OFFEROR_AGREEMENT_TYPEHASH = keccak256(
+        "OfferorAgreement(address offeror,uint8 side,address certPrinter,uint256 tokenId,uint256 units,address paymentToken,uint256 consideration,uint8 exemptionPathway,uint256 validUntil,bytes counterpartyRestrictions,bytes additionalTerms,bytes32 templateId,uint256 salt,string[] globalValues,string[] offerorPartyValues)"
+    );
     bytes32 constant CANCEL_OFFER_AUTH_TYPEHASH =
         keccak256("CancelOfferAuth(bytes32 offerId,address forAddr,uint256 nonce)");
     bytes32 constant VOID_SECONDARY_AUTH_TYPEHASH =
@@ -234,6 +239,11 @@ library SecondaryTradeStorage {
             adminMultisig: params.side == OfferSide.BUY ? params.adminMultisig : address(0),
             settlementAgreementIds: new bytes32[](0)
         });
+
+        if (!EIP712Lib.verifySignature(
+            EIP712_NAME, EIP712_VERSION, address(this), offeror,
+            _hashOfferorAgreement(ds.offers[offerId]), params.offerorAgreementSig
+        )) revert ISecondaryTradeStorage.InvalidOfferorAgreementSignature();
 
         // Evaluate threshold conditions (offer is now readable via getOffer). At posting there are no
         // settlements yet (agreementId == 0), so buyer-facing conditions short-circuit; seller/offer-wide
@@ -405,12 +415,16 @@ library SecondaryTradeStorage {
             address(this),
             settlementExpiry
         );
-        // Offeror: DealManager (finalizer) attests commitment via signContractWithEscrow.
-        // The registry does not verify escrowSigner's EIP-712 sig here; the offeror's
-        // commitment is evidenced by their postOffer() tx and stored offerorAgreementSig.
+        // Offeror: the registry checks the offeror's OfferorAgreement signature from postOffer.
         ICyberAgreementRegistry(registry).signContractWithEscrow(
             offer.offeror, settlementAgreementId, offer.offerorPartyValues,
-            offer.offerorAgreementSig, false, ""
+            ICyberAgreementRegistry.EscrowAttestation({
+                domainName: EIP712_NAME,
+                domainVersion: EIP712_VERSION,
+                structHash: _hashOfferorAgreement(offer),
+                signature: offer.offerorAgreementSig
+            }),
+            false, ""
         );
         // Acceptor: proper EIP-712 sig verified by the registry.
         ICyberAgreementRegistry(registry).signContractFor(
@@ -755,6 +769,36 @@ library SecondaryTradeStorage {
             keccak256(p.acceptorAgreementSig),
             keccak256(p.openEndorsementSig)
         ));
+    }
+
+    /// @dev EIP-712 hashStruct of OfferorAgreement, read from the stored offer.
+    function _hashOfferorAgreement(Offer storage o) internal view returns (bytes32) {
+        return keccak256(abi.encode(
+            OFFEROR_AGREEMENT_TYPEHASH,
+            o.offeror,
+            uint8(o.side),
+            o.certPrinter,
+            o.tokenId,
+            o.units,
+            o.paymentToken,
+            o.consideration,
+            uint8(o.expectedExemptionPathway),
+            o.validUntil,
+            keccak256(o.counterpartyRestrictions),
+            keccak256(o.additionalTerms),
+            o.templateId,
+            o.salt,
+            _hashStoredStringArray(o.globalValues),
+            _hashStoredStringArray(o.offerorPartyValues)
+        ));
+    }
+
+    function _hashStoredStringArray(string[] storage arr) internal view returns (bytes32) {
+        bytes32[] memory hashes = new bytes32[](arr.length);
+        for (uint256 i = 0; i < arr.length; i++) {
+            hashes[i] = keccak256(bytes(arr[i]));
+        }
+        return keccak256(abi.encodePacked(hashes));
     }
 
     /// @dev EIP-712 array encoding: keccak256 over the concatenated per-element hashes.

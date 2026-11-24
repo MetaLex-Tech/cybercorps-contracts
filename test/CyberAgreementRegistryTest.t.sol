@@ -356,16 +356,114 @@ contract CyberAgreementRegistryTest is Test {
         );
 
         // Bob should not be able to fake alice's escrow signature
+        ICyberAgreementRegistry.EscrowAttestation memory attestation;
         vm.expectRevert(CyberAgreementRegistry.FinalizerNotDefined.selector);
         vm.prank(bob);
         registry.signContractWithEscrow(
             alice,
             agreementId,
             testPartyValues[0],
-            "",
+            attestation,
             false,
             ""
         );
+    }
+
+    /// @notice The finalizer records a party with the signature that the party gave in the finalizer's domain
+    function test_signContractWithEscrow() public {
+        address finalizer = makeAddr("finalizer");
+        bytes32 agreementId = _createEscrowAgreement("test_signContractWithEscrow", finalizer);
+
+        ICyberAgreementRegistry.EscrowAttestation memory attestation =
+            _escrowAttestation(alicePrivateKey, finalizer, keccak256("alice accepts the terms"));
+
+        vm.expectEmit(true, true, false, true);
+        emit ICyberAgreementRegistry.AgreementSigned(agreementId, alice, block.timestamp);
+        vm.prank(finalizer);
+        registry.signContractWithEscrow(alice, agreementId, testPartyValues[0], attestation, false, "");
+
+        assertTrue(registry.hasSigned(agreementId, alice));
+    }
+
+    /// @notice A finalizer that the creator chose cannot record a party who never signed for it
+    function test_RevertIf_signContractWithEscrowPartyDidNotSign() public {
+        address bobFinalizer = makeAddr("bobFinalizer");
+        bytes32 agreementId = _createEscrowAgreement("test_RevertIf_signContractWithEscrowPartyDidNotSign", bobFinalizer);
+
+        // Bob signs the attestation himself and names alice as the signer
+        ICyberAgreementRegistry.EscrowAttestation memory attestation =
+            _escrowAttestation(bobPrivateKey, bobFinalizer, keccak256("alice accepts the terms"));
+
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.prank(bobFinalizer);
+        registry.signContractWithEscrow(alice, agreementId, testPartyValues[0], attestation, false, "");
+
+        assertFalse(registry.hasSigned(agreementId, alice));
+    }
+
+    /// @notice A signature that a party gave to one finalizer does not work for another finalizer
+    function test_RevertIf_signContractWithEscrowOtherFinalizerDomain() public {
+        address aliceFinalizer = makeAddr("aliceFinalizer");
+        address bobFinalizer = makeAddr("bobFinalizer");
+        bytes32 agreementId =
+            _createEscrowAgreement("test_RevertIf_signContractWithEscrowOtherFinalizerDomain", bobFinalizer);
+
+        ICyberAgreementRegistry.EscrowAttestation memory attestation =
+            _escrowAttestation(alicePrivateKey, aliceFinalizer, keccak256("alice accepts the terms"));
+
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.prank(bobFinalizer);
+        registry.signContractWithEscrow(alice, agreementId, testPartyValues[0], attestation, false, "");
+    }
+
+    /// @notice The finalizer cannot change the signed terms
+    function test_RevertIf_signContractWithEscrowStructHashMismatch() public {
+        address finalizer = makeAddr("finalizer");
+        bytes32 agreementId = _createEscrowAgreement("test_RevertIf_signContractWithEscrowStructHashMismatch", finalizer);
+
+        ICyberAgreementRegistry.EscrowAttestation memory attestation =
+            _escrowAttestation(alicePrivateKey, finalizer, keccak256("alice accepts the terms"));
+        attestation.structHash = keccak256("other terms");
+
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.prank(finalizer);
+        registry.signContractWithEscrow(alice, agreementId, testPartyValues[0], attestation, false, "");
+    }
+
+    function _createEscrowAgreement(string memory saltLabel, address finalizer) internal returns (bytes32) {
+        vm.prank(bob);
+        return registry.createContract(
+            testTemplateId,
+            uint256(keccak256(bytes(saltLabel))),
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            "",
+            finalizer,
+            block.timestamp + 10
+        );
+    }
+
+    function _escrowAttestation(uint256 signerKey, address verifyingContract, bytes32 structHash)
+        internal
+        view
+        returns (ICyberAgreementRegistry.EscrowAttestation memory attestation)
+    {
+        bytes32 domainSeparator = keccak256(abi.encode(
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+            keccak256("TestFinalizer"),
+            keccak256("1"),
+            block.chainid,
+            verifyingContract
+        ));
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(signerKey, keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash)));
+        attestation = ICyberAgreementRegistry.EscrowAttestation({
+            domainName: "TestFinalizer",
+            domainVersion: "1",
+            structHash: structHash,
+            signature: abi.encodePacked(r, s, v)
+        });
     }
 
     function test_voidContractForSelf() public {

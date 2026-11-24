@@ -51,6 +51,7 @@ import "./interfaces/IRoundManagerFactory.sol";
 import "./interfaces/ILedgerEntryToken.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./CyberCorpConstants.sol";
+import {EIP712Lib} from "./libs/EIP712Lib.sol";
 import "./storage/LedgerEntryTokenStorage.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
@@ -74,6 +75,11 @@ interface ICyberCorpLocal {
 
 contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     using Strings for string;
+
+    // The officer signs this in this factory's domain. It is the same type that ParentCoFactory uses.
+    string private constant ESCROW_AUTHORIZATION_DOMAIN_NAME = "MetaDAOFactory";
+    string private constant ESCROW_AUTHORIZATION_DOMAIN_VERSION = "1";
+    bytes32 private constant ESCROW_AUTHORIZATION_TYPEHASH = keccak256("EscrowAuthorization(string name,string contact)");
     
     error InvalidSalt();
     error RoundManagerAlreadyExists();
@@ -175,6 +181,31 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
     function setMetaDAOSignatureHash(bytes memory _metaDAOSignatureHash) public onlyOwner {
         metaDAOSignatureHash = _metaDAOSignatureHash;
+    }
+
+    /// @notice The digest that the MetaDAO officer signs to let this factory sign agreements for them.
+    /// The officer signs the name and contact that the agreements record for them.
+    function escrowAuthorizationHash(string memory name, string memory contact) public view returns (bytes32) {
+        return EIP712Lib.hashTypedData(
+            ESCROW_AUTHORIZATION_DOMAIN_NAME,
+            ESCROW_AUTHORIZATION_DOMAIN_VERSION,
+            address(this),
+            _escrowAuthorizationStructHash(name, contact)
+        );
+    }
+
+    function _escrowAuthorizationStructHash(string memory name, string memory contact) private pure returns (bytes32) {
+        return keccak256(abi.encode(ESCROW_AUTHORIZATION_TYPEHASH, keccak256(bytes(name)), keccak256(bytes(contact))));
+    }
+
+    /// @notice The officer's escrow authorization, in the form the registry checks when it records the officer.
+    function _escrowAttestation() private view returns (ICyberAgreementRegistry.EscrowAttestation memory) {
+        return ICyberAgreementRegistry.EscrowAttestation({
+            domainName: ESCROW_AUTHORIZATION_DOMAIN_NAME,
+            domainVersion: ESCROW_AUTHORIZATION_DOMAIN_VERSION,
+            structHash: _escrowAuthorizationStructHash(metaDAOOfficer.name, metaDAOOfficer.contact),
+            signature: metaDAOSignatureHash
+        });
     }
 
     function setStable(address _stable) public onlyOwner {
@@ -461,7 +492,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             metaDAOOfficer.eoa,
             agreementId,
             partyValuesOverride[0],
-            metaDAOSignatureHash,
+            _escrowAttestation(),
             false,
             ""
         );
@@ -486,7 +517,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             metaDAOOfficer.eoa,
             meetingNotesId,
             meetingNotesPartyValues[0],
-            metaDAOSignatureHash,
+            _escrowAttestation(),
             false,
             ""
         );

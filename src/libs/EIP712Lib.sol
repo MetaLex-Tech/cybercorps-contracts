@@ -74,6 +74,15 @@ library EIP712Lib {
         bytes32 structHash,
         bytes memory signature
     ) internal view returns (bool success) {
+        return hashTypedData(name, version, verifyingContract, structHash).recover(signature) == signer;
+    }
+
+    /// @notice The EIP-712 digest that a signer signs for `structHash` in the given domain.
+    function hashTypedData(string memory name, string memory version, address verifyingContract, bytes32 structHash)
+        internal
+        view
+        returns (bytes32)
+    {
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 EIP712_DOMAIN_TYPEHASH,
@@ -83,7 +92,6 @@ library EIP712Lib {
                 verifyingContract
             )
         );
-        bytes32 digest = MessageHashUtils.toTypedDataHash(domainSeparator, structHash);
-        return digest.recover(signature) == signer;
+        return MessageHashUtils.toTypedDataHash(domainSeparator, structHash);
     }
 }

@@ -83,7 +83,7 @@ struct Offer {
     uint256 salt;                   // offeror-supplied salt; used to derive unique settlementSalt per acceptance
     string[] globalValues;          // agreement global values; stored for use at acceptOffer
     string[] offerorPartyValues;    // offeror's party values; stored for use at acceptOffer
-    bytes offerorAgreementSig;      // offeror's EIP-712 sig over offerAgreementId+terms; verified at postOffer, passed to signContractWithEscrow at acceptOffer
+    bytes offerorAgreementSig;      // offeror's EIP-712 OfferorAgreement sig in the DealManager domain; checked at postOffer, checked again by the registry at acceptOffer
     bytes openEndorsementSig;       // sell offer-only: seller's pre-signed open endorsement (spec §7.3.1); in contrast, buy offer's open endorsement is acquired at acceptance and stored in SecondaryEscrow
     string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
     HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
@@ -262,6 +262,7 @@ interface ISecondaryTradeStorage {
     error NotSigner();
     /// @notice A relayer overload's EIP-712 authorization did not recover to `forAddr`
     error InvalidSecondaryAuthSignature();
+    error InvalidOfferorAgreementSignature();
     /// @notice A relayer overload's unordered authorization nonce was already consumed (replay)
     error SecondaryAuthReplayed();
     error SecondaryEscrowNotFound();

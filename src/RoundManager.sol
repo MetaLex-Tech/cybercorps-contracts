@@ -364,6 +364,7 @@ contract RoundManager is
             if (newEndTime > deadline) revert EndTimeAfterMinimumDeadline();
         }
         uint256 oldEndTime = round.endTime;
+        RoundManagerStorage.recordSignedEndTime(roundId);
         round.endTime = newEndTime;
         emit RoundEndTimeUpdated(roundId, oldEndTime, newEndTime);
     }
@@ -375,6 +376,7 @@ contract RoundManager is
         if (round.id == bytes32(0)) revert InvalidRound();
         if (round.restrictEndTimeReduction) revert EndTimeReductionRestricted();
         uint256 oldEndTime = round.endTime;
+        RoundManagerStorage.recordSignedEndTime(roundId);
         round.endTime = block.timestamp;
         emit RoundEndTimeUpdated(roundId, oldEndTime, round.endTime);
         emit RoundClosed(roundId, block.timestamp);
