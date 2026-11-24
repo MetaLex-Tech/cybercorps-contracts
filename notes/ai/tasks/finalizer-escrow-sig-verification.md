@@ -15,7 +15,7 @@
   Owner choices on 2026-11-23: reuse today's officer types; secondary trade gets a new offeror type.
 - **Repository / branch:** cybercorps-contracts; branch `feat/finalizer-escrow-sig-verification`
   (no upstream)
-- **Verified base / code head:** base 13418fb5; tests ran on the uncommitted working tree listed below
+- **Verified base / code head:** base 13418fb5; first part committed as 1f4fff96 (wip). Latest tests ran on 1f4fff96 plus the uncommitted restore and fork-test changes
 - **PR / artifact:** not yet created
 
 ## Change
@@ -44,7 +44,7 @@
 - ParentCo flows record the officer with today's signature: verified (existing ParentCo tests).
 - Secondary post rejects a wrong or stale offeror signature; accept records the offeror: verified.
 - MetaDAOFactory: not tested. Its test file was emptied in beccbb7c.
-- Fork tests: 3 fail by design (deployed callers not upgraded). Owner decision pending.
+- Fork tests: pass. Owner chose to upgrade the caller in each test that ran a deployed caller (2026-11-23).
 
 ## Upgrade effects
 
@@ -54,8 +54,29 @@
 - Live secondary offers posted before the upgrade have no valid offeror signature. They cannot be
   accepted; the offeror must cancel and post again. The webapp must ask for the new signature.
 - A round whose end time changed before the RoundManager upgrade has no `signedEndTime`. Its
-  `allocate` reverts at the registry. Scan live rounds for `RoundEndTimeUpdated` before upgrading.
+  `allocate` reverts at the registry until the owner calls `restoreSignedEndTime(roundId, endTime)`
+  with the end time from `RoundCreated`. The call checks the officer's signature, so only the signed
+  value is accepted. Scan live rounds for `RoundEndTimeUpdated` to find them.
 - Scan pre-upgrade agreements whose finalizer no known factory deployed (forged records stay).
+
+## Webapp follow-up after merge
+
+Checked against `../metalex-webapp` on 2026-11-24.
+
+1. Secondary post: `secondaryOfferCall.ts` sends `offerorAgreementSig: "0x"`, and
+   `secondaryOfferAuthorization.ts` pins it to `z.literal("0x")`. The seller must sign
+   `OfferorAgreement` (domain `"DealManager"`, `"1"`, the DealManager address) before the post or the
+   relayer `PostOfferAuth` signature.
+2. MetaDAO escrowed-signature page (`useEscrowMetaDaoSignature.ts`, `escrowSignatureData.ts`) signs
+   the registry's `EscrowSignatureData`. It must sign `EscrowAuthorization(name, contact)` in the
+   `"MetaDAOFactory"` domain. `packPreflight.ts` must check the stored bytes against that type.
+3. Upgrade page: upgrade order is registry first, then each finalizer. Add `restoreSignedEndTime`
+   for rounds whose end time changed before the RoundManager upgrade.
+4. ABIs: regenerate the registry, DealManager, RoundManager and MetaDAOFactory ABIs in
+   `packages/abis` and `apps/cybercorps-indexer/abis`. Map the new errors.
+5. Stale offers: offers posted before the upgrade cannot be accepted. Show them as "post again".
+
+No change: Umia (ParentCo) escrow page, RoundManager officer signature, round close calls, indexer events.
 
 ## Decisions and evidence
 
@@ -73,8 +94,8 @@ Related findings (Hexens report in `audits/`):
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
 | Unit tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --nmc '(ForkTest\|AdhocTest)'`; base 13418fb5 + working tree | 1597 passed, 0 failed |
-| Sizes | `forge build ... --sizes` | Registry 23,266 B; RoundManager 24,147 B (429 B margin); DealManager 22,248 B |
-| Fork tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --nmc AdhocTest --threads 1 --cups 10`; same tree | 224 passed, 3 failed, 1 skipped. Each failure is a deployed caller (not upgraded) that calls the removed `signContractWithEscrow` selector on the new registry: `RoundManagerFCFSForkTest.test_CyberCorpFactory_CreatesFcfsRound_AndInvestorFundsIt`, `RoundManagerMinimumRaiseUpgradeForkTest.test_UpgradeFromDeployedV5_KeepsStateAndPaths`, `DeployParentCoFactoryAcceptanceForkTest.test_deploySubCorp`. Open owner decision. |
+| Sizes | `forge build ... --sizes` | Registry 23,266 B; RoundManager 24,451 B (125 B margin); DealManager 22,248 B |
+| Fork tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --nmc AdhocTest --threads 1 --cups 10`; same tree | 228 passed, 0 failed, 1 skipped. The three tests that ran deployed callers now upgrade them first (FCFS: RoundManager ref implementation; v5 upgrade: registry starts on the Base implementation, then registry and RoundManager upgrade; ParentCo: a ParentCo officer upgrades the live Umia factory, whose live officer signature passes) |
 
 ## Next action and handoff
 

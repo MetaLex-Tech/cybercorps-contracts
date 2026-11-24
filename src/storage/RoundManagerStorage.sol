@@ -121,6 +121,8 @@ library RoundManagerStorage {
     error MinimumNotMet();
     error MinimumAlreadyMet();
     error MinimumAlreadySet();
+    error SignedEndTimeAlreadySet();
+    error SignedEndTimeMismatch();
     error ArrayLengthMismatch();
     error AgreementNotInRound(bytes32 agreementId);
     error NotCommitted(bytes32 agreementId);
@@ -670,6 +672,21 @@ library RoundManagerStorage {
         if (ds.signedEndTime[roundId] == 0) ds.signedEndTime[roundId] = getRound(roundId).endTime;
     }
 
+    /// @notice Sets the signed end time of a round whose end time changed before `signedEndTime` existed.
+    /// The officer's round signature must verify with `endTime`, so only the signed value can be set.
+    /// @dev Called via delegatecall from RoundManager. external to keep this off RoundManager's bytecode.
+    function restoreSignedEndTime(bytes32 roundId, uint256 endTime) external {
+        RoundManagerData storage ds = roundManagerStorage();
+        if (ds.signedEndTime[roundId] != 0) revert SignedEndTimeAlreadySet();
+        Round storage round = getRound(roundId);
+        if (round.id == bytes32(0)) revert InvalidRound();
+        if (!EIP712Lib.verifySignature(
+            EIP712_NAME, EIP712_VERSION, address(this), round.authorityOfficer,
+            _escrowedStructHash(round, endTime), round.escrowedSignature
+        )) revert SignedEndTimeMismatch();
+        ds.signedEndTime[roundId] = endTime;
+    }
+
     function _signedEndTime(Round storage round) private view returns (uint256) {
         uint256 signed = roundManagerStorage().signedEndTime[round.id];
         return signed != 0 ? signed : round.endTime;
@@ -917,7 +934,16 @@ library RoundManagerStorage {
         view
         returns (ICyberAgreementRegistry.EscrowAttestation memory)
     {
-        bytes32 structHash = _hashEscrowedSignatureData(
+        return ICyberAgreementRegistry.EscrowAttestation({
+            domainName: EIP712_NAME,
+            domainVersion: EIP712_VERSION,
+            structHash: _escrowedStructHash(round, _signedEndTime(round)),
+            signature: round.escrowedSignature
+        });
+    }
+
+    function _escrowedStructHash(Round storage round, uint256 endTime) private view returns (bytes32) {
+        return _hashEscrowedSignatureData(
             EscrowedSignatureData({
                 roundId: round.id,
                 seriesType: uint8(round.seriesType),
@@ -926,7 +952,7 @@ library RoundManagerStorage {
                 maxTicket: round.maxTicket,
                 roundType: uint8(round.roundType),
                 startTime: round.startTime,
-                endTime: _signedEndTime(round),
+                endTime: endTime,
                 templateId: round.templateId,
                 paymentToken: round.paymentToken,
                 pricePerUnit: round.pricePerUnit,
@@ -934,12 +960,6 @@ library RoundManagerStorage {
                 companyAddress: LexScrowStorage.getCorp()
             })
         );
-        return ICyberAgreementRegistry.EscrowAttestation({
-            domainName: EIP712_NAME,
-            domainVersion: EIP712_VERSION,
-            structHash: structHash,
-            signature: round.escrowedSignature
-        });
     }
 
     function _hashEscrowedSignatureData(EscrowedSignatureData memory data) private pure returns (bytes32) {

@@ -100,6 +100,8 @@ contract RoundManager is
     error ArrayLengthMismatch();
     error MinimumAlreadyMet();
     error MinimumAlreadySet();
+    error SignedEndTimeAlreadySet();
+    error SignedEndTimeMismatch();
     error NotCommitted(bytes32 agreementId);
     error CommitmentLocked(bytes32 agreementId);
     error SettleWindowTooShort(bytes32 agreementId);
@@ -367,6 +369,13 @@ contract RoundManager is
         RoundManagerStorage.recordSignedEndTime(roundId);
         round.endTime = newEndTime;
         emit RoundEndTimeUpdated(roundId, oldEndTime, newEndTime);
+    }
+
+    /// @notice Owner sets the end time that the officer signed, for a round whose end time changed
+    /// before this version. Read it from the round's `RoundCreated` event. The registry needs it to
+    /// check the officer's round signature.
+    function restoreSignedEndTime(bytes32 roundId, uint256 signedEndTime) external onlyOwner {
+        RoundManagerStorage.restoreSignedEndTime(roundId, signedEndTime);
     }
 
     /// @notice Owner can close the round immediately by setting endTime to now
