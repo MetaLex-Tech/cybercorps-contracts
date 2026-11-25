@@ -1,7 +1,7 @@
 # Task: Registry checks the party's signature on escrow signing
 
-- **Status:** Active (implemented and unit-tested locally; not committed, not reviewed)
-- **Updated:** 2026-11-24
+- **Status:** Active (committed through 38e92baa; issue #218 fix `DealManager.signDeal` uncommitted; not reviewed)
+- **Updated:** 2026-11-25
 - **Owner:** Claude Code session, for the owner
 - **Collaborators / boundaries:** Registry, RoundManager, DealManager secondary trade,
   ParentCoFactory and MetaDAOFactory. No deployment, upgrade, webapp change or audit was started.
@@ -17,7 +17,7 @@
 - **Repository / branch:** cybercorps-contracts; branch `feat/finalizer-escrow-sig-verification`
   (no upstream)
 - **Verified base / code head:** base 13418fb5; first part committed as 1f4fff96 (wip). Latest tests ran on 1f4fff96 plus the uncommitted restore and fork-test changes
-- **PR / artifact:** not yet created
+- **PR / artifact:** PR #216 (`feat/finalizer-escrow-sig-verification`); issue #218 (compatibility review); PR #219 (issuer regression tests, targets this branch)
 
 ## Change
 
@@ -84,6 +84,8 @@
 
 Checked against `../metalex-webapp` on 2026-11-24.
 
+0. Primary escrow: `EscrowedDealPanel.tsx` / `buildSignContractCall` must call
+   `DealManager.signDeal(signer, agreementId, partyValues, signature, secret)` instead of the registry.
 1. Secondary post: `secondaryOfferCall.ts` sends `offerorAgreementSig: "0x"`, and
    `secondaryOfferAuthorization.ts` pins it to `z.literal("0x")`. The seller must sign
    `OfferorAgreement` (domain `"DealManager"`, `"1"`, the DealManager address) before the post or the
@@ -125,6 +127,25 @@ Finalizer-only signing, 2026-11-24, on 0dcf8dd8 plus the uncommitted registry an
 | Unit tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --nmc '(ForkTest\|AdhocTest)'` | 1598 passed, 0 failed |
 | Fork tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --nmc AdhocTest --threads 1 --cups 10` | 228 passed, 0 failed, 1 skipped. A first run had one DNS failure in `MulticallFormationFeeForkTest` setUp; the rerun passed |
 | Sizes | `forge build ... --sizes` | Registry 23,240 B (26 B smaller than 0dcf8dd8). The `onlyFinalizerIfSet` modifier form was 26,204 B and was not used |
+
+## Issue #218 dispositions (2026-11-25)
+
+Owner decisions on 2026-11-25:
+
+- Case 1 (removed 6-argument `signContractWithEscrow`): hard cutover. Every manager must upgrade
+  before it uses the new registry. No legacy overload, no allowlist. PR #219 fork tests confirm the
+  revert for live Base v4 and v5.1 RoundManagers and a v5 DealManager after a registry-only upgrade.
+- Case 3 (`proposeDeal`, company signs after the investor pays): fixed by `DealManager.signDeal`
+  (first party only; relays allowed). The registry finalizer-only rule is unchanged.
+  `signAndFinalizeDeal` is not an alternative after payment (`DealNotPending`). The production UI does
+  not send `DealManager.proposeDeal`; only `EscrowedDealPanel` signs such a deal, through the registry.
+- Case 4 (EOA/Safe finalizer service agreements): no fix. No mainnet use; MetaVesT service template
+  registration is commented out.
+- Case 5 (MetaVesT grantee): no break.
+- Umia `ParentCoFactory` (Ethereum, customer-owned, upgrade not pinned) and `MetaDAOFactory` (Base,
+  deployer-owned auth) also call the removed selector and must upgrade with the cutover.
+
+Tests: `test/DealManagerSignDealTest.t.sol` (6 tests, real registry, factories and company).
 
 ## Next action and handoff
 
