@@ -13,6 +13,7 @@ import {DealManager} from "../src/DealManager.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {RoundManager} from "../src/RoundManager.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundLib, RoundType} from "../src/libs/RoundLib.sol";
 import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
@@ -69,6 +70,9 @@ contract Issue218MixedVersionEscrowForkTest is Test {
     /// @dev Live Base factory reference implementations at `FORK_BLOCK`.
     address internal constant LIVE_BASE_RM_51_IMPL = 0x2d282dB929bf095B1F9a97469b090f7A4f92Bd1a;
     address internal constant LIVE_BASE_DM_5_IMPL = 0xF791E85C9D6c140891DF59C56bf093E298cfc7C7;
+
+    /// @dev The 6-argument `signContractWithEscrow` that the upgraded registry no longer has.
+    bytes4 internal constant REMOVED_ESCROW_SELECTOR = 0x8f3b0982;
 
     bytes32 internal constant TEST_TEMPLATE_ID = keccak256("Issue218.ForkTemplate");
     string internal constant TEST_TEMPLATE_URI = "ipfs://issue-218-fork-template";
@@ -136,6 +140,14 @@ contract Issue218MixedVersionEscrowForkTest is Test {
 
     function _upgradeRegistryOnly() internal {
         CyberAgreementUtils.upgradeRegistry(vm, address(registry), core.metalexSafe);
+    }
+
+    function _upgradeRoundManager(address rm) internal {
+        address next = address(new RoundManager());
+        vm.prank(core.metalexSafe);
+        RoundManagerFactory(core.roundManagerFactory).setRefImplementation(next);
+        vm.prank(officer);
+        RoundManager(rm).upgradeToAndCall(next, "");
     }
 
     function _createRoundOn(address rm, address corpAddr, RoundType roundType, bool allowTimedOffers)
@@ -400,6 +412,7 @@ contract Issue218MixedVersionEscrowForkTest is Test {
 
         vm.startPrank(investor);
         IERC20(BASE_USDC).approve(rm, amount);
+        vm.expectCall(address(registry), abi.encodePacked(REMOVED_ESCROW_SELECTOR));
         vm.expectRevert();
         RoundManager(rm).submitEOI(
             roundId, eoi, globalValues, investorPartyValues, sig, salt, new address[](0), bytes32(0)
@@ -409,7 +422,7 @@ contract Issue218MixedVersionEscrowForkTest is Test {
 
     /// @notice Hard-cutover upgrade requirement: un-upgraded live Base 5.1 `RoundManager` FCFS `submitEOI`
     ///         succeeds before registry upgrade and reverts atomically after upgrading `CyberAgreementRegistry`
-    ///         (leaving investor USDC untouched).
+    ///         (leaving investor USDC untouched). It succeeds again after the company owner upgrades the `RoundManager`.
     function test_Case1a_UnupgradedLiveV51RoundManager_FCFSSubmitEOI_RevertsUntilManagerUpgrade() public {
         bytes32 roundId = _createRoundOn(v5RoundManager, v5Corp, RoundType.FCFS, false);
 
@@ -422,6 +435,10 @@ contract Issue218MixedVersionEscrowForkTest is Test {
         _upgradeRegistryOnly();
         _submitPostUpgradeExpectRevert(v5RoundManager, roundId, 101, 10_000e6);
         assertEq(IERC20(BASE_USDC).balanceOf(investor), investorBefore, "investor USDC stays in wallet on revert");
+
+        _upgradeRoundManager(v5RoundManager);
+        bytes32 postUpgradeId = _submitInvestorEOI(v5RoundManager, roundId, 101, 10_000e6, block.timestamp + 7 days);
+        assertTrue(registry.isFinalized(postUpgradeId), "FCFS submitEOI succeeds after the RoundManager upgrade");
     }
 
     /// @notice Hard-cutover upgrade requirement + non-lockup proof: un-upgraded live Base 5.1 `RoundManager`
@@ -441,6 +458,7 @@ contract Issue218MixedVersionEscrowForkTest is Test {
 
         _upgradeRegistryOnly();
         vm.prank(officer);
+        vm.expectCall(address(registry), abi.encodePacked(REMOVED_ESCROW_SELECTOR));
         vm.expectRevert();
         RoundManager(v5RoundManager).allocate(agreementId, 10_000e6);
 
@@ -485,6 +503,7 @@ contract Issue218MixedVersionEscrowForkTest is Test {
 
         _upgradeRegistryOnly();
         vm.prank(officer);
+        vm.expectCall(address(registry), abi.encodePacked(REMOVED_ESCROW_SELECTOR));
         vm.expectRevert();
         RoundManager(LIVE_V4_ROUND_MANAGER).allocate(agreementId, 10_000e6);
 
@@ -610,6 +629,7 @@ contract Issue218MixedVersionEscrowForkTest is Test {
         _upgradeRegistryOnly();
         vm.startPrank(buyer);
         IERC20(BASE_USDC).approve(v5DealManager, 10_000e6);
+        vm.expectCall(address(registry), abi.encodePacked(REMOVED_ESCROW_SELECTOR));
         vm.expectRevert();
         DealManager(v5DealManager).acceptOffer(acceptParams);
         vm.stopPrank();
