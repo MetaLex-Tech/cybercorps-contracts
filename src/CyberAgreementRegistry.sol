@@ -690,10 +690,18 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         }
     }
 
-    /// @notice The finalizer signs for a party with a signature that the party gave to the finalizer.
-    /// The party must have signed in the finalizer's own EIP-712 domain. This proves that the party
-    /// accepts this finalizer. The finalizer checks that the signed terms match the agreement.
-    /// @dev See `test_RevertIf_signContractWithEscrowUndefinedFinalizer` for how it prevent exploits
+    /// @notice The finalizer records a party's signature with a signature that the party gave to the
+    /// finalizer. The party must have signed in an EIP-712 domain that names the finalizer.
+    /// @dev Trust model: the registry accepts any signature whose domain names the finalizer as the
+    /// party's assent. It does not know what the party signed. The finalizer's code chooses which
+    /// signed terms count and checks that they match the agreement. So a party who signs anything for
+    /// a finalizer trusts the present and future code of that finalizer with their assent.
+    /// This keeps the signatures that existing cyberCORP managers already collect valid, for example
+    /// the officer's round signature.
+    /// TODO: a later design asks the party to sign a dedicated assent for the finalizer, with a nonce
+    /// that the party can revoke.
+    /// See `test_RevertIf_signContractWithEscrowUndefinedFinalizer` for how the domain check stops a
+    /// finalizer that the party never signed for.
     function signContractWithEscrow(
         address escrowSigner,
         bytes32 contractId,
