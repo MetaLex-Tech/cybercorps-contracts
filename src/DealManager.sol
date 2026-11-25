@@ -241,6 +241,22 @@ contract DealManager is
         DealManagerStorage.signDealAndPay(signer, agreementId, signature, partyValues, _fillUnallocated, name, secret);
     }
 
+    /// @notice The first party (the company) signs a deal that `proposeDeal` created unsigned
+    /// @param signer Address of the first party
+    /// @param agreementId Unique identifier for the agreement
+    /// @param partyValues Array of party-specific values, must match the template
+    /// @param signature Signature of the signer
+    /// @param secret Secret required for finalization (if any)
+    function signDeal(
+        address signer,
+        bytes32 agreementId,
+        string[] memory partyValues,
+        bytes memory signature,
+        string memory secret
+    ) public {
+        DealManagerStorage.signDeal(signer, agreementId, partyValues, signature, secret);
+    }
+
     /// @notice Signs and finalizes a deal in one transaction
     /// @dev Combines signing, payment, and finalization steps
     /// @param signer Address of the signer
