@@ -244,6 +244,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         );
     }
 
+    /// @notice Create an unsigned agreement for a finalizer contract, such as a DealManager.
+    /// @dev Deprecated when `finalizer` is `address(0)`. The id does not include the creator or
+    /// the expiry, so anyone can create the same id first with other terms (MTLX1-30, MTLX1-39).
+    /// Apps and front ends must not call it with no finalizer. Use `createBoundContract` or
+    /// `createBoundContractAndSignFor`. A later upgrade removes the use with no finalizer.
     function createContract(
         bytes32 templateId,
         uint256 salt,
@@ -254,15 +259,12 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         address finalizer,
         uint256 expiry
     ) public returns (bytes32 contractId) {
-        // It is critical to bind `secretHash` and `finalizer` into the id: the finalizer
-        // controls settlement and the secretHash gates who may sign, so omitting them would
-        // let a front-runner seize the same id with hostile terms and bind signers to an
-        // agreement they never authorized.
-        // `expiry` is deliberately NOT bound: callers derive it from block.timestamp at
-        // creation time, which a party signing off-chain cannot predict, so including it
-        // would make every presigned signature unverifiable.
-        // TODO: an off-chain indexer that derives contractId (rather than reading the
-        // ContractCreated event) must include these two fields.
+        // The id includes `secretHash` and `finalizer`. The finalizer controls settlement and
+        // the secret controls who can sign, so another creator cannot take the id with other values.
+        // The id does not include `expiry`: the finalizer sets it from the block time at
+        // creation, so a party who signs before creation cannot know it.
+        // TODO: an off-chain indexer that calculates contractId (and does not read the
+        // ContractCreated event) must include `secretHash` and `finalizer`.
         contractId = keccak256(
             abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
@@ -321,6 +323,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     }
 
     /// @notice See `createStandaloneContractAndSignFor()`
+    /// @dev Deprecated. Apps and front ends must not call it. Use `createBoundContractAndSignFor`.
+    /// A later upgrade removes it.
     function createStandaloneContractAndSign(
         string memory title,
         string memory legalContractUri,
@@ -348,13 +352,13 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         );
     }
 
-    /// @notice Create a standalone agreement that:
-    /// - Proposer can prepare & sign an agreement in one tx. For single-party agreements that means one tx and done
-    /// - Standalone means it creates its own template just-in-time if needed. No more waiting for admin to create the template for you
-    /// - Takes `salt` so agreement IDs are deterministic. You can also create identical agreements with distinct IDs if needed
-    ///
-    /// Note `finalizer` is intentionally fixed at `address(0)` because other values require
-    /// tighter integration with vetted smart contracts, which does not fit our use cases here
+    /// @notice Create an agreement and its template if it does not exist, and record the first
+    /// party's signature, in one transaction. The `salt` makes the id known before creation.
+    /// The agreement has no finalizer.
+    /// @dev Deprecated. The id does not include the creator or the expiry, so anyone can create
+    /// the same id first with a later expiry and submit the public signature to it (MTLX1-39).
+    /// Apps and front ends must not call it. Use `createBoundContractAndSignFor`. A later upgrade
+    /// removes it.
     function createStandaloneContractAndSignFor(
         string memory title,
         string memory legalContractUri,

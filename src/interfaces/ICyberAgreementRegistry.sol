@@ -96,6 +96,8 @@ interface ICyberAgreementRegistry {
         string[] memory partyFields
     ) external;
 
+    /// @dev Deprecated when `finalizer` is `address(0)`. Apps and front ends must not call it with
+    /// no finalizer. Use `createBoundContract` or `createBoundContractAndSignFor`.
     function createContract(
         bytes32 templateId,
         uint256 salt,
