@@ -409,7 +409,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     }
 
     /// @notice Create a template and an unsigned agreement whose ids are bound to
-    /// `msg.sender` and every stored term. Exact parties only; no secret or finalizer.
+    /// `msg.sender` and every stored term. No secret or finalizer. A zero address after
+    /// `parties[0]` is an open slot with empty party values; anyone can fill it with `signContractFor`.
     function createBoundContract(
         Template memory template,
         uint256 salt,
@@ -1228,7 +1229,9 @@ library CyberAgreementBound {
     }
 
     /// @notice Create a template and an unsigned agreement whose ids bind `creator`, every
-    /// stored term and the conditions. Exact parties only; no secret or finalizer.
+    /// stored term and the conditions. No secret or finalizer.
+    /// @dev A zero address after `parties[0]` is an open slot. Its party values are empty and it has
+    /// no conditions. The first signer who fills it gives the values. The id covers the slot.
     function create(
         mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
         mapping(bytes32 => CyberAgreementRegistry.AgreementData) storage agreements,
@@ -1247,14 +1250,21 @@ library CyberAgreementBound {
         if (partyValues.length != parties.length) revert CyberAgreementRegistry.MismatchedPartyValuesLength();
         if (globalValues.length != template.globalFields.length) revert CyberAgreementRegistry.MismatchedFieldsLength();
         if (expiry != 0 && expiry <= block.timestamp) revert CyberAgreementRegistry.ExpiryNotInFuture();
+        if (parties[0] == address(0)) revert CyberAgreementRegistry.FirstPartyZeroAddress();
+        SignerConditionLib.checkLength(conditions, parties.length);
         for (uint256 i = 0; i < parties.length; i++) {
-            if (parties[i] == address(0)) revert CyberAgreementRegistry.FirstPartyZeroAddress();
+            if (parties[i] == address(0)) {
+                if (partyValues[i].length != 0) revert CyberAgreementRegistry.MismatchedFieldsLength();
+                if (conditions.length != 0 && conditions[i].length != 0) {
+                    revert ISignerConditions.OpenSlotHasSignerConditions();
+                }
+                continue;
+            }
             if (partyValues[i].length != template.partyFields.length) revert CyberAgreementRegistry.MismatchedFieldsLength();
             for (uint256 j = 0; j < i; j++) {
                 if (parties[i] == parties[j]) revert CyberAgreementRegistry.DuplicateParty();
             }
         }
-        SignerConditionLib.checkLength(conditions, parties.length);
 
         (templateId, contractId) = boundIds(
             creator, template, salt, globalValues, parties, partyValues, expiry, conditions
@@ -1276,6 +1286,7 @@ library CyberAgreementBound {
         agreementData.parties = parties;
         agreementData.expiry = expiry;
         for (uint256 i = 0; i < parties.length; i++) {
+            if (parties[i] == address(0)) continue;
             agreementData.partyValues[parties[i]] = partyValues[i];
         }
 
@@ -1284,6 +1295,7 @@ library CyberAgreementBound {
         SignerConditionLib.set(contractId, parties, conditions);
 
         for (uint256 i = 0; i < parties.length; i++) {
+            if (parties[i] == address(0)) continue;
             agreementsForParty[parties[i]].push(contractId);
         }
     }
@@ -1329,7 +1341,8 @@ library CyberAgreementBound {
     }
 
     /// @notice Sign for a party with signer conditions. The party must pass each condition with its
-    /// evidence. The signature covers the evidence. A bound agreement has no finalizer, open slot or secret.
+    /// evidence. The signature covers the evidence. A bound agreement has no finalizer or secret, and an
+    /// open slot has no conditions.
     function signWithEvidence(
         mapping(bytes32 => CyberAgreementRegistry.AgreementData) storage agreements,
         mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
