@@ -322,7 +322,7 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
     //////////////////////////////////////////////////////////////*/
 
     function test_Version() public view {
-        assertEq(RoundManager(roundManager).DEPLOY_VERSION(), "5.1");
+        assertEq(RoundManager(roundManager).DEPLOY_VERSION(), "5.2");
         assertEq(RoundManager(roundManager).SETTLE_WINDOW(), 2 days);
     }
 

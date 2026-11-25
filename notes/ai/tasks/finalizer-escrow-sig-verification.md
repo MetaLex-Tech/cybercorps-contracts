@@ -1,6 +1,6 @@
 # Task: Registry checks the party's signature on escrow signing
 
-- **Status:** Active (committed through 38e92baa; issue #218 fix `DealManager.signDeal` uncommitted; not reviewed)
+- **Status:** Active (issue #218 fix `DealManager.signDeal` in 6745777e; version bump committed after it; not reviewed)
 - **Updated:** 2026-11-25
 - **Owner:** Claude Code session, for the owner
 - **Collaborators / boundaries:** Registry, RoundManager, DealManager secondary trade,
@@ -146,6 +146,12 @@ Owner decisions on 2026-11-25:
   deployer-owned auth) also call the removed selector and must upgrade with the cutover.
 
 Tests: `test/DealManagerSignDealTest.t.sol` (6 tests, real registry, factories and company).
+
+Version bump (2026-11-25): `RoundManager.DEPLOY_VERSION` is `"5.2"` and `DealManager.DEPLOY_VERSION`
+is `"5.1"`. The live Base 5.1 `RoundManager` and v5 `DealManager` report the old strings, so the webapp
+can find un-upgraded managers with `DEPLOY_VERSION()`. Gabriel accepted the hard cutover with an in-app
+upgrade prompt. `UpgradeRoundManagerV51ScriptForkTest` is removed: the 5.1 upgrade is live, and the
+script now builds 5.2.
 
 ## Next action and handoff
 

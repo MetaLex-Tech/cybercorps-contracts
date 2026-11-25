@@ -73,7 +73,7 @@ contract RoundManager is
     using LexScrowStorage for LexScrowStorage.LexScrowData;
     using SafeERC20 for IERC20;
 
-    string public constant DEPLOY_VERSION = "5.1"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "5.2"; // For version-tracking on all deployment and future upgrades
 
     error InvalidRound();
     error RoundNotOpen();

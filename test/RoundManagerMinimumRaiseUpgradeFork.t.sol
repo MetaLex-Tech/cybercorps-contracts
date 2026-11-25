@@ -11,11 +11,11 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
-/// @notice Upgrade from the deployed v5 RoundManager to 5.1 keeps existing state.
+/// @notice Upgrade from the deployed v5 RoundManager to the local build (5.2) keeps existing state.
 /// @dev Runs on a Base fork. The company's RoundManager proxy first runs the exact v5 reference
 /// implementation that the Base RoundManagerFactory serves (with its deployed linked libraries).
 /// The test builds real state with that code (a founder-approved round, one allocated EOI and
-/// two escrowed EOIs), upgrades the proxy to the local 5.1 build, and checks that the state
+/// two escrowed EOIs), upgrades the proxy to the local build, and checks that the state
 /// reads the same and every existing path still works. Needs `RPC_URL_BASE`; skipped without it.
 contract RoundManagerMinimumRaiseUpgradeForkTest is MinimumRaiseFixture {
     /// @dev Reference implementation of the Base RoundManagerFactory 0xc9d5…aeb9, read 2026-11-13.
@@ -68,9 +68,9 @@ contract RoundManagerMinimumRaiseUpgradeForkTest is MinimumRaiseFixture {
         Round memory before = RoundManager(roundManager).getRound(roundId);
         Escrow memory e1Before = RoundManager(roundManager).getEscrowDetails(a1);
 
-        // MetaLeX releases 5.1; the company accepts the upgrade.
+        // MetaLeX releases the new build; the company accepts the upgrade.
         _upgradeRegistryAndRoundManager();
-        assertEq(RoundManager(roundManager).DEPLOY_VERSION(), "5.1");
+        assertEq(RoundManager(roundManager).DEPLOY_VERSION(), "5.2");
 
         // Existing state reads the same.
         Round memory afterUpgrade = RoundManager(roundManager).getRound(roundId);
