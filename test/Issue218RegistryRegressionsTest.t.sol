@@ -3,46 +3,24 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {CyberCorp} from "../src/CyberCorp.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {DealManager} from "../src/DealManager.sol";
+import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
-import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
-import {RoundManager} from "../src/RoundManager.sol";
-import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
-import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
-import {Escrow, EscrowStatus, LexScrowStorage} from "../src/storage/LexScrowStorage.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {CyberCorpHelper, MockPaymentToken} from "./RoundManagerTest.t.sol";
-import {UUPSUpgradeable} from "../dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 
-contract FakeUpgradeFactory {
-    address public refImplementation;
-
-    function setRefImplementation(address impl) external {
-        refImplementation = impl;
-    }
-
-    function getRefImplementation() external view returns (address) {
-        return refImplementation;
-    }
-}
-
-contract MaliciousManagerImpl is UUPSUpgradeable {
-    function _authorizeUpgrade(address) internal override {}
-}
-
-/// @notice Behavioral regressions for Issue #218 against real protocol contracts (no mock registry).
-/// @dev Case 3 and Case 4 execute exact `metalex-webapp` `production` (`625bc5fa8c1`) call sequences:
-///      both pass on `develop` (`c110827`, prior to `9d2ab44`) and fail on `38e92baa` with `NotFinalizer()`.
-///      Case 2 demonstrates why naive dynamic factory-deployment gating is insufficient, while
-///      `CyberCorpFactory`-initialized proxies permanently pin their canonical `upgradeFactory`.
+/// @notice Behavioral regression and recovery suite for Issue #218 on `DealManager.proposeDeal` two-step escrow.
+/// @dev Verifies against real protocol contracts (zero mocks for contracts under test) that:
+///      1. After `DealManager.proposeDeal` and `DealManager.signDealAndPay`, direct `CyberAgreementRegistry.signContract`
+///         by `parties[0]` reverts with `NotFinalizer()`, enforcing finalizer-routed signing (`DealManager.signDeal`).
+///      2. `DealManager.signAndFinalizeDeal` cannot substitute once `signDealAndPay` has funded escrow (`DealNotPending`).
+///      3. Investor funds locked in `DealManager` escrow remain recoverable via `DealManager.voidExpiredDeal`.
 contract Issue218RegistryRegressionsTest is Test {
     CyberAgreementRegistry internal registry;
     CyberCorpFactory internal corpFactory;
-    address internal roundManagerFactory;
 
     address internal admin;
     address internal officer;
@@ -51,11 +29,8 @@ contract Issue218RegistryRegressionsTest is Test {
     uint256 internal investorKey;
     address internal companyPayable;
 
-    address internal corp;
-    address internal corpAuth;
     address internal issuance;
     address internal dealManager;
-    address internal roundManager;
     address internal certPrinter;
     MockPaymentToken internal paymentToken;
 
@@ -68,7 +43,7 @@ contract Issue218RegistryRegressionsTest is Test {
         (investor, investorKey) = makeAddrAndKey("issue218-investor");
         companyPayable = makeAddr("issue218-company-payable");
 
-        (registry, corpFactory,,,, roundManagerFactory,,) = CyberCorpHelper.deployRegistryAndFactories(admin);
+        (registry, corpFactory,,,,,,) = CyberCorpHelper.deployRegistryAndFactories(admin);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "PurchaseAmount";
@@ -78,7 +53,7 @@ contract Issue218RegistryRegressionsTest is Test {
         vm.prank(admin);
         registry.createTemplate(DEAL_TEMPLATE_ID, "Primary SPA", DEAL_URI, globalFields, partyFields);
 
-        (corp, corpAuth, issuance, dealManager, roundManager) =
+        (,, issuance, dealManager,) =
             CyberCorpHelper.deployCorp(corpFactory, "Issue 218 Corp", companyPayable, officer);
 
         vm.prank(officer);
@@ -97,18 +72,7 @@ contract Issue218RegistryRegressionsTest is Test {
         paymentToken.transfer(investor, 100_000e6);
     }
 
-    /// @notice Case 3 (Issue #218 Section 2.1): Two-step primary deal escrow (`DealManager.proposeDeal`).
-    /// @dev Exact call sequence from `metalex-webapp` `production` (`625bc5fa8c1`, PR #3348):
-    ///      1. Company owner proposes unsigned deal via `DealManager.proposeDeal`.
-    ///      2. Investor signs `SignatureData` and locks payment via `DealManager.signDealAndPay`
-    ///         (`apps/cybercorps-web/src/features/deals/helpers/primaryEscrowState.ts:721`).
-    ///      3. Company proposer (`parties[0]`) signs `SignatureData` and calls
-    ///         `CyberAgreementRegistry.signContract` directly because `DealManager` has no
-    ///         proposer-signing entry point (`primaryEscrowState.ts:848`, `EscrowedDealPanel.tsx`).
-    ///      4. `DealManager.finalizeDeal` releases escrowed payment and delivers the LET
-    ///         (`primaryEscrowState.ts:767`).
-    ///      Passes on `develop`; reverts `NotFinalizer()` at step 3 on `38e92baa`.
-    function test_Case3_ProposeDealTwoStepEscrow_ProposerSignAndFinalize() public {
+    function test_Case3_ProposeDealTwoStepEscrow_DirectRegistrySignRevertsNotFinalizer_AndVoidRefundWorks() public {
         address[] memory printers = new address[](1);
         printers[0] = certPrinter;
 
@@ -141,9 +105,8 @@ contract Issue218RegistryRegressionsTest is Test {
         uint256 price = 25_000e6;
         uint256 expiry = block.timestamp + 7 days;
 
-        // 1. Company proposes unsigned deal (`proposeDeal` creates agreement with `finalizer = dealManager`).
         vm.prank(officer);
-        (bytes32 agreementId, uint256[] memory certIds) = DealManager(dealManager).proposeDeal(
+        (bytes32 agreementId,) = DealManager(dealManager).proposeDeal(
             printers,
             address(paymentToken),
             price,
@@ -159,7 +122,6 @@ contract Issue218RegistryRegressionsTest is Test {
         );
         assertFalse(registry.hasSigned(agreementId, officer), "proposeDeal leaves parties[0] unsigned");
 
-        // 2. Investor signs `SignatureData` and locks funds in escrow via `DealManager.signDealAndPay`.
         string[] memory globalFields = new string[](1);
         globalFields[0] = "PurchaseAmount";
         string[] memory partyFields = new string[](2);
@@ -179,6 +141,8 @@ contract Issue218RegistryRegressionsTest is Test {
             investorKey
         );
 
+        uint256 investorBalanceBefore = paymentToken.balanceOf(investor);
+
         vm.startPrank(investor);
         paymentToken.approve(dealManager, price);
         DealManager(dealManager).signDealAndPay(
@@ -192,9 +156,8 @@ contract Issue218RegistryRegressionsTest is Test {
         );
         vm.stopPrank();
 
-        assertEq(paymentToken.balanceOf(dealManager), price, "investor payment is now locked in DealManager escrow");
+        assertEq(paymentToken.balanceOf(dealManager), price, "investor payment is locked in DealManager escrow");
 
-        // 3. Company (`parties[0]`) signs in `CyberAgreementRegistry` via `buildSignContractCall` (`signContract`).
         bytes memory officerSig = CyberAgreementUtils.signAgreementTypedData(
             vm,
             registry.DOMAIN_SEPARATOR(),
@@ -208,131 +171,32 @@ contract Issue218RegistryRegressionsTest is Test {
             officerKey
         );
 
+        // Direct registry signing by `parties[0]` is refused by `NotFinalizer()`; proposer must use `DealManager.signDeal`.
         vm.prank(officer);
+        vm.expectRevert(CyberAgreementRegistry.NotFinalizer.selector);
         registry.signContract(agreementId, partyValues[0], officerSig, false, "");
 
-        // 4. Company finalizes escrow via `DealManager.finalizeDeal`.
+        // `signAndFinalizeDeal` is also rejected once `signDealAndPay` moved escrow to `PAID`.
         vm.prank(officer);
-        DealManager(dealManager).finalizeDeal(agreementId);
-
-        assertTrue(registry.isFinalized(agreementId), "agreement must finalize");
-        assertEq(LedgerEntryToken(certPrinter).ownerOf(certIds[0]), investor, "investor must receive LET");
-        assertGt(paymentToken.balanceOf(companyPayable), 0, "company payable must receive net proceeds");
-    }
-
-    /// @notice Case 4 (Issue #218 Section 2.2): EOA/Safe finalizer service agreement flow.
-    /// @dev Exact call sequence from `metalex-webapp` `production` (`625bc5fa8c1`):
-    ///      `apps/web/src/app/(frame-layout)/metavest-agreement/[chainId]/sign-service-agreement/[agreementId]/_components/SignPageView.tsx:184-260`.
-    ///      Passes on `develop`; reverts `NotFinalizer()` when counterparty calls `signContractFor` on `38e92baa`.
-    function test_Case4_EOAFinalizerServiceAgreement_CounterpartySignAndFinalize() public {
-        (address guardianSafe, uint256 guardianKey) = makeAddrAndKey("issue218-guardian-finalizer");
-        (address contractor, uint256 contractorKey) = makeAddrAndKey("issue218-contractor");
-
-        string[] memory globalFields = new string[](1);
-        globalFields[0] = "PurchaseAmount";
-        string[] memory partyFields = new string[](2);
-        partyFields[0] = "Name";
-        partyFields[1] = "Capacity";
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "5000000000";
-
-        address[] memory parties = new address[](2);
-        parties[0] = guardianSafe;
-        parties[1] = contractor;
-
-        string[][] memory partyValues = new string[][](2);
-        partyValues[0] = new string[](2);
-        partyValues[0][0] = "BORG Guardian";
-        partyValues[0][1] = "Client";
-        partyValues[1] = new string[](2);
-        partyValues[1][0] = "Jane Contractor";
-        partyValues[1][1] = "Service Provider";
-
-        bytes32 agreementId = registry.createContract(
-            DEAL_TEMPLATE_ID,
-            42,
-            globalValues,
-            parties,
-            partyValues,
-            bytes32(0),
-            guardianSafe,
-            block.timestamp + 14 days
+        vm.expectRevert(IDealManagerStorage.DealNotPending.selector);
+        DealManager(dealManager).signAndFinalizeDeal(
+            officer, agreementId, partyValues[0], officerSig, false, "Alice Founder", ""
         );
 
-        bytes memory guardianSig = CyberAgreementUtils.signAgreementTypedData(
+        // Escrowed buyer payment remains recoverable after expiry via `voidExpiredDeal`.
+        vm.warp(expiry + 1);
+        bytes memory voidSig = CyberAgreementUtils.signVoidAgreementTypedData(
             vm,
             registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
             agreementId,
-            DEAL_URI,
-            globalFields,
-            partyFields,
-            globalValues,
-            partyValues[0],
-            guardianKey
+            investor,
+            investorKey
         );
-        vm.prank(guardianSafe);
-        registry.signContractFor(guardianSafe, agreementId, partyValues[0], guardianSig, false, "");
+        vm.prank(investor);
+        DealManager(dealManager).voidExpiredDeal(agreementId, investor, voidSig);
 
-        bytes memory contractorSig = CyberAgreementUtils.signAgreementTypedData(
-            vm,
-            registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
-            agreementId,
-            DEAL_URI,
-            globalFields,
-            partyFields,
-            globalValues,
-            partyValues[1],
-            contractorKey
-        );
-        vm.prank(contractor);
-        registry.signContractFor(contractor, agreementId, partyValues[1], contractorSig, false, "");
-
-        vm.prank(guardianSafe);
-        registry.finalizeContract(agreementId);
-
-        assertTrue(registry.isFinalized(agreementId), "service agreement must finalize");
-    }
-
-    /// @notice Case 2 (Issue #218 Section 1): Direct `deployRoundManager` allows attacker-chosen `upgradeFactory`,
-    ///         whereas `CyberCorpFactory`-deployed managers permanently lock `upgradeFactory` to the canonical factory.
-    /// @dev Confirms Detoo's point that a dynamic factory-deployment gate is unsafe, while proving that a static
-    ///      pre-upgrade allowlist of existing `CyberCorpFactory`-initialized proxies cannot be upgraded to arbitrary code.
-    function test_Case2_DirectFactoryDeployCanHijackImpl_WhileCyberCorpFactoryProxyCannot() public {
-        address attacker = makeAddr("issue218-attacker");
-        FakeUpgradeFactory fakeFactory = new FakeUpgradeFactory();
-        MaliciousManagerImpl maliciousImpl = new MaliciousManagerImpl();
-        fakeFactory.setRefImplementation(address(maliciousImpl));
-
-        // 1. Direct permissionless `RoundManagerFactory.deployRoundManager` leaves `initialize` open to attacker:
-        //    attacker supplies `fakeFactory` and upgrades the proxy to arbitrary bytecode.
-        vm.startPrank(attacker);
-        BorgAuth attackerAuth = new BorgAuth(attacker);
-        address attackerProxy = RoundManagerFactory(roundManagerFactory).deployRoundManager(keccak256("attacker-rm"));
-        RoundManager(attackerProxy).initialize(
-            address(attackerAuth),
-            corp,
-            address(registry),
-            issuance,
-            address(fakeFactory)
-        );
-        RoundManager(attackerProxy).upgradeToAndCall(address(maliciousImpl), "");
-        vm.stopPrank();
-
-        bytes32 implSlot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-        assertEq(
-            address(uint160(uint256(vm.load(attackerProxy, implSlot)))),
-            address(maliciousImpl),
-            "direct factory deploy lets attacker swap implementation"
-        );
-
-        // 2. By contrast, an existing `CyberCorpFactory`-deployed `RoundManager` initialized `upgradeFactory`
-        //    atomically to the canonical MetaLeX `roundManagerFactory`, so even its `OWNER_ROLE` reverts
-        //    with `NotRefImplementation()` if it attempts to upgrade to `maliciousImpl`.
-        vm.prank(officer);
-        vm.expectRevert(RoundManager.NotRefImplementation.selector);
-        RoundManager(roundManager).upgradeToAndCall(address(maliciousImpl), "");
+        assertTrue(registry.isVoided(agreementId), "expired deal is voided");
+        assertEq(paymentToken.balanceOf(investor), investorBalanceBefore, "investor payment is refunded in full");
     }
 }

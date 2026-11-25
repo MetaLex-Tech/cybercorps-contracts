@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {IERC721} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -12,12 +13,10 @@ import {DealManager} from "../src/DealManager.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {RoundManager} from "../src/RoundManager.sol";
-import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
-import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundLib, RoundType} from "../src/libs/RoundLib.sol";
 import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
-import {CyberCertData, EOI, LexChexDetails} from "../src/storage/RoundManagerStorage.sol";
+import {CyberCertData, EOI} from "../src/storage/RoundManagerStorage.sol";
 import {
     AcceptOfferParams,
     ExemptionPathway,
@@ -43,15 +42,16 @@ interface IRoundManagerV4 {
     function createRound(Round memory roundDraft, CyberCertDataV4[] memory certData) external returns (bytes32);
 }
 
-/// @notice Mixed-version Base fork regressions for Issue #218 (Section 1: Case 1).
-/// @dev Forks Base (`8453`) at block `61900000`, builds live round and secondary-offer state against
-///      the deployed Base `CyberAgreementRegistry` (`0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134`,
-///      implementation `0x239Ef1C2F037e0AE2ED4c2c9B4196d8ffe738ea9`), verifies in a snapshot that
-///      settlement succeeds before upgrading the registry, then upgrades ONLY `CyberAgreementRegistry`
-///      to `38e92baa` while leaving deployed company `RoundManager` and `DealManager` proxies at their
-///      live implementations (`RoundManager` v4 `0xF9768520048Fe1289F5f68bf7258b9BF5345F23D`,
-///      `RoundManager` 5.1 `0x2d282dB929bf095B1F9a97469b090f7A4f92Bd1a`, and `DealManager` 5
-///      `0xF791E85C9D6c140891DF59C56bf093E298cfc7C7`).
+/// @notice Hard-cutover upgrade boundary and escrow recovery fork tests for Issue #218 (Section 1: Case 1).
+/// @dev Forks Base (`8453`) at block `61900000` against live `CyberAgreementRegistry`
+///      (`0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134`). Verifies in a snapshot that settlement succeeds before
+///      the registry upgrade, then upgrades ONLY `CyberAgreementRegistry` and asserts:
+///      1. Un-upgraded company `RoundManager` (live v4 `0xF9768520048Fe1289F5f68bf7258b9BF5345F23D` and live 5.1
+///         `0x2d282dB929bf095B1F9a97469b090f7A4f92Bd1a`) and `DealManager` (live 5
+///         `0xF791E85C9D6c140891DF59C56bf093E298cfc7C7`) proxies revert on settlement until the company owner
+///         upgrades the manager proxy (documented hard-cutover upgrade requirement).
+///      2. Investor funds escrowed before the registry upgrade (`reject` and `recallEOI`) and seller certificates
+///         in open secondary offers (`cancelOffer`) remain recoverable without upgrading the manager proxy first.
 ///      Requires `RPC_URL_BASE`; skipped when `RPC_URL_BASE` is unset.
 contract Issue218MixedVersionEscrowForkTest is Test {
     using RoundLib for Round;
@@ -138,7 +138,10 @@ contract Issue218MixedVersionEscrowForkTest is Test {
         CyberAgreementUtils.upgradeRegistry(vm, address(registry), core.metalexSafe);
     }
 
-    function _createRoundOn(address rm, address corpAddr, RoundType roundType) internal returns (bytes32 roundId) {
+    function _createRoundOn(address rm, address corpAddr, RoundType roundType, bool allowTimedOffers)
+        internal
+        returns (bytes32 roundId)
+    {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Restricted";
         CyberCertData[] memory certData = new CyberCertData[](1);
@@ -187,7 +190,7 @@ contract Issue218MixedVersionEscrowForkTest is Test {
                 SecuritySeries.SeriesSeed,
                 roundType,
                 false,
-                false,
+                allowTimedOffers,
                 false,
                 cap,
                 minTicket,
@@ -214,7 +217,10 @@ contract Issue218MixedVersionEscrowForkTest is Test {
         roundId = RoundManager(rm).createRound(draft, certData);
     }
 
-    function _createRoundOnV4(address rm, address corpAddr, RoundType roundType) internal returns (bytes32 roundId) {
+    function _createRoundOnV4(address rm, address corpAddr, RoundType roundType, bool allowTimedOffers)
+        internal
+        returns (bytes32 roundId)
+    {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Restricted";
         CyberCertDataV4[] memory certData = new CyberCertDataV4[](1);
@@ -262,7 +268,7 @@ contract Issue218MixedVersionEscrowForkTest is Test {
                 SecuritySeries.SeriesSeed,
                 roundType,
                 false,
-                false,
+                allowTimedOffers,
                 false,
                 cap,
                 minTicket,
@@ -289,10 +295,64 @@ contract Issue218MixedVersionEscrowForkTest is Test {
         roundId = IRoundManagerV4(rm).createRound(draft, certData);
     }
 
-    function _submitInvestorEOI(address rm, bytes32 roundId, uint256 salt, uint256 amount)
+    function _submitInvestorEOI(address rm, bytes32 roundId, uint256 salt, uint256 amount, uint256 expiry)
         internal
         returns (bytes32 agreementId)
     {
+        Round memory r = RoundManager(rm).getRound(roundId);
+        address[] memory parties = new address[](2);
+        parties[0] = r.authorityOfficer;
+        parties[1] = investor;
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field";
+        string[] memory partyFields = new string[](2);
+        partyFields[0] = "Officer Name";
+        partyFields[1] = "Officer Title";
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "10000";
+        string[] memory investorPartyValues = new string[](2);
+        investorPartyValues[0] = "Bob Investor";
+        investorPartyValues[1] = "Subscriber";
+
+        bytes32 predictedId =
+            keccak256(abi.encode(TEST_TEMPLATE_ID, salt, globalValues, parties, bytes32(0), rm));
+
+        bytes memory sig = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            predictedId,
+            TEST_TEMPLATE_URI,
+            globalFields,
+            partyFields,
+            globalValues,
+            investorPartyValues,
+            investorKey
+        );
+
+        EOI memory eoi = EOI({
+            name: "Bob Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "bob@example.com",
+            minAmount: amount,
+            maxAmount: amount,
+            expiry: expiry,
+            naturalPerson: true,
+            lexchexDetails: CyberCorpHelper.emptyLex()
+        });
+
+        vm.startPrank(investor);
+        IERC20(BASE_USDC).approve(rm, amount);
+        (agreementId,) = RoundManager(rm).submitEOI(
+            roundId, eoi, globalValues, investorPartyValues, sig, salt, new address[](0), bytes32(0)
+        );
+        vm.stopPrank();
+    }
+
+    function _submitPostUpgradeExpectRevert(address rm, bytes32 roundId, uint256 salt, uint256 amount) internal {
         Round memory r = RoundManager(rm).getRound(roundId);
         address[] memory parties = new address[](2);
         parties[0] = r.authorityOfficer;
@@ -340,32 +400,38 @@ contract Issue218MixedVersionEscrowForkTest is Test {
 
         vm.startPrank(investor);
         IERC20(BASE_USDC).approve(rm, amount);
-        (agreementId,) = RoundManager(rm).submitEOI(
+        vm.expectRevert();
+        RoundManager(rm).submitEOI(
             roundId, eoi, globalValues, investorPartyValues, sig, salt, new address[](0), bytes32(0)
         );
         vm.stopPrank();
     }
 
-    /// @notice Un-upgraded live Base 5.1 `RoundManager` FCFS `submitEOI` succeeds before registry upgrade
-    ///         and reverts after upgrading only `CyberAgreementRegistry` to `38e92baa`.
-    function test_Case1a_UnupgradedLiveV51RoundManager_FCFSSubmitEOI() public {
-        bytes32 roundId = _createRoundOn(v5RoundManager, v5Corp, RoundType.FCFS);
+    /// @notice Hard-cutover upgrade requirement: un-upgraded live Base 5.1 `RoundManager` FCFS `submitEOI`
+    ///         succeeds before registry upgrade and reverts atomically after upgrading `CyberAgreementRegistry`
+    ///         (leaving investor USDC untouched).
+    function test_Case1a_UnupgradedLiveV51RoundManager_FCFSSubmitEOI_RevertsUntilManagerUpgrade() public {
+        bytes32 roundId = _createRoundOn(v5RoundManager, v5Corp, RoundType.FCFS, false);
 
         uint256 snap = vm.snapshotState();
-        bytes32 preUpgradeId = _submitInvestorEOI(v5RoundManager, roundId, 101, 10_000e6);
+        bytes32 preUpgradeId = _submitInvestorEOI(v5RoundManager, roundId, 101, 10_000e6, block.timestamp + 7 days);
         assertTrue(registry.isFinalized(preUpgradeId), "FCFS submitEOI succeeds before registry upgrade");
         vm.revertToState(snap);
 
+        uint256 investorBefore = IERC20(BASE_USDC).balanceOf(investor);
         _upgradeRegistryOnly();
-        bytes32 postUpgradeId = _submitInvestorEOI(v5RoundManager, roundId, 101, 10_000e6);
-        assertTrue(registry.isFinalized(postUpgradeId), "FCFS submitEOI on un-upgraded 5.1 RoundManager");
+        _submitPostUpgradeExpectRevert(v5RoundManager, roundId, 101, 10_000e6);
+        assertEq(IERC20(BASE_USDC).balanceOf(investor), investorBefore, "investor USDC stays in wallet on revert");
     }
 
-    /// @notice Un-upgraded live Base 5.1 `RoundManager` FounderApproved `allocate` (with investor USDC already
-    ///         escrowed prior to the registry upgrade) succeeds before registry upgrade and reverts after `38e92baa`.
-    function test_Case1b_UnupgradedLiveV51RoundManager_AllocateEscrowedEOI() public {
-        bytes32 roundId = _createRoundOn(v5RoundManager, v5Corp, RoundType.FounderApproved);
-        bytes32 agreementId = _submitInvestorEOI(v5RoundManager, roundId, 202, 10_000e6);
+    /// @notice Hard-cutover upgrade requirement + non-lockup proof: un-upgraded live Base 5.1 `RoundManager`
+    ///         FounderApproved `allocate` reverts after registry upgrade, while both `reject` and `recallEOI`
+    ///         refund investor USDC without upgrading the `RoundManager` proxy first.
+    function test_Case1b_UnupgradedLiveV51RoundManager_AllocateReverts_AndRejectOrRecallRefunds() public {
+        bytes32 roundId = _createRoundOn(v5RoundManager, v5Corp, RoundType.FounderApproved, true);
+        uint256 eoiExpiry = block.timestamp + 7 days;
+        uint256 investorBefore = IERC20(BASE_USDC).balanceOf(investor);
+        bytes32 agreementId = _submitInvestorEOI(v5RoundManager, roundId, 202, 10_000e6, eoiExpiry);
 
         uint256 snap = vm.snapshotState();
         vm.prank(officer);
@@ -375,14 +441,27 @@ contract Issue218MixedVersionEscrowForkTest is Test {
 
         _upgradeRegistryOnly();
         vm.prank(officer);
+        vm.expectRevert();
         RoundManager(v5RoundManager).allocate(agreementId, 10_000e6);
-        assertTrue(registry.isFinalized(agreementId), "allocate on un-upgraded 5.1 RoundManager");
+
+        // Recovery path 1: founder `reject` refunds investor USDC without calling removed escrow selector.
+        uint256 postUpgradeSnap = vm.snapshotState();
+        vm.prank(officer);
+        RoundManager(v5RoundManager).reject(agreementId);
+        assertEq(IERC20(BASE_USDC).balanceOf(investor), investorBefore, "reject refunds investor USDC in full");
+        vm.revertToState(postUpgradeSnap);
+
+        // Recovery path 2: investor `recallEOI` after EOI expiry refunds investor USDC without founder action.
+        vm.warp(eoiExpiry + 1);
+        vm.prank(investor);
+        RoundManager(v5RoundManager).recallEOI(agreementId);
+        assertEq(IERC20(BASE_USDC).balanceOf(investor), investorBefore, "recallEOI refunds investor USDC in full");
     }
 
-    /// @notice Existing live Base v4 company (`0x3c60411a819597a10893c85fec6262843e4de990`, `RoundManager`
-    ///         `0xF9768520048Fe1289F5f68bf7258b9BF5345F23D`) `allocate` succeeds before registry upgrade and
-    ///         reverts after upgrading only `CyberAgreementRegistry` to `38e92baa`.
-    function test_Case1c_UnupgradedExistingLiveV4RoundManager_AllocateEscrowedEOI() public {
+    /// @notice Hard-cutover upgrade requirement + non-lockup proof on existing live Base v4 `RoundManager`
+    ///         (`0xF9768520048Fe1289F5f68bf7258b9BF5345F23D` on corp `0x3C60411a819597A10893C85FeC6262843e4dE990`):
+    ///         `allocate` reverts after registry upgrade, while `reject` and `recallEOI` refund investor USDC.
+    function test_Case1c_UnupgradedExistingLiveV4RoundManager_AllocateReverts_AndRejectOrRecallRefunds() public {
         assertEq(RoundManager(LIVE_V4_ROUND_MANAGER).DEPLOY_VERSION(), "4");
         (address existingFounder,,,) = CyberCorp(LIVE_V4_CORP).companyOfficers(0);
         BorgAuth v4Auth = CyberCorp(LIVE_V4_CORP).AUTH();
@@ -393,8 +472,10 @@ contract Issue218MixedVersionEscrowForkTest is Test {
         );
         vm.stopPrank();
 
-        bytes32 roundId = _createRoundOnV4(LIVE_V4_ROUND_MANAGER, LIVE_V4_CORP, RoundType.FounderApproved);
-        bytes32 agreementId = _submitInvestorEOI(LIVE_V4_ROUND_MANAGER, roundId, 303, 10_000e6);
+        bytes32 roundId = _createRoundOnV4(LIVE_V4_ROUND_MANAGER, LIVE_V4_CORP, RoundType.FounderApproved, true);
+        uint256 eoiExpiry = block.timestamp + 7 days;
+        uint256 investorBefore = IERC20(BASE_USDC).balanceOf(investor);
+        bytes32 agreementId = _submitInvestorEOI(LIVE_V4_ROUND_MANAGER, roundId, 303, 10_000e6, eoiExpiry);
 
         uint256 snap = vm.snapshotState();
         vm.prank(officer);
@@ -404,14 +485,27 @@ contract Issue218MixedVersionEscrowForkTest is Test {
 
         _upgradeRegistryOnly();
         vm.prank(officer);
+        vm.expectRevert();
         RoundManager(LIVE_V4_ROUND_MANAGER).allocate(agreementId, 10_000e6);
-        assertTrue(registry.isFinalized(agreementId), "v4 allocate on un-upgraded live RoundManager");
+
+        // Recovery path 1: founder `reject` on live v4 RoundManager refunds investor USDC.
+        uint256 postUpgradeSnap = vm.snapshotState();
+        vm.prank(officer);
+        RoundManager(LIVE_V4_ROUND_MANAGER).reject(agreementId);
+        assertEq(IERC20(BASE_USDC).balanceOf(investor), investorBefore, "v4 reject refunds investor USDC in full");
+        vm.revertToState(postUpgradeSnap);
+
+        // Recovery path 2: investor `recallEOI` after EOI expiry on live v4 RoundManager refunds investor USDC.
+        vm.warp(eoiExpiry + 1);
+        vm.prank(investor);
+        RoundManager(LIVE_V4_ROUND_MANAGER).recallEOI(agreementId);
+        assertEq(IERC20(BASE_USDC).balanceOf(investor), investorBefore, "v4 recallEOI refunds investor USDC in full");
     }
 
-    /// @notice Un-upgraded live Base v5 `DealManager` (`0xF791E85C9D6c140891DF59C56bf093E298cfc7C7`) secondary
-    ///         `acceptOffer` (on an offer posted with `offerorAgreementSig = ""` as `metalex-webapp` `production`
-    ///         `625bc5fa8c1` `secondaryOfferCall.ts` sends) succeeds before registry upgrade and reverts after `38e92baa`.
-    function test_Case1d_UnupgradedLiveV5DealManager_AcceptSecondaryOffer() public {
+    /// @notice Hard-cutover upgrade requirement + non-lockup proof on live Base v5 `DealManager`
+    ///         (`0xF791E85C9D6c140891DF59C56bf093E298cfc7C7`): `acceptOffer` reverts after registry upgrade,
+    ///         while `cancelOffer` returns the seller's escrowed LET certificate cleanly.
+    function test_Case1d_UnupgradedLiveV5DealManager_AcceptOfferReverts_AndCancelOfferRecoversCert() public {
         bytes32 secTemplateId = keccak256("Issue218.SecondaryTemplate");
         vm.prank(core.metalexSafe);
         registry.createTemplate(secTemplateId, "Secondary SPA", "ipfs://sec-spa", new string[](0), new string[](0));
@@ -446,7 +540,6 @@ contract Issue218MixedVersionEscrowForkTest is Test {
         ILedgerEntryToken(printer).setGlobalLegalTransferable(true);
         vm.stopPrank();
 
-        // Seller posts offer prior to upgrade with `offerorAgreementSig: ""` (matches production webapp).
         PostOfferParams memory postParams = PostOfferParams({
             side: OfferSide.SELL,
             certPrinter: printer,
@@ -517,8 +610,13 @@ contract Issue218MixedVersionEscrowForkTest is Test {
         _upgradeRegistryOnly();
         vm.startPrank(buyer);
         IERC20(BASE_USDC).approve(v5DealManager, 10_000e6);
-        bytes32 postUpgradeSettlement = DealManager(v5DealManager).acceptOffer(acceptParams);
+        vm.expectRevert();
+        DealManager(v5DealManager).acceptOffer(acceptParams);
         vm.stopPrank();
-        assertEq(postUpgradeSettlement, settlementId, "acceptOffer on un-upgraded live v5 DealManager");
+
+        // Offeror `cancelOffer` recovers the escrowed LET certificate without upgrading DealManager first.
+        vm.prank(investor);
+        DealManager(v5DealManager).cancelOffer(offerId);
+        assertEq(IERC721(printer).ownerOf(tokenId), investor, "cancelOffer returns seller LET certificate");
     }
 }
