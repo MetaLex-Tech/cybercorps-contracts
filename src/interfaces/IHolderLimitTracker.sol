@@ -2,15 +2,16 @@
 pragma solidity 0.8.28;
 
 /// @title  IHolderLimitTracker - section 12(g) holder counts of LET contracts, kept outside the LET contract
-/// @notice One shared tracker keeps, for each LET contract (printer) that points at it, the counts that
-/// HolderCapCondition needs for a limit on holders who are not accredited and for leaving holders of plan
-/// securities only (Rule 12g5-1(a)(8)) out of the counts. The printer reports each change of a lot through
-/// `onLotChange`; everything else is computed here from the printer's public reads and its credential
-/// registry (`lookThroughBadge`).
+/// @notice One shared tracker keeps, for each LET contract (printer) that points at it, the section 12(g)
+/// counts that HolderCapCondition needs: holders of record, holders who are not accredited, and both with the
+/// holders of plan securities only (Rule 12g5-1(a)(8)) left out. Section 12(g) counts holders of record, so
+/// each legal owner with a live lot counts as one holder; there is no look-through to beneficial owners. The
+/// printer reports each change of a lot through `onLotChange`; everything else is computed here from the
+/// printer's public reads and the accreditation credentials in its registry (`lookThroughBadge`).
 interface IHolderLimitTracker {
-    /// @notice The counts of one printer, all on the look-through basis of `lookThroughHolderCount`.
+    /// @notice The counts of one printer, in holders of record: each legal owner with a live lot counts once.
     struct Counts {
-        uint256 total;                       // Σ weight over live holders
+        uint256 total;                       // legal owners with a live lot
         uint256 nonAccredited;               // total less the holders booked accredited
         uint256 totalExcludingPlan;          // total less the plan-only holders
         uint256 nonAccreditedExcludingPlan;  // nonAccredited less the plan-only holders who are not accredited
@@ -20,7 +21,7 @@ interface IHolderLimitTracker {
     struct HolderRecord {
         uint32 liveLots;      // live lots counted for the holder
         uint32 planLots;      // of those, lots with the plan label in force
-        uint32 weight;        // look-through weight in the totals; 0 = not in the totals
+        bool counted;         // in the totals (the holder has a live lot)
         bool accredited;      // booked accredited
         bool planOnly;        // every live lot has the plan label
         uint256 credentialId; // the credential the accredited booking relies on
@@ -61,7 +62,7 @@ interface IHolderLimitTracker {
     /// @notice Re-read one lot from the printer (legal owner and void status) and apply it.
     function syncLot(address printer, uint256 tokenId) external;
 
-    /// @notice Re-read a holder's look-through weight and accreditation from the registry.
+    /// @notice Re-read a holder's accreditation from the registry.
     function syncHolder(address printer, address owner) external;
 
     function syncHolders(address printer, address[] calldata owners) external;
@@ -91,8 +92,8 @@ interface IHolderLimitTracker {
     /// mark, and either a valid accredited credential now or a booking whose credential was not voided.
     function isAccredited(address printer, address account) external view returns (bool);
 
-    /// @notice The weight a plan-only holder is left out of the counts with; 0 for any other address.
-    function planOnlyHolderWeight(address printer, address owner) external view returns (uint256);
+    /// @notice True when `owner` is a holder whose every live lot has the plan label in force.
+    function isPlanOnlyHolder(address printer, address owner) external view returns (bool);
 
     function isPlanSecurity(address printer, uint256 tokenId) external view returns (bool);
 

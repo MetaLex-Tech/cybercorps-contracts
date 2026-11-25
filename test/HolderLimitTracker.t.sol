@@ -235,13 +235,15 @@ contract HolderLimitTrackerTest is Test {
         return !printer.isVoided(id);
     }
 
-    /// @dev T1 and T2: each holder's live lots and plan-only state match the printer and the labels, and every
-    /// total equals the sum of the holders' contributions and (total) the printer's own tally.
+    /// @dev T1 and T2: each holder's live lots and plan-only state match the printer and the labels; every total
+    /// is the number of holders of record in that state (each legal owner with a live lot once); and the total
+    /// never exceeds the printer's look-through tally, which counts an entity as its beneficial owners.
     function _checkBook() internal view {
         uint256 total;
         uint256 accredited;
         uint256 planOnly;
         uint256 planOnlyAccredited;
+        uint256 owners;
         for (uint256 i = 0; i < holders.length; i++) {
             address h = holders[i];
             uint32 live;
@@ -256,18 +258,21 @@ contract HolderLimitTrackerTest is Test {
             assertEq(r.liveLots, live, "live lots");
             assertEq(r.planLots, planned, "plan lots");
             assertEq(r.planOnly, live > 0 && planned == live, "plan-only");
-            assertEq(r.weight == 0, live == 0, "weight iff live");
-            total += r.weight;
-            if (r.accredited) accredited += r.weight;
-            if (r.planOnly) planOnly += r.weight;
-            if (r.accredited && r.planOnly) planOnlyAccredited += r.weight;
+            assertEq(r.counted, live > 0, "counted iff live");
+            if (live > 0) owners++;
+            if (!r.counted) continue;
+            total += 1;
+            if (r.accredited) accredited += 1;
+            if (r.planOnly) planOnly += 1;
+            if (r.accredited && r.planOnly) planOnlyAccredited += 1;
         }
         IHolderLimitTracker.Counts memory c = _counts();
         assertEq(c.total, total, "total");
         assertEq(c.nonAccredited, total - accredited, "non-accredited");
         assertEq(c.totalExcludingPlan, total - planOnly, "excluding plan");
         assertEq(c.nonAccreditedExcludingPlan, (total - accredited) - (planOnly - planOnlyAccredited), "non-accredited excluding plan");
-        assertEq(c.total, printer.lookThroughHolderCount(), "matches the printer's tally");
+        assertEq(c.total, owners, "one per legal owner with a live lot");
+        assertLe(c.total, printer.lookThroughHolderCount(), "never above the look-through tally");
     }
 
     // ── Opt-in and attach ──────────────────────────────────────────────────────────────────────────
@@ -343,20 +348,28 @@ contract HolderLimitTrackerTest is Test {
         printer.debugBurn(1); // bob's only lot
         tokens[0] = tokens[1];
         tokens.pop();
-        assertEq(_rec(bob).weight, 0);
+        assertFalse(_rec(bob).counted);
         _checkBook();
     }
 
-    function test_EntityWeight_FollowsThePrinterRule() public {
+    /// Section 12(g) counts holders of record: an entity with 5 beneficial owners is one holder here, while the
+    /// printer's Investment Company Act look-through tally counts it as 5.
+    function test_Entity_CountsAsOneHolderOfRecord() public {
         _attach();
         _entity(alice, 5);
         _mint(1, alice);
-        assertEq(_rec(alice).weight, 5);
+        _mint(2, alice);
+        _mint(3, bob);
+        assertTrue(_rec(alice).counted);
+        assertEq(_counts().total, 2, "alice and bob, one each");
+        assertEq(_counts().nonAccredited, 2);
+        assertEq(printer.lookThroughHolderCount(), 6, "the look-through tally is unchanged");
         _checkBook();
-        // A lapse is unknown, not lower: the weight stays
-        vm.warp(block.timestamp + 3651 days);
+        // A later credential with more beneficial owners changes nothing here
+        _entity(alice, 40);
         tracker.syncHolder(address(printer), alice);
-        assertEq(_rec(alice).weight, 5);
+        assertEq(_counts().total, 2);
+        _checkBook();
     }
 
     // ── Accreditation ──────────────────────────────────────────────────────────────────────────────
@@ -443,7 +456,8 @@ contract HolderLimitTrackerTest is Test {
         assertEq(_counts().totalExcludingPlan, 2);
         _label(2, true);
         assertTrue(_rec(alice).planOnly);
-        assertEq(tracker.planOnlyHolderWeight(address(printer), alice), 1);
+        assertTrue(tracker.isPlanOnlyHolder(address(printer), alice));
+        assertFalse(tracker.isPlanOnlyHolder(address(printer), bob));
         assertEq(_counts().totalExcludingPlan, 1);
         assertEq(_counts().nonAccreditedExcludingPlan, 1);
         _checkBook();
@@ -576,7 +590,7 @@ contract HolderLimitTrackerTest is Test {
         fake.attach(tracker);
         fake.report(tracker, 1, alice, true);
         IHolderLimitTracker.HolderRecord memory r = tracker.holderRecord(address(fake), alice);
-        assertEq(r.weight, 1, "an oversized count reads as none");
+        assertTrue(r.counted, "counted as one holder of record");
         assertFalse(r.accredited, "a malformed found word reads as not found");
         assertFalse(tracker.isAccredited(address(fake), alice));
         assertEq(tracker.counts(address(fake)).nonAccredited, 1);
@@ -601,7 +615,7 @@ contract HolderLimitTrackerTest is Test {
         FakePrinter fake = new FakePrinter(address(new HostileTracker())); // no registry functions: every read fails
         fake.attach(tracker);
         fake.report(tracker, 1, alice, true);
-        assertEq(tracker.holderRecord(address(fake), alice).weight, 1);
+        assertTrue(tracker.holderRecord(address(fake), alice).counted);
         assertEq(tracker.counts(address(fake)).nonAccredited, 1);
     }
 
@@ -644,7 +658,7 @@ contract HolderLimitTrackerTest is Test {
         uint256 nextId = 1;
         for (uint256 step = 0; step < 40; step++) {
             uint256 r = uint256(keccak256(abi.encode(seed, step)));
-            uint256 op = r % 9;
+            uint256 op = r % 10;
             address h = holders[(r >> 8) % holders.length];
             if (op == 0 || tokens.length == 0) {
                 _mint(nextId++, h);
@@ -657,6 +671,10 @@ contract HolderLimitTrackerTest is Test {
                 else if (op == 4) _label(id, (r >> 24) % 2 == 0);
                 else if (op == 5) _mark(h, (r >> 24) % 2 == 0);
                 else if (op == 6) credentials[(r >> 8) % holders.length] = _accredit(h);
+                else if (op == 9) {
+                    _entity(h, uint32(2 + (r >> 24) % 30)); // look-through only; the book must not change
+                    tracker.syncHolder(address(printer), h);
+                }
                 else if (op == 7) {
                     uint256 c = credentials[(r >> 8) % holders.length];
                     if (c != 0 && badge.isValid(c)) badge.void(c, "fuzz");

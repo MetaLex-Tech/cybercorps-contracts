@@ -15,10 +15,13 @@ import {Credential} from "./creds/storage/lexchexBadgeStorage.sol";
 /// @notice A shared singleton. A LET contract (printer) opts in by pointing `holderTracker` at it; the printer
 /// then reports every change of a lot's legal owner or void status here (`onLotChange`). From those reports
 /// and the printer's credential registry the tracker keeps, per printer:
-///  - each holder's live lots, look-through weight (the rule of the printer's own tally), accredited booking
-///    and plan-only state;
-///  - the totals behind `counts`, which HolderCapCondition reads for its limit on holders who are not
-///    accredited and for leaving plan-only holders out (Rule 12g5-1(a)(8)).
+///  - each holder's live lots, accredited booking and plan-only state;
+///  - the totals behind `counts`, which HolderCapCondition reads for its section 12(g) limits: holders of
+///    record, holders who are not accredited, and leaving plan-only holders out (Rule 12g5-1(a)(8)).
+///
+/// Holders of record: section 12(g) counts each legal owner once. An entity is one holder however many
+/// beneficial owners it has; there is no look-through (owner decision, 2026-11-25). The printer's own
+/// look-through tally, which the Investment Company Act cap uses, is separate and unchanged.
 ///
 /// Who can write what:
 ///  - A printer writes only its own book: `onAttach`, `onDetach` and `onLotChange` are keyed by msg.sender.
@@ -39,21 +42,21 @@ import {Credential} from "./creds/storage/lexchexBadgeStorage.sol";
 /// decision: the evidence from the time of the purchase stands); a void of the credential the booking relies
 /// on ends it at the next sync, unless another valid one exists; the company mark ends it at once.
 ///
-/// A registry that answers malformed data never reverts a sync: it reads as no count, not accredited and
+/// A registry that answers malformed data never reverts a sync: it reads as not accredited and
 /// voided, which can only raise the counts of holders who are not accredited.
 contract HolderLimitTracker is IHolderLimitTracker, UUPSUpgradeable, BorgAuthACL {
-    /// @dev One holder, packed in one slot. `weight` is 0 exactly when the holder is not in the totals.
+    /// @dev One holder, packed in one slot. `counted` is true exactly when the holder is in the totals.
     struct Holder {
         uint32 liveLots;
         uint32 planLots;
-        uint32 weight;
+        bool counted;
         bool accredited;
         bool planOnly;
     }
 
-    /// @dev One generation of a printer's counts. Every total equals the sum of the matching contribution of
-    /// the holders: total = Σ weight; accredited = Σ weight if accredited; planOnly = Σ weight if planOnly;
-    /// planOnlyAccredited = Σ weight if both.
+    /// @dev One generation of a printer's counts. Every total is the number of counted holders with the
+    /// matching state: total = all; accredited = booked accredited; planOnly = plan-only;
+    /// planOnlyAccredited = both.
     struct Book {
         bool started;                            // `target` is fixed
         bool ready;                              // the backfill covered `target`
@@ -218,15 +221,15 @@ contract HolderLimitTracker is IHolderLimitTracker, UUPSUpgradeable, BorgAuthACL
         if (!attached) return false;
         Book storage b = _storage().books[printer][gen];
         Holder storage h = b.holders[account];
-        return h.weight != 0 && h.accredited && !_isVoided(badge, b.credentialId[account]);
+        return h.counted && h.accredited && !_isVoided(badge, b.credentialId[account]);
     }
 
     /// @inheritdoc IHolderLimitTracker
-    function planOnlyHolderWeight(address printer, address owner) external view returns (uint256) {
+    function isPlanOnlyHolder(address printer, address owner) external view returns (bool) {
         (bool attached, uint64 gen) = _generation(printer);
-        if (!attached) return 0;
+        if (!attached) return false;
         Holder storage h = _storage().books[printer][gen].holders[owner];
-        return h.planOnly ? h.weight : 0;
+        return h.counted && h.planOnly;
     }
 
     /// @inheritdoc IHolderLimitTracker
@@ -253,7 +256,7 @@ contract HolderLimitTracker is IHolderLimitTracker, UUPSUpgradeable, BorgAuthACL
         r = HolderRecord({
             liveLots: h.liveLots,
             planLots: h.planLots,
-            weight: h.weight,
+            counted: h.counted,
             accredited: h.accredited,
             planOnly: h.planOnly,
             credentialId: b.credentialId[owner]
@@ -319,17 +322,17 @@ contract HolderLimitTracker is IHolderLimitTracker, UUPSUpgradeable, BorgAuthACL
         if (holder != address(0)) _syncHolder(printer, b, holder);
     }
 
-    /// @dev Remove what the holder adds to the totals, recompute its weight, booking and plan-only state, and
-    /// add the new contribution. A holder with no live lot leaves the totals and its record is cleared; its
-    /// company mark stays.
+    /// @dev Remove the holder from the totals, recompute its booking and plan-only state, and add it back as one
+    /// holder of record. A holder with no live lot leaves the totals and its record is cleared; its company
+    /// mark stays.
     function _syncHolder(address printer, Book storage b, address owner) private {
         Holder storage h = b.holders[owner];
-        uint32 oldWeight = h.weight;
-        if (oldWeight != 0) {
-            b.total -= oldWeight;
-            if (h.accredited) b.accredited -= oldWeight;
-            if (h.planOnly) b.planOnly -= oldWeight;
-            if (h.accredited && h.planOnly) b.planOnlyAccredited -= oldWeight;
+        bool wasCounted = h.counted;
+        if (wasCounted) {
+            b.total -= 1;
+            if (h.accredited) b.accredited -= 1;
+            if (h.planOnly) b.planOnly -= 1;
+            if (h.accredited && h.planOnly) b.planOnlyAccredited -= 1;
         }
         if (h.liveLots == 0) {
             delete b.holders[owner];
@@ -337,21 +340,16 @@ contract HolderLimitTracker is IHolderLimitTracker, UUPSUpgradeable, BorgAuthACL
             return;
         }
 
-        address badge = _badgeOf(printer);
-        // The printer's weight rule: a credentialed count, else the weight already booked (a lapsed or voided
-        // count is unknown, not lower), else one.
-        uint32 bo = _boCount(badge, owner);
-        uint32 weight = bo > 0 ? bo : (oldWeight > 0 ? oldWeight : 1);
-        bool booked = _decideBooking(printer, b, badge, owner, oldWeight != 0 && h.accredited);
+        bool booked = _decideBooking(printer, b, _badgeOf(printer), owner, wasCounted && h.accredited);
         bool planOnly = h.planLots == h.liveLots;
 
-        h.weight = weight;
+        h.counted = true;
         h.accredited = booked;
         h.planOnly = planOnly;
-        b.total += weight;
-        if (booked) b.accredited += weight;
-        if (planOnly) b.planOnly += weight;
-        if (booked && planOnly) b.planOnlyAccredited += weight;
+        b.total += 1;
+        if (booked) b.accredited += 1;
+        if (planOnly) b.planOnly += 1;
+        if (booked && planOnly) b.planOnlyAccredited += 1;
     }
 
     /// @dev The booking of a live holder: the company mark ends it; a valid credential books it (and is the
@@ -401,13 +399,6 @@ contract HolderLimitTracker is IHolderLimitTracker, UUPSUpgradeable, BorgAuthACL
     function _badgeOf(address printer) private view returns (address) {
         (bool ok, uint256 word) = _readUint(printer, abi.encodeCall(ILedgerEntryToken.lookThroughBadge, ()));
         return (ok && word <= type(uint160).max) ? address(uint160(word)) : address(0);
-    }
-
-    function _boCount(address badge, address owner) private view returns (uint32) {
-        if (badge == address(0)) return 0;
-        (bool ok, uint256 word) =
-            _readUint(badge, abi.encodeCall(ILexChexBadge.getEffectiveBeneficialOwnerCount, (owner)));
-        return (ok && word <= type(uint32).max) ? uint32(word) : 0;
     }
 
     /// @dev The most recent valid credential with `K_ACCREDITED` for `owner`, through the two-argument
