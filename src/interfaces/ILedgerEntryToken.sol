@@ -153,6 +153,7 @@ interface ILedgerEntryToken is IERC721Metadata, IERC721Enumerable {
     event TokenLegalTransferableSet(uint256 indexed tokenId, bool legalTransferable);
     event TokenTransferableSet(uint256 indexed tokenId, bool transferable);
     event LookThroughBadgeSet(address indexed badge);
+    event HolderTrackerSet(address indexed tracker);
     event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
     event IssueTimestampSet(uint256 indexed tokenId, uint64 issueTimestamp);
     event AcquisitionTimestampSet(uint256 indexed tokenId, uint64 acquisitionTimestamp);
@@ -299,6 +300,9 @@ interface ILedgerEntryToken is IERC721Metadata, IERC721Enumerable {
     function isLegalHolder(address owner) external view returns (bool); // note the distinction vs legal owner: a legal holder must have live lots
     function lookThroughBadge() external view returns (address);
     function setLookThroughBadge(address badge) external;
+    /// @notice Point the printer at a HolderLimitTracker (zero: none). The printer reports each change of a lot
+    /// to it.
+    function setHolderTracker(address tracker) external;
     function resyncHolder(address owner) external;
     function resyncHolders(address[] calldata owners) external;
     function backfillLookThroughTally(uint256 startIndex, uint256 count) external;

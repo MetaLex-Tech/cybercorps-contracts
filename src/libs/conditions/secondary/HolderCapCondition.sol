@@ -8,6 +8,7 @@ import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
 import {LookThroughPolicy} from "../../policies/LookThroughPolicy.sol";
 import {ILedgerEntryToken} from "../../../interfaces/ILedgerEntryToken.sol";
+import {IHolderLimitTracker} from "../../../interfaces/IHolderLimitTracker.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title  HolderCapCondition - ICA §3(c)(1) / §3(c)(1)(C) / §3(c)(7) holder limits at transfer time
@@ -40,6 +41,12 @@ import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 /// The credential registry is the printer's own (`lookThroughBadge`), never a separate wiring here: a printer
 /// keeps one badge for life, and reading it there is what stops the buyer and the holders already counted
 /// from being classified against different registries.
+///
+/// Section 12(g) limits (`setClassLimits`): a cap on holders who are not accredited, and leaving holders of plan
+/// securities only (Rule 12g5-1(a)(8)) out of the counts. Those counts are kept outside the printer by the
+/// HolderLimitTracker that MetaLeX trusts here (`setHolderTracker`). A sale under these limits passes only when
+/// the printer reports to that tracker and the tracker's book of it is complete (`isReady`); otherwise it
+/// fails. An SPV that sets no such limit never reads the tracker.
 contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     /// @notice The ICA exception the SPV relies on (informational for the indexer/UI; the cap value and
     /// counting mode below drive the enforcement)
@@ -57,8 +64,20 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         bool configured;             // cap 0 is a real setting, so it cannot double as "unset"
     }
 
+    /// @notice Section 12(g) limits that sit beside an SpvConfig. One struct for the SPV (printer key
+    /// `address(0)`) and one for each LET contract; the LET contract's struct, when set, replaces the SPV's for
+    /// sales of that printer.
+    struct ClassLimits {
+        uint256 nonAccreditedCap;    // limit on holders who are not accredited; 0 = no such limit
+        bool excludePlanOnly;        // leave holders whose every live lot has the plan label out of the counts
+        bool configured;             // set by setClassLimits; tells "not set" from "set to no limit"
+    }
+
     error InvalidSpv();
     error InvalidPrinter();
+    /// @notice `usResidentOnlyCount` and `excludePlanOnly` cannot apply to the same sales: there is no total of
+    /// U.S. holders with the plan-only holders left out.
+    error UsResidentCountWithPlanExclusion();
 
     event ConfigUpdated(
         address indexed spv,
@@ -82,15 +101,41 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
     /// @notice The per-printer policy is removed; sales of that printer use the SPV policy again.
     event PrinterConfigRemoved(address indexed spv, address indexed printer);
 
+    /// @notice Section 12(g) limits set for an SPV (`printer == address(0)`) or for one of its LET contracts.
+    event ClassLimitsUpdated(
+        address indexed spv, address indexed printer, uint256 nonAccreditedCap, bool excludePlanOnly
+    );
+
+    /// @notice The section 12(g) limits of a LET contract (or of the SPV) are removed. A LET contract then uses
+    /// the SPV's; the SPV then has none.
+    event ClassLimitsRemoved(address indexed spv, address indexed printer);
+
+    /// @notice The HolderLimitTracker whose counts the section 12(g) limits read.
+    event HolderTrackerUpdated(address indexed tracker);
+
     /// @dev Upgrade notes: the shared proxy keeps this struct at the fixed STORAGE_POSITION (ERC-7201-style
     /// namespace, not linear slots). Members may only be appended; never move, rename or retype one.
     ///   slot P + 0: configs          (deployed layout)
     ///   slot P + 1: printerConfigs   (appended for per-class caps)
+    ///   slot P + 2: classLimits      (appended for the section 12(g) limits, as are the members below)
+    ///   slot P + 3: holderTracker
+    ///   slot P + 4: planExclusionOnSpvConfig
+    ///   slot P + 5: usOnlyOnSpvLimits
     struct HolderCapStorage {
         mapping(address => SpvConfig) configs;
         /// @dev spv => LET contract (printer) => policy. Keyed by the SPV first, so only that SPV's admin can
         /// write a policy that the SPV's own sales read.
         mapping(address => mapping(address => SpvConfig)) printerConfigs;
+        /// @dev spv => LET contract (printer), or address(0) for the SPV itself => section 12(g) limits.
+        mapping(address => mapping(address => ClassLimits)) classLimits;
+        /// @dev The HolderLimitTracker trusted for the counts; set by the owner (MetaLeX).
+        address holderTracker;
+        /// @dev spv => number of its printers with their own limits that exclude plan-only holders and no
+        /// policy of their own (their sales use the SPV policy).
+        mapping(address => uint256) planExclusionOnSpvConfig;
+        /// @dev spv => number of its printers with their own policy that counts U.S. residents only and no
+        /// limits of their own (their sales use the SPV limits).
+        mapping(address => uint256) usOnlyOnSpvLimits;
     }
 
     bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.holder-cap.storage.v1");
@@ -122,6 +167,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
             blockUsInvestors: _blockUsInvestors,
             configured: true
         });
+        _requireNoSpvConflict(spv);
         emit ConfigUpdated(spv, _icaException, _cap, _usResidentOnlyCount, _blockUsInvestors);
     }
 
@@ -138,6 +184,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         if (spv == address(0)) revert InvalidSpv();
         if (printer == address(0)) revert InvalidPrinter();
         _requireAuthAdmin(spv);
+        (bool wasA, bool wasB) = _inheritance(spv, printer);
         _holderCapStorage().printerConfigs[spv][printer] = SpvConfig({
             icaException: _icaException,
             cap: _cap,
@@ -145,6 +192,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
             blockUsInvestors: _blockUsInvestors,
             configured: true
         });
+        _afterPrinterChange(spv, printer, wasA, wasB);
         emit PrinterConfigUpdated(spv, printer, _icaException, _cap, _usResidentOnlyCount, _blockUsInvestors);
     }
 
@@ -154,8 +202,43 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         if (spv == address(0)) revert InvalidSpv();
         if (printer == address(0)) revert InvalidPrinter();
         _requireAuthAdmin(spv);
+        (bool wasA, bool wasB) = _inheritance(spv, printer);
         delete _holderCapStorage().printerConfigs[spv][printer];
+        _afterPrinterChange(spv, printer, wasA, wasB);
         emit PrinterConfigRemoved(spv, printer);
+    }
+
+    /// @notice Sets the section 12(g) limits of an SPV (`printer == address(0)`) or of one of its LET contracts;
+    /// only the SPV's own BorgAuth admin. The limits of a LET contract replace the SPV's for its sales.
+    /// @param nonAccreditedCap Limit on holders who are not accredited (look-through basis); 0 = no limit.
+    /// @param excludePlanOnly Leave plan-only holders out of the total cap and of the limit above.
+    function setClassLimits(address spv, address printer, uint256 nonAccreditedCap, bool excludePlanOnly) external {
+        if (spv == address(0)) revert InvalidSpv();
+        _requireAuthAdmin(spv);
+        (bool wasA, bool wasB) = _inheritance(spv, printer);
+        _holderCapStorage().classLimits[spv][printer] =
+            ClassLimits({nonAccreditedCap: nonAccreditedCap, excludePlanOnly: excludePlanOnly, configured: true});
+        if (printer == address(0)) _requireNoSpvConflict(spv);
+        else _afterPrinterChange(spv, printer, wasA, wasB);
+        emit ClassLimitsUpdated(spv, printer, nonAccreditedCap, excludePlanOnly);
+    }
+
+    /// @notice Removes the section 12(g) limits of an SPV or of one of its LET contracts; only the SPV's own
+    /// BorgAuth admin. A LET contract then uses the SPV's limits.
+    function removeClassLimits(address spv, address printer) external {
+        if (spv == address(0)) revert InvalidSpv();
+        _requireAuthAdmin(spv);
+        (bool wasA, bool wasB) = _inheritance(spv, printer);
+        delete _holderCapStorage().classLimits[spv][printer];
+        if (printer != address(0)) _afterPrinterChange(spv, printer, wasA, wasB);
+        emit ClassLimitsRemoved(spv, printer);
+    }
+
+    /// @notice Sets the HolderLimitTracker whose counts the section 12(g) limits read; only the owner. Zero:
+    /// none, and every sale under those limits fails.
+    function setHolderTracker(address tracker) external onlyOwner {
+        _holderCapStorage().holderTracker = tracker;
+        emit HolderTrackerUpdated(tracker);
     }
 
     function checkCondition(
@@ -189,6 +272,13 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         (bool buyerIsUS,) = LookThroughPolicy.isUSInvestor(badge, buyer);
         if (config.blockUsInvestors && buyerIsUS) return false;
 
+        // Section 12(g) limits. An SPV that sets none, or sets them with no limit and the exclusion off,
+        // continues below exactly as before and never reads the tracker.
+        ClassLimits memory limits = _effectiveClassLimits(offer.spvAddress, offer.certPrinter);
+        if (limits.nonAccreditedCap != 0 || limits.excludePlanOnly) {
+            return _checkWithClassLimits(config, limits, printer, badge, buyer, buyerIsUS);
+        }
+
         if (config.cap == 0) return true;
 
         // Note threshold conditions are checked BEFORE the transaction happens, so we need to consider the fact
@@ -206,13 +296,124 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
             ? printer.usLookThroughHolderCount()
             : printer.lookThroughHolderCount();
 
-        // A credentialed entity BO count flows through instead of 1. `_validate` rejects an asserted count of
-        // zero, so a zero read means no look-through credential — a single holder.
+        return currentCount + _addition(badge, buyer, 1) <= config.cap;
+    }
+
+    /// @dev The buyer's place in a count. A credentialed entity BO count flows through instead of
+    /// `bookedWeight`. `_validate` rejects an asserted count of zero, so a zero read means no look-through
+    /// credential: a new holder (1), or a holder already booked at `bookedWeight` (a withdrawn or lapsed count
+    /// is unknown, not lower).
+    function _addition(ILexChexBadge badge, address buyer, uint256 bookedWeight) private view returns (uint256) {
         uint32 boCount;
         if (address(badge) != address(0)) (boCount,) = badge.getEffectiveBeneficialOwnerCount(buyer);
-        uint256 addition = boCount > 0 ? boCount : 1;
+        return boCount > 0 ? boCount : bookedWeight;
+    }
 
-        return currentCount + addition <= config.cap;
+    /// @dev The steps after the no-U.S. floor when section 12(g) limits apply to the sale. The counts come
+    /// from the trusted tracker; a printer that does not report to it, or whose book there is not complete,
+    /// fails the sale.
+    function _checkWithClassLimits(
+        SpvConfig storage config,
+        ClassLimits memory limits,
+        ILedgerEntryToken printer,
+        ILexChexBadge badge,
+        address buyer,
+        bool buyerIsUS
+    ) private view returns (bool) {
+        // No count matches this pair; the setters refuse it, so this only guards against an unforeseen path.
+        if (limits.excludePlanOnly && config.usResidentOnlyCount) return false;
+
+        IHolderLimitTracker tracker = IHolderLimitTracker(_holderCapStorage().holderTracker);
+        if (address(tracker) == address(0) || !tracker.isReady(address(printer))) return false;
+        IHolderLimitTracker.Counts memory c = tracker.counts(address(printer));
+
+        // A buyer who already holds is a larger position, not a new holder. With the plan exclusion on, a
+        // plan-only holder is left out of the counts today, so buying a lot that has no label adds them at the
+        // weight the tracker books for them (unless the registry gives a fresh count).
+        bool newHolder = !printer.isLegalHolder(buyer);
+        uint256 bookedWeight = 1;
+        if (!newHolder && limits.excludePlanOnly) {
+            bookedWeight = tracker.planOnlyHolderWeight(address(printer), buyer);
+            newHolder = bookedWeight != 0;
+        }
+        if (!newHolder) return true;
+
+        uint256 addition = _addition(badge, buyer, bookedWeight);
+
+        // The total cap, on the count with plan-only holders left out when that is on
+        if (config.cap != 0 && !(config.usResidentOnlyCount && !buyerIsUS)) {
+            uint256 currentCount;
+            if (config.usResidentOnlyCount) currentCount = printer.usLookThroughHolderCount();
+            else if (limits.excludePlanOnly) currentCount = c.totalExcludingPlan;
+            else currentCount = printer.lookThroughHolderCount();
+            if (currentCount + addition > config.cap) return false;
+        }
+
+        // The limit on holders who are not accredited. An accredited buyer does not use a place. The buyer is
+        // read through the tracker, under the rule its book uses (registry, booking and company mark).
+        if (limits.nonAccreditedCap != 0 && !tracker.isAccredited(address(printer), buyer)) {
+            uint256 nonAccredited = limits.excludePlanOnly ? c.nonAccreditedExcludingPlan : c.nonAccredited;
+            if (nonAccredited + addition > limits.nonAccreditedCap) return false;
+        }
+        return true;
+    }
+
+    /// @dev The section 12(g) limits that sales of `printer` use: the printer's own if set, else the SPV's.
+    function _effectiveClassLimits(address spv, address printer) private view returns (ClassLimits memory limits) {
+        HolderCapStorage storage $ = _holderCapStorage();
+        limits = $.classLimits[spv][printer];
+        if (!limits.configured) limits = $.classLimits[spv][address(0)];
+    }
+
+    /// @dev The SPV policy that sales of `printer` use: the printer's own if set, else the SPV's.
+    function _effectiveConfig(address spv, address printer) private view returns (SpvConfig storage config) {
+        HolderCapStorage storage $ = _holderCapStorage();
+        config = $.printerConfigs[spv][printer];
+        if (!config.configured) config = $.configs[spv];
+    }
+
+    /// @dev Which SPV-level setting a printer inherits in a way the conflict check must follow:
+    /// `a` = it has limits of its own that exclude plan-only holders and uses the SPV policy;
+    /// `b` = it has a policy of its own that counts U.S. residents only and uses the SPV limits.
+    function _inheritance(address spv, address printer) private view returns (bool a, bool b) {
+        if (printer == address(0)) return (false, false);
+        HolderCapStorage storage $ = _holderCapStorage();
+        SpvConfig storage config = $.printerConfigs[spv][printer];
+        ClassLimits storage limits = $.classLimits[spv][printer];
+        a = limits.configured && limits.excludePlanOnly && !config.configured;
+        b = config.configured && config.usResidentOnlyCount && !limits.configured;
+    }
+
+    /// @dev After a change of a printer's own policy or limits: keep the two counts of printers that inherit an
+    /// SPV-level setting, and refuse the change if the printer's sales would pair a U.S.-only count with the
+    /// plan exclusion.
+    function _afterPrinterChange(address spv, address printer, bool wasA, bool wasB) private {
+        HolderCapStorage storage $ = _holderCapStorage();
+        (bool a, bool b) = _inheritance(spv, printer);
+        if (a != wasA) {
+            if (a) $.planExclusionOnSpvConfig[spv] += 1;
+            else $.planExclusionOnSpvConfig[spv] -= 1;
+        }
+        if (b != wasB) {
+            if (b) $.usOnlyOnSpvLimits[spv] += 1;
+            else $.usOnlyOnSpvLimits[spv] -= 1;
+        }
+        if (_effectiveConfig(spv, printer).usResidentOnlyCount && _effectiveClassLimits(spv, printer).excludePlanOnly) {
+            revert UsResidentCountWithPlanExclusion();
+        }
+    }
+
+    /// @dev After a change of the SPV policy or the SPV limits: refuse it if the sales of any printer would pair
+    /// a U.S.-only count with the plan exclusion. Printers with neither setting of their own use both SPV
+    /// settings; the two counts cover the printers that inherit only one of them.
+    function _requireNoSpvConflict(address spv) private view {
+        HolderCapStorage storage $ = _holderCapStorage();
+        bool usOnly = $.configs[spv].usResidentOnlyCount;
+        bool exclude = $.classLimits[spv][address(0)].excludePlanOnly;
+        if (
+            (usOnly && exclude) || (usOnly && $.planExclusionOnSpvConfig[spv] != 0)
+                || (exclude && $.usOnlyOnSpvLimits[spv] != 0)
+        ) revert UsResidentCountWithPlanExclusion();
     }
 
     /// @notice An SPV's holder-limit configuration
@@ -224,6 +425,17 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
     /// policy from `configs(spv)`
     function printerConfigs(address spv, address printer) public view returns (SpvConfig memory) {
         return _holderCapStorage().printerConfigs[spv][printer];
+    }
+
+    /// @notice The section 12(g) limits stored for an SPV (`printer == address(0)`) or for one of its LET
+    /// contracts; `configured == false` means not set (a LET contract then uses the SPV's).
+    function classLimits(address spv, address printer) public view returns (ClassLimits memory) {
+        return _holderCapStorage().classLimits[spv][printer];
+    }
+
+    /// @notice The HolderLimitTracker whose counts the section 12(g) limits read.
+    function holderTracker() public view returns (address) {
+        return _holderCapStorage().holderTracker;
     }
 
     function _holderCapStorage() private pure returns (HolderCapStorage storage $) {
