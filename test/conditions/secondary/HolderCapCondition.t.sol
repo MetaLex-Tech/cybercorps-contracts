@@ -10,7 +10,8 @@ import {LedgerEntryToken} from "../../../src/LedgerEntryToken.sol";
 import {LeXcheXBadge} from "../../../src/creds/lexchexBadge.sol";
 import {SecurityClass, SecuritySeries} from "../../../src/CyberCorpConstants.sol";
 import {HolderCapCondition} from "../../../src/libs/conditions/secondary/HolderCapCondition.sol";
-import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
+import {BorgAuth} from "../../../src/libs/auth.sol";
+import {SecondaryConditionIntegrationBase, SpvFixture} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HolderCapCondition — ICA §3(c)(1)/§3(c)(1)(C)/§3(c)(7) holder limits at transfer time.
@@ -45,6 +46,19 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | # | case                              | expect              |
 // |---|-----------------------------------|---------------------|
 // |12 | updateConfig by stranger          | revert (not admin)  |
+//
+// Per-printer (per-class) policy: `printerConfigs[spv][printer]` replaces `configs[spv]` for sales of that
+// printer only. A printer with no policy of its own falls back to the SPV policy.
+// |  # | case                                                   | expect                         |
+// |----|--------------------------------------------------------|--------------------------------|
+// | P1 | two classes of one SPV, different caps                 | each sale reads its own cap    |
+// | P2 | class with no policy of its own                        | SPV policy applies             |
+// | P3 | class policy removed                                   | SPV policy applies again       |
+// | P4 | class policy only, no SPV policy                       | class policy applies           |
+// | P5 | neither policy for the printer of the sale             | fail (not configured)          |
+// | P6 | another SPV's admin writes under its own key           | not read by this SPV's sales   |
+// | P7 | set/remove by non-admin, zero SPV, zero printer        | revert                         |
+// | P8 | raw slots: `configs` at P+0, `printerConfigs` at P+1   | deployed layout kept           |
 //
 // Operational staleness: a re-credential that changes an existing holder's BO count does not reach the
 // printer's cached tally until a keeper resync (15).
@@ -408,6 +422,187 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         // §3(c)(7) with no numeric cap is a configuration, and it passes.
         fresh.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
         assertTrue(fresh.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+    }
+
+    // ── Per-printer (per-class) policy ──────────────────────────────────────────
+
+    /// @dev A second class of the same SPV: an unwired printer from the SPV's IssuanceManager, with the seller
+    /// holding one cert. An unwired printer counts every holder as one U.S. holder, so its tally is 1.
+    function _postAndAcceptOnSecondClass() internal returns (address bare, bytes32 offerId, bytes32 settlementId) {
+        bare = _unwiredPrinter();
+        uint256 sellerCert = im.createCertAndAssign(bare, seller, _certDetails(UNITS));
+        offerId = _postSellOn(bare, sellerCert);
+        settlementId = _acceptSell(offerId);
+    }
+
+    function _checkOffer(HolderCapCondition c, bytes32 offerId, bytes32 settlementId) internal view returns (bool) {
+        return c.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId);
+    }
+
+    // P1 — two LET contracts of one SPV with different caps: each sale is checked against its own cap. The SPV
+    // policy (cap 100) would pass both sales, so every refusal below comes from a class policy.
+    function test_PrinterConfig_TwoClasses_EachSaleUsesOwnCap() public {
+        _seedHolder("KY", 9); // class A tally: seller(1) + 9 = 10
+        (bytes32 offerA, bytes32 settlementA) = _postAndAcceptSell();
+        (address classB, bytes32 offerB, bytes32 settlementB) = _postAndAcceptOnSecondClass(); // class B tally 1
+        assertEq(printer.lookThroughHolderCount(), 10);
+        assertEq(ILedgerEntryToken(classB).lookThroughHolderCount(), 1);
+
+        // A cap 11 (10 + 1 fits), B cap 1 (1 + 1 does not)
+        holderCap.setPrinterConfig(address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C1, 11, false, false);
+        holderCap.setPrinterConfig(address(corp), classB, HolderCapCondition.IcaException.SECTION_3C1, 1, false, false);
+        assertTrue(_checkOffer(holderCap, offerA, settlementA), "class A: 10 + 1 <= 11");
+        assertFalse(_checkOffer(holderCap, offerB, settlementB), "class B: 1 + 1 > 1");
+
+        // Reversed: A cap 10 (10 + 1 does not fit), B cap 2 (1 + 1 fits)
+        holderCap.setPrinterConfig(address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C1, 10, false, false);
+        holderCap.setPrinterConfig(address(corp), classB, HolderCapCondition.IcaException.SECTION_3C1, 2, false, false);
+        assertFalse(_checkOffer(holderCap, offerA, settlementA), "class A: 10 + 1 > 10");
+        assertTrue(_checkOffer(holderCap, offerB, settlementB), "class B: 1 + 1 <= 2");
+
+        // The SPV policy is unchanged by the class policies
+        HolderCapCondition.SpvConfig memory spvCfg = holderCap.configs(address(corp));
+        assertEq(spvCfg.cap, 100);
+        assertTrue(spvCfg.configured);
+    }
+
+    // P1b — a class policy carries all of its fields, not only the cap: the no-U.S. floor of class B does not
+    // reach class A.
+    function test_PrinterConfig_BlockUsInvestors_OnlyOnItsClass() public {
+        (bytes32 offerA, bytes32 settlementA) = _postAndAcceptSell();
+        (address classB, bytes32 offerB, bytes32 settlementB) = _postAndAcceptOnSecondClass();
+        holderCap.setPrinterConfig(address(corp), classB, HolderCapCondition.IcaException.SECTION_3C7, 0, false, true);
+        assertTrue(_checkOffer(holderCap, offerA, settlementA), "class A uses the SPV policy (no floor)");
+        assertFalse(_checkOffer(holderCap, offerB, settlementB), "class B refuses the U.S. buyer");
+    }
+
+    // P2 — a printer with no policy of its own uses the SPV policy (behaviour before this change)
+    function test_PrinterConfig_UnsetPrinter_UsesSpvConfig() public {
+        (address classB,,) = _postAndAcceptOnSecondClass();
+        holderCap.setPrinterConfig(address(corp), classB, HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
+        assertFalse(holderCap.printerConfigs(address(corp), address(printer)).configured);
+
+        _seedHolder("KY", 99); // class A tally 100; SPV cap 100; buyer +1 = 101
+        assertFalse(_check(), "class A falls back to the SPV cap of 100");
+    }
+
+    // P3 — after the class policy is removed, the SPV policy applies again
+    function test_PrinterConfig_Removed_FallsBackToSpvConfig() public {
+        _seedHolder("KY", 99); // tally 100
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "SPV cap 100 refuses 101");
+
+        vm.expectEmit(true, true, false, true, address(holderCap));
+        emit HolderCapCondition.PrinterConfigUpdated(
+            address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C1C, 250, false, false
+        );
+        holderCap.setPrinterConfig(address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C1C, 250, false, false);
+        HolderCapCondition.SpvConfig memory cfg = holderCap.printerConfigs(address(corp), address(printer));
+        assertTrue(cfg.configured);
+        assertEq(cfg.cap, 250);
+        assertEq(uint8(cfg.icaException), uint8(HolderCapCondition.IcaException.SECTION_3C1C));
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "class cap 250 admits 101");
+
+        vm.expectEmit(true, true, false, true, address(holderCap));
+        emit HolderCapCondition.PrinterConfigRemoved(address(corp), address(printer));
+        holderCap.removePrinterConfig(address(corp), address(printer));
+        cfg = holderCap.printerConfigs(address(corp), address(printer));
+        assertFalse(cfg.configured);
+        assertEq(cfg.cap, 0);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "SPV cap 100 applies again");
+    }
+
+    // P4 + P5 — on a condition with no SPV policy, a sale passes only when its own printer has a policy
+    function test_PrinterConfig_NoSpvConfig_OnlyConfiguredClassPasses() public {
+        HolderCapCondition fresh = HolderCapCondition(
+            _proxy(address(new HolderCapCondition()), abi.encodeCall(HolderCapCondition.initialize, (address(auth))))
+        );
+        (bytes32 offerA, bytes32 settlementA) = _postAndAcceptSell();
+        (address classB, bytes32 offerB, bytes32 settlementB) = _postAndAcceptOnSecondClass();
+
+        // Neither policy: refused (existing behaviour)
+        assertFalse(_checkOffer(fresh, offerA, settlementA), "neither policy");
+        assertFalse(_checkOffer(fresh, offerB, settlementB), "neither policy");
+
+        // A class B policy does not configure class A
+        fresh.setPrinterConfig(address(corp), classB, HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
+        assertTrue(_checkOffer(fresh, offerB, settlementB), "class B has its own policy");
+        assertFalse(_checkOffer(fresh, offerA, settlementA), "class A still has neither policy");
+
+        // Removing the only policy returns class B to "not configured"
+        fresh.removePrinterConfig(address(corp), classB);
+        assertFalse(_checkOffer(fresh, offerB, settlementB), "class B has neither policy again");
+    }
+
+    // P6 — a policy is read as [offer.spvAddress][offer.certPrinter]. Another SPV's admin can write a policy for
+    // this SPV's printer, but only under its own SPV key, which this SPV's sales never read.
+    function test_PrinterConfig_OtherSpvKey_NotRead() public {
+        BorgAuth otherAuth = new BorgAuth(stranger);
+        SpvFixture otherSpv = new SpvFixture(address(otherAuth));
+
+        _seedHolder("KY", 99); // tally 100; SPV cap 100
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+
+        vm.prank(stranger);
+        holderCap.setPrinterConfig(address(otherSpv), address(printer), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
+        assertTrue(holderCap.printerConfigs(address(otherSpv), address(printer)).configured);
+        assertFalse(holderCap.printerConfigs(address(corp), address(printer)).configured);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "corp's sale still reads corp's cap of 100");
+    }
+
+    // P7 — authorization and input checks
+    function test_SetPrinterConfig_ByNonAdmin_Reverts() public {
+        uint256 adminRole = auth.ADMIN_ROLE(); // read before the prank, which the next call consumes
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, adminRole, stranger));
+        holderCap.setPrinterConfig(address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
+    }
+
+    function test_RemovePrinterConfig_ByNonAdmin_Reverts() public {
+        holderCap.setPrinterConfig(address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
+        uint256 adminRole = auth.ADMIN_ROLE(); // read before the prank, which the next call consumes
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, adminRole, stranger));
+        holderCap.removePrinterConfig(address(corp), address(printer));
+        assertTrue(holderCap.printerConfigs(address(corp), address(printer)).configured, "policy is still set");
+    }
+
+    function test_SetPrinterConfig_ZeroSpv_Reverts() public {
+        vm.expectRevert(HolderCapCondition.InvalidSpv.selector);
+        holderCap.setPrinterConfig(address(0), address(printer), HolderCapCondition.IcaException.SECTION_3C1, 100, false, false);
+    }
+
+    function test_SetPrinterConfig_ZeroPrinter_Reverts() public {
+        vm.expectRevert(HolderCapCondition.InvalidPrinter.selector);
+        holderCap.setPrinterConfig(address(corp), address(0), HolderCapCondition.IcaException.SECTION_3C1, 100, false, false);
+    }
+
+    function test_RemovePrinterConfig_ZeroSpv_Reverts() public {
+        vm.expectRevert(HolderCapCondition.InvalidSpv.selector);
+        holderCap.removePrinterConfig(address(0), address(printer));
+    }
+
+    function test_RemovePrinterConfig_ZeroPrinter_Reverts() public {
+        vm.expectRevert(HolderCapCondition.InvalidPrinter.selector);
+        holderCap.removePrinterConfig(address(corp), address(0));
+    }
+
+    // P8 — storage layout. The shared proxy already holds `configs` data at the namespaced position P, so that
+    // member must stay at P + 0 (the slot formula of the deployed implementation); the new mapping is at P + 1.
+    // SpvConfig: slot 0 = icaException, slot 1 = cap, slot 2 = the three packed bools.
+    function test_StorageLayout_ConfigsKeptAtNamespaceBase() public {
+        bytes32 base = keccak256("metalex.condition.secondary.holder-cap.storage.v1");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1C, 123, false, false);
+        holderCap.setPrinterConfig(address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C1, 77, false, false);
+
+        bytes32 spvCfgSlot = keccak256(abi.encode(address(corp), base));
+        assertEq(uint256(vm.load(address(holderCap), bytes32(uint256(spvCfgSlot) + 1))), 123, "configs[spv].cap at P+0");
+
+        bytes32 inner = keccak256(abi.encode(address(corp), bytes32(uint256(base) + 1)));
+        bytes32 printerCfgSlot = keccak256(abi.encode(address(printer), inner));
+        assertEq(
+            uint256(vm.load(address(holderCap), bytes32(uint256(printerCfgSlot) + 1))), 77, "printerConfigs[spv][printer].cap at P+1"
+        );
     }
 
     function test_SetConfig_ByStranger_Reverts() public {

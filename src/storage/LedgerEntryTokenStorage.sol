@@ -55,6 +55,7 @@ import "../interfaces/IIssuanceManager.sol";
 import {BorgAuth} from "../libs/auth.sol";
 import {ILexChexBadge} from "../interfaces/ILexChexBadge.sol";
 import {LookThroughPolicy} from "../libs/policies/LookThroughPolicy.sol";
+import {IHolderLimitTracker} from "../interfaces/IHolderLimitTracker.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
@@ -97,6 +98,9 @@ import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtensionV3
 library LedgerEntryTokenStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.cert.printer.storage.v1");
+    /// @dev Gas for telling a previous holder tracker it is detached; enough for its own bookkeeping, too little
+    /// for one that tries to stop the switch by using all gas.
+    uint256 constant DETACH_GAS = 50_000;
 
     // Errors and events are shared: declared once on ILedgerEntryToken and referenced as ILedgerEntryToken.X
     // (below), so library reverts/logs carry the same selectors/topics as the printer's under delegatecall.
@@ -190,6 +194,10 @@ library LedgerEntryTokenStorage {
         // until an admin opens it.
         bool legalTransferable;
         mapping(uint256 => bool) tokenLegalTransferable;
+
+        // Appended: the HolderLimitTracker told of each change of a lot's legal owner or void status, so that it
+        // can keep the section 12(g) counts outside the printer. Zero: no tracker, and no call is made.
+        address holderTracker;
     }
 
     // Returns the storage layout
@@ -497,6 +505,7 @@ library LedgerEntryTokenStorage {
         record.name = name;
 
         _countLot(s, tokenId, newOwner);
+        _notifyHolderTracker(s, tokenId);
     }
 
     /// @dev Idempotent: a token already in an owner's enumeration is left alone (so backfilling a tracked token
@@ -537,6 +546,7 @@ library LedgerEntryTokenStorage {
         _uncountLot(s, tokenId, owner);
         if (owner != address(0)) _removeFromLegalOwnerEnumeration(s, owner, tokenId);
         delete s.owners[tokenId];
+        _notifyHolderTracker(s, tokenId);
     }
 
     /// @dev One-time/idempotent migration for printers deployed before the legal-owner enumeration existed:
@@ -668,6 +678,7 @@ library LedgerEntryTokenStorage {
     function recordVoidLegalOwner(uint256 tokenId) external {
         CyberCertStorage storage s = cyberCertStorage();
         _uncountLot(s, tokenId, s.owners[tokenId].ownerAddress);
+        _notifyHolderTracker(s, tokenId);
     }
 
     /// @dev Tally maintenance for unvoidCert — restore the lot's live contribution. Call after status is
@@ -675,6 +686,61 @@ library LedgerEntryTokenStorage {
     function recordUnvoidLegalOwner(uint256 tokenId) external {
         CyberCertStorage storage s = cyberCertStorage();
         _countLot(s, tokenId, s.owners[tokenId].ownerAddress);
+        _notifyHolderTracker(s, tokenId);
+    }
+
+    /// @dev Report a lot to the holder tracker after its legal owner or status changed: the legal owner now
+    /// (zero when none) and whether it is live. Every caller runs after the tally has counted or uncounted the
+    /// lot, so `liveCounted` is exactly "has an owner and is not void" here. No tracker: no call. A tracker
+    /// that reverts reverts the change, so its counts never miss one; an admin can set the tracker to zero to
+    /// stop the calls.
+    /// @dev The call is written in assembly because this runs at four places and the encoding of a
+    /// high-level call costs space that this library does not have: `onLotChange(uint256,address,bool)`.
+    function _notifyHolderTracker(CyberCertStorage storage s, uint256 tokenId) private {
+        address tracker = s.holderTracker;
+        if (tracker == address(0)) return;
+        address owner = s.owners[tokenId].ownerAddress;
+        bool live = s.liveCounted[tokenId];
+        bytes4 selector = IHolderLimitTracker.onLotChange.selector;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, selector)
+            mstore(add(ptr, 0x04), tokenId)
+            mstore(add(ptr, 0x24), owner)
+            mstore(add(ptr, 0x44), live)
+            if iszero(call(gas(), tracker, 0, ptr, 0x64, 0, 0)) {
+                returndatacopy(ptr, 0, returndatasize())
+                revert(ptr, returndatasize())
+            }
+        }
+    }
+
+    /// @dev Point the printer at a holder tracker (or none). The previous tracker is told that it no longer
+    /// hears of changes (`onDetach`), with a gas limit and its result ignored, so no tracker can block the
+    /// switch and an admin can always leave one that reverts. The new tracker is told to start a new book for
+    /// this printer (`onAttach`), since it cannot see the changes made while the printer pointed elsewhere; a
+    /// revert there reverts the switch. External so the printer keeps the code out of its own bytecode.
+    function setHolderTracker(address tracker) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        address previous = s.holderTracker;
+        s.holderTracker = tracker;
+        bytes4 detach = IHolderLimitTracker.onDetach.selector;
+        bytes4 attach = IHolderLimitTracker.onAttach.selector;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            if previous {
+                mstore(ptr, detach)
+                pop(call(DETACH_GAS, previous, 0, ptr, 4, 0, 0))
+            }
+            if tracker {
+                mstore(ptr, attach)
+                if iszero(call(gas(), tracker, 0, ptr, 4, 0, 0)) {
+                    returndatacopy(ptr, 0, returndatasize())
+                    revert(ptr, returndatasize())
+                }
+            }
+        }
+        emit ILedgerEntryToken.HolderTrackerSet(tracker);
     }
 
     /// @dev Keeper/admin refresh after a re-credential: reconcile a live holder's contribution to the badge.

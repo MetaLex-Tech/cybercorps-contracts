@@ -480,6 +480,13 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable, ILedger
         return LedgerEntryTokenStorage.getLookThroughBadge();
     }
 
+    /// @notice Point the printer at a HolderLimitTracker, or at none (zero). The tracker then starts a new book
+    /// for this printer, which must be backfilled when the printer already has tokens. The tracker in use is
+    /// in the `HolderTrackerSet` event and in the tracker's `isAttached`.
+    function setHolderTracker(address tracker) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.setHolderTracker(tracker);
+    }
+
     function _exists(uint256 tokenId) internal view virtual returns (bool) {
         return _ownerOf(tokenId) != address(0);
     }
