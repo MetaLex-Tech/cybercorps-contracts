@@ -77,6 +77,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     
     error InvalidSalt();
     error RoundManagerAlreadyExists();
+    error CannotRenounceProtectedAuth(address auth);
 
     address public registryAddress;
     address public issuanceManagerFactory;
@@ -318,6 +319,8 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
 
         emit MetaCorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
+
+        BorgAuth(authAddress).zeroOwner();
     }
 
     // Admin-only, one-time creation of the MetaDAO parent corp
@@ -500,6 +503,22 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         bytes calldata
     ) external pure override returns (bytes4) {
         return this.onERC721Received.selector;
+    }
+
+    /// @notice Renounce this factory's own OWNER_ROLE on previously deployed company BorgAuth contracts.
+    /// @dev Idempotent: skips contracts where this factory no longer holds OWNER_ROLE.
+    ///      Refuses address(0) and this factory's own AUTH contract.
+    function renounceAuthOwnership(address[] calldata auths) external onlyOwner {
+        for (uint256 i = 0; i < auths.length; i++) {
+            address authAddress = auths[i];
+            if (authAddress == address(0) || authAddress == address(AUTH)) {
+                revert CannotRenounceProtectedAuth(authAddress);
+            }
+            BorgAuth targetAuth = BorgAuth(authAddress);
+            if (targetAuth.userRoles(address(this)) >= targetAuth.OWNER_ROLE()) {
+                targetAuth.zeroOwner();
+            }
+        }
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
