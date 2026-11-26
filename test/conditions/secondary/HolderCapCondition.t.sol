@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {K_BO_COUNT, K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, InvestorType}
+import {K_ACCREDITED, K_BO_COUNT, K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, InvestorType}
     from "../../../src/interfaces/ILexChexBadge.sol";
+import {ILedgerEntryTokenHolderLimits} from "../../../src/interfaces/ILedgerEntryTokenHolderLimits.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {ILedgerEntryToken} from "../../../src/interfaces/ILedgerEntryToken.sol";
@@ -59,6 +60,26 @@ import {SecondaryConditionIntegrationBase, SpvFixture} from "./SecondaryConditio
 // | P6 | another SPV's admin writes under its own key           | not read by this SPV's sales   |
 // | P7 | set/remove by non-admin, zero SPV, zero printer        | revert                         |
 // | P8 | raw slots: `configs` at P+0, `printerConfigs` at P+1   | deployed layout kept           |
+//
+// Section 12(g) limits (C2, C4): `classLimits[spv][printer]` (printer 0 = the SPV) holds a limit on holders
+// who are not accredited and the plan-only exclusion. Read through the printer's `holderLimits` forwarder.
+// | #  | case                                                               | expect                          |
+// |----|--------------------------------------------------------------------|---------------------------------|
+// | N1 | cap 2, 2 non-accredited holders: new non-accredited buyer           | fail                            |
+// | N2 | same, accredited buyer / existing holder                            | pass                            |
+// | N3 | holder's credential voided: count 2 before resync, 3 after          | fail after (known limit before) |
+// | N4 | company mark on an accredited buyer                                 | counted, fail                   |
+// | N5 | printer without the forwarder (older LET), limits set / not set     | fail / as C1                    |
+// | N6 | malformed forwarder answer                                          | fail                            |
+// | N7 | non-admin setters; another SPV's key                                | revert; not read                |
+// | N8 | limits configured with no limit and exclusion off                   | as C1, no new read              |
+// | N9 | LET contract limits override the SPV's; removed -> SPV's again      | per printer                     |
+// | N10| second cap with total cap 0                                         | applies                         |
+// | L1 | plan-only incumbent, exclusion on / off                             | left out / counted              |
+// | L2 | incumbent with one labelled and one unlabelled lot                  | counted once                    |
+// | L3 | plan-only buyer, exclusion on                                       | uses a place                    |
+// | L4 | usResidentOnlyCount with the exclusion                              | refused by setters; fail        |
+// | L5 | plan-only entity buyer, BO count voided / lapsed / replaced         | booked weight; new count        |
 //
 // Operational staleness: a re-credential that changes an existing holder's BO count does not reach the
 // printer's cached tally until a keeper resync (15).
@@ -609,5 +630,373 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         vm.prank(stranger);
         vm.expectRevert();
         holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
+    }
+
+    // ── Section 12(g) limits (C2, C4) ───────────────────────────────────────────────────────────────
+
+    function _accredited(address to) internal returns (uint256) {
+        Credential memory c;
+        return _mintCred(to, K_ACCREDITED, c);
+    }
+
+    function _limits(uint256 nonAccreditedCap, bool excludePlanOnly) internal {
+        holderCap.setClassLimits(address(corp), address(0), nonAccreditedCap, excludePlanOnly);
+    }
+
+    function _hl(bytes memory data) internal returns (bytes memory) {
+        return LedgerEntryToken(address(printer)).holderLimits(data);
+    }
+
+    function _nonAccredited() internal returns (uint256) {
+        return abi.decode(_hl(abi.encodeCall(ILedgerEntryTokenHolderLimits.nonAccreditedLookThroughHolderCount, ())), (uint256));
+    }
+
+    function _label(uint256 tokenId) internal {
+        _hl(abi.encodeCall(ILedgerEntryTokenHolderLimits.setPlanSecurity, (tokenId, true)));
+    }
+
+    // N1 + N2
+    function test_NonAccreditedCap_RefusesNewNonAccreditedBuyer() public {
+        _makeHolder(incumbent); // seller(1) + incumbent(1), neither accredited
+        assertEq(_nonAccredited(), 2);
+        _limits(2, false);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "2 + 1 > 2");
+
+        // The buyer's status is read live: an accredited buyer does not use a place
+        _accredited(buyer);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "accredited buyer");
+    }
+
+    function test_NonAccreditedCap_ExistingHolderBuysMore() public {
+        _makeHolder(incumbent);
+        _makeHolder(buyer); // count 3, above the limit; the buyer already holds
+        _limits(2, false);
+        assertTrue(_check(), "a larger position, not a new holder");
+    }
+
+    // N3 — revoke before expiry
+    function test_NonAccreditedCap_VoidedCredential_CountsAfterResync() public {
+        address accHolder = makeAddr("accHolder");
+        uint256 cred = _accredited(accHolder);
+        _makeHolder(accHolder);
+        _makeHolder(incumbent);
+        assertEq(printer.lookThroughHolderCount(), 3);
+        assertEq(_nonAccredited(), 2);
+        _limits(2, false);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "2 + 1 > 2");
+
+        badge.void(cred, "revoked");
+        assertEq(_nonAccredited(), 2, "known limit: the count is too low until a resync");
+        _limits(3, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "known limit: 2 + 1 <= 3 before the resync");
+
+        vm.prank(stranger);
+        LedgerEntryToken(address(printer)).resyncHolder(accHolder);
+        assertEq(_nonAccredited(), 3);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "3 + 1 > 3 after the resync");
+        _limits(2, false);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "3 + 1 > 2");
+    }
+
+    // N4 — a marked buyer is a buyer who is not accredited
+    function test_NonAccreditedCap_MarkedBuyerIsCounted() public {
+        _makeHolder(incumbent);
+        _accredited(buyer);
+        _limits(2, false);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "accredited buyer");
+        _hl(abi.encodeCall(ILedgerEntryTokenHolderLimits.setNotAccreditedMark, (buyer, true)));
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "the marked buyer counts against the limit");
+    }
+
+    // N5 — an older printer has no forwarder: refused when limits apply, as C1 when they do not
+    function test_OldPrinter_RefusedOnlyWhenLimitsApply() public {
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        vm.mockCallRevert(address(printer), abi.encodeWithSelector(ILedgerEntryToken.holderLimits.selector), "");
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "no limits: as C1");
+
+        _limits(50, false);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "second cap on an older printer: refused");
+        _limits(0, true);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "plan setting on an older printer: refused");
+
+        // N8 — configured, but no limit and the exclusion off: no new read, as C1
+        _limits(0, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "nothing applies: as C1");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 1, false, false);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "C1 cap still refuses 1 + 1 > 1");
+
+        holderCap.removeClassLimits(address(corp), address(0));
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, false, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "limits removed: as C1");
+    }
+
+    // N6 — an answer that is not a well-formed `bytes` of at least one word is refused, not trusted
+    function test_MalformedForwarderAnswer_Refused() public {
+        _limits(50, false);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_checkOffer(holderCap, offerId, settlementId));
+
+        bytes memory sel = abi.encodeWithSelector(ILedgerEntryToken.holderLimits.selector);
+        vm.mockCall(address(printer), sel, abi.encode(uint256(0))); // one raw word, not `bytes`
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "raw word");
+        vm.mockCall(address(printer), sel, abi.encode(bytes(""))); // empty `bytes`
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "empty answer");
+        vm.mockCall(address(printer), sel, abi.encodePacked(uint256(0x40), uint256(32), uint256(0))); // bad offset
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "bad offset");
+        vm.mockCall(address(printer), sel, abi.encodePacked(uint256(0x20), uint256(64), uint256(0))); // short
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "length past the data");
+        vm.clearMockedCalls();
+        assertTrue(_checkOffer(holderCap, offerId, settlementId));
+    }
+
+    // N7
+    function test_SetClassLimits_ByNonAdmin_Reverts() public {
+        uint256 adminRole = auth.ADMIN_ROLE();
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, adminRole, stranger));
+        holderCap.setClassLimits(address(corp), address(0), 1, false);
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, adminRole, stranger));
+        holderCap.setClassLimits(address(corp), address(printer), 1, true);
+        _limits(1, false);
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, adminRole, stranger));
+        holderCap.removeClassLimits(address(corp), address(0));
+        assertTrue(holderCap.classLimits(address(corp), address(0)).configured);
+
+        vm.expectRevert(HolderCapCondition.InvalidSpv.selector);
+        holderCap.setClassLimits(address(0), address(printer), 1, false);
+        vm.expectRevert(HolderCapCondition.InvalidSpv.selector);
+        holderCap.removeClassLimits(address(0), address(printer));
+    }
+
+    function test_ClassLimits_OtherSpvKey_NotRead() public {
+        BorgAuth otherAuth = new BorgAuth(stranger);
+        SpvFixture otherSpv = new SpvFixture(address(otherAuth));
+        vm.startPrank(stranger);
+        holderCap.setClassLimits(address(otherSpv), address(printer), 1, false);
+        holderCap.setClassLimits(address(otherSpv), address(0), 1, false);
+        vm.stopPrank();
+        assertFalse(holderCap.classLimits(address(corp), address(printer)).configured);
+        assertTrue(_check(), "corp's sale does not read another SPV's limits (1 + 1 would be > 1)");
+    }
+
+    // N9 — a printer's limits replace the SPV's; removing them falls back
+    function test_ClassLimits_PrinterOverridesSpv() public {
+        _makeHolder(incumbent); // non-accredited count 2
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        _limits(2, false);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "SPV limit 2");
+
+        vm.expectEmit(true, true, false, true, address(holderCap));
+        emit HolderCapCondition.ClassLimitsUpdated(address(corp), address(printer), 10, false);
+        holderCap.setClassLimits(address(corp), address(printer), 10, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "printer limit 10");
+        holderCap.setClassLimits(address(corp), address(printer), 0, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "printer: no limit, replaces the SPV's 2");
+
+        vm.expectEmit(true, true, false, true, address(holderCap));
+        emit HolderCapCondition.ClassLimitsRemoved(address(corp), address(printer));
+        holderCap.removeClassLimits(address(corp), address(printer));
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "SPV limit 2 again");
+
+        // A second class without its own limits uses the SPV's
+        (, bytes32 offerB, bytes32 settlementB) = _postAndAcceptOnSecondClass(); // class B: seller only
+        _limits(1, false);
+        assertFalse(_checkOffer(holderCap, offerB, settlementB), "class B: 1 + 1 > 1 (SPV's)");
+    }
+
+    // N10 — the second cap applies with no total cap
+    function test_NonAccreditedCap_AppliesWithoutTotalCap() public {
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
+        _makeHolder(incumbent);
+        _limits(2, false);
+        assertFalse(_check(), "total cap 0, second cap 2: 2 + 1 > 2");
+    }
+
+    function test_ClassLimits_BlockUsInvestorsStillFirst() public {
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
+        _accredited(buyer);
+        _limits(100, false);
+        assertFalse(_check(), "the no-U.S. floor precedes the limits");
+    }
+
+    // The entity look-through weight flows into the second cap, as into the total
+    function test_NonAccreditedCap_EntityBuyerUsesItsWeight() public {
+        _credentialBuyer("US", 3);
+        _limits(3, false);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "seller(1) + buyer(3) > 3");
+        _limits(4, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId));
+    }
+
+    // L1
+    function test_PlanExclusion_PlanOnlyIncumbentLeftOut() public {
+        uint256 lot = _makeHolder(incumbent);
+        _label(lot);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 2, false, false);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "exclusion off: 2 + 1 > 2");
+        _limits(0, true);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "exclusion on: 1 + 1 <= 2");
+
+        // The same for the second cap
+        _limits(1, true);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "non-accredited, excl. plan: 1 + 1 > 1");
+        _limits(2, true);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId));
+        _limits(2, false);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "exclusion off: non-accredited 2 + 1 > 2");
+    }
+
+    // L2
+    function test_PlanExclusion_OneLabelledOneNot_CountedOnce() public {
+        uint256 lot = _makeHolder(incumbent);
+        _makeHolder(incumbent);
+        _label(lot);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 2, false, false);
+        _limits(0, true);
+        assertEq(printer.lookThroughHolderCount(), 2);
+        assertFalse(_check(), "incumbent still counts once: 2 + 1 > 2");
+    }
+
+    // L3 — a buyer who holds only plan securities is a new holder for the count when the exclusion is on
+    function test_PlanExclusion_PlanOnlyBuyerUsesAPlace() public {
+        uint256 lot = _makeHolder(buyer);
+        _label(lot);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 2, false, false);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "exclusion off: an existing holder");
+        _limits(0, true);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "exclusion on: seller(1) + buyer(1) <= 2");
+        _makeHolder(incumbent);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "exclusion on: 2 + 1 > 2, the buyer uses a place");
+        _limits(0, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "exclusion off: still a larger position");
+    }
+
+    function _countExcludingPlan() internal returns (uint256) {
+        return abi.decode(_hl(abi.encodeCall(ILedgerEntryTokenHolderLimits.lookThroughHolderCountExcludingPlan, ())), (uint256));
+    }
+
+    // L5 — a plan-only entity whose beneficial-owner count was withdrawn keeps its booked weight in the printer
+    // (H2). When it buys a lot with no label it enters the counts at that weight, so the check adds that weight.
+    function test_PlanExclusion_PlanOnlyBuyerWithVoidedBoCount_UsesBookedWeight() public {
+        uint256 boCred = _credential(buyer, "US", 90);
+        uint256 lot = _makeHolder(buyer); // seller(1) + buyer(90)
+        _label(lot);
+        assertEq(printer.lookThroughHolderCount(), 91);
+        assertEq(_countExcludingPlan(), 1, "the plan-only buyer is left out");
+
+        badge.void(boCred, "attestation withdrawn");
+        (uint32 afterVoid,) = badge.getEffectiveBeneficialOwnerCount(buyer);
+        assertEq(uint256(afterVoid), 0, "badge reports the fact unestablished");
+
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 2, false, false);
+        _limits(0, true);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "total: seller(1) + booked 90 > 2");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 90, false, false);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "total: 1 + 90 > 90");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 91, false, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "total: 1 + 90 <= 91");
+
+        // The same weight for the limit on holders who are not accredited
+        _limits(90, true);
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "non-accredited: 1 + 90 > 90");
+        _limits(91, true);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "non-accredited: 1 + 90 <= 91");
+
+        // The weight that the check added is the weight that the printer keeps on the purchase
+        _makeHolder(buyer);
+        assertEq(_countExcludingPlan(), 91, "the buyer entered the count at its booked weight");
+    }
+
+    // L5 — the same for a count that lapsed: expiry needs no admin action
+    function test_PlanExclusion_PlanOnlyBuyerWithLapsedBoCount_UsesBookedWeight() public {
+        Credential memory c;
+        c.investorType = InvestorType.ENTITY;
+        c.investorJurisdiction = "US";
+        c.beneficialOwnerCount = 90;
+        c.expiryDate = uint64(block.timestamp + 1 days);
+        _mintCred(buyer, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_BO_COUNT, c);
+        uint256 lot = _makeHolder(buyer);
+        _label(lot);
+        vm.warp(block.timestamp + 2 days);
+
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 90, false, false);
+        _limits(0, true);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "total: seller(1) + booked 90 > 90");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 91, false, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "total: 1 + 90 <= 91");
+    }
+
+    // L5 — a fresh count replaces the booked weight, as it does in the printer
+    function test_PlanExclusion_PlanOnlyBuyerWithNewBoCount_UsesNewCount() public {
+        _credential(buyer, "US", 90);
+        uint256 lot = _makeHolder(buyer);
+        _label(lot);
+        _credential(buyer, "US", 3); // not resynced: the printer still books 90
+
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 3, false, false);
+        _limits(0, true);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "total: seller(1) + new count 3 > 3");
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 4, false, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId), "total: 1 + 3 <= 4");
+        _makeHolder(buyer);
+        assertEq(_countExcludingPlan(), 4, "the purchase resynced the buyer to the new count");
+    }
+
+    // L4 — no printer total matches a U.S.-only count with the exclusion
+    function test_PlanExclusion_WithUsResidentCount_Refused() public {
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, true, false);
+        vm.expectRevert(HolderCapCondition.UsResidentCountWithPlanExclusion.selector);
+        _limits(0, true);
+        vm.expectRevert(HolderCapCondition.UsResidentCountWithPlanExclusion.selector);
+        holderCap.setClassLimits(address(corp), address(printer), 0, true);
+        _limits(5, false); // a second cap alone is fine with the U.S.-only count
+
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, false, false);
+        _limits(0, true);
+        vm.expectRevert(HolderCapCondition.UsResidentCountWithPlanExclusion.selector);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, true, false);
+        vm.expectRevert(HolderCapCondition.UsResidentCountWithPlanExclusion.selector);
+        holderCap.setPrinterConfig(address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C1, 100, true, false);
+
+        // A printer with its own limits (exclusion off) may use a U.S.-only count; removing those limits
+        // would pair it with the SPV's exclusion, so the removal is refused
+        holderCap.setClassLimits(address(corp), address(printer), 0, false);
+        holderCap.setPrinterConfig(address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C1, 100, true, false);
+        vm.expectRevert(HolderCapCondition.UsResidentCountWithPlanExclusion.selector);
+        holderCap.removeClassLimits(address(corp), address(printer));
+    }
+
+    // L4 — the pair that no setter sees: a printer policy with a U.S.-only count set first, then the SPV's
+    // exclusion. checkCondition refuses those sales.
+    function test_PlanExclusion_UncatchablePair_RefusedInCheck() public {
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        holderCap.setPrinterConfig(address(corp), address(printer), HolderCapCondition.IcaException.SECTION_3C1, 100, true, false);
+        assertTrue(_checkOffer(holderCap, offerId, settlementId));
+        _limits(0, true); // the SPV policy has no U.S.-only count, so this setter allows it
+        assertFalse(_checkOffer(holderCap, offerId, settlementId), "the printer pairs both: refused");
+    }
+
+    // Storage layout: classLimits at P + 2; ClassLimits: slot 0 = cap, slot 1 = the two packed bools.
+    function test_StorageLayout_ClassLimitsAtP2() public {
+        bytes32 base = keccak256("metalex.condition.secondary.holder-cap.storage.v1");
+        holderCap.setClassLimits(address(corp), address(printer), 499, true);
+        bytes32 inner = keccak256(abi.encode(address(corp), bytes32(uint256(base) + 2)));
+        bytes32 slot = keccak256(abi.encode(address(printer), inner));
+        assertEq(uint256(vm.load(address(holderCap), slot)), 499, "classLimits[spv][printer].nonAccreditedCap at P+2");
+        assertEq(uint256(vm.load(address(holderCap), bytes32(uint256(slot) + 1))), 0x0101, "excludePlanOnly + configured");
+        // configs and printerConfigs are where they were
+        HolderCapCondition.SpvConfig memory cfg = holderCap.configs(address(corp));
+        assertEq(cfg.cap, 100);
     }
 }
