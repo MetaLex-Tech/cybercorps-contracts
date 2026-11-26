@@ -55,7 +55,6 @@ import "../interfaces/IIssuanceManager.sol";
 import {BorgAuth} from "../libs/auth.sol";
 import {ILexChexBadge} from "../interfaces/ILexChexBadge.sol";
 import {LookThroughPolicy} from "../libs/policies/LookThroughPolicy.sol";
-import {LedgerEntryTokenHolderLimits} from "./LedgerEntryTokenHolderLimits.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
@@ -95,12 +94,6 @@ import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtensionV3
 /// becomes U.S. and nothing on-chain notices. Past `usTallyExpiry`, `getUsLookThroughHolderCount` stops
 /// trusting the U.S. subtotal and reports the full count instead. `nonUsHolderCount` is there only so
 /// `resyncHolders` can prove it rechecked every non-U.S. holder before pushing that expiry back out.
-///
-/// The section 12(g) counts (holders who are not accredited, plan-only holders) live in the linked library
-/// LedgerEntryTokenHolderLimits. The tally here calls its two sync functions wherever a holder's lots or
-/// weight change: `syncLot` after a lot is uncounted, after each change of legal owner, after an unvoid and
-/// in the backfill; `syncHolder` after a resync. They only
-/// read the accounts above; nothing here reads their totals.
 library LedgerEntryTokenStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.cert.printer.storage.v1");
@@ -117,23 +110,6 @@ library LedgerEntryTokenStorage {
         // When `isUS` stops being trustworthy — the earliest expiry behind a non-US reading; 0 when it
         // never does, which covers a US reading and an account booked before this field existed.
         uint64 expiry;
-    }
-
-    /// @dev Per-holder record of LedgerEntryTokenHolderLimits. One slot. The three weights are what this holder
-    /// currently adds to each section 12(g) total, so removing a holder never subtracts more than it added.
-    struct HolderLimitAcct {
-        bool accredited;                  // booked accredited
-        uint32 planLots;                  // live lots counted under this holder with the plan label in force
-        uint32 accreditedWeight;          // added to accreditedLookThroughHolderCount
-        uint32 planOnlyWeight;            // added to planOnlyLookThroughHolderCount
-        uint32 planOnlyAccreditedWeight;  // added to planOnlyAccreditedLookThroughHolderCount
-    }
-
-    /// @dev Per-token plan record of LedgerEntryTokenHolderLimits. Two slots (two addresses do not pack).
-    struct PlanLot {
-        address labelOwner;    // legal owner for whom the plan label was set; 0 = no label. In force only while
-                               // this address is the legal owner.
-        address countedUnder;  // holder whose `planLots` counts this lot; 0 = not counted
     }
 
     // Main storage layout struct
@@ -214,17 +190,6 @@ library LedgerEntryTokenStorage {
         // until an admin opens it.
         bool legalTransferable;
         mapping(uint256 => bool) tokenLegalTransferable;
-
-        // Section 12(g) counts, kept by LedgerEntryTokenHolderLimits. Each total is the side to SUBTRACT from
-        // `lookThroughHolderCount`, so a printer upgraded with holders overcounts (the safe direction) until
-        // each holder is synced, with no backfill.
-        mapping(address => HolderLimitAcct) holderLimitAcct;
-        mapping(uint256 => PlanLot) planLot;
-        mapping(address => uint256) accreditedCredentialId; // badge credential an accredited booking relies on
-        mapping(address => bool) notAccreditedMark;         // company override: never book as accredited
-        uint256 accreditedLookThroughHolderCount;
-        uint256 planOnlyLookThroughHolderCount;
-        uint256 planOnlyAccreditedLookThroughHolderCount;
     }
 
     // Returns the storage layout
@@ -532,9 +497,6 @@ library LedgerEntryTokenStorage {
         record.name = name;
 
         _countLot(s, tokenId, newOwner);
-        // Runs on every change of legal owner, counted lot or not, so a plan label set for an earlier owner is
-        // deleted here and cannot come back if title later returns to that owner. Also syncs `newOwner`.
-        LedgerEntryTokenHolderLimits.syncLot(tokenId);
     }
 
     /// @dev Idempotent: a token already in an owner's enumeration is left alone (so backfilling a tracked token
@@ -700,7 +662,6 @@ library LedgerEntryTokenStorage {
             _trackNonUs(s, _isTrackedNonUs(a), false, 0);
             delete s.holderAcct[owner];
         }
-        LedgerEntryTokenHolderLimits.syncLot(tokenId); // also syncs `owner`, the legal owner at this point
     }
 
     /// @dev Tally maintenance for voidCert — drop the lot's live contribution. Call after status is set Void.
@@ -714,13 +675,11 @@ library LedgerEntryTokenStorage {
     function recordUnvoidLegalOwner(uint256 tokenId) external {
         CyberCertStorage storage s = cyberCertStorage();
         _countLot(s, tokenId, s.owners[tokenId].ownerAddress);
-        LedgerEntryTokenHolderLimits.syncLot(tokenId);
     }
 
     /// @dev Keeper/admin refresh after a re-credential: reconcile a live holder's contribution to the badge.
     function resyncHolder(address owner) external {
         _resyncHolder(cyberCertStorage(), owner);
-        LedgerEntryTokenHolderLimits.syncHolder(owner);
     }
 
     /// @dev The keeper path back to a precise US subtotal. Pass every live holder currently booked non-US,
@@ -738,7 +697,6 @@ library LedgerEntryTokenStorage {
             if (owner <= prev) ascending = false;
             prev = owner;
             _resyncHolder(s, owner);
-            LedgerEntryTokenHolderLimits.syncHolder(owner);
             HolderAcct storage a = s.holderAcct[owner];
             if (a.liveLots > 0 && !a.isUS) {
                 covered += 1;
@@ -761,7 +719,6 @@ library LedgerEntryTokenStorage {
         for (uint256 i = startIndex; i < end; i++) {
             uint256 tokenId = self.tokenByIndex(i);
             _countLot(s, tokenId, s.owners[tokenId].ownerAddress);
-            LedgerEntryTokenHolderLimits.syncLot(tokenId);
         }
     }
 

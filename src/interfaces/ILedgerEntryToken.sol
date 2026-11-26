@@ -169,12 +169,6 @@ interface ILedgerEntryToken is IERC721Metadata, IERC721Enumerable {
     event CertificateDetailsUpdated(uint256 indexed tokenId);
     event CertLegendsChanged(uint256 indexed tokenId);
     event DefaultLegendsChanged();
-    /// @notice The plan-security label of a lot (Rule 12g5-1(a)(8)) was set or cleared. A change of legal
-    /// owner clears it and emits this event too. Emitted by LedgerEntryTokenHolderLimits.
-    event PlanSecuritySet(uint256 indexed tokenId, bool planSecurity);
-    /// @notice The company marked `account` as not accredited for this printer, or removed the mark.
-    /// Emitted by LedgerEntryTokenHolderLimits.
-    event NotAccreditedMarkSet(address indexed account, bool marked);
 
     function initialize(
         string[] memory defaultLegend,
@@ -308,10 +302,6 @@ interface ILedgerEntryToken is IERC721Metadata, IERC721Enumerable {
     function resyncHolder(address owner) external;
     function resyncHolders(address[] calldata owners) external;
     function backfillLookThroughTally(uint256 startIndex, uint256 count) external;
-
-    /// @notice Section 12(g) counts and settings: delegatecalls the linked LedgerEntryTokenHolderLimits
-    /// library with `data` (encode it against ILedgerEntryTokenHolderLimits) and returns the answer.
-    function holderLimits(bytes calldata data) external returns (bytes memory);
 
     function setTokenTransferable(uint256 tokenId, bool value) external;
     function setTokenLegalTransferable(uint256 tokenId, bool value) external;
