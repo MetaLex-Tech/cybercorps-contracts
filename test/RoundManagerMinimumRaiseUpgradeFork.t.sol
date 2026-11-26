@@ -6,6 +6,10 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {Round} from "../src/libs/RoundLib.sol";
 import {Escrow, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
+import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
 
 /// @notice Upgrade from the deployed v5 RoundManager to 5.1 keeps existing state.
 /// @dev Runs on a Base fork. The company's RoundManager proxy first runs the exact v5 reference
@@ -26,6 +30,27 @@ contract RoundManagerMinimumRaiseUpgradeForkTest is MinimumRaiseFixture {
         }
         vm.createSelectFork(rpc, FORK_BLOCK);
         _deployFixture(BASE_V5_ROUND_MANAGER_IMPL);
+        // The v5 RoundManager runs against the registry code that Base runs at the fork block.
+        vm.prank(owner);
+        registry.upgradeToAndCall(_deployedRegistryImplementation(), "");
+    }
+
+    /// @dev MetaLeX upgrades the registry first, then each company upgrades its RoundManager.
+    /// The new registry checks the officer's signature, which a v5 RoundManager does not pass.
+    function _upgradeRegistryAndRoundManager() internal {
+        CyberAgreementUtils.upgradeRegistry(vm, address(registry), owner);
+        address next = address(new RoundManager());
+        vm.prank(owner);
+        RoundManagerFactory(rmFactory).setRefImplementation(next);
+        vm.prank(corpOwner);
+        RoundManager(roundManager).upgradeToAndCall(next, "");
+    }
+
+    function _deployedRegistryImplementation() internal view returns (address) {
+        address deployedRegistry = DeploymentConstants.coreV2(DeploymentConstants.BASE).cyberAgreementRegistry;
+        // ERC-1967 implementation slot
+        bytes32 slot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+        return address(uint160(uint256(vm.load(deployedRegistry, slot))));
     }
 
     function test_UpgradeFromDeployedV5_KeepsStateAndPaths() public {
@@ -44,11 +69,7 @@ contract RoundManagerMinimumRaiseUpgradeForkTest is MinimumRaiseFixture {
         Escrow memory e1Before = RoundManager(roundManager).getEscrowDetails(a1);
 
         // MetaLeX releases 5.1; the company accepts the upgrade.
-        address next = address(new RoundManager());
-        vm.prank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(next);
-        vm.prank(corpOwner);
-        RoundManager(roundManager).upgradeToAndCall(next, "");
+        _upgradeRegistryAndRoundManager();
         assertEq(RoundManager(roundManager).DEPLOY_VERSION(), "5.1");
 
         // Existing state reads the same.
@@ -88,12 +109,42 @@ contract RoundManagerMinimumRaiseUpgradeForkTest is MinimumRaiseFixture {
         assertEq(paymentToken.balanceOf(investors[2]), balanceBefore + MAX_TICKET);
     }
 
-    function test_UpgradeFromDeployedV5_MinimumRoundWorks() public {
-        address next = address(new RoundManager());
-        vm.prank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(next);
+    /// @notice A v5 round whose end time changed before the upgrade cannot rebuild the signed data, so
+    /// the registry refuses the officer. The owner restores the signed end time, and allocation works.
+    function test_UpgradeFromDeployedV5_RestoreSignedEndTimeAfterEndTimeChange() public {
+        bytes32 roundId = _createPlainRound(VALUATION);
+        uint256 signedEndTime = RoundManager(roundManager).getRound(roundId).endTime;
+        bytes32 a0 = _submitEOI(roundId, 0);
         vm.prank(corpOwner);
-        RoundManager(roundManager).upgradeToAndCall(next, "");
+        RoundManager(roundManager).setRoundEndTime(roundId, signedEndTime + 30 days);
+
+        _upgradeRegistryAndRoundManager();
+
+        vm.prank(corpOwner);
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        RoundManager(roundManager).allocate(a0, MAX_TICKET);
+
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.SignedEndTimeMismatch.selector);
+        RoundManager(roundManager).restoreSignedEndTime(roundId, signedEndTime + 30 days);
+
+        vm.prank(investors[0]);
+        vm.expectPartialRevert(BorgAuth.BorgAuth_NotAuthorized.selector);
+        RoundManager(roundManager).restoreSignedEndTime(roundId, signedEndTime);
+
+        vm.startPrank(corpOwner);
+        RoundManager(roundManager).restoreSignedEndTime(roundId, signedEndTime);
+        vm.expectRevert(RoundManager.SignedEndTimeAlreadySet.selector);
+        RoundManager(roundManager).restoreSignedEndTime(roundId, signedEndTime);
+        RoundManager(roundManager).allocate(a0, MAX_TICKET);
+        vm.stopPrank();
+
+        assertTrue(registry.hasSigned(a0, corpOwner), "registry records the officer");
+        _assertAllocated(a0);
+    }
+
+    function test_UpgradeFromDeployedV5_MinimumRoundWorks() public {
+        _upgradeRegistryAndRoundManager();
 
         bytes32 roundId = _createMinimumRound(MIN_RAISE);
         bytes32 a0 = _submitEOI(roundId, 0);

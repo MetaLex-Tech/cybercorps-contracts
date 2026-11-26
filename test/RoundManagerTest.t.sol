@@ -1188,8 +1188,20 @@ contract RoundManagerTest is Test {
         // Officer has not signed yet in FounderApproved mode prior to allocation.
         assertFalse(registry.hasSigned(agreementId, round.authorityOfficer));
 
+        // Only the finalizer can submit a signature for this agreement.
+        vm.prank(round.authorityOfficer);
+        vm.expectRevert(CyberAgreementRegistry.NotFinalizer.selector);
+        registry.signContractFor(
+            round.authorityOfficer,
+            agreementId,
+            round.roundPartyValues,
+            round.escrowedSignature,
+            false,
+            ""
+        );
+
         // The stored escrowed signature is NOT a valid agreement signature.
-        vm.startPrank(round.authorityOfficer);
+        vm.prank(address(roundManager));
         vm.expectRevert(
             abi.encodeWithSelector(
                 CyberAgreementRegistry.SignatureVerificationFailed.selector
@@ -1203,7 +1215,6 @@ contract RoundManagerTest is Test {
             false,
             ""
         );
-        vm.stopPrank();
 
         // Yet allocate() will mark the same officer as signed through signContractWithEscrow.
         vm.prank(corpOwner);

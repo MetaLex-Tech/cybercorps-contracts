@@ -57,6 +57,15 @@ interface ICyberAgreementRegistry {
         bytes32 transactionHash;
     }
 
+    /// @notice A party's EIP-712 signature that the finalizer holds. The party signed `structHash` in the
+    /// finalizer's own domain. The registry builds that domain with the caller as the verifying contract.
+    struct EscrowAttestation {
+        string domainName;
+        string domainVersion;
+        bytes32 structHash;
+        bytes signature;
+    }
+
     event TemplateCreated(
         bytes32 indexed templateId,
         string indexed title,
@@ -119,7 +128,7 @@ interface ICyberAgreementRegistry {
         address escrowSigner,
         bytes32 contractId,
         string[] memory partyValues,
-        bytes calldata signature,
+        EscrowAttestation calldata attestation,
         bool fillUnallocated, // to fill a 0 address or not
         string memory secret
     ) external;
