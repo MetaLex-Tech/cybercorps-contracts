@@ -38,6 +38,14 @@ struct ServiceConfig {
     bool devMode;
 }
 
+enum NullifierType {
+    NON_SALTED_NULLIFIER,
+    SALTED_NULLIFIER,
+    NON_SALTED_MOCK_NULLIFIER,
+    SALTED_MOCK_NULLIFIER,
+    NONE_NULLIFIER
+}
+
 interface IZKPassportVerifier {
     function verify(ProofVerificationParams calldata params)
         external
@@ -69,4 +77,22 @@ interface IZKPassportHelper {
         bool isStrict,
         bytes calldata committedInputs
     ) external view;
+}
+
+/// @notice Extended helper methods exposed by ZKPassport's deployed VerifierHelper
+///         for nationality allowlists, minimum age checks, and nullifier-type checks.
+interface IZKPassportEligibilityHelper is IZKPassportHelper {
+    function isNationalityIn(
+        string[] memory countryList,
+        bytes calldata committedInputs
+    ) external view returns (bool);
+
+    function isAgeAboveOrEqual(
+        uint8 minAge,
+        bytes calldata committedInputs
+    ) external view returns (bool);
+
+    function getNullifierType(
+        bytes32[] calldata publicInputs
+    ) external view returns (NullifierType);
 }
