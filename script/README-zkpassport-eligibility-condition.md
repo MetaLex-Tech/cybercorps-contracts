@@ -14,7 +14,7 @@ This script deploys `ZKPassportEligibilityCondition`, `ZKPassportEligibilityCond
 To sign and broadcast with an in-browser wallet such as Ambire Wallet (no private key on disk), serve `script/browser/` locally and open the deploy page on `http://localhost`:
 
 ```bash
-python3 -m http.server 8787 --bind 127.0.0.1 --directory /home/lex/repos/ccc-wt-zkpassport-eligibility/script/browser
+python3 -m http.server 8787 --bind 127.0.0.1 --directory script/browser
 ```
 
 Then open `http://localhost:8787/deploy-zkpassport-eligibility-condition.html`. The page discovers Ambire via EIP-6963, runs live onchain preflight checks, verifies every deterministic `CREATE2` address against the Forge simulation, and walks through Steps 1–3 (plus Step 4 on Sepolia for the sample `GBR`/`USA` `18+` condition).
