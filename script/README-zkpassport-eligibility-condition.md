@@ -9,6 +9,16 @@ This script deploys `ZKPassportEligibilityCondition`, `ZKPassportEligibilityCond
 - **Live helper preflight:** The script verifies that `ZKPassportRootVerifier` (`0x1D000001000EFD9a6371f4d90bB8920D5431c0D8`) and its `v0.21.0` `VerifierHelper` (`0x00000015...`, which exposes `getNullifierType`, `isNationalityIn`, and `isAgeAboveOrEqual`) are deployed before broadcasting. Chains without a verifier (Arbitrum, Base Sepolia) refuse cleanly.
 - **Same address on Ethereum and Base:** Because the core `BorgAuth`, verifier, domain (`cyberraise.metalex.tech`), validity period (`30 days`), `devModeAllowed` (`false`), and `CREATE2` salts match, the factory deploys to the same address on both chains.
 
+## Browser deploy page (Ambire / EIP-6963 browser wallet)
+
+To sign and broadcast with an in-browser wallet such as Ambire Wallet (no private key on disk), serve `script/browser/` locally and open the deploy page on `http://localhost`:
+
+```bash
+python3 -m http.server 8787 --bind 127.0.0.1 --directory /home/lex/repos/ccc-wt-zkpassport-eligibility/script/browser
+```
+
+Then open `http://localhost:8787/deploy-zkpassport-eligibility-condition.html`. The page discovers Ambire via EIP-6963, runs live onchain preflight checks, verifies every deterministic `CREATE2` address against the Forge simulation, and walks through Steps 1–3 (plus Step 4 on Sepolia for the sample `GBR`/`USA` `18+` condition).
+
 ## 1. Simulate (no broadcast)
 
 ```bash
