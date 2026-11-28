@@ -60,6 +60,7 @@ import {
 } from "../src/storage/SecondaryTradeStorage.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {Test, console2} from "forge-std/Test.sol";
+import {OfferorAgreementSigner} from "./libs/OfferorAgreementSigner.sol";
 import {Vm} from "forge-std/Vm.sol";
 // Real contract stack for the IssuanceManager + LedgerEntryToken side.
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
@@ -239,6 +240,16 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     MockCyberCorpForIM public corp;
     DealManagerFactory public dmFactory;
     DealManager public dm;
+
+    // Signing keys of the accounts that post offers in this suite.
+    mapping(address => uint256) internal offerorKeys;
+
+    /// @dev Adds the offeror's OfferorAgreement signature. The offeror is the account that the test pranks.
+    function _signedOffer(PostOfferParams memory p) internal returns (PostOfferParams memory) {
+        (, address offeror,) = vm.readCallers();
+        p.offerorAgreementSig = OfferorAgreementSigner.sign(vm, address(dm), offeror, offerorKeys[offeror], p);
+        return p;
+    }
     BorgAuth public auth;
 
     bytes32 public constant TEMPLATE_ID = bytes32(0);
@@ -251,7 +262,9 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
         (seller, sellerKey) = makeAddrAndKey("seller");
+        offerorKeys[seller] = sellerKey;
         (buyer, buyerKey) = makeAddrAndKey("buyer");
+        offerorKeys[buyer] = buyerKey;
         keeper = makeAddr("keeper");
 
         paymentToken = new SecERC20Mock();
@@ -419,12 +432,12 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
 
     function _postSellOffer() internal returns (bytes32 offerId) {
         vm.prank(seller);
-        offerId = dm.postOffer(_defaultSellOfferParams());
+        offerId = dm.postOffer(_signedOffer(_defaultSellOfferParams()));
     }
 
     function _postBuyOffer() internal returns (bytes32 offerId) {
         vm.prank(buyer);
-        offerId = dm.postOffer(_defaultBuyOfferParams());
+        offerId = dm.postOffer(_signedOffer(_defaultBuyOfferParams()));
     }
 
     function _acceptSellOfferPartial(bytes32 offerId, uint256 units) internal returns (bytes32 settlementId) {
@@ -1143,7 +1156,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
 
         vm.recordLogs();
         vm.prank(seller);
-        bytes32 offerId = dm.postOffer(p);
+        bytes32 offerId = dm.postOffer(_signedOffer(p));
 
         AcceptOfferParams memory ap = AcceptOfferParams({
             offerId: offerId,

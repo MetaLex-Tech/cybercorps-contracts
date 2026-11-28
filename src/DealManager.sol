@@ -77,7 +77,7 @@ contract DealManager is
     using DealManagerStorage for DealManagerStorage.DealManagerData;
     using SafeERC20 for IERC20;
 
-    string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "5.1"; // For version-tracking on all deployment and future upgrades
 
     // Library-emitted events/errors are inherited from the per-library interfaces (IDealManagerStorage,
     // ISecondaryTradeStorage and ILexScrowStorage) so their selectors/topics appear in DealManager's ABI.
@@ -239,6 +239,22 @@ contract DealManager is
     ) public {
         // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
         DealManagerStorage.signDealAndPay(signer, agreementId, signature, partyValues, _fillUnallocated, name, secret);
+    }
+
+    /// @notice The first party (the company) signs a deal that `proposeDeal` created unsigned
+    /// @param signer Address of the first party
+    /// @param agreementId Unique identifier for the agreement
+    /// @param partyValues Array of party-specific values, must match the template
+    /// @param signature Signature of the signer
+    /// @param secret Secret required for finalization (if any)
+    function signDeal(
+        address signer,
+        bytes32 agreementId,
+        string[] memory partyValues,
+        bytes memory signature,
+        string memory secret
+    ) public {
+        DealManagerStorage.signDeal(signer, agreementId, partyValues, signature, secret);
     }
 
     /// @notice Signs and finalizes a deal in one transaction

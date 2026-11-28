@@ -199,6 +199,22 @@ library DealManagerStorage {
     // Deal lifecycle (linked logic; called via delegatecall)
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// @notice The first party (the company) signs a deal that `proposeDeal` created unsigned.
+    /// @dev The registry accepts a signature on this agreement only from DealManager, its finalizer.
+    /// Only the first party can sign here: the counterparty signs with its payment.
+    function signDeal(
+        address signer,
+        bytes32 agreementId,
+        string[] memory partyValues,
+        bytes memory signature,
+        string memory secret
+    ) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+        ICyberAgreementRegistry registry = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry());
+        if (registry.getParties(agreementId)[0] != signer) revert IDealManagerStorage.SignerNotFirstParty();
+        registry.signContractFor(signer, agreementId, partyValues, signature, false, secret);
+    }
+
     /// @notice Signs a deal and processes payment
     /// @dev Access modifiers (if any) are carried by the DealManager wrapper that delegatecalls here.
     function signDealAndPay(

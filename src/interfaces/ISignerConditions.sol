@@ -66,4 +66,5 @@ interface ISignerConditions {
     error EvidenceRequired();
     error NoSignerConditions();
     error EvidenceLengthMismatch();
+    error OpenSlotHasSignerConditions();
 }

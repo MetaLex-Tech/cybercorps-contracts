@@ -23,15 +23,12 @@ contract CyberAgreementRegistryTest is Test {
     BorgAuth coreAuth;
     CyberAgreementRegistry registry;
 
-    string testTitle = "Test agreement";
     string testLegalContractUri = "ipfs://template";
     string[] testGlobalFields;
     string[] testPartyFields;
     string[] testGlobalValues;
     address[] testParties;
     string[][] testPartyValues;
-
-    bytes32 expectedStandaloneTemplateId;
 
     bytes32 testTemplateId = keccak256("test-template-id");
 
@@ -78,14 +75,6 @@ contract CyberAgreementRegistryTest is Test {
         testPartyValues[1][0] = "Bob";
         testPartyValues[1][1] = "Test title 2";
 
-        // Calculate the expected standalone template ID
-        expectedStandaloneTemplateId = keccak256(abi.encode(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields
-        ));
-
         // Create a test template
         registry.createTemplate(
             testTemplateId,
@@ -100,42 +89,9 @@ contract CyberAgreementRegistryTest is Test {
 
     /// @notice Contract should automatically finalize if (1) all parties are signed, and (2) finalizer is undefined
     function test_signContractAndFinalize() public {
-        uint256 salt = uint256(keccak256("test_signContractAndFinalize"));
-
-        bytes32 expectedAgreementId = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            bytes32(0),
-            address(0)));
-
-        vm.startPrank(alice);
-        bytes32 agreementId = registry.createStandaloneContractAndSign(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            block.timestamp + 10,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId,
-                testLegalContractUri,
-                testGlobalFields,
-                testPartyFields,
-                testGlobalValues,
-                testPartyValues[0],
-                alicePrivateKey
-            )
+        bytes32 agreementId = _createAliceSignedAgreement(
+            uint256(keccak256("test_signContractAndFinalize")), block.timestamp + 10
         );
-        vm.stopPrank();
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
 
         vm.startPrank(bob);
         registry.signContract(
@@ -145,7 +101,7 @@ contract CyberAgreementRegistryTest is Test {
                 vm,
                 registry.DOMAIN_SEPARATOR(),
                 registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId,
+                agreementId,
                 testLegalContractUri,
                 testGlobalFields,
                 testPartyFields,
@@ -173,17 +129,7 @@ contract CyberAgreementRegistryTest is Test {
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = testPartyValues[0]; // alice's test values
 
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            parties, // open agreement
-            partyValues,
-            "",
-            address(0), // finalizer undefined
-            block.timestamp + 10
-        );
+        bytes32 agreementId = _createLegacyContract(salt, parties, partyValues, "", block.timestamp + 10);
 
         // bob to fill the unallocated slot
 
@@ -247,17 +193,7 @@ contract CyberAgreementRegistryTest is Test {
 
         // Alice to create a closed agreement
 
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            "",
-            address(0), // finalizer undefined
-            block.timestamp + 10
-        );
+        bytes32 agreementId = _createLegacyContract(salt, testParties, testPartyValues, "", block.timestamp + 10);
 
         // chad should not be able to fill the slot because he's not a party
 
@@ -296,22 +232,11 @@ contract CyberAgreementRegistryTest is Test {
         );
     }
 
-    /// @notice Should allow `signContractFor()` even if finalizer is not defined
-    /// This is for simple standalone cases to work because the finalizer would be undefined
+    /// @notice Anyone can submit a party's signature with `signContractFor()` when the agreement has no finalizer
     function test_signContractForUndefinedFinalizer() public {
         uint256 salt = uint256(keccak256("test_signContractForUndefinedFinalizer"));
 
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            "",
-            address(0), // finalizer undefined
-            block.timestamp + 10
-        );
+        bytes32 agreementId = _createLegacyContract(salt, testParties, testPartyValues, "", block.timestamp + 10);
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -343,67 +268,124 @@ contract CyberAgreementRegistryTest is Test {
     function test_RevertIf_signContractWithEscrowUndefinedFinalizer() public {
         uint256 salt = uint256(keccak256("test_RevertIf_signContractWithEscrowUndefinedFinalizer"));
 
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            "",
-            address(0), // finalizer undefined
-            block.timestamp + 10
-        );
+        bytes32 agreementId = _createLegacyContract(salt, testParties, testPartyValues, "", block.timestamp + 10);
 
         // Bob should not be able to fake alice's escrow signature
+        ICyberAgreementRegistry.EscrowAttestation memory attestation;
         vm.expectRevert(CyberAgreementRegistry.FinalizerNotDefined.selector);
         vm.prank(bob);
         registry.signContractWithEscrow(
             alice,
             agreementId,
             testPartyValues[0],
-            "",
+            attestation,
             false,
             ""
         );
     }
 
-    function test_voidContractForSelf() public {
-        uint256 salt = uint256(keccak256("test_voidContractForSelf"));
+    /// @notice The finalizer records a party with the signature that the party gave in the finalizer's domain
+    function test_signContractWithEscrow() public {
+        address finalizer = makeAddr("finalizer");
+        bytes32 agreementId = _createEscrowAgreement("test_signContractWithEscrow", finalizer);
 
-        bytes32 expectedAgreementId = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            bytes32(0),
-            address(0)));
+        ICyberAgreementRegistry.EscrowAttestation memory attestation =
+            _escrowAttestation(alicePrivateKey, finalizer, keccak256("alice accepts the terms"));
 
-        vm.startPrank(alice);
-        bytes32 agreementId = registry.createStandaloneContractAndSign(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
-            salt,
+        vm.expectEmit(true, true, false, true);
+        emit ICyberAgreementRegistry.AgreementSigned(agreementId, alice, block.timestamp);
+        vm.prank(finalizer);
+        registry.signContractWithEscrow(alice, agreementId, testPartyValues[0], attestation, false, "");
+
+        assertTrue(registry.hasSigned(agreementId, alice));
+    }
+
+    /// @notice A finalizer that the creator chose cannot record a party who never signed for it
+    function test_RevertIf_signContractWithEscrowPartyDidNotSign() public {
+        address bobFinalizer = makeAddr("bobFinalizer");
+        bytes32 agreementId = _createEscrowAgreement("test_RevertIf_signContractWithEscrowPartyDidNotSign", bobFinalizer);
+
+        // Bob signs the attestation himself and names alice as the signer
+        ICyberAgreementRegistry.EscrowAttestation memory attestation =
+            _escrowAttestation(bobPrivateKey, bobFinalizer, keccak256("alice accepts the terms"));
+
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.prank(bobFinalizer);
+        registry.signContractWithEscrow(alice, agreementId, testPartyValues[0], attestation, false, "");
+
+        assertFalse(registry.hasSigned(agreementId, alice));
+    }
+
+    /// @notice A signature that a party gave to one finalizer does not work for another finalizer
+    function test_RevertIf_signContractWithEscrowOtherFinalizerDomain() public {
+        address aliceFinalizer = makeAddr("aliceFinalizer");
+        address bobFinalizer = makeAddr("bobFinalizer");
+        bytes32 agreementId =
+            _createEscrowAgreement("test_RevertIf_signContractWithEscrowOtherFinalizerDomain", bobFinalizer);
+
+        ICyberAgreementRegistry.EscrowAttestation memory attestation =
+            _escrowAttestation(alicePrivateKey, aliceFinalizer, keccak256("alice accepts the terms"));
+
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.prank(bobFinalizer);
+        registry.signContractWithEscrow(alice, agreementId, testPartyValues[0], attestation, false, "");
+    }
+
+    /// @notice The finalizer cannot change the signed terms
+    function test_RevertIf_signContractWithEscrowStructHashMismatch() public {
+        address finalizer = makeAddr("finalizer");
+        bytes32 agreementId = _createEscrowAgreement("test_RevertIf_signContractWithEscrowStructHashMismatch", finalizer);
+
+        ICyberAgreementRegistry.EscrowAttestation memory attestation =
+            _escrowAttestation(alicePrivateKey, finalizer, keccak256("alice accepts the terms"));
+        attestation.structHash = keccak256("other terms");
+
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.prank(finalizer);
+        registry.signContractWithEscrow(alice, agreementId, testPartyValues[0], attestation, false, "");
+    }
+
+    function _createEscrowAgreement(string memory saltLabel, address finalizer) internal returns (bytes32) {
+        vm.prank(finalizer);
+        return registry.createContract(
+            testTemplateId,
+            uint256(keccak256(bytes(saltLabel))),
             testGlobalValues,
             testParties,
             testPartyValues,
-            block.timestamp + 10,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId,
-                testLegalContractUri,
-                testGlobalFields,
-                testPartyFields,
-                testGlobalValues,
-                testPartyValues[0],
-                alicePrivateKey
-            )
+            "",
+            finalizer,
+            block.timestamp + 10
         );
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+    }
+
+    function _escrowAttestation(uint256 signerKey, address verifyingContract, bytes32 structHash)
+        internal
+        view
+        returns (ICyberAgreementRegistry.EscrowAttestation memory attestation)
+    {
+        bytes32 domainSeparator = keccak256(abi.encode(
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+            keccak256("TestFinalizer"),
+            keccak256("1"),
+            block.chainid,
+            verifyingContract
+        ));
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(signerKey, keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash)));
+        attestation = ICyberAgreementRegistry.EscrowAttestation({
+            domainName: "TestFinalizer",
+            domainVersion: "1",
+            structHash: structHash,
+            signature: abi.encodePacked(r, s, v)
+        });
+    }
+
+    function test_voidContractForSelf() public {
+        bytes32 agreementId =
+            _createAliceSignedAgreement(uint256(keccak256("test_voidContractForSelf")), block.timestamp + 10);
+
+        vm.startPrank(alice);
 
         registry.voidContractFor(
             agreementId,
@@ -422,42 +404,8 @@ contract CyberAgreementRegistryTest is Test {
     }
 
     function test_voidContractForOthers() public {
-        uint256 salt = uint256(keccak256("test_voidContractForOthers"));
-
-        bytes32 expectedAgreementId = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            bytes32(0),
-            address(0)));
-
-        vm.startPrank(alice);
-        bytes32 agreementId = registry.createStandaloneContractAndSign(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            block.timestamp + 10,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId,
-                testLegalContractUri,
-                testGlobalFields,
-                testPartyFields,
-                testGlobalValues,
-                testPartyValues[0],
-                alicePrivateKey
-            )
-        );
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
-        vm.stopPrank();
+        bytes32 agreementId =
+            _createAliceSignedAgreement(uint256(keccak256("test_voidContractForOthers")), block.timestamp + 10);
 
         vm.startPrank(bob);
         registry.voidContractFor(
@@ -491,27 +439,25 @@ contract CyberAgreementRegistryTest is Test {
     /// @notice A zero-expiry agreement is still voidable once ALL parties have requested it
     function test_voidContract_ZeroExpiry_VoidedWhenAllPartiesRequest() public {
         uint256 salt = uint256(keccak256("test_voidContract_ZeroExpiry_VoidedWhenAllPartiesRequest"));
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            "",
-            makeAddr("finalizer"), // nonzero finalizer so full signatures do not auto-finalize
-            0 // expiry: no deadline
-        );
 
-        // Both sign so numSignatures > 1. With only the proposer signed, the proposer branch voids on
-        // alice's request alone and this never exercises unanimity.
+        address[] memory parties = new address[](3);
+        parties[0] = alice;
+        parties[1] = bob;
+        parties[2] = chad;
+
+        bytes32 agreementId = _createLegacyContract(salt, parties, testPartyValues, "", 0);
+
+        // Alice and bob sign so numSignatures > 1. With only the proposer signed, the proposer branch
+        // voids on alice's request alone and this never exercises unanimity. Chad does not sign, so
+        // the agreement does not finalize.
         _signAs(agreementId, testPartyValues[0], alice, alicePrivateKey, false);
         _signAs(agreementId, testPartyValues[1], bob, bobPrivateKey, false);
 
         _requestVoid(agreementId, alice, alicePrivateKey);
-        assertFalse(registry.isVoided(agreementId), "first void request alone must not void");
-
         _requestVoid(agreementId, bob, bobPrivateKey);
+        assertFalse(registry.isVoided(agreementId), "two of three parties must not void");
+
+        _requestVoid(agreementId, chad, chadPrivateKey);
         assertTrue(registry.isVoided(agreementId), "unanimous void requests must void the zero-expiry agreement");
     }
 
@@ -550,17 +496,7 @@ contract CyberAgreementRegistryTest is Test {
         partyValues[0] = testPartyValues[0];
         partyValues[1] = testPartyValues[1];
 
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            parties,
-            partyValues,
-            "",
-            address(0), // finalizer undefined
-            0 // expiry: no deadline
-        );
+        bytes32 agreementId = _createLegacyContract(salt, parties, partyValues, "", 0);
 
         _signAs(agreementId, testPartyValues[0], alice, alicePrivateKey, false);
         _signAs(agreementId, testPartyValues[1], bob, bobPrivateKey, false);
@@ -576,10 +512,13 @@ contract CyberAgreementRegistryTest is Test {
     function test_voidContract_ZeroExpiry_FilledSlotRaisesUnanimityBar() public {
         uint256 salt = uint256(keccak256("test_voidContract_ZeroExpiry_FilledSlotRaisesUnanimityBar"));
 
-        address[] memory parties = new address[](3);
+        (address dave, uint256 davePrivateKey) = makeAddrAndKey("dave");
+
+        address[] memory parties = new address[](4);
         parties[0] = alice;
         parties[1] = bob;
         // parties[2] left as address(0): open slot
+        parties[3] = dave;
         string[][] memory partyValues = new string[][](2);
         partyValues[0] = testPartyValues[0];
         partyValues[1] = testPartyValues[1];
@@ -588,28 +527,64 @@ contract CyberAgreementRegistryTest is Test {
         chadValues[0] = "Chad";
         chadValues[1] = "Test title 3";
 
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            parties,
-            partyValues,
-            "",
-            makeAddr("finalizer"), // nonzero finalizer so full signatures do not auto-finalize
-            0 // expiry: no deadline
-        );
+        bytes32 agreementId = _createLegacyContract(salt, parties, partyValues, "", 0);
 
+        // Dave does not sign, so the agreement does not finalize.
         _signAs(agreementId, testPartyValues[0], alice, alicePrivateKey, false);
         _signAs(agreementId, testPartyValues[1], bob, bobPrivateKey, false);
         _signAs(agreementId, chadValues, chad, chadPrivateKey, true); // chad fills the open slot
 
         _requestVoid(agreementId, alice, alicePrivateKey);
         _requestVoid(agreementId, bob, bobPrivateKey);
-        assertFalse(registry.isVoided(agreementId), "two of three allocated parties must not void");
+        _requestVoid(agreementId, dave, davePrivateKey);
+        assertFalse(registry.isVoided(agreementId), "three of four allocated parties must not void");
 
         _requestVoid(agreementId, chad, chadPrivateKey);
-        assertTrue(registry.isVoided(agreementId), "all three allocated parties requesting must void");
+        assertTrue(registry.isVoided(agreementId), "all four allocated parties requesting must void");
+    }
+
+    /// @notice An agreement with a finalizer records a signature only when the finalizer submits it
+    function test_RevertIf_signContractForFinalizerAgreementNotFromFinalizer() public {
+        address finalizer = makeAddr("finalizer");
+        vm.prank(finalizer);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            uint256(keccak256("test_RevertIf_signContractForFinalizerAgreementNotFromFinalizer")),
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            "",
+            finalizer,
+            block.timestamp + 7 days
+        );
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            testGlobalValues,
+            testPartyValues[0],
+            alicePrivateKey
+        );
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistry.NotFinalizer.selector);
+        registry.signContract(agreementId, testPartyValues[0], signature, false, "");
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistry.NotFinalizer.selector);
+        registry.signContractFor(alice, agreementId, testPartyValues[0], signature, false, "");
+
+        vm.prank(bob);
+        vm.expectRevert(CyberAgreementRegistry.NotFinalizer.selector);
+        registry.signContractFor(alice, agreementId, testPartyValues[0], signature, false, "");
+
+        vm.prank(finalizer);
+        registry.signContractFor(alice, agreementId, testPartyValues[0], signature, false, "");
+        assertTrue(registry.hasSigned(agreementId, alice), "the finalizer submits the party's signature");
     }
 
     /// @notice Signs `agreementId` as `signer` with matching party values
@@ -636,42 +611,26 @@ contract CyberAgreementRegistryTest is Test {
         registry.signContract(agreementId, partyValues, signature, fillUnallocated, "");
     }
 
-    /// @notice Creates a standalone two-party (alice, bob) agreement signed only by alice (the proposer)
+    /// @notice Creates a legacy two-party (alice, bob) agreement signed only by alice (the proposer)
     function _createAliceSignedAgreement(uint256 salt, uint256 expiry) private returns (bytes32 agreementId) {
-        bytes32 expectedAgreementId = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            bytes32(0),
-            address(0)));
-
-        vm.startPrank(alice);
-        agreementId = registry.createStandaloneContractAndSign(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            expiry,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId,
-                testLegalContractUri,
-                testGlobalFields,
-                testPartyFields,
-                testGlobalValues,
-                testPartyValues[0],
-                alicePrivateKey
-            )
-        );
-        vm.stopPrank();
+        agreementId = _createLegacyContract(salt, testParties, testPartyValues, "", expiry);
+        _signAs(agreementId, testPartyValues[0], alice, alicePrivateKey, false);
         assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+    }
+
+    /// @notice Creates an agreement with no finalizer, like the legacy agreements on chain.
+    /// Only the zero address passes the finalizer check when there is no finalizer.
+    function _createLegacyContract(
+        uint256 salt,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        uint256 expiry
+    ) private returns (bytes32) {
+        vm.prank(address(0));
+        return registry.createContract(
+            testTemplateId, salt, testGlobalValues, parties, partyValues, secretHash, address(0), expiry
+        );
     }
 
     /// @notice Submits a signed void request for `party`
@@ -694,18 +653,9 @@ contract CyberAgreementRegistryTest is Test {
     function test_setDelegation() public {
         uint256 salt = uint256(keccak256("test_setDelegation"));
 
-        vm.startPrank(alice);
+        bytes32 agreementId = _createLegacyContract(salt, testParties, testPartyValues, "", block.timestamp + 10);
 
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            "",
-            address(0), // finalizer undefined
-            block.timestamp + 10
-        );
+        vm.startPrank(alice);
 
         // alice to delegate to bob
         vm.expectEmit(true, true, true, true);
@@ -748,18 +698,9 @@ contract CyberAgreementRegistryTest is Test {
     function test_revokeDelegate() public {
         uint256 salt = uint256(keccak256("test_revokeDelegate"));
 
-        vm.startPrank(alice);
+        bytes32 agreementId = _createLegacyContract(salt, testParties, testPartyValues, "", block.timestamp + 10);
 
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            "",
-            address(0), // finalizer undefined
-            block.timestamp + 10
-        );
+        vm.startPrank(alice);
 
         // alice to delegate to bob but revoke immediately
         registry.setDelegation(bob, block.timestamp + 10);
@@ -814,17 +755,7 @@ contract CyberAgreementRegistryTest is Test {
         parties[0] = alice;
         parties[1] = chad;
 
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            parties,
-            testPartyValues,
-            "", // secretHash
-            address(0), // finalizer undefined -> auto-finalize on full quorum
-            block.timestamp + 100
-        );
+        bytes32 agreementId = _createLegacyContract(salt, parties, testPartyValues, "", block.timestamp + 100);
 
         // alice delegates to bob
         vm.prank(alice);
@@ -887,374 +818,37 @@ contract CyberAgreementRegistryTest is Test {
         assertFalse(registry.isFinalized(agreementId), "agreement must not finalize without chad");
     }
 
-    /// @notice Should be able to prepare & sign a standalone agreement in one tx
-    function test_createStandaloneContractAndSign() public {
-        uint256 salt = uint256(keccak256("test_createStandaloneContractAndSign"));
+    // ===== AUDIT: only the finalizer creates an agreement with `createContract` =====
 
-        bytes32 expectedAgreementId = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            bytes32(0),
-            address(0)));
+    /// @notice MTLX1-30: another account cannot take the id of an agreement that a finalizer creates
+    function test_AUDIT_MTLX1_30_createContractRevertsIfNotFinalizer() public {
+        address finalizer = makeAddr("finalizer");
+        uint256 salt = uint256(keccak256("test_AUDIT_MTLX1_30_createContractRevertsIfNotFinalizer"));
 
-        vm.startPrank(alice);
-        bytes32 agreementId = registry.createStandaloneContractAndSign(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            block.timestamp + 10,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId,
-                testLegalContractUri,
-                testGlobalFields,
-                testPartyFields,
-                testGlobalValues,
-                testPartyValues[0],
-                alicePrivateKey
-            )
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistry.NotFinalizer.selector);
+        registry.createContract(
+            testTemplateId, salt, testGlobalValues, testParties, testPartyValues, "", finalizer, block.timestamp + 10
         );
-        vm.stopPrank();
 
-        (string memory templateUri, ) = registry.templates(expectedStandaloneTemplateId);
-        assertEq(templateUri, testLegalContractUri, "just-in-time template should have been created");
-
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+        // The finalizer still gets the id that it expects
+        bytes32 expectedId =
+            keccak256(abi.encode(testTemplateId, salt, testGlobalValues, testParties, bytes32(0), finalizer));
+        vm.prank(finalizer);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId, salt, testGlobalValues, testParties, testPartyValues, "", finalizer, block.timestamp + 10
+        );
+        assertEq(agreementId, expectedId, "the finalizer gets the expected id");
     }
 
-    /// @notice Third-party should be able to prepare & forward a pre-signed standalone agreement in one tx
-    function test_createStandaloneContractAndSignFor() public {
-        uint256 salt = uint256(keccak256("test_createStandaloneContractAndSignFor"));
-
-        bytes32 expectedAgreementId = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            bytes32(0),
-            address(0)));
-
-        vm.startPrank(deployer); // third-party
-        bytes32 agreementId = registry.createStandaloneContractAndSignFor(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            block.timestamp + 10,
-            alice, // on behalf of
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId,
-                testLegalContractUri,
-                testGlobalFields,
-                testPartyFields,
-                testGlobalValues,
-                testPartyValues[0],
-                alicePrivateKey
-            )
-        );
-        vm.stopPrank();
-
-        (string memory templateUri, ) = registry.templates(expectedStandaloneTemplateId);
-        assertEq(templateUri, testLegalContractUri, "just-in-time template should have been created");
-
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
-    }
-
-    /// @notice Third-party should be able to prepare & sign a standalone agreement (on delegator's behalf) in one tx
-    function test_createStandaloneContractAndSignForDelegator() public {
-        uint256 salt = uint256(keccak256("test_createStandaloneContractAndSignForDelegator"));
-
-        // alice to delegate to bob
-
+    /// @notice MTLX1-39: `createContract` does not make an agreement with no finalizer, because that id
+    /// does not include the creator or the expiry. Such an agreement must use the bound path.
+    function test_AUDIT_MTLX1_39_createContractRevertsWithNoFinalizer() public {
         vm.prank(alice);
-        registry.setDelegation(bob, block.timestamp + 10);
-        assertTrue(registry.isValidDelegate(alice, bob), "alice should've delegated to bob");
-
-        // Bob to prepare and sign agreement as the delegate
-
-        bytes32 expectedAgreementId = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
-            salt,
-            testGlobalValues,
-            testParties,
-            bytes32(0),
-            address(0)));
-
-        vm.startPrank(bob);
-        bytes32 agreementId = registry.createStandaloneContractAndSignFor(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
-            salt,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            block.timestamp + 10,
-            alice, // on behalf of
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId,
-                testLegalContractUri,
-                testGlobalFields,
-                testPartyFields,
-                testGlobalValues,
-                testPartyValues[0],
-                alice, // bob signs for alice
-                bobPrivateKey // delegate's own private key
-            )
+        vm.expectRevert(CyberAgreementRegistry.NotFinalizer.selector);
+        registry.createContract(
+            testTemplateId, 1, testGlobalValues, testParties, testPartyValues, "", address(0), block.timestamp + 10
         );
-        vm.stopPrank();
-
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
-    }
-
-    /// @notice Should be able to create duplicate simple agreements as long as their salts are different.
-    /// The duplicate agreements should have the same template ID, too.
-    function test_createStandaloneContractAndSignDuplicate() public {
-        vm.startPrank(alice);
-
-        uint256 salt0 = uint256(keccak256("test_createSimpleContractDifferentSalts.0"));
-        bytes32 expectedAgreementId0 = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
-            salt0,
-            testGlobalValues,
-            testParties,
-            bytes32(0),
-            address(0)));
-        bytes32 agreementId0 = registry.createStandaloneContractAndSign(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
-            salt0,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            block.timestamp + 10,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId0,
-                testLegalContractUri,
-                testGlobalFields,
-                testPartyFields,
-                testGlobalValues,
-                testPartyValues[0],
-                alicePrivateKey
-            )
-        );
-        (bytes32 templateId0,,,,,,,,, ) = registry.getContractDetails(agreementId0);
-
-        uint256 salt1 = uint256(keccak256("test_createSimpleContractDifferentSalts.1"));
-        bytes32 expectedAgreementId1 = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
-            salt1,
-            testGlobalValues,
-            testParties,
-            bytes32(0),
-            address(0)));
-        bytes32 agreementId1 = registry.createStandaloneContractAndSign(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
-            salt1,
-            testGlobalValues,
-            testParties,
-            testPartyValues,
-            block.timestamp + 10,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId1,
-                testLegalContractUri,
-                testGlobalFields,
-                testPartyFields,
-                testGlobalValues,
-                testPartyValues[0],
-                alicePrivateKey
-            )
-        );
-        (bytes32 templateId1,,,,,,,,, ) = registry.getContractDetails(agreementId1);
-
-        assertNotEq(agreementId0, agreementId1, "two agreements should have different IDs");
-        assertEq(templateId0, templateId1, "two agreements should share the same template");
-    }
-
-    // ===== AUDIT: instantiation-hijack via front-running is blocked =====
-    // contractId now = keccak256(templateId, salt, globalValues, parties, secretHash, finalizer).
-    // An attacker who front-runs createContract with the same (templateId, salt, globalValues, parties)
-    // but hostile lifecycle params gets a DIFFERENT contractId, so it can neither collide with the
-    // victim's intended instance nor accept the victim's signature. Each test isolates one field.
-
-    /// @dev Recompute the standalone contractId the way createContract now does.
-    function _standaloneId(
-        uint256 salt,
-        address[] memory parties,
-        bytes32 secretHash,
-        address finalizer
-    ) internal view returns (bytes32) {
-        return keccak256(abi.encode(
-            expectedStandaloneTemplateId, salt, testGlobalValues, parties, secretHash, finalizer
-        ));
-    }
-
-    /// @notice A hostile finalizer yields a different contractId, so the victim's standalone agreement
-    /// (finalizer == address(0)) is created and auto-finalized exactly as intended.
-    function test_AUDIT_frontRunFinalizerCannotHijack() public {
-        uint256 salt = uint256(keccak256("test_AUDIT_frontRunFinalizerCannotHijack"));
-        uint256 expiry = block.timestamp + 10;
-
-        address[] memory parties = new address[](1);
-        parties[0] = alice;
-        string[][] memory partyValues = new string[][](1);
-        partyValues[0] = testPartyValues[0];
-
-        bytes32 victimId = _standaloneId(salt, parties, bytes32(0), address(0));
-        bytes memory aliceSig = CyberAgreementUtils.signAgreementTypedData(
-            vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
-            victimId, testLegalContractUri, testGlobalFields, testPartyFields,
-            testGlobalValues, partyValues[0], alicePrivateKey
-        );
-
-        // Attacker front-runs with a hostile finalizer -> different contractId, no collision
-        vm.startPrank(chad);
-        registry.createTemplate(
-            expectedStandaloneTemplateId, testTitle, testLegalContractUri, testGlobalFields, testPartyFields
-        );
-        bytes32 attackerId = registry.createContract(
-            expectedStandaloneTemplateId, salt, testGlobalValues, parties, partyValues,
-            bytes32(0), chad, expiry
-        );
-        vm.stopPrank();
-        assertNotEq(attackerId, victimId, "hostile finalizer must not collide with the intended id");
-
-        // The victim's standalone tx is unaffected and its agreement auto-finalizes
-        vm.prank(alice);
-        bytes32 agreementId = registry.createStandaloneContractAndSign(
-            testTitle, testLegalContractUri, testGlobalFields, testPartyFields,
-            salt, testGlobalValues, parties, partyValues, expiry, aliceSig
-        );
-        assertEq(agreementId, victimId, "victim gets the intended contractId");
-        assertTrue(registry.isFinalized(agreementId), "victim's no-finalizer agreement auto-finalizes");
-    }
-
-    /// @notice `expiry` is NOT bound into contractId, so a front-runner CAN squat the victim's id with a
-    /// hostile expiry. This is an accepted trade-off: binding it would make presigned flows unusable,
-    /// because callers derive expiry from block.timestamp and an off-chain signer cannot predict it.
-    /// The squat is a denial-of-service (victim's create reverts), not a signature hijack: the victim
-    /// never signs the attacker's instance, and `salt` lets them retry on a fresh id.
-    function test_AUDIT_frontRunExpirySquatsIdButCannotStealSignature() public {
-        uint256 salt = uint256(keccak256("test_AUDIT_frontRunExpirySquatsId"));
-        uint256 expiry = block.timestamp + 10;
-
-        address[] memory parties = new address[](1);
-        parties[0] = alice;
-        string[][] memory partyValues = new string[][](1);
-        partyValues[0] = testPartyValues[0];
-
-        bytes32 victimId = _standaloneId(salt, parties, bytes32(0), address(0));
-
-        // Attacker front-runs with a different expiry -> SAME contractId, so the id is taken
-        vm.startPrank(chad);
-        registry.createTemplate(
-            expectedStandaloneTemplateId, testTitle, testLegalContractUri, testGlobalFields, testPartyFields
-        );
-        bytes32 attackerId = registry.createContract(
-            expectedStandaloneTemplateId, salt, testGlobalValues, parties, partyValues,
-            bytes32(0), address(0), block.timestamp + 1000
-        );
-        vm.stopPrank();
-        assertEq(attackerId, victimId, "expiry is not bound, so the ids collide");
-
-        bytes memory aliceSig = CyberAgreementUtils.signAgreementTypedData(
-            vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
-            victimId, testLegalContractUri, testGlobalFields, testPartyFields,
-            testGlobalValues, partyValues[0], alicePrivateKey
-        );
-
-        // The victim's own creation reverts rather than silently adopting the attacker's terms
-        vm.prank(alice);
-        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyExists.selector);
-        registry.createStandaloneContractAndSign(
-            testTitle, testLegalContractUri, testGlobalFields, testPartyFields,
-            salt, testGlobalValues, parties, partyValues, expiry, aliceSig
-        );
-
-        // A fresh salt sidesteps the squatted id entirely
-        uint256 freshSalt = salt + 1;
-        bytes32 freshId = _standaloneId(freshSalt, parties, bytes32(0), address(0));
-        bytes memory aliceFreshSig = CyberAgreementUtils.signAgreementTypedData(
-            vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
-            freshId, testLegalContractUri, testGlobalFields, testPartyFields,
-            testGlobalValues, partyValues[0], alicePrivateKey
-        );
-        vm.prank(alice);
-        bytes32 agreementId = registry.createStandaloneContractAndSign(
-            testTitle, testLegalContractUri, testGlobalFields, testPartyFields,
-            freshSalt, testGlobalValues, parties, partyValues, expiry, aliceFreshSig
-        );
-        assertEq(agreementId, freshId, "victim gets the intended contractId on a fresh salt");
-        assertTrue(registry.isFinalized(agreementId), "victim's agreement auto-finalizes");
-    }
-
-    /// @notice A hostile secretHash yields a different contractId, so it cannot pre-empt the victim's instance.
-    function test_AUDIT_frontRunSecretHashCannotHijack() public {
-        uint256 salt = uint256(keccak256("test_AUDIT_frontRunSecretHashCannotHijack"));
-        uint256 expiry = block.timestamp + 10;
-
-        address[] memory parties = new address[](1);
-        parties[0] = alice;
-        string[][] memory partyValues = new string[][](1);
-        partyValues[0] = testPartyValues[0];
-
-        bytes32 victimId = _standaloneId(salt, parties, bytes32(0), address(0));
-        bytes memory aliceSig = CyberAgreementUtils.signAgreementTypedData(
-            vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
-            victimId, testLegalContractUri, testGlobalFields, testPartyFields,
-            testGlobalValues, partyValues[0], alicePrivateKey
-        );
-
-        // Attacker front-runs with a hostile secretHash -> different contractId, no collision
-        vm.startPrank(chad);
-        registry.createTemplate(
-            expectedStandaloneTemplateId, testTitle, testLegalContractUri, testGlobalFields, testPartyFields
-        );
-        bytes32 attackerId = registry.createContract(
-            expectedStandaloneTemplateId, salt, testGlobalValues, parties, partyValues,
-            keccak256(abi.encode("chad-secret")), address(0), expiry
-        );
-        vm.stopPrank();
-        assertNotEq(attackerId, victimId, "hostile secretHash must not collide with the intended id");
-
-        vm.prank(alice);
-        bytes32 agreementId = registry.createStandaloneContractAndSign(
-            testTitle, testLegalContractUri, testGlobalFields, testPartyFields,
-            salt, testGlobalValues, parties, partyValues, expiry, aliceSig
-        );
-        assertEq(agreementId, victimId, "victim gets the intended contractId");
-        assertTrue(registry.isFinalized(agreementId), "victim's agreement auto-finalizes");
     }
 
     /// @notice A delegate signature made for one party must not count as consent from another party
@@ -1268,17 +862,7 @@ contract CyberAgreementRegistryTest is Test {
         parties[0] = alice;
         parties[1] = chad;
 
-        vm.prank(deployer);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
-            salt,
-            testGlobalValues,
-            parties,
-            new string[][](0), // open agreement, so the relayer picks the party values
-            "", // secretHash
-            address(0), // no finalizer, so any relayer may submit
-            block.timestamp + 100
-        );
+        bytes32 agreementId = _createLegacyContract(salt, parties, new string[][](0), "", block.timestamp + 100);
 
         // Alice and Chad both use Bob as their signing wallet.
         vm.prank(alice);

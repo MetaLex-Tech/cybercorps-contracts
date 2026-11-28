@@ -214,16 +214,26 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     /// - contact (explicit)
     function escrowAuthorizationHash(string memory name, string memory contact) public view returns (bytes32) {
         return keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                DOMAIN_SEPARATOR,
-                keccak256(abi.encode(
-                    ESCROW_AUTHORIZATION_TYPEHASH,
-                    keccak256(bytes(name)),
-                    keccak256(bytes(contact))
-                ))
-            )
+            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, _escrowAuthorizationStructHash(name, contact))
         );
+    }
+
+    function _escrowAuthorizationStructHash(string memory name, string memory contact) private view returns (bytes32) {
+        return keccak256(abi.encode(ESCROW_AUTHORIZATION_TYPEHASH, keccak256(bytes(name)), keccak256(bytes(contact))));
+    }
+
+    /// @notice The officer's escrow authorization, in the form the registry checks when it records the officer.
+    function _escrowAttestation(CompanyOfficer memory officer)
+        private
+        view
+        returns (ICyberAgreementRegistry.EscrowAttestation memory)
+    {
+        return ICyberAgreementRegistry.EscrowAttestation({
+            domainName: "ParentCoFactory",
+            domainVersion: "1",
+            structHash: _escrowAuthorizationStructHash(officer.name, officer.contact),
+            signature: parentCoSignatureHash
+        });
     }
 
     function setIssuanceManagerFactory(address _issuanceManagerFactory) external onlyOwner {
@@ -526,7 +536,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             signingOfficer.eoa,
             agreementId,
             partyValuesOverride[0],
-            parentCoSignatureHash,
+            _escrowAttestation(signingOfficer),
             false,
             ""
         );
@@ -551,7 +561,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             signingOfficer.eoa,
             meetingNotesId,
             meetingNotesPartyValues[0],
-            parentCoSignatureHash,
+            _escrowAttestation(signingOfficer),
             false,
             ""
         );

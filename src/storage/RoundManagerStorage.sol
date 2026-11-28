@@ -121,6 +121,8 @@ library RoundManagerStorage {
     error MinimumNotMet();
     error MinimumAlreadyMet();
     error MinimumAlreadySet();
+    error SignedEndTimeAlreadySet();
+    error SignedEndTimeMismatch();
     error ArrayLengthMismatch();
     error AgreementNotInRound(bytes32 agreementId);
     error NotCommitted(bytes32 agreementId);
@@ -197,6 +199,10 @@ library RoundManagerStorage {
 
         /// @notice Sum of open commitments in a round
         mapping(bytes32 => uint256) committedTotal;
+
+        /// @notice The end time that the officer signed, kept when the owner first changes the end time
+        /// (0 = not changed since this field was added, so the current end time is the signed one)
+        mapping(bytes32 => uint256) signedEndTime;
     }
 
     /// @notice Retrieves the storage reference for the RoundManagerData struct
@@ -354,7 +360,7 @@ library RoundManagerStorage {
                     round.authorityOfficer,
                     agreementId,
                     round.roundPartyValues,
-                    round.escrowedSignature,
+                    _escrowAttestation(round),
                     false,
                     ""
                 );
@@ -420,7 +426,7 @@ library RoundManagerStorage {
                     round.authorityOfficer,
                     agreementId,
                     round.roundPartyValues,
-                    round.escrowedSignature,
+                    _escrowAttestation(round),
                     false,
                     ""
                 );
@@ -659,6 +665,33 @@ library RoundManagerStorage {
         emit RoundMinimumSet(roundId, minRaise, deadline);
     }
 
+    /// @notice Keeps the signed end time before the owner changes it. The registry needs it to check the
+    /// officer's round signature.
+    function recordSignedEndTime(bytes32 roundId) internal {
+        RoundManagerData storage ds = roundManagerStorage();
+        if (ds.signedEndTime[roundId] == 0) ds.signedEndTime[roundId] = getRound(roundId).endTime;
+    }
+
+    /// @notice Sets the signed end time of a round whose end time changed before `signedEndTime` existed.
+    /// The officer's round signature must verify with `endTime`, so only the signed value can be set.
+    /// @dev Called via delegatecall from RoundManager. external to keep this off RoundManager's bytecode.
+    function restoreSignedEndTime(bytes32 roundId, uint256 endTime) external {
+        RoundManagerData storage ds = roundManagerStorage();
+        if (ds.signedEndTime[roundId] != 0) revert SignedEndTimeAlreadySet();
+        Round storage round = getRound(roundId);
+        if (round.id == bytes32(0)) revert InvalidRound();
+        if (!EIP712Lib.verifySignature(
+            EIP712_NAME, EIP712_VERSION, address(this), round.authorityOfficer,
+            _escrowedStructHash(round, endTime), round.escrowedSignature
+        )) revert SignedEndTimeMismatch();
+        ds.signedEndTime[roundId] = endTime;
+    }
+
+    function _signedEndTime(Round storage round) private view returns (uint256) {
+        uint256 signed = roundManagerStorage().signedEndTime[round.id];
+        return signed != 0 ? signed : round.endTime;
+    }
+
     /// @notice Returns a round's minimum raise, extension deadline and whether it was met
     function getRoundMinimum(bytes32 roundId) internal view returns (uint256 minRaise, uint256 deadline, bool met) {
         RoundManagerData storage ds = roundManagerStorage();
@@ -890,7 +923,47 @@ library RoundManagerStorage {
         EscrowedSignatureData memory data,
         bytes memory signature
     ) external view returns (bool) {
-        bytes32 structHash = keccak256(
+        return EIP712Lib.verifySignature(
+            EIP712_NAME, EIP712_VERSION, address(this), signer, _hashEscrowedSignatureData(data), signature
+        );
+    }
+
+    /// @notice The officer's round signature, in the form the registry checks when it records the officer.
+    function _escrowAttestation(Round storage round)
+        private
+        view
+        returns (ICyberAgreementRegistry.EscrowAttestation memory)
+    {
+        return ICyberAgreementRegistry.EscrowAttestation({
+            domainName: EIP712_NAME,
+            domainVersion: EIP712_VERSION,
+            structHash: _escrowedStructHash(round, _signedEndTime(round)),
+            signature: round.escrowedSignature
+        });
+    }
+
+    function _escrowedStructHash(Round storage round, uint256 endTime) private view returns (bytes32) {
+        return _hashEscrowedSignatureData(
+            EscrowedSignatureData({
+                roundId: round.id,
+                seriesType: uint8(round.seriesType),
+                raiseCap: round.raiseCap,
+                minTicket: round.minTicket,
+                maxTicket: round.maxTicket,
+                roundType: uint8(round.roundType),
+                startTime: round.startTime,
+                endTime: endTime,
+                templateId: round.templateId,
+                paymentToken: round.paymentToken,
+                pricePerUnit: round.pricePerUnit,
+                valuation: round.valuation,
+                companyAddress: LexScrowStorage.getCorp()
+            })
+        );
+    }
+
+    function _hashEscrowedSignatureData(EscrowedSignatureData memory data) private pure returns (bytes32) {
+        return keccak256(
             abi.encode(
                 ESCROWEDSIGNATUREDATA_TYPEHASH,
                 data.roundId,
@@ -908,7 +981,6 @@ library RoundManagerStorage {
                 data.companyAddress
             )
         );
-        return EIP712Lib.verifySignature(EIP712_NAME, EIP712_VERSION, address(this), signer, structHash, signature);
     }
 
     function _isStockSecurityClass(SecurityClass cls) private pure returns (bool) {

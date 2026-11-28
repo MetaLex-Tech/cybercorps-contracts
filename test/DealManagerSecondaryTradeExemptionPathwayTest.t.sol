@@ -54,6 +54,7 @@ import {TimeSettlementPeriodCondition} from "../src/libs/conditions/secondary/Ti
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {MockUriBuilderForIM} from "./IssuanceManagerTest.t.sol";
 import {Test} from "forge-std/Test.sol";
+import {OfferorAgreementSigner} from "./libs/OfferorAgreementSigner.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mocks
@@ -131,6 +132,16 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     CyberAgreementRegistry public registry;
     DealManagerFactory public dmFactory;
     DealManager public dm;
+
+    // Signing keys of the accounts that post offers in this suite.
+    mapping(address => uint256) internal offerorKeys;
+
+    /// @dev Adds the offeror's OfferorAgreement signature. The offeror is the account that the test pranks.
+    function _signedOffer(PostOfferParams memory p) internal returns (PostOfferParams memory) {
+        (, address offeror,) = vm.readCallers();
+        p.offerorAgreementSig = OfferorAgreementSigner.sign(vm, address(dm), offeror, offerorKeys[offeror], p);
+        return p;
+    }
     LeXcheXBadge public badge;
 
     // Real conditions.
@@ -157,6 +168,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     function setUp() public {
         (owner, ownerKey) = makeAddrAndKey("owner");
         (seller, sellerKey) = makeAddrAndKey("seller");
+        offerorKeys[seller] = sellerKey;
         keeper = makeAddr("keeper");
         legionIssuer = makeAddr("legion.issuer");
 
@@ -797,7 +809,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         PostOfferParams memory p = _buyOfferParams(ExemptionPathway.RULE_144A, 51);
         vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(qib)));
         vm.prank(buyer);
-        dm.postOffer(p);
+        dm.postOffer(_signedOffer(p));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -841,7 +853,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     {
         PostOfferParams memory p = _sellOfferParams(tokenId, pathway, salt);
         vm.prank(seller);
-        offerId = dm.postOffer(p);
+        offerId = dm.postOffer(_signedOffer(p));
     }
 
     /// @dev Kept separate from the call so revert tests can build the params before arming vm.expectRevert.
@@ -906,7 +918,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         PostOfferParams memory p = _sellOfferParams(tokenId, pathway, salt);
         vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, condition));
         vm.prank(seller);
-        dm.postOffer(p);
+        dm.postOffer(_signedOffer(p));
     }
 
     /// @dev Params are built by the caller, since computing the acceptor signature makes registry view calls.
@@ -938,6 +950,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     /// @dev Sophisticated but not accredited: KYC and Legion only, no status fact.
     function _sophisticatedBuyer(string memory label) internal returns (address buyer, uint256 key) {
         (buyer, key) = makeAddrAndKey(label);
+        offerorKeys[buyer] = key;
         _commonBuyerSetup(buyer, "US", CA);
     }
 
@@ -1020,7 +1033,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     function _postBuyOffer(address buyer, ExemptionPathway pathway, uint256 salt) internal returns (bytes32 offerId) {
         PostOfferParams memory p = _buyOfferParams(pathway, salt);
         vm.prank(buyer);
-        offerId = dm.postOffer(p);
+        offerId = dm.postOffer(_signedOffer(p));
     }
 
     /// @dev A buy offer names no lot: the accepting seller supplies `sellerTokenId`, and the offeror's own

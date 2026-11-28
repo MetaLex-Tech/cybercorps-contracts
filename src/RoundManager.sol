@@ -73,7 +73,7 @@ contract RoundManager is
     using LexScrowStorage for LexScrowStorage.LexScrowData;
     using SafeERC20 for IERC20;
 
-    string public constant DEPLOY_VERSION = "5.1"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "5.2"; // For version-tracking on all deployment and future upgrades
 
     error InvalidRound();
     error RoundNotOpen();
@@ -100,6 +100,8 @@ contract RoundManager is
     error ArrayLengthMismatch();
     error MinimumAlreadyMet();
     error MinimumAlreadySet();
+    error SignedEndTimeAlreadySet();
+    error SignedEndTimeMismatch();
     error NotCommitted(bytes32 agreementId);
     error CommitmentLocked(bytes32 agreementId);
     error SettleWindowTooShort(bytes32 agreementId);
@@ -364,8 +366,16 @@ contract RoundManager is
             if (newEndTime > deadline) revert EndTimeAfterMinimumDeadline();
         }
         uint256 oldEndTime = round.endTime;
+        RoundManagerStorage.recordSignedEndTime(roundId);
         round.endTime = newEndTime;
         emit RoundEndTimeUpdated(roundId, oldEndTime, newEndTime);
+    }
+
+    /// @notice Owner sets the end time that the officer signed, for a round whose end time changed
+    /// before this version. Read it from the round's `RoundCreated` event. The registry needs it to
+    /// check the officer's round signature.
+    function restoreSignedEndTime(bytes32 roundId, uint256 signedEndTime) external onlyOwner {
+        RoundManagerStorage.restoreSignedEndTime(roundId, signedEndTime);
     }
 
     /// @notice Owner can close the round immediately by setting endTime to now
@@ -375,6 +385,7 @@ contract RoundManager is
         if (round.id == bytes32(0)) revert InvalidRound();
         if (round.restrictEndTimeReduction) revert EndTimeReductionRestricted();
         uint256 oldEndTime = round.endTime;
+        RoundManagerStorage.recordSignedEndTime(roundId);
         round.endTime = block.timestamp;
         emit RoundEndTimeUpdated(roundId, oldEndTime, round.endTime);
         emit RoundClosed(roundId, block.timestamp);

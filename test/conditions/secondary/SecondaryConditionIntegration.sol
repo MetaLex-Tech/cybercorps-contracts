@@ -27,6 +27,7 @@ import {CyberAgreementUtils} from "../../libs/CyberAgreementUtils.sol";
 import {MockUriBuilderForIM} from "../../IssuanceManagerTest.t.sol";
 import {MockERC20} from "../../mock/MockERC20.sol";
 import {Test} from "forge-std/Test.sol";
+import {OfferorAgreementSigner} from "../../libs/OfferorAgreementSigner.sol";
 
 /// @notice Minimal SPV/CyberCorp fixture. It exposes AUTH() (per-SPV secondary conditions gate their
 /// configuration on the SPV's own BorgAuth via offer.spvAddress) plus the CyberCorp getters the real
@@ -66,6 +67,16 @@ abstract contract SecondaryConditionIntegrationBase is Test {
     CyberAgreementRegistry internal registry;
     SpvFixture internal corp;
     DealManager internal dm;
+
+    // Signing keys of the accounts that post offers in this suite.
+    mapping(address => uint256) internal offerorKeys;
+
+    /// @dev Adds the offeror's OfferorAgreement signature. The offeror is the account that the test pranks.
+    function _signedOffer(PostOfferParams memory p) internal returns (PostOfferParams memory) {
+        (, address offeror,) = vm.readCallers();
+        p.offerorAgreementSig = OfferorAgreementSigner.sign(vm, address(dm), offeror, offerorKeys[offeror], p);
+        return p;
+    }
     DealManagerFactory internal dmFactory;
     LeXcheXBadge internal badge;
     MockERC20 internal paymentToken;
@@ -118,7 +129,9 @@ abstract contract SecondaryConditionIntegrationBase is Test {
 
     function _setUpIntegration() internal {
         (seller, sellerKey) = makeAddrAndKey("seller");
+        offerorKeys[seller] = sellerKey;
         (buyer, buyerKey) = makeAddrAndKey("buyer");
+        offerorKeys[buyer] = buyerKey;
 
         auth = new BorgAuth(address(this));
         corp = new SpvFixture(address(auth));
@@ -246,7 +259,7 @@ abstract contract SecondaryConditionIntegrationBase is Test {
 
     function _postSell() internal returns (bytes32 offerId) {
         vm.prank(seller);
-        offerId = dm.postOffer(_sellOfferParams());
+        offerId = dm.postOffer(_signedOffer(_sellOfferParams()));
     }
 
     /// @dev Posts a sell offer against an explicit cert printer + tokenId (e.g. a printer configured with a
@@ -257,7 +270,7 @@ abstract contract SecondaryConditionIntegrationBase is Test {
         p.tokenId = tokenId;
         p.salt = uint256(keccak256(abi.encode(certPrinter, tokenId)));
         vm.prank(seller);
-        offerId = dm.postOffer(p);
+        offerId = dm.postOffer(_signedOffer(p));
     }
 
     /// @dev Posts a real BUY offer (offeror = buyer, who funds the escrow up front); pinned to RULE_144.
@@ -269,7 +282,7 @@ abstract contract SecondaryConditionIntegrationBase is Test {
         p.salt = uint256(keccak256("secondaryConditionBuyOffer"));
         p.buyerName = "Buyer";
         vm.prank(buyer);
-        offerId = dm.postOffer(p);
+        offerId = dm.postOffer(_signedOffer(p));
     }
 
     /// @dev Acceptor's EIP-712 signature over the pending settlement id (verified by the registry in acceptOffer).
@@ -334,7 +347,7 @@ abstract contract SecondaryConditionIntegrationBase is Test {
         p.tokenId = tokenId;
         p.salt = saltSeed;
         vm.prank(seller);
-        offerId = dm.postOffer(p);
+        offerId = dm.postOffer(_signedOffer(p));
         settlementId = _acceptSell(offerId);
     }
 

@@ -527,7 +527,7 @@ abstract contract SecondaryTradeGasBase is SecondaryConditionIntegrationBase {
     function _measurePost(PostOfferParams memory p) internal returns (bytes32 offerId, uint256 gasUsed) {
         vm.prank(seller);
         uint256 gasStart = gasleft();
-        offerId = dm.postOffer(p);
+        offerId = dm.postOffer(_signedOffer(p));
         gasUsed = gasStart - gasleft();
     }
 

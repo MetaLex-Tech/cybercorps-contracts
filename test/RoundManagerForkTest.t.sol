@@ -856,6 +856,11 @@ contract RoundManagerFCFSForkTest is Test {
         IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory()).upgradeToAndCall(address(new IssuanceManagerFactory()), "");
         DealManagerFactory(cyberCorpFactory.dealManagerFactory()).upgradeToAndCall(address(new DealManagerFactory()), "");
         vm.stopPrank();
+        // The new registry checks the officer's signature, so the company must get the RoundManager that
+        // passes it. Deploy the implementation before the prank, or the CREATE consumes it.
+        address newRoundManagerImpl = address(new RoundManager());
+        vm.prank(net.metalexSafe);
+        roundManagerFactory.setRefImplementation(newRoundManagerImpl);
 
         bytes32 templateId = bytes32(uint256(5535));
         _createFcfsTemplate(registry, net.metalexSafe, templateId);

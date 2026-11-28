@@ -49,6 +49,7 @@ import "./libs/JsonLib.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import {ISignerConditions, SignerCondition} from "./interfaces/ISignerConditions.sol";
 import {SignerConditionLib} from "./libs/SignerConditionLib.sol";
+import {EIP712Lib} from "./libs/EIP712Lib.sol";
 
 contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
     ICyberAgreementRegistry, ISignerConditions
@@ -243,6 +244,10 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         );
     }
 
+    /// @notice A finalizer contract, such as a DealManager, creates an unsigned agreement that it
+    /// settles. Only the finalizer can create it, so no one else can take its id first (MTLX1-30).
+    /// An agreement with no finalizer must use `createBoundContract` or
+    /// `createBoundContractAndSignFor`. Their id includes the creator and the expiry (MTLX1-39).
     function createContract(
         bytes32 templateId,
         uint256 salt,
@@ -253,15 +258,15 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         address finalizer,
         uint256 expiry
     ) public returns (bytes32 contractId) {
-        // It is critical to bind `secretHash` and `finalizer` into the id: the finalizer
-        // controls settlement and the secretHash gates who may sign, so omitting them would
-        // let a front-runner seize the same id with hostile terms and bind signers to an
-        // agreement they never authorized.
-        // `expiry` is deliberately NOT bound: callers derive it from block.timestamp at
-        // creation time, which a party signing off-chain cannot predict, so including it
-        // would make every presigned signature unverifiable.
-        // TODO: an off-chain indexer that derives contractId (rather than reading the
-        // ContractCreated event) must include these two fields.
+        // No account is the zero address, so this also refuses an agreement with no finalizer.
+        if (msg.sender != finalizer) revert NotFinalizer();
+
+        // The id includes `finalizer`, and only the finalizer creates it. The id also includes
+        // `secretHash`, which controls who can sign.
+        // The id does not include `expiry`: the finalizer sets it from the block time at
+        // creation, so a party who signs before creation cannot know it.
+        // TODO: an off-chain indexer that calculates contractId (and does not read the
+        // ContractCreated event) must include `secretHash` and `finalizer`.
         contractId = keccak256(
             abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
@@ -319,96 +324,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         }
     }
 
-    /// @notice See `createStandaloneContractAndSignFor()`
-    function createStandaloneContractAndSign(
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        bytes calldata signature
-    ) external returns (bytes32 contractId) {
-        return createStandaloneContractAndSignFor(
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            expiry,
-            msg.sender, // signer
-            signature
-        );
-    }
-
-    /// @notice Create a standalone agreement that:
-    /// - Proposer can prepare & sign an agreement in one tx. For single-party agreements that means one tx and done
-    /// - Standalone means it creates its own template just-in-time if needed. No more waiting for admin to create the template for you
-    /// - Takes `salt` so agreement IDs are deterministic. You can also create identical agreements with distinct IDs if needed
-    ///
-    /// Note `finalizer` is intentionally fixed at `address(0)` because other values require
-    /// tighter integration with vetted smart contracts, which does not fit our use cases here
-    function createStandaloneContractAndSignFor(
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        address signer,
-        bytes calldata signature
-    ) public returns (bytes32 contractId) {
-        // Derive template ID
-        bytes32 templateId = keccak256(abi.encode(
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        ));
-
-        // Create the template if needed
-        if (bytes(templates[templateId].legalContractUri).length == 0) {
-            _createTemplate(
-                templateId,
-                title,
-                legalContractUri,
-                globalFields,
-                partyFields
-            );
-        }
-
-        contractId = createContract(
-            templateId,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            "", // secretHash
-            address(0), // fixed finalizer, see notice above
-            expiry
-        );
-
-        signContractFor(
-            signer,
-            contractId,
-            partyValues[0], // proposer
-            signature,
-            false, // proposer should explicitly add himself to the parties
-            "" // secret
-        );
-    }
-
     /// @notice Create a template and an unsigned agreement whose ids are bound to
-    /// `msg.sender` and every stored term. Exact parties only; no secret or finalizer.
+    /// `msg.sender` and every stored term. No secret or finalizer. A zero address after
+    /// `parties[0]` is an open slot with empty party values; anyone can fill it with `signContractFor`.
     function createBoundContract(
         Template memory template,
         uint256 salt,
@@ -606,6 +524,10 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
+        // When the agreement has a finalizer, only the finalizer can submit a party's signature.
+        // The party signs through the finalizer's flow, not on the registry.
+        if (agreementData.finalizer != msg.sender && agreementData.finalizer != address(0))
+            revert NotFinalizer();
         if (agreementData.signedAt[signer] != 0) revert AlreadySigned();
         if (isVoided(contractId)) revert ContractAlreadyVoided();
         if (agreementData.finalized) revert ContractAlreadyFinalized();
@@ -658,12 +580,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
             revert SignatureVerificationFailed();
         }
 
-        if(
-            address(0) != agreementData.finalizer && // if finalizer is undefined, as long as the signature is valid we still allow it
-            msg.sender != agreementData.finalizer &&
-            msg.sender != signer
-        )
-            revert NotFinalizer();
     
         if (partyValues.length != template.partyFields.length)
             revert MismatchedFieldsLength();
@@ -686,17 +602,38 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         }
     }
 
-    /// @notice Sign a contract with escrow signatures. It relies on the finalizer to enforce proper access control.
-    /// As a result, the finalizer is required to be a predefined smart contract.
-    /// @dev See `test_RevertIf_signContractWithEscrowUndefinedFinalizer` for how it prevent exploits
+    /// @notice The finalizer records a party's signature with a signature that the party gave to the
+    /// finalizer. The party must have signed in an EIP-712 domain that names the finalizer.
+    /// @dev Trust model: the registry accepts any signature whose domain names the finalizer as the
+    /// party's assent. It does not know what the party signed. The finalizer's code chooses which
+    /// signed terms count and checks that they match the agreement. So a party who signs anything for
+    /// a finalizer trusts the present and future code of that finalizer with their assent.
+    /// This keeps the signatures that existing cyberCORP managers already collect valid, for example
+    /// the officer's round signature.
+    /// TODO: a later design asks the party to sign a dedicated assent for the finalizer, with a nonce
+    /// that the party can revoke.
+    /// See `test_RevertIf_signContractWithEscrowUndefinedFinalizer` for how the domain check stops a
+    /// finalizer that the party never signed for.
     function signContractWithEscrow(
         address escrowSigner,
         bytes32 contractId,
         string[] memory partyValues,
-        bytes calldata signature,
+        EscrowAttestation calldata attestation,
         bool fillUnallocated, // to fill a 0 address or not
         string memory secret
     ) onlyDefinedFinalizer(contractId) external {
+        // The caller is the finalizer, so the domain names the finalizer that the party accepted.
+        if (
+            !EIP712Lib.verifySignature(
+                attestation.domainName,
+                attestation.domainVersion,
+                msg.sender,
+                escrowSigner,
+                attestation.structHash,
+                attestation.signature
+            )
+        ) revert SignatureVerificationFailed();
+
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
@@ -1216,7 +1153,9 @@ library CyberAgreementBound {
     }
 
     /// @notice Create a template and an unsigned agreement whose ids bind `creator`, every
-    /// stored term and the conditions. Exact parties only; no secret or finalizer.
+    /// stored term and the conditions. No secret or finalizer.
+    /// @dev A zero address after `parties[0]` is an open slot. Its party values are empty and it has
+    /// no conditions. The first signer who fills it gives the values. The id covers the slot.
     function create(
         mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,
         mapping(bytes32 => CyberAgreementRegistry.AgreementData) storage agreements,
@@ -1235,14 +1174,21 @@ library CyberAgreementBound {
         if (partyValues.length != parties.length) revert CyberAgreementRegistry.MismatchedPartyValuesLength();
         if (globalValues.length != template.globalFields.length) revert CyberAgreementRegistry.MismatchedFieldsLength();
         if (expiry != 0 && expiry <= block.timestamp) revert CyberAgreementRegistry.ExpiryNotInFuture();
+        if (parties[0] == address(0)) revert CyberAgreementRegistry.FirstPartyZeroAddress();
+        SignerConditionLib.checkLength(conditions, parties.length);
         for (uint256 i = 0; i < parties.length; i++) {
-            if (parties[i] == address(0)) revert CyberAgreementRegistry.FirstPartyZeroAddress();
+            if (parties[i] == address(0)) {
+                if (partyValues[i].length != 0) revert CyberAgreementRegistry.MismatchedFieldsLength();
+                if (conditions.length != 0 && conditions[i].length != 0) {
+                    revert ISignerConditions.OpenSlotHasSignerConditions();
+                }
+                continue;
+            }
             if (partyValues[i].length != template.partyFields.length) revert CyberAgreementRegistry.MismatchedFieldsLength();
             for (uint256 j = 0; j < i; j++) {
                 if (parties[i] == parties[j]) revert CyberAgreementRegistry.DuplicateParty();
             }
         }
-        SignerConditionLib.checkLength(conditions, parties.length);
 
         (templateId, contractId) = boundIds(
             creator, template, salt, globalValues, parties, partyValues, expiry, conditions
@@ -1264,6 +1210,7 @@ library CyberAgreementBound {
         agreementData.parties = parties;
         agreementData.expiry = expiry;
         for (uint256 i = 0; i < parties.length; i++) {
+            if (parties[i] == address(0)) continue;
             agreementData.partyValues[parties[i]] = partyValues[i];
         }
 
@@ -1272,6 +1219,7 @@ library CyberAgreementBound {
         SignerConditionLib.set(contractId, parties, conditions);
 
         for (uint256 i = 0; i < parties.length; i++) {
+            if (parties[i] == address(0)) continue;
             agreementsForParty[parties[i]].push(contractId);
         }
     }
@@ -1317,7 +1265,8 @@ library CyberAgreementBound {
     }
 
     /// @notice Sign for a party with signer conditions. The party must pass each condition with its
-    /// evidence. The signature covers the evidence. A bound agreement has no finalizer, open slot or secret.
+    /// evidence. The signature covers the evidence. A bound agreement has no finalizer or secret, and an
+    /// open slot has no conditions.
     function signWithEvidence(
         mapping(bytes32 => CyberAgreementRegistry.AgreementData) storage agreements,
         mapping(bytes32 => ICyberAgreementRegistry.Template) storage templates,

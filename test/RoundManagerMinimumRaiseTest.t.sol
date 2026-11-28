@@ -322,7 +322,7 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
     //////////////////////////////////////////////////////////////*/
 
     function test_Version() public view {
-        assertEq(RoundManager(roundManager).DEPLOY_VERSION(), "5.1");
+        assertEq(RoundManager(roundManager).DEPLOY_VERSION(), "5.2");
         assertEq(RoundManager(roundManager).SETTLE_WINDOW(), 2 days);
     }
 
@@ -942,6 +942,39 @@ contract RoundManagerMinimumRaiseTest is MinimumRaiseFixture {
         vm.prank(corpOwner);
         RoundManager(roundManager).setRoundEndTime(roundId, block.timestamp + 365 days);
         assertEq(RoundManager(roundManager).getRound(roundId).endTime, block.timestamp + 365 days);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+               officer signature after an end time change
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The registry checks the officer's round signature, which covers the original end time.
+    /// A later end time change must not stop the officer from signing at allocation.
+    function test_Allocate_AfterSetRoundEndTime_RecordsOfficer() public {
+        bytes32 roundId = _createPlainRound(VALUATION);
+        bytes32 a0 = _submitEOI(roundId, 0);
+
+        vm.startPrank(corpOwner);
+        RoundManager(roundManager).setRoundEndTime(roundId, block.timestamp + 30 days);
+        RoundManager(roundManager).setRoundEndTime(roundId, block.timestamp + 60 days);
+        RoundManager(roundManager).allocate(a0, MAX_TICKET);
+        vm.stopPrank();
+
+        assertTrue(registry.hasSigned(a0, corpOwner), "registry records the officer");
+        _assertAllocated(a0);
+    }
+
+    function test_Allocate_AfterCloseRoundNow_RecordsOfficer() public {
+        bytes32 roundId = _createPlainRound(VALUATION);
+        bytes32 a0 = _submitEOI(roundId, 0);
+
+        vm.startPrank(corpOwner);
+        RoundManager(roundManager).closeRoundNow(roundId);
+        RoundManager(roundManager).allocate(a0, MAX_TICKET);
+        vm.stopPrank();
+
+        assertTrue(registry.hasSigned(a0, corpOwner), "registry records the officer");
+        _assertAllocated(a0);
     }
 
     /*//////////////////////////////////////////////////////////////

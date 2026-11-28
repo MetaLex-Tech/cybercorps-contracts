@@ -7,7 +7,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import "../src/interfaces/ICyberAgreementRegistry.sol";
-import {SignerCondition} from "../src/interfaces/ISignerConditions.sol";
+import {ISignerConditions, SignerCondition} from "../src/interfaces/ISignerConditions.sol";
 
 contract CyberAgreementRegistryBoundTest is Test {
     address alice;
@@ -91,6 +91,26 @@ contract CyberAgreementRegistryBoundTest is Test {
             template.partyFields,
             globalValues,
             partyValues[index],
+            privateKey
+        );
+    }
+
+    function _signValues(bytes32 contractId, address signer, string[] memory values, uint256 privateKey)
+        internal
+        view
+        returns (bytes memory)
+    {
+        return CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            template.legalContractUri,
+            template.globalFields,
+            template.partyFields,
+            globalValues,
+            values,
+            signer,
             privateKey
         );
     }
@@ -196,8 +216,15 @@ contract CyberAgreementRegistryBoundTest is Test {
         vm.expectRevert(CyberAgreementRegistry.DuplicateParty.selector);
         registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
 
-        parties[1] = address(0);
+        parties[0] = address(0);
+        parties[1] = bob;
         vm.expectRevert(CyberAgreementRegistry.FirstPartyZeroAddress.selector);
+        registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
+
+        // An open slot gets its values from the signer who fills it.
+        parties[0] = alice;
+        parties[1] = address(0);
+        vm.expectRevert(CyberAgreementRegistry.MismatchedFieldsLength.selector);
         registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
 
         parties[1] = bob;
@@ -208,6 +235,81 @@ contract CyberAgreementRegistryBoundTest is Test {
         vm.stopPrank();
     }
 
+    /// @notice A signer fills each open slot of a bound agreement with its own values.
+    function test_createBoundContract_openSlots() public {
+        (address dave, uint256 davePrivateKey) = makeAddrAndKey("dave");
+        (address erin, uint256 erinPrivateKey) = makeAddrAndKey("erin");
+        parties[1] = address(0);
+        parties.push(address(0));
+        partyValues[1] = new string[](0);
+        partyValues.push(new string[](0));
+        (, bytes32 expectedId) = _ids(alice, 1);
+
+        vm.prank(alice);
+        (, bytes32 contractId) = registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry);
+        assertEq(contractId, expectedId);
+        assertEq(registry.getAgreementsForParty(address(0)).length, 0);
+
+        string[] memory daveValues = new string[](2);
+        daveValues[0] = "Dave";
+        daveValues[1] = "dave@example.com";
+        string[] memory erinValues = new string[](2);
+        erinValues[0] = "Erin";
+        erinValues[1] = "erin@example.com";
+        bytes memory daveSignature = _signValues(contractId, dave, daveValues, davePrivateKey);
+        bytes memory erinSignature = _signValues(contractId, erin, erinValues, erinPrivateKey);
+        bytes memory aliceSignature = _sign(contractId, 0, alicePrivateKey);
+
+        vm.prank(dave);
+        registry.signContractFor(dave, contractId, daveValues, daveSignature, true, "");
+        vm.prank(erin);
+        registry.signContractFor(erin, contractId, erinValues, erinSignature, true, "");
+        vm.prank(alice);
+        registry.signContract(contractId, partyValues[0], aliceSignature, false, "");
+
+        (,,,,, address[] memory storedParties, string[][] memory storedValues,,,) =
+            registry.getContractDetails(contractId);
+        assertEq(storedParties[1], dave);
+        assertEq(storedParties[2], erin);
+        assertEq(storedValues[2][0], "Erin");
+        assertTrue(registry.isFinalized(contractId));
+    }
+
+    function test_RevertIf_createBoundContract_openSlotHasConditions() public {
+        parties[1] = address(0);
+        partyValues[1] = new string[](0);
+        SignerCondition[][] memory conditions = new SignerCondition[][](2);
+        conditions[1] = new SignerCondition[](1);
+
+        vm.prank(alice);
+        vm.expectRevert(ISignerConditions.OpenSlotHasSignerConditions.selector);
+        registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry, conditions);
+    }
+
+    /// @notice MTLX1-39: a front-run with a later expiry gives another id, so the creator's
+    /// signature does not count on it and the creator's own creation still succeeds.
+    function test_createBoundContractAndSignFor_frontRunWithLaterExpiryGetsOtherId() public {
+        parties[1] = address(0);
+        partyValues[1] = new string[](0);
+        (, bytes32 aliceId) = _ids(alice, 1);
+        bytes memory aliceSignature = _sign(aliceId, 0, alicePrivateKey);
+
+        vm.prank(chad);
+        (, bytes32 chadId) =
+            registry.createBoundContract(template, 1, globalValues, parties, partyValues, expiry + 30 days);
+        assertNotEq(chadId, aliceId);
+
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        registry.signContractFor(alice, chadId, partyValues[0], aliceSignature, false, "");
+
+        (, bytes32 contractId) = registry.createBoundContractAndSignFor(
+            template, 1, globalValues, parties, partyValues, expiry, aliceSignature
+        );
+        assertEq(contractId, aliceId);
+        assertTrue(registry.hasSigned(aliceId, alice));
+    }
+
     function test_getContractJson() public {
         bytes32 templateId = keccak256("json-template");
         partyValues[1][0] = "Bob \"B\"";
@@ -215,10 +317,14 @@ contract CyberAgreementRegistryBoundTest is Test {
         registry.createTemplate(
             templateId, template.title, template.legalContractUri, template.globalFields, template.partyFields
         );
+        vm.stopPrank();
+        // A legacy agreement with no finalizer. Only the zero address can create one now.
+        vm.prank(address(0));
         bytes32 contractId =
             registry.createContract(templateId, 1, globalValues, parties, partyValues, bytes32(0), address(0), expiry);
-        registry.signContract(contractId, partyValues[0], _sign(contractId, 0, alicePrivateKey), false, "");
-        vm.stopPrank();
+        bytes memory aliceSignature = _sign(contractId, 0, alicePrivateKey);
+        vm.prank(alice);
+        registry.signContract(contractId, partyValues[0], aliceSignature, false, "");
 
         assertEq(registry.getContractJson(contractId), EXPECTED_JSON);
     }

@@ -93,6 +93,14 @@ interface IDealManager {
     ) external;
     
 
+    function signDeal(
+        address signer,
+        bytes32 agreementId,
+        string[] memory partyValues,
+        bytes memory signature,
+        string memory secret
+    ) external;
+
     function signAndFinalizeDeal(
         address signer,
         bytes32 _agreementId,

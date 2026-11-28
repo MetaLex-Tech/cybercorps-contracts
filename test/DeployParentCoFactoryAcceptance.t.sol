@@ -45,6 +45,12 @@ contract DeployParentCoFactoryAcceptanceForkTest is Test {
         CyberAgreementUtils.upgradeRegistry(vm, address(registry), coreDeployment.metalexSafe);
 
         parentCoFactory = ParentCoFactory(umiaDeployment.parentCoFactory);
+        // The new registry checks the officer's escrow authorization, so the factory must pass it.
+        // A ParentCo officer owns the factory and accepts the upgrade.
+        address newParentCoFactoryImpl = address(new ParentCoFactory());
+        (address upgrader,,,) = parentCoFactory.parentCoOfficers(0);
+        vm.prank(upgrader);
+        parentCoFactory.upgradeToAndCall(newParentCoFactoryImpl, "");
 
 //        // Simulate MetaLeX creating the templates
 //

@@ -508,9 +508,11 @@ contract CyberAgreementRegistrySignerConditionsTest is Test {
         registry.createTemplate(
             templateId, template.title, template.legalContractUri, template.globalFields, template.partyFields
         );
+        vm.stopPrank();
+        // A legacy agreement with no finalizer. Only the zero address can create one now.
+        vm.prank(address(0));
         bytes32 contractId =
             registry.createContract(templateId, 1, globalValues, parties, partyValues, bytes32(0), address(0), expiry);
-        vm.stopPrank();
 
         _expectRevertOnRelay(
             contractId,

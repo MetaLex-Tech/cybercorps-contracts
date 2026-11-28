@@ -72,5 +72,6 @@ interface IDealManagerStorage {
 
     error CounterPartyValueMismatch();
     error DealNotPending();
+    error SignerNotFirstParty();
     error DealNotExpired();
 }

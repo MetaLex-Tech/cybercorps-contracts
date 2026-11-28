@@ -81,6 +81,8 @@ contract DeployBoundAgreementRegistryScriptTest is Test {
         partyValues[0] = values;
         partyValues[1] = values;
         registry.createTemplate(bytes32(uint256(1)), "Existing", "ipfs://existing", fields, fields);
+        // A legacy agreement with no finalizer. Only the zero address can create one now.
+        vm.prank(address(0));
         bytes32 id =
             registry.createContract(bytes32(uint256(1)), 1, values, parties, partyValues, bytes32(0), address(0), 0);
         bytes memory aliceSig = CyberAgreementUtils.signAgreementTypedData(
