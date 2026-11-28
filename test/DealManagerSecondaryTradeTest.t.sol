@@ -951,6 +951,35 @@ contract DealManagerSecondaryTradeTest is Test {
         assertTrue(registry.hasSigned(settlementId, seller), "registry records the offeror");
     }
 
+    // MTLX1-30: the offer is public, so an attacker can compute the next settlement id. The attacker
+    // cannot create it first, so the acceptance settles on that id.
+    function test_AUDIT_MTLX1_30_AcceptOffer_AttackerCannotCreateSettlementIdFirst() public {
+        address attacker = makeAddr("attacker");
+        bytes32 offerId = _postSellOffer();
+        Offer memory o = dm.getOffer(offerId);
+        uint256 settlementSalt = uint256(keccak256(abi.encodePacked(o.salt, o.settlementAgreementIds.length)));
+        address[] memory parties = new address[](2);
+        parties[0] = o.offeror;
+        parties[1] = buyer;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = o.offerorPartyValues;
+        partyValues[1] = new string[](0);
+        bytes32 expectedId =
+            keccak256(abi.encode(o.templateId, settlementSalt, o.globalValues, parties, bytes32(0), address(dm)));
+        uint256 expiry = block.timestamp + dm.getSettlementWindow();
+
+        vm.prank(attacker);
+        vm.expectRevert(CyberAgreementRegistry.NotFinalizer.selector);
+        registry.createContract(
+            o.templateId, settlementSalt, o.globalValues, parties, partyValues, bytes32(0), address(dm), expiry
+        );
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        assertEq(settlementId, expectedId, "settlement id");
+        assertTrue(registry.hasSigned(settlementId, seller), "offeror signed");
+        assertTrue(registry.hasSigned(settlementId, buyer), "acceptor signed");
+    }
+
     // BUY counterpart: a non-owner acceptor cannot sell someone else's Ledger Entry Token into a buy offer
     // (attacker supplies sellerTokenId, owned by `seller`).
     function test_RevertIf_AcceptBuyOffer_NotCertOwner() public {

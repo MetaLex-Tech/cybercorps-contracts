@@ -110,12 +110,21 @@ Related findings (Hexens report in `audits/`):
 - MTLX1-30 (Low, Acknowledged): claimable agreement IDs. Closed in code on 2026-11-27 (owner
   request, branch `feat/registry-attestation-cleanup`): `createContract` reverts `NotFinalizer`
   unless `msg.sender == finalizer`. Not deployed. The recorded audit response is unchanged.
+  Regressions: `test_AUDIT_MTLX1_30_createContractRevertsIfNotFinalizer` (registry) and
+  `test_AUDIT_MTLX1_30_AcceptOffer_AttackerCannotCreateSettlementIdFirst` (DealManager: an attacker
+  cannot create the next settlement id, and `acceptOffer` settles on it).
 - MTLX1-39 (Medium, Acknowledged): standalone signature moved to a squatted ID. Closed in code on
   2026-11-27 (owner request): the same check refuses `finalizer = address(0)`, and
   `createStandaloneContractAndSign(For)` are removed. Agreements with no finalizer use only the bound
-  path. Blocker for the registry upgrade: the webapp still creates agreements with no finalizer
-  (`emailSigning.ts`, `privateDocumentEnvelope.ts`, governance documents, GAIBE and cyberSign
-  standalone). The `docs/` pages still describe the deployed standalone path.
+  path. Blockers for the registry upgrade (webapp review on 2026-11-27, branch
+  `feat/registry-attestation-cleanup` at d3405a9e8): email-signing registration
+  (`emailSigningRegistrationCallList`, sent through Multicall3), private-document and packet
+  registration (`privateDocumentRegistrationCalls`, also from `server/privateRelay.ts`), governance
+  documents and their GAIBE steps (always standalone), and the standalone fallback of board consents,
+  packets and private envelopes. Requests already sealed with a legacy id and not yet created cannot
+  be created after the upgrade. The cyberSign app (`apps/web`) already uses only
+  `createBoundContractAndSignFor`; `sharedSigningJourney.browser.server.ts` is a test harness. The
+  `docs/` pages still describe the deployed standalone path.
 - MTLX1-37 (Low, Fixed): delegate replay. Escrow path accepts no delegates.
 - MTLX1-41 (High, Fixed) and MTLX1-3 (Medium, Fixed): the domain binds the finalizer address only;
   the existing bindings in the round flow are unchanged.
@@ -125,6 +134,7 @@ Related findings (Hexens report in `audits/`):
 | Check | Evidence and exact revision | Result / remaining limitation |
 | --- | --- | --- |
 | Unit tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --nmc '(ForkTest\|AdhocTest)'`; base 13418fb5 + working tree | 1597 passed, 0 failed |
+| Unit tests (MTLX1-30/39) | same command; 51c85b74 + DealManager regression | 1604 passed, 0 failed |
 | Sizes | `forge build ... --sizes` | Registry 23,266 B; RoundManager 24,451 B (125 B margin); DealManager 22,248 B |
 | Fork tests | `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --nmc AdhocTest --threads 1 --cups 10`; same tree | 228 passed, 0 failed, 1 skipped. The three tests that ran deployed callers now upgrade them first (FCFS: RoundManager ref implementation; v5 upgrade: registry starts on the Base implementation, then registry and RoundManager upgrade; ParentCo: a ParentCo officer upgrades the live Umia factory, whose live officer signature passes) |
 
