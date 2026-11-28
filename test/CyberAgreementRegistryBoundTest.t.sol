@@ -317,10 +317,14 @@ contract CyberAgreementRegistryBoundTest is Test {
         registry.createTemplate(
             templateId, template.title, template.legalContractUri, template.globalFields, template.partyFields
         );
+        vm.stopPrank();
+        // A legacy agreement with no finalizer. Only the zero address can create one now.
+        vm.prank(address(0));
         bytes32 contractId =
             registry.createContract(templateId, 1, globalValues, parties, partyValues, bytes32(0), address(0), expiry);
-        registry.signContract(contractId, partyValues[0], _sign(contractId, 0, alicePrivateKey), false, "");
-        vm.stopPrank();
+        bytes memory aliceSignature = _sign(contractId, 0, alicePrivateKey);
+        vm.prank(alice);
+        registry.signContract(contractId, partyValues[0], aliceSignature, false, "");
 
         assertEq(registry.getContractJson(contractId), EXPECTED_JSON);
     }

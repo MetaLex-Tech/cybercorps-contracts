@@ -244,11 +244,10 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         );
     }
 
-    /// @notice Create an unsigned agreement for a finalizer contract, such as a DealManager.
-    /// @dev Deprecated when `finalizer` is `address(0)`. The id does not include the creator or
-    /// the expiry, so anyone can create the same id first with other terms (MTLX1-30, MTLX1-39).
-    /// Apps and front ends must not call it with no finalizer. Use `createBoundContract` or
-    /// `createBoundContractAndSignFor`. A later upgrade removes the use with no finalizer.
+    /// @notice A finalizer contract, such as a DealManager, creates an unsigned agreement that it
+    /// settles. Only the finalizer can create it, so no one else can take its id first (MTLX1-30).
+    /// An agreement with no finalizer must use `createBoundContract` or
+    /// `createBoundContractAndSignFor`. Their id includes the creator and the expiry (MTLX1-39).
     function createContract(
         bytes32 templateId,
         uint256 salt,
@@ -259,8 +258,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         address finalizer,
         uint256 expiry
     ) public returns (bytes32 contractId) {
-        // The id includes `secretHash` and `finalizer`. The finalizer controls settlement and
-        // the secret controls who can sign, so another creator cannot take the id with other values.
+        // No account is the zero address, so this also refuses an agreement with no finalizer.
+        if (msg.sender != finalizer) revert NotFinalizer();
+
+        // The id includes `finalizer`, and only the finalizer creates it. The id also includes
+        // `secretHash`, which controls who can sign.
         // The id does not include `expiry`: the finalizer sets it from the block time at
         // creation, so a party who signs before creation cannot know it.
         // TODO: an off-chain indexer that calculates contractId (and does not read the
@@ -320,96 +322,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL,
         for (uint256 i = 0; i < parties.length; i++) {
             agreementsForParty[parties[i]].push(contractId);
         }
-    }
-
-    /// @notice See `createStandaloneContractAndSignFor()`
-    /// @dev Deprecated. Apps and front ends must not call it. Use `createBoundContractAndSignFor`.
-    /// A later upgrade removes it.
-    function createStandaloneContractAndSign(
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        bytes calldata signature
-    ) external returns (bytes32 contractId) {
-        return createStandaloneContractAndSignFor(
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            expiry,
-            msg.sender, // signer
-            signature
-        );
-    }
-
-    /// @notice Create an agreement and its template if it does not exist, and record the first
-    /// party's signature, in one transaction. The `salt` makes the id known before creation.
-    /// The agreement has no finalizer.
-    /// @dev Deprecated. The id does not include the creator or the expiry, so anyone can create
-    /// the same id first with a later expiry and submit the public signature to it (MTLX1-39).
-    /// Apps and front ends must not call it. Use `createBoundContractAndSignFor`. A later upgrade
-    /// removes it.
-    function createStandaloneContractAndSignFor(
-        string memory title,
-        string memory legalContractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        uint256 expiry,
-        address signer,
-        bytes calldata signature
-    ) public returns (bytes32 contractId) {
-        // Derive template ID
-        bytes32 templateId = keccak256(abi.encode(
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        ));
-
-        // Create the template if needed
-        if (bytes(templates[templateId].legalContractUri).length == 0) {
-            _createTemplate(
-                templateId,
-                title,
-                legalContractUri,
-                globalFields,
-                partyFields
-            );
-        }
-
-        contractId = createContract(
-            templateId,
-            salt,
-            globalValues,
-            parties,
-            partyValues,
-            "", // secretHash
-            address(0), // fixed finalizer, see notice above
-            expiry
-        );
-
-        signContractFor(
-            signer,
-            contractId,
-            partyValues[0], // proposer
-            signature,
-            false, // proposer should explicitly add himself to the parties
-            "" // secret
-        );
     }
 
     /// @notice Create a template and an unsigned agreement whose ids are bound to

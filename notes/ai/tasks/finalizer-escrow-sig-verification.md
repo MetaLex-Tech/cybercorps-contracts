@@ -1,7 +1,7 @@
 # Task: Registry checks the party's signature on escrow signing
 
 - **Status:** Active (issue #218 fix `DealManager.signDeal` in 6745777e; version bump committed after it; not reviewed)
-- **Updated:** 2026-11-25
+- **Updated:** 2026-11-27
 - **Owner:** Claude Code session, for the owner
 - **Collaborators / boundaries:** Registry, RoundManager, DealManager secondary trade,
   ParentCoFactory and MetaDAOFactory. No deployment, upgrade, webapp change or audit was started.
@@ -107,7 +107,15 @@ Related findings (Hexens report in `audits/`):
 
 - MTLX1-24 (Low, Acknowledged): officer signature does not cover the agreement body. Unchanged.
 - MTLX1-26 (Low, Fixed): round signature reuse through a weaker factory. Type unchanged, still holds.
-- MTLX1-30 (Low, Acknowledged): claimable agreement IDs. Unchanged.
+- MTLX1-30 (Low, Acknowledged): claimable agreement IDs. Closed in code on 2026-11-27 (owner
+  request, branch `feat/registry-attestation-cleanup`): `createContract` reverts `NotFinalizer`
+  unless `msg.sender == finalizer`. Not deployed. The recorded audit response is unchanged.
+- MTLX1-39 (Medium, Acknowledged): standalone signature moved to a squatted ID. Closed in code on
+  2026-11-27 (owner request): the same check refuses `finalizer = address(0)`, and
+  `createStandaloneContractAndSign(For)` are removed. Agreements with no finalizer use only the bound
+  path. Blocker for the registry upgrade: the webapp still creates agreements with no finalizer
+  (`emailSigning.ts`, `privateDocumentEnvelope.ts`, governance documents, GAIBE and cyberSign
+  standalone). The `docs/` pages still describe the deployed standalone path.
 - MTLX1-37 (Low, Fixed): delegate replay. Escrow path accepts no delegates.
 - MTLX1-41 (High, Fixed) and MTLX1-3 (Medium, Fixed): the domain binds the finalizer address only;
   the existing bindings in the round flow are unchanged.

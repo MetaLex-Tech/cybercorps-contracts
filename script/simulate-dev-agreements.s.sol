@@ -4,6 +4,8 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {ICyberAgreementRegistry} from "../src/interfaces/ICyberAgreementRegistry.sol";
+import {SignerCondition} from "../src/interfaces/ISignerConditions.sol";
 
 contract SimulateDevAgreementsScript is Script {
 
@@ -146,27 +148,26 @@ contract SimulateDevAgreementsScript is Script {
         uint256 expiry,
         uint256 proposerPrivateKey
     ) internal returns (bytes32) {
-        // Calculate the expected standalone template ID
-        bytes32 expectedStandaloneTemplateId = keccak256(abi.encode(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields
-        ));
-
-        bytes32 expectedAgreementId = keccak256(abi.encode(
-            expectedStandaloneTemplateId,
+        ICyberAgreementRegistry.Template memory template = ICyberAgreementRegistry.Template({
+            legalContractUri: testLegalContractUri,
+            title: testTitle,
+            globalFields: testGlobalFields,
+            partyFields: testPartyFields
+        });
+        (, bytes32 expectedAgreementId) = registry.boundIdsOf(
+            vm.addr(proposerPrivateKey),
+            template,
             salt,
             testGlobalValues,
-            testParties
-        ));
+            testParties,
+            testPartyValues,
+            expiry,
+            new SignerCondition[][](0)
+        );
 
         vm.startBroadcast(proposerPrivateKey);
-        bytes32 agreementId = registry.createStandaloneContractAndSign(
-            testTitle,
-            testLegalContractUri,
-            testGlobalFields,
-            testPartyFields,
+        (, bytes32 agreementId) = registry.createBoundContractAndSignFor(
+            template,
             salt,
             testGlobalValues,
             testParties,
